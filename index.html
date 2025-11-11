@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🌱 Polivalka Remote Dashboard</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>🌱 Polivalka Remote Dashboard</h1>
+            <p class="subtitle">Control your plant watering system from anywhere</p>
+        </header>
+
+        <div class="device-grid">
+            <!-- Device Card -->
+            <div class="device-card">
+                <div class="device-header">
+                    <h2>Kitchen Plant</h2>
+                    <span class="device-id">BC67E9</span>
+                </div>
+
+                <div class="device-status">
+                    <div class="status-item">
+                        <span class="label">Status:</span>
+                        <span id="status" class="value">Loading...</span>
+                    </div>
+                    <div class="status-item">
+                        <span class="label">Moisture:</span>
+                        <span id="moisture" class="value">--</span>
+                        <span class="unit">%</span>
+                    </div>
+                    <div class="status-item">
+                        <span class="label">Battery:</span>
+                        <span id="battery" class="value">--</span>
+                        <span class="unit">V</span>
+                    </div>
+                    <div class="status-item">
+                        <span class="label">Last Update:</span>
+                        <span id="last-update" class="value">--</span>
+                    </div>
+                </div>
+
+                <div class="controls">
+                    <button class="btn btn-primary" onclick="waterPlant()">
+                        💧 Water Plant
+                    </button>
+                    <button class="btn btn-secondary" onclick="readSensor()">
+                        📊 Read Sensor
+                    </button>
+                    <button class="btn btn-danger" onclick="stopPump()">
+                        🛑 Stop Pump
+                    </button>
+                </div>
+
+                <div id="command-log" class="command-log"></div>
+            </div>
+
+            <!-- Chart Card -->
+            <div class="chart-card">
+                <h3>Moisture History (7 days)</h3>
+                <canvas id="moistureChart"></canvas>
+            </div>
+        </div>
+
+        <footer>
+            <p>Polivalka v1.0 | Backend: AWS Lambda | Frontend: GitHub Pages</p>
+        </footer>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="api.js"></script>
+    <script src="app.js"></script>
+</body>
+</html>
