@@ -4,8 +4,8 @@
  * SETUP: Replace API_BASE with your actual API Gateway URL after deployment
  */
 
-// TODO: Replace with your API Gateway URL after Lambda deployment
-const API_BASE = 'https://YOUR_API_GATEWAY_ID.execute-api.us-east-1.amazonaws.com';
+// API Gateway URL (deployed to AWS)
+const API_BASE = 'https://9iv2areho4.execute-api.us-east-1.amazonaws.com';
 
 // Device ID (currently hardcoded, will be dynamic later with auth)
 const DEVICE_ID = 'BC67E9';
