@@ -19,8 +19,8 @@ const IS_CLOUD = window.location.hostname === 'gt3max.github.io' ||
 
 // API configuration
 const API = {
-  // Cloud API (AWS Lambda)
-  cloudBase: 'https://9iv2areho4.execute-api.us-east-1.amazonaws.com',
+  // Cloud API (AWS Lambda) - EU region (Frankfurt)
+  cloudBase: 'https://82tzywgcjl.execute-api.eu-central-1.amazonaws.com/prod',
 
   // Local API (ESP32 WebServer)
   localBase: '',
