@@ -635,6 +635,7 @@ async function refreshSensor(deviceId) {
     const device = allDevices.find(d => d.device_id === deviceId);
     if (device) {
       device.moisture_pct = result.moisture_pct;
+      device.adc_raw = result.adc_raw;
       device.last_update = result.timestamp;
 
       // Re-render devices
