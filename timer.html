@@ -1,0 +1,393 @@
+<!doctype html><html><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width, initial-scale=1"><title>Polivalka — Schedule</title>
+<script src="api-adapter.js"></script>
+<style>
+    body{font-family:system-ui,Arial;margin:0;padding:0;max-width:100%}
+    .header{position:sticky;top:0;z-index:1000;background:#2c5f2d;color:#fff;padding:8px 10px;display:flex;justify-content:space-between;align-items:center;gap:8px}
+    .header h1{margin:0;font-size:18px}
+    .header-info{font-size:12px;text-align:right;line-height:1.3}
+    .nav{position:sticky;top:65px;z-index:999;background:#f0f0f0;padding:5px 8px;display:flex;gap:2px;border-bottom:1px solid #ddd;overflow-x:auto;white-space:nowrap;-webkit-overflow-scrolling:touch}
+    .nav a{text-decoration:none;color:#333;padding:6px 8px;border-radius:6px;font-size:14px;flex-shrink:0}
+    .nav a.active{background:#2c5f2d;color:#fff}
+    .nav a:hover{background:#ddd}
+    .container{padding:18px;max-width:760px}
+    .card{border:1px solid #ddd;padding:16px;border-radius:12px;margin:12px 0}
+    .row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+    .mono{font-family:ui-monospace,monospace}
+    button{padding:8px 12px;border-radius:8px;border:1px solid #888;background:#fafafa;cursor:pointer}
+    button:disabled{opacity:0.5;cursor:not-allowed}
+    button.danger{background:#ffebee;border-color:#c62828;color:#c62828}
+    button.primary{background:#2c5f2d;color:#fff;border-color:#2c5f2d}
+    input,select{padding:6px 10px;border:1px solid #ccc;border-radius:8px}
+    .muted{color:#666;font-size:14px}
+    .danger{color:#b00}
+    .ok{color:#0a0}
+    .status-badge{display:inline-block;padding:4px 10px;border-radius:12px;font-size:13px;font-weight:600}
+    .status-timer{background:#e3f2fd;color:#1976d2}
+    .status-off{background:#fce4ec;color:#c2185b}
+    .schedule-item{border:1px solid #e0e0e0;padding:12px;border-radius:8px;margin:8px 0;background:#fafafa}
+    .schedule-item.disabled{opacity:0.6}
+    .schedule-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px}
+    .schedule-time{font-size:20px;font-weight:600}
+    .schedule-days{margin:6px 0;font-size:14px}
+    .day-btn{display:inline-block;width:32px;height:32px;line-height:32px;text-align:center;border:1px solid #ccc;border-radius:50%;margin:2px;cursor:pointer;background:#fff}
+    .day-btn.active{background:#2c5f2d;color:#fff;border-color:#2c5f2d}
+    .modal{display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.5);z-index:1000;align-items:center;justify-content:center}
+    .modal.show{display:flex}
+    .modal-content{background:#fff;padding:20px;border-radius:12px;max-width:500px;width:90%;max-height:80vh;overflow-y:auto}
+  </style>
+</head><body><div class="header"><div><h1 id="device-name" style="margin:0;font-size:18px">🌱 Polivalka</h1><div style="font-size:11px;opacity:0.8"><span id="location-text">—</span> / <span id="room-text">—</span></div></div><div class="header-info"><div id="header-time" class="mono" style="font-size:11px">Time: --:--</div><div style="font-size:11px" id="header-mode">Mode: <span id="mode-badge" class="status-badge status-off">Off</span></div><div style="font-size:11px" id="header-conn">📡 <span id="conn-text">Offline</span></div></div></div></div><div class="nav"><a href="/">Home</a><a href="/timer" class="active">Timer</a><a href="/sensor">Sensor</a><a href="/settings">Settings</a><a href="/calibration">Calibration</a><a href="/online">Online</a><a href="/trends">Trends</a><a href="/update">Update</a></div><div class="container"><div class="card"><h3>Timer Mode</h3><p class="muted">Water on a schedule. Add up to 8 schedules with specific days and times.</p><div class="row"><button id="add-schedule-btn" class="primary" onclick="showModalWithCheck()">+ Add Schedule</button><span id="schedule-limit-info" class="muted" style="margin-left:8px"></span></div></div><div class="card"><h3>Active Schedules <span id="schedule-count" class="muted" style="font-weight:400;font-size:14px"></span></h3><div id="schedules-list"><div class="muted">No schedules configured. Click "+ Add Schedule" to create one.</div></div></div></div><div id="modal" class="modal"><div class="modal-content"><h3 id="modal-title">Add Schedule</h3><div style="margin:12px 0"><label>Time</label><br><input id="edit-time" type="time" value="07:00" style="width:150px;font-size:16px"></div><div style="margin:12px 0"><label>Days</label><br><div id="days-selector" style="margin-top:8px"><span class="day-btn" data-day="1">M</span><span class="day-btn" data-day="2">T</span><span class="day-btn" data-day="3">W</span><span class="day-btn" data-day="4">T</span><span class="day-btn" data-day="5">F</span><span class="day-btn" data-day="6">S</span><span class="day-btn" data-day="7">S</span></div><button onclick="selectAllDays()" style="margin-top:8px;font-size:12px">Every day</button><button onclick="selectWeekdays()" style="margin-top:8px;font-size:12px">Weekdays</button></div><div style="margin:12px 0"><label>Duration</label><br><input id="edit-duration" type="number" min="1" max="999" value="30" style="width:100px;text-align:left;font-size:16px"><select id="edit-unit" style="width:100px"><option value="sec">seconds</option><option value="min">minutes</option><option value="hr">hours</option></select></div><div style="margin:12px 0"><label><input id="edit-enabled" type="checkbox" checked>
+Enabled
+</label></div><div class="row" style="margin-top:16px"><button class="primary" onclick="saveSchedule()">Save</button><button onclick="closeModal()">Cancel</button></div></div></div>
+<script>
+let editingId = null;
+
+async function loadSchedules(){
+  try {
+    const data = await API.get('/schedules');
+    const list = document.getElementById('schedules-list');
+    const count = data.schedules ? data.schedules.length : 0;
+    const maxSchedules = 8;
+
+    // Update counter
+    document.getElementById('schedule-count').textContent = `(${count}/${maxSchedules})`;
+
+    // Update limit info and button state
+    const addBtn = document.getElementById('add-schedule-btn');
+    const limitInfo = document.getElementById('schedule-limit-info');
+    if (count >= maxSchedules) {
+      addBtn.disabled = true;
+      limitInfo.textContent = 'Maximum reached';
+      limitInfo.style.color = '#b00';
+    } else {
+      addBtn.disabled = false;
+      limitInfo.textContent = '';
+    }
+
+    if (!data.schedules || data.schedules.length === 0) {
+      list.innerHTML = '<div class="muted">No schedules configured.</div>';
+      return;
+    }
+
+    list.innerHTML = data.schedules.map(s => {
+      const daysText = formatDays(s.days);
+      const durationText = `${s.duration} ${s.unit}`;
+      const statusIcon = s.enabled ? '✅' : '❌';
+
+      return `
+        <div class="schedule-item ${s.enabled?'':'disabled'}">
+          <div class="schedule-header">
+            <div>
+              <span style="font-size:24px">${statusIcon}</span>
+              <span class="schedule-time">${s.time}</span>
+              <span class="muted">• ${durationText}</span>
+            </div>
+            <div class="row">
+              <button onclick="editSchedule(${s.id})">Edit</button>
+              <button class="danger" onclick="deleteSchedule(${s.id})">Delete</button>
+            </div>
+          </div>
+          <div class="schedule-days muted">${daysText}</div>
+        </div>
+      `;
+    }).join('');
+  } catch(e) {
+    console.error('Load schedules failed:', e);
+  }
+}
+
+function formatDays(days) {
+  const dayNames = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+  if (days.length === 7) return 'Every day';
+  if (days.length === 5 && days.every(d => d <= 5)) return 'Weekdays';
+  return days.map(d => dayNames[d-1]).join(', ');
+}
+
+async function showModalWithCheck() {
+  // Check if limit reached
+  try {
+    const data = await API.get('/schedules');
+    const count = data.schedules ? data.schedules.length : 0;
+    if (count >= 8) {
+      alert('Maximum 8 schedules allowed. Please delete an existing schedule first.');
+      return;
+    }
+    showModal();
+  } catch(e) {
+    console.error('Check schedules failed:', e);
+    showModal(); // Fallback: open anyway
+  }
+}
+
+function showModal(id = null) {
+  editingId = id;
+  document.getElementById('modal-title').textContent = id ? 'Edit Schedule' : 'Add Schedule';
+
+  if (id) {
+    // Load existing schedule
+    API.get('/schedules')
+      .then(r=>r.json())
+      .then(data => {
+        const s = data.schedules.find(x => x.id === id);
+        if (s) {
+          document.getElementById('edit-time').value = s.time;
+          document.getElementById('edit-duration').value = s.duration;
+          document.getElementById('edit-unit').value = s.unit;
+          document.getElementById('edit-enabled').checked = s.enabled;
+
+          // Set days
+          document.querySelectorAll('.day-btn').forEach(btn => {
+            const day = parseInt(btn.dataset.day);
+            btn.classList.toggle('active', s.days.includes(day));
+          });
+
+          // Open modal AFTER data is loaded
+          document.getElementById('modal').classList.add('show');
+        }
+      });
+  } else {
+    // Reset form
+    document.getElementById('edit-time').value = '07:00';
+    document.getElementById('edit-duration').value = 30;
+    document.getElementById('edit-unit').value = 'sec';
+    document.getElementById('edit-enabled').checked = true;
+    document.querySelectorAll('.day-btn').forEach(btn => btn.classList.remove('active'));
+
+    // Open modal for new schedule
+    document.getElementById('modal').classList.add('show');
+  }
+}
+
+function closeModal() {
+  document.getElementById('modal').classList.remove('show');
+  editingId = null;
+}
+
+// Toggle day selection
+document.querySelectorAll('.day-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    btn.classList.toggle('active');
+  });
+});
+
+function selectAllDays() {
+  const allActive = Array.from(document.querySelectorAll('.day-btn')).every(btn => btn.classList.contains('active'));
+
+  if (allActive) {
+    // All selected - deselect all
+    document.querySelectorAll('.day-btn').forEach(btn => btn.classList.remove('active'));
+  } else {
+    // Some not selected - select all
+    document.querySelectorAll('.day-btn').forEach(btn => btn.classList.add('active'));
+  }
+}
+
+function selectWeekdays() {
+  const weekdayBtns = Array.from(document.querySelectorAll('.day-btn')).filter(btn => parseInt(btn.dataset.day) <= 5);
+  const allWeekdaysActive = weekdayBtns.every(btn => btn.classList.contains('active'));
+
+  if (allWeekdaysActive) {
+    // All weekdays selected - deselect all weekdays
+    weekdayBtns.forEach(btn => btn.classList.remove('active'));
+  } else {
+    // Some weekdays not selected - select all weekdays
+    weekdayBtns.forEach(btn => btn.classList.add('active'));
+  }
+}
+
+async function saveSchedule() {
+  const time = document.getElementById('edit-time').value;
+  const duration = parseInt(document.getElementById('edit-duration').value);
+  const unit = document.getElementById('edit-unit').value;
+  const enabled = document.getElementById('edit-enabled').checked;
+
+  const days = Array.from(document.querySelectorAll('.day-btn.active'))
+    .map(btn => parseInt(btn.dataset.day));
+
+  if (days.length === 0) {
+    alert('Please select at least one day');
+    return;
+  }
+
+  try {
+    let id;
+    if (editingId !== null) {
+      // Editing existing schedule
+      id = editingId;
+    } else {
+      // Find free slot (0-7)
+      const data = await API.get('/schedules');
+      const usedIds = data.schedules.map(s => s.id);
+      id = [0,1,2,3,4,5,6,7].find(i => !usedIds.includes(i));
+      if (id === undefined) {
+        alert('Maximum 8 schedules allowed');
+        return;
+      }
+    }
+
+    const schedule = { id, time, days, duration, unit, enabled };
+    console.log('Saving schedule:', schedule);
+
+    const response = await API.post('/schedule/set', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify(schedule),
+      cache: 'no-store'
+    });
+
+    const result = await response.json();
+    console.log('Server response:', result);
+
+    if (!result.success) {
+      alert('Error saving schedule');
+      return;
+    }
+
+    closeModal();
+    loadSchedules();
+  } catch(e) {
+    console.error('Save error:', e);
+    alert('Error saving schedule: ' + e.message);
+  }
+}
+
+async function deleteSchedule(id) {
+  if (!confirm('Delete this schedule?')) return;
+
+  try {
+    await API.get('/schedule/delete?id=' + id, {
+      method: 'POST',
+      cache: 'no-store'
+    });
+    loadSchedules();
+  } catch(e) {
+    alert('Error deleting schedule: ' + e.message);
+  }
+}
+
+async function editSchedule(id) {
+  showModal(id);
+}
+
+async function updateTime(){
+  try {
+    const t = await API.get('/time/status');
+    const timeEl = document.getElementById('header-time');
+    if (t.time_set && t.current_time) {
+      timeEl.textContent='Time: '+t.current_time.substring(11,16);
+      timeEl.className = 'mono ok';
+    } else {
+      timeEl.textContent = 'Time: not set';
+      timeEl.className = 'mono danger';
+    }
+  } catch(e) {}
+}
+
+async function updateMode(){
+  try {
+    const s = await API.get('/status');
+
+    // Device Name, Location, Room
+    if (s.system_state?.device_name) {
+      document.getElementById('device-name').textContent = '🌱 ' + s.system_state.device_name;
+    }
+    if (s.system_state?.location) {
+      document.getElementById('location-text').textContent = s.system_state.location;
+    }
+    if (s.system_state?.room) {
+      document.getElementById('room-text').textContent = s.system_state.room;
+    }
+
+    // Mode
+    const mode = s.system_state?.mode || 'off';
+    const modeBadge = document.getElementById('mode-badge');
+    const modeText = mode.charAt(0).toUpperCase() + mode.slice(1);
+    modeBadge.textContent = modeText;
+    modeBadge.className = 'status-badge status-' + mode;
+
+    // Connection status
+    const connText = document.getElementById('conn-text');
+    if (s.wifi_connected) {
+      connText.textContent = 'Online';
+      connText.style.color = '#0a0';
+    } else {
+      connText.textContent = 'Offline';
+      connText.style.color = '#999';
+    }
+  } catch(e) {}
+}
+
+// Track WiFi mode to detect disconnection
+var lastWiFiMode = null;
+var lastStaIp = null;
+
+async function monitorWiFiMode() {
+  try {
+    const response = await fetch('/api/wifi/status', {
+      method: 'POST',
+      cache: 'no-store'
+    });
+    const result = await response.json();
+    const currentMode = result.mode; // "ap", "sta", "apsta"
+    const currentStaIp = result.sta_ip || null;
+
+    // Initialize on first call
+    if (lastWiFiMode === null) {
+      lastWiFiMode = currentMode;
+      lastStaIp = currentStaIp;
+      return;
+    }
+
+    // Detect NEW connection to router (sta_ip appeared) - redirect immediately!
+    if (!lastStaIp && currentStaIp) {
+      console.log('Connected to router, redirecting to ' + currentStaIp);
+      window.location.href = 'http://' + currentStaIp + window.location.pathname;
+      return;
+    }
+
+    // Detect transition from online (sta/apsta) to offline (ap)
+    if ((lastWiFiMode === 'sta' || lastWiFiMode === 'apsta') && currentMode === 'ap') {
+      // WiFi disconnected - redirect to AP IP
+      console.log('WiFi disconnected, redirecting to AP mode...');
+      window.location.href = 'http://192.168.4.1' + window.location.pathname;
+      return;
+    }
+
+    lastWiFiMode = currentMode;
+    lastStaIp = currentStaIp;
+  } catch(e) {
+    // Connection lost - try AP fallback
+    console.log('Connection lost, trying AP fallback...');
+    try {
+      await fetch('http://192.168.4.1/api/wifi/status', {
+        method: 'POST',
+        cache: 'no-store'
+      });
+      // AP is accessible - redirect
+      console.log('AP accessible, redirecting...');
+      window.location.href = 'http://192.168.4.1' + window.location.pathname;
+    } catch(e2) {
+      // AP not accessible yet, will retry on next poll
+    }
+  }
+}
+
+// Cloud mode: показать device ID в header сразу
+if (IS_CLOUD && DEVICE_ID) {
+  document.getElementById('device-name').textContent = `🌱 Polivalka-${DEVICE_ID}`;
+  document.title = `Polivalka-${DEVICE_ID} — Timer Mode`;
+  document.getElementById('location-text').textContent = 'Cloud';
+  document.getElementById('room-text').textContent = DEVICE_ID;
+}
+
+// Auto-update intervals
+setInterval(updateTime, 60000);      // Time: every minute
+setInterval(updateMode, 30000);      // Status/Mode: every 30 seconds
+if (!IS_CLOUD) { setInterval(monitorWiFiMode, 5000);  // WiFi mode: every 5 seconds (balance UX/load for active editing)
+
+// Initial load
+updateTime();
+updateMode();
+monitorWiFiMode();
+loadSchedules();
+</script>
+</body></html>

@@ -1,0 +1,264 @@
+<!doctype html><html><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width, initial-scale=1"><title>Polivalka — Firmware Update</title>
+<script src="api-adapter.js"></script>
+<style>
+    body{font-family:system-ui,Arial;margin:0;padding:0;max-width:100%}
+    .header{position:sticky;top:0;z-index:1000;background:#2c5f2d;color:#fff;padding:8px 10px;display:flex;justify-content:space-between;align-items:center;gap:8px}
+    .header h1{margin:0;font-size:18px}
+    .header-info{font-size:12px;text-align:right;line-height:1.3}
+    .nav{position:sticky;top:65px;z-index:999;background:#f0f0f0;padding:5px 8px;display:flex;gap:2px;border-bottom:1px solid #ddd;overflow-x:auto;white-space:nowrap;-webkit-overflow-scrolling:touch}
+    .nav a{text-decoration:none;color:#333;padding:6px 8px;border-radius:6px;font-size:14px;flex-shrink:0}
+    .nav a.active{background:#2c5f2d;color:#fff}
+    .nav a:hover{background:#ddd}
+    .container{padding:18px;max-width:760px}
+    .card{border:1px solid #ddd;padding:16px;border-radius:12px;margin:12px 0}
+    .mono{font-family:ui-monospace,monospace}
+    .muted{color:#666;font-size:14px}
+    .ok{color:#0a0}
+    .danger{color:#b00}
+    .warning{color:#f57c00;background:#fff3cd;padding:12px;border-radius:6px;margin:12px 0}
+    button{padding:8px 12px;border-radius:8px;border:1px solid #888;background:#fafafa;cursor:pointer}
+    button:disabled{opacity:0.5;cursor:not-allowed}
+    button.primary{background:#2c5f2d;color:#fff;border-color:#2c5f2d}
+    .progress-bar{width:100%;height:24px;background:#f0f0f0;border-radius:6px;overflow:hidden;margin:12px 0;display:none}
+    .progress-fill{height:100%;background:#2c5f2d;transition:width 0.3s;text-align:center;line-height:24px;color:#fff;font-size:12px}
+    .status-badge{display:inline-block;padding:4px 10px;border-radius:12px;font-size:13px;font-weight:600}
+    .status-timer{background:#e3f2fd;color:#1976d2}
+    .status-off{background:#fce4ec;color:#c2185b}
+</style>
+</head><body><div class="header"><div><h1 id="device-name" style="margin:0;font-size:18px">🌱 Polivalka</h1><div style="font-size:11px;opacity:0.8"><span id="location-text">—</span> / <span id="room-text">—</span></div></div><div class="header-info"><div id="header-time" class="mono" style="font-size:11px">Time: --:--</div><div style="font-size:11px" id="header-mode">Mode: <span id="mode-badge" class="status-badge status-off">Off</span></div><div style="font-size:11px" id="header-conn">📡 <span id="conn-text">Offline</span></div></div></div></div><div class="nav"><a href="/">Home</a><a href="/timer">Timer</a><a href="/sensor">Sensor</a><a href="/settings">Settings</a><a href="/calibration">Calibration</a><a href="/online">Online</a><a href="/trends">Trends</a><a href="/update" class="active">Update</a></div><div class="container"><div class="card"><h3>⚙️ Firmware Update (OTA)</h3><p class="muted">Upload new firmware (.bin file) without USB cable</p><div class="warning">⚠️ <b>Warning:</b> Do not power off during update! Device will restart automatically after successful update.</div><div style="margin:16px 0"><div class="mono" style="font-size:12px"><b>Current firmware:</b><br>Compiled: <span id="compile-datetime">--</span></div></div><div style="margin:16px 0"><label style="display:block;margin-bottom:8px"><b>Select firmware file (.bin):</b></label><input type="file" id="firmware-file" accept=".bin" style="padding:8px;border:1px solid #ccc;border-radius:6px;width:100%;max-width:400px"></div><div class="progress-bar" id="progress-bar"><div class="progress-fill" id="progress-fill">0%</div></div><div id="status-message" style="margin:12px 0;padding:10px;border-radius:6px;display:none"></div><div style="margin-top:16px"><button id="upload-btn" class="primary" onclick="uploadFirmware()" disabled>Upload Firmware</button></div></div><div class="card"><h3>How to build firmware:</h3><div class="mono" style="font-size:13px;background:#f5f5f5;padding:12px;border-radius:6px">
+cd /path/to/Polivalka<br>
+. ~/esp-idf/export.sh<br>
+idf.py build<br>
+<br>
+<span class="muted"># Binary file location:</span><br>
+build/polivalka.bin
+</div></div></div>
+<script>
+const fileInput = document.getElementById('firmware-file');
+const uploadBtn = document.getElementById('upload-btn');
+const progressBar = document.getElementById('progress-bar');
+const progressFill = document.getElementById('progress-fill');
+const statusMessage = document.getElementById('status-message');
+
+// Enable upload button when file selected
+fileInput.addEventListener('change', function() {
+  uploadBtn.disabled = !fileInput.files.length;
+});
+
+// Load current firmware info
+async function loadFirmwareInfo() {
+  try {
+    const data = await fetch('/ota/status').then(r => r.json());
+    document.getElementById('compile-datetime').textContent =
+      data.compile_date + ' ' + data.compile_time;
+  } catch(e) {
+    console.error('Failed to load firmware info:', e);
+  }
+}
+
+async function uploadFirmware() {
+  const file = fileInput.files[0];
+  if (!file) {
+    alert('Please select a firmware file');
+    return;
+  }
+
+  if (!file.name.endsWith('.bin')) {
+    alert('Please select a .bin file');
+    return;
+  }
+
+  if (!confirm('Upload firmware and restart device?\n\nThis will take about 30 seconds. Do not power off!')) {
+    return;
+  }
+
+  // Disable UI
+  uploadBtn.disabled = true;
+  fileInput.disabled = true;
+  progressBar.style.display = 'block';
+  statusMessage.style.display = 'none';
+
+  // Create form data
+  const formData = new FormData();
+  formData.append('firmware', file);
+
+  try {
+    // Upload
+    const xhr = new XMLHttpRequest();
+
+    xhr.upload.addEventListener('progress', (e) => {
+      if (e.lengthComputable) {
+        const percent = Math.round((e.loaded / e.total) * 100);
+        progressFill.style.width = percent + '%';
+        progressFill.textContent = percent + '%';
+      }
+    });
+
+    xhr.addEventListener('load', () => {
+      if (xhr.status === 200) {
+        const result = JSON.parse(xhr.responseText);
+        if (result.success) {
+          showStatus('✅ Firmware uploaded successfully! Device will restart in 8 seconds...', 'ok');
+          setTimeout(() => {
+            showStatus('⏳ Restarting device...', 'info');
+          }, 8000);
+          setTimeout(() => {
+            window.location.href = '/';
+          }, 15000);
+        } else {
+          showStatus('❌ Upload failed: ' + (result.error || 'Unknown error'), 'danger');
+          resetUI();
+        }
+      } else {
+        showStatus('❌ Upload failed: HTTP ' + xhr.status, 'danger');
+        resetUI();
+      }
+    });
+
+    xhr.addEventListener('error', () => {
+      showStatus('❌ Network error during upload', 'danger');
+      resetUI();
+    });
+
+    xhr.open('POST', '/api/ota/update');
+    xhr.send(formData);
+
+  } catch (e) {
+    showStatus('❌ Error: ' + e.message, 'danger');
+    resetUI();
+  }
+}
+
+function showStatus(message, type) {
+  statusMessage.textContent = message;
+  statusMessage.style.display = 'block';
+  statusMessage.style.background = type === 'ok' ? '#e8f5e9' : type === 'info' ? '#e3f2fd' : '#ffebee';
+  statusMessage.style.color = type === 'ok' ? '#2e7d32' : type === 'info' ? '#1976d2' : '#c62828';
+}
+
+function resetUI() {
+  uploadBtn.disabled = false;
+  fileInput.disabled = false;
+  progressBar.style.display = 'none';
+  progressFill.style.width = '0%';
+  progressFill.textContent = '0%';
+}
+
+// Header updates
+async function updateTime(){
+  try {
+    const t = await API.get('/time/status');
+    const timeEl = document.getElementById('header-time');
+    if (t.time_set && t.current_time) {
+      timeEl.textContent='Time: '+t.current_time.substring(11,16);
+      timeEl.className = 'mono ok';
+    } else {
+      timeEl.textContent = 'Time: not set';
+      timeEl.className = 'mono danger';
+    }
+  } catch(e) {}
+}
+
+async function updateHeader(){
+  try {
+    const s = await API.get('/status');
+    if (s.system_state?.device_name) {
+      document.getElementById('device-name').textContent = '🌱 ' + s.system_state.device_name;
+    }
+    if (s.system_state?.location) {
+      document.getElementById('location-text').textContent = s.system_state.location;
+    }
+    if (s.system_state?.room) {
+      document.getElementById('room-text').textContent = s.system_state.room;
+    }
+    const mode = s.system_state?.mode || 'off';
+    const modeBadge = document.getElementById('mode-badge');
+    const modeText = mode.charAt(0).toUpperCase() + mode.slice(1);
+    modeBadge.textContent = modeText;
+    modeBadge.className = 'status-badge status-' + mode;
+
+    const connText = document.getElementById('conn-text');
+    if (s.wifi_connected) {
+      connText.textContent = 'Online';
+      connText.style.color = '#0a0';
+    } else {
+      connText.textContent = 'Offline';
+      connText.style.color = '#999';
+    }
+  } catch(e) {}
+}
+
+// Cloud mode: показать device ID в header сразу
+if (IS_CLOUD && DEVICE_ID) {
+  document.getElementById('device-name').textContent = `🌱 Polivalka-${DEVICE_ID}`;
+  document.title = `Polivalka-${DEVICE_ID} — Update`;
+  document.getElementById('location-text').textContent = 'Cloud';
+  document.getElementById('room-text').textContent = DEVICE_ID;
+}
+
+updateTime();
+updateHeader();
+loadFirmwareInfo();
+
+// Track WiFi mode to detect disconnection
+var lastWiFiMode = null;
+var lastStaIp = null;
+
+async function monitorWiFiMode() {
+  try {
+    const response = await fetch('/api/wifi/status', {
+      method: 'POST',
+      cache: 'no-store'
+    });
+    const result = await response.json();
+    const currentMode = result.mode;
+    const currentStaIp = result.sta_ip || null;
+
+    // Initialize on first call
+    if (lastWiFiMode === null) {
+      lastWiFiMode = currentMode;
+      lastStaIp = currentStaIp;
+      return;
+    }
+
+    // Detect NEW connection to router (sta_ip appeared) - redirect immediately!
+    if (!lastStaIp && currentStaIp) {
+      console.log('Connected to router, redirecting to ' + currentStaIp);
+      window.location.href = 'http://' + currentStaIp + window.location.pathname;
+      return;
+    }
+
+    if (lastWiFiMode && (lastWiFiMode === 'sta' || lastWiFiMode === 'apsta') && currentMode === 'ap') {
+      console.log('WiFi disconnected, redirecting to AP mode...');
+      window.location.href = 'http://192.168.4.1' + window.location.pathname;
+      return;
+    }
+
+    lastWiFiMode = currentMode;
+    lastStaIp = currentStaIp;
+  } catch(e) {
+    // Connection lost - try AP fallback
+    console.log('Connection lost, trying AP fallback...');
+    try {
+      await fetch('http://192.168.4.1/api/wifi/status', {
+        method: 'POST',
+        cache: 'no-store'
+      });
+      // AP is accessible - redirect
+      console.log('AP accessible, redirecting...');
+      window.location.href = 'http://192.168.4.1' + window.location.pathname;
+    } catch(e2) {
+      // AP not accessible yet, will retry on next poll
+    }
+  }
+}
+
+// Auto-update intervals
+setInterval(updateTime, 60000);      // Time: every minute
+setInterval(updateHeader, 30000);    // Status: every 30 seconds
+if (!IS_CLOUD) { setInterval(monitorWiFiMode, 3000);  // WiFi mode: every 3 seconds (CRITICAL - OTA can brick device if WiFi drops)
+
+// Initial load
+monitorWiFiMode();
+</script>
+</body></html>

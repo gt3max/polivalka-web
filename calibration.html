@@ -1,0 +1,179 @@
+<!doctype html><html><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width, initial-scale=1"><title>Polivalka — Calibration</title>
+<script src="api-adapter.js"></script>
+<style>
+body{font-family:system-ui,Arial;margin:0;padding:0;max-width:100%}
+.header{position:sticky;top:0;z-index:1000;background:#2c5f2d;color:#fff;padding:8px 10px;display:flex;justify-content:space-between;align-items:center;gap:8px}
+.header h1{margin:0;font-size:18px}
+.header-info{font-size:12px;text-align:right;line-height:1.3}
+.nav{position:sticky;top:65px;z-index:999;background:#f0f0f0;padding:5px 8px;display:flex;gap:2px;border-bottom:1px solid #ddd;overflow-x:auto;white-space:nowrap;-webkit-overflow-scrolling:touch}
+.nav a{text-decoration:none;color:#333;padding:6px 8px;border-radius:6px;font-size:14px;flex-shrink:0}
+.nav a.active{background:#2c5f2d;color:#fff}
+.nav a:hover{background:#ddd}
+.container{padding:18px;max-width:760px}
+.card{border:1px solid #ddd;padding:16px;border-radius:12px;margin:12px 0}
+.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.mono{font-family:ui-monospace,monospace}
+button{padding:8px 12px;border-radius:8px;border:1px solid #888;background:#fafafa;cursor:pointer}
+button.primary{background:#2c5f2d;color:#fff;border-color:#2c5f2d}
+.muted{color:#666;font-size:14px}
+.danger{color:#b00}
+.ok{color:#0a0}
+.status-badge{display:inline-block;padding:4px 10px;border-radius:12px;font-size:13px;font-weight:600}
+.status-timer{background:#e3f2fd;color:#1976d2}
+.status-sensor{background:#fff3e0;color:#f57c00}
+.status-off{background:#fce4ec;color:#c2185b}
+</style>
+</head><body><div class="header"><div><h1 id="device-name" style="margin:0;font-size:18px">🌱 Polivalka</h1><div style="font-size:11px;opacity:0.8"><span id="location-text">—</span> / <span id="room-text">—</span></div></div><div class="header-info"><div id="header-time" class="mono" style="font-size:11px">Time: --:--</div><div style="font-size:11px" id="header-mode">Mode: <span id="mode-badge" class="status-badge status-off">Off</span></div><div style="font-size:11px" id="header-conn">📡 <span id="conn-text">Offline</span></div></div></div></div><div class="nav"><a href="/">Home</a><a href="/timer">Timer</a><a href="/sensor">Sensor</a><a href="/settings">Settings</a><a href="/calibration" class="active">Calibration</a><a href="/online">Online</a><a href="/trends">Trends</a><a href="/update">Update</a></div><div class="container"><div class="card"><h3>Sensor Calibration <span id="sensor-cal-badge" class="status-badge" style="font-size:12px;margin-left:8px">—</span></h3><p class="muted">3-point: Water=100%, Dry Soil=0%, Air=ref</p><div style="background:#f5f5f5;padding:12px;border-radius:8px;margin:8px 0"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px"><div class="muted" style="font-size:12px">Current:</div><button onclick="updateCalibration()" style="padding:4px 8px;font-size:12px">🔬 Read</button></div><div style="display:flex;gap:16px;align-items:center"><div class="mono" id="live-adc" style="font-size:18px;font-weight:600">ADC: —</div><div class="mono" id="live-moisture" style="font-size:18px;font-weight:600;color:#2c5f2d">—</div></div></div><div class="mono" id="calib" style="font-size:14px">adc_air=— adc_water=— adc_dry_soil=—</div><div class="row" style="margin-top:12px"><button id="btn-air" onclick="calib('air')">Air</button><button id="btn-water" onclick="calib('water')">Water</button><button id="btn-soil" onclick="calib('soil')">Dry Soil</button><button onclick="resetCalib()">Reset</button></div><div class="muted" style="margin-top:8px">1) Water→Water 2) Dry sensor+soil→Dry Soil 3) Air (opt)</div><div id="calib-warning" style="display:none;margin-top:8px;padding:8px;background:#fff3cd;border-radius:6px;color:#856404">⚠️ <span id="warning-text"></span></div></div><div class="card"><h3>Pump Calibration <span id="pump-cal-badge" class="status-badge" style="font-size:12px;margin-left:8px">—</span></h3><p class="muted">Measure flow rate (ml/sec)</p><div class="muted" style="margin:8px 0;font-size:13px">1) Fill tubes, remove air 2) Prepare cup/scale 3) Test & measure</div><div style="background:#f5f5f5;padding:12px;border-radius:8px;margin:12px 0"><div class="muted" style="font-size:12px">Flow:</div><div class="mono" style="font-size:18px;font-weight:600;color:#2c5f2d" id="current-ml-per-sec">-- ml/sec</div></div><div style="border:1px solid #ddd;padding:12px;border-radius:8px;margin:8px 0"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px"><b>10s</b><button onclick="pumpTest(10)" id="test-10s">Run 10s</button></div><div style="display:flex;gap:8px;align-items:center"><input type="number" id="ml-10s" placeholder="ml" oninput="calculateResults()" style="flex:1;padding:6px;border:1px solid #ccc;border-radius:4px" min="0" step="1"><span class="mono" id="result-10s" style="color:#666">— ml/s</span></div></div><div style="border:1px solid #ddd;padding:12px;border-radius:8px;margin:8px 0"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px"><b>30s</b><button onclick="pumpTest(30)" id="test-30s">Run 30s</button></div><div style="display:flex;gap:8px;align-items:center"><input type="number" id="ml-30s" placeholder="ml" oninput="calculateResults()" style="flex:1;padding:6px;border:1px solid #ccc;border-radius:4px" min="0" step="1"><span class="mono" id="result-30s" style="color:#666">— ml/s</span></div></div><div style="border:1px solid #ddd;padding:12px;border-radius:8px;margin:8px 0"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px"><b>60s</b><button onclick="pumpTest(60)" id="test-60s">Run 60s</button></div><div style="display:flex;gap:8px;align-items:center"><input type="number" id="ml-60s" placeholder="ml" oninput="calculateResults()" style="flex:1;padding:6px;border:1px solid #ccc;border-radius:4px" min="0" step="1"><span class="mono" id="result-60s" style="color:#666">— ml/s</span></div></div><div id="pump-result" style="display:none;background:#e8f5e9;padding:12px;border-radius:8px;margin:12px 0"><div><b>Avg:</b> <span class="mono" id="avg-ml-per-sec" style="font-size:18px">-- ml/s</span></div><div style="display:flex;gap:8px;margin-top:8px"><button onclick="saveCalibration()" class="primary">✓ Save</button><button onclick="resetPumpCalib()">Reset</button></div></div><div id="pump-warning" style="display:none;margin-top:8px;padding:8px;background:#fff3cd;border-radius:6px;color:#856404">⚠️ <span id="pump-warning-text"></span></div></div></div>
+<script>
+async function loadAllData(){
+try {
+const s=await API.get('/status');
+if(s.system_state?.device_name){document.getElementById('device-name').textContent='🌱 '+s.system_state.device_name;}
+if(s.system_state?.location){document.getElementById('location-text').textContent=s.system_state.location;}
+if(s.system_state?.room){document.getElementById('room-text').textContent=s.system_state.room;}
+const mode=s.system_state?.mode||'off';const modeBadge=document.getElementById('mode-badge');
+const modeText=mode.charAt(0).toUpperCase()+mode.slice(1);
+modeBadge.textContent=modeText;modeBadge.className='status-badge status-'+mode;
+const connText=document.getElementById('conn-text');
+if(s.wifi_connected){connText.textContent='Online';connText.style.color='#0a0';}else{connText.textContent='Offline';connText.style.color='#999';}
+document.getElementById('live-adc').textContent=`ADC: ${s.adc}`;
+const moistureEl=document.getElementById('live-moisture');
+if(s.percent!==null&&s.percent!==undefined){moistureEl.textContent=`${s.percent}%`;}else{moistureEl.textContent='Not calibrated';}
+const air=s.calib.adc_air;const water=s.calib.adc_water;const soil=s.calib.adc_dry_soil;
+document.getElementById('calib').textContent=`adc_air=${air}  adc_water=${water}  adc_dry_soil=${soil||'—'}`;
+const sensorBadge=document.getElementById('sensor-cal-badge');
+if(s.sensor_calibrated){sensorBadge.textContent='✓ Calibrated';sensorBadge.style.background='#e8f5e9';sensorBadge.style.color='#2e7d32';}
+else{sensorBadge.textContent='⚠️ Defaults';sensorBadge.style.background='#fff3e0';sensorBadge.style.color='#f57c00';}
+if(air!==null&&soil!==null&&air!=='—'&&soil!=='—'){
+const diff=Math.abs(air-soil);const warningDiv=document.getElementById('calib-warning');
+const warningText=document.getElementById('warning-text');
+if(diff>200){warningText.textContent=`Air (${air}) vs Soil (${soil}) >200! Dry soil first`;warningDiv.style.display='block';}
+else{warningDiv.style.display='none';}}
+}catch(e){}}
+async function updateCalibration(){
+const btn=event?event.target:document.querySelector('button[onclick*="updateCalibration"]');
+if(btn){btn.disabled=true;btn.textContent='⏳';}
+try{await API.get('/moisture');
+await new Promise(r=>setTimeout(r,500));await loadAllData();}catch(e){alert('Read failed');}
+if(btn){btn.disabled=false;btn.textContent='🔬 Read';}}
+async function updateTime(){
+try{const t=await API.get('/time/status');
+const timeEl=document.getElementById('header-time');
+if(t.time_set&&t.current_time){timeEl.textContent='Time: '+t.current_time.substring(11,16);timeEl.className='mono ok';}
+else{timeEl.textContent='Time: not set';timeEl.className='mono danger';}}catch(e){}}
+async function calib(kind){
+document.getElementById('btn-air').disabled=true;document.getElementById('btn-water').disabled=true;
+document.getElementById('btn-soil').disabled=true;const CAL_SEC=2;
+for(let t=CAL_SEC;t>0;t--){await new Promise(r=>setTimeout(r,1000));}
+const params={'air':'dry=1','water':'wet=1','soil':'soil=1'};
+await fetch('/calibrate?'+params[kind]+'&hold='+(CAL_SEC*1000),{cache:'no-store'});
+document.getElementById('btn-air').disabled=false;document.getElementById('btn-water').disabled=false;
+document.getElementById('btn-soil').disabled=false;updateCalibration();}
+async function resetCalib(){await API.get('/reset');updateCalibration();}
+async function loadPumpCalibration(){
+try{const s=await API.get('/pump/status');
+const ml=s.ml_per_sec||10.0;document.getElementById('current-ml-per-sec').textContent=ml.toFixed(2)+' ml/sec';
+const pumpBadge=document.getElementById('pump-cal-badge');
+if(s.calibrated){pumpBadge.textContent='✓ Calibrated';pumpBadge.style.background='#e8f5e9';pumpBadge.style.color='#2e7d32';}
+else{pumpBadge.textContent='⚠️ Defaults';pumpBadge.style.background='#fff3e0';pumpBadge.style.color='#f57c00';}}catch(e){}}
+async function pumpTest(duration){
+const btn=document.getElementById('test-'+duration+'s');if(!btn)return;
+btn.disabled=true;btn.textContent='⏳';
+try{await fetch('/pump/test?sec='+duration,{cache:'no-store'});btn.textContent='✓';
+setTimeout(()=>{btn.textContent='Run '+duration+'s';btn.disabled=false;},2000);}
+catch(e){btn.textContent='❌';setTimeout(()=>{btn.textContent='Run '+duration+'s';btn.disabled=false;},2000);}}
+function calculateResults(){
+const ml10=parseFloat(document.getElementById('ml-10s').value)||0;
+const ml30=parseFloat(document.getElementById('ml-30s').value)||0;
+const ml60=parseFloat(document.getElementById('ml-60s').value)||0;
+let rates=[];let hasData=false;
+if(ml10>0){const rate=ml10/10;document.getElementById('result-10s').textContent=rate.toFixed(2)+' ml/s';rates.push(rate);hasData=true;}
+else{document.getElementById('result-10s').textContent='— ml/s';}
+if(ml30>0){const rate=ml30/30;document.getElementById('result-30s').textContent=rate.toFixed(2)+' ml/s';rates.push(rate);hasData=true;}
+else{document.getElementById('result-30s').textContent='— ml/s';}
+if(ml60>0){const rate=ml60/60;document.getElementById('result-60s').textContent=rate.toFixed(2)+' ml/s';rates.push(rate);hasData=true;}
+else{document.getElementById('result-60s').textContent='— ml/s';}
+if(rates.length>=2){const avg=rates.reduce((a,b)=>a+b,0)/rates.length;
+document.getElementById('avg-ml-per-sec').textContent=avg.toFixed(2)+' ml/s';
+document.getElementById('pump-result').style.display='block';
+const maxRate=Math.max(...rates);const minRate=Math.min(...rates);const variance=((maxRate-minRate)/avg)*100;
+const warningDiv=document.getElementById('pump-warning');const warningText=document.getElementById('pump-warning-text');
+if(variance>10){warningText.textContent='Variance '+variance.toFixed(1)+'% - check air bubbles';warningDiv.style.display='block';}
+else{warningDiv.style.display='none';}}
+else{document.getElementById('pump-result').style.display='none';document.getElementById('pump-warning').style.display='none';}}
+async function saveCalibration(){
+const avgText=document.getElementById('avg-ml-per-sec').textContent;const ml_per_sec=parseFloat(avgText);
+if(!ml_per_sec||ml_per_sec<=0){alert('Invalid value');return;}
+try{await fetch('/pump/calibrate?ml_per_sec='+ml_per_sec,{cache:'no-store'});
+alert('Saved: '+ml_per_sec.toFixed(2)+' ml/sec');loadPumpCalibration();}catch(e){alert('Save failed');}}
+async function resetPumpCalib(){
+try{await API.get('/pump/reset');
+alert('Pump calibration reset to default (2.5 ml/sec)');loadPumpCalibration();}catch(e){alert('Reset failed');}}
+// Cloud mode: показать device ID в header сразу
+if (IS_CLOUD && DEVICE_ID) {
+  document.getElementById('device-name').textContent = `🌱 Polivalka-${DEVICE_ID}`;
+  document.title = `Polivalka-${DEVICE_ID} — Calibration`;
+  document.getElementById('location-text').textContent = 'Cloud';
+  document.getElementById('room-text').textContent = DEVICE_ID;
+}
+
+updateTime();loadAllData();loadPumpCalibration();
+
+// Track WiFi mode to detect disconnection
+var lastWiFiMode = null;
+var lastStaIp = null;
+
+async function monitorWiFiMode() {
+  try {
+    const response = await fetch('/wifi/status', {
+      method: 'POST',
+      cache: 'no-store'
+    });
+    const result = await response.json();
+    const currentMode = result.mode;
+    const currentStaIp = result.sta_ip || null;
+
+    // Initialize on first call
+    if (lastWiFiMode === null) {
+      lastWiFiMode = currentMode;
+      lastStaIp = currentStaIp;
+      return;
+    }
+
+    // Detect NEW connection to router (sta_ip appeared) - redirect immediately!
+    if (!lastStaIp && currentStaIp) {
+      console.log('Connected to router, redirecting to ' + currentStaIp);
+      window.location.href = 'http://' + currentStaIp + window.location.pathname;
+      return;
+    }
+
+    if (lastWiFiMode && (lastWiFiMode === 'sta' || lastWiFiMode === 'apsta') && currentMode === 'ap') {
+      console.log('WiFi disconnected, redirecting to AP mode...');
+      window.location.href = 'http://192.168.4.1' + window.location.pathname;
+      return;
+    }
+
+    lastWiFiMode = currentMode;
+    lastStaIp = currentStaIp;
+  } catch(e) {
+    // Connection lost - try AP fallback
+    console.log('Connection lost, trying AP fallback...');
+    try {
+      await fetch('http://192.168.4.1/api/wifi/status', {
+        method: 'POST',
+        cache: 'no-store'
+      });
+      // AP is accessible - redirect
+      console.log('AP accessible, redirecting...');
+      window.location.href = 'http://192.168.4.1' + window.location.pathname;
+    } catch(e2) {
+      // AP not accessible yet, will retry on next poll
+    }
+  }
+}
+
+setInterval(updateTime, 60000);
+if (!IS_CLOUD) { setInterval(monitorWiFiMode, 5000);  // 5 sec - balance UX/load (active calibration operations)
+monitorWiFiMode();
+</script>
+</body></html>

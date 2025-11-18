@@ -1,0 +1,304 @@
+<!doctype html><html><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width, initial-scale=1"><title>Polivalka — Settings</title>
+<script src="api-adapter.js"></script>
+<style>
+    body{font-family:system-ui,Arial;margin:0;padding:0;max-width:100%}
+    .header{position:sticky;top:0;z-index:1000;background:#2c5f2d;color:#fff;padding:8px 10px;display:flex;justify-content:space-between;align-items:center;gap:8px}
+    .header h1{margin:0;font-size:18px}
+    .header-info{font-size:12px;text-align:right;line-height:1.3}
+    .nav{position:sticky;top:65px;z-index:999;background:#f0f0f0;padding:5px 8px;display:flex;gap:2px;border-bottom:1px solid #ddd;overflow-x:auto;white-space:nowrap;-webkit-overflow-scrolling:touch}
+    .nav a{text-decoration:none;color:#333;padding:6px 8px;border-radius:6px;font-size:14px;flex-shrink:0}
+    .nav a.active{background:#2c5f2d;color:#fff}
+    .nav a:hover{background:#ddd}
+    .container{padding:18px;max-width:760px}
+    .card{border:1px solid #ddd;padding:16px;border-radius:12px;margin:12px 0}
+    .row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+    .mono{font-family:ui-monospace,monospace}
+    button{padding:8px 12px;border-radius:8px;border:1px solid #888;background:#fafafa;cursor:pointer}
+    button.primary{background:#2c5f2d;color:#fff;border-color:#2c5f2d}
+    input{padding:6px 10px;border:1px solid #ccc;border-radius:8px}
+    .muted{color:#666;font-size:14px}
+    .danger{color:#b00}
+    .ok{color:#0a0}
+    .status-badge{display:inline-block;padding:4px 10px;border-radius:12px;font-size:13px;font-weight:600}
+    .status-timer{background:#e3f2fd;color:#1976d2}
+    .status-sensor{background:#fff3e0;color:#f57c00}
+    .status-off{background:#fce4ec;color:#c2185b}
+  </style>
+</head><body><div class="header"><div><h1 id="device-name" style="margin:0;font-size:18px">🌱 Polivalka</h1><div style="font-size:11px;opacity:0.8"><span id="location-text">—</span> / <span id="room-text">—</span></div></div><div class="header-info"><div id="header-time" class="mono" style="font-size:11px">Time: --:--</div><div style="font-size:11px" id="header-mode">Mode: <span id="mode-badge" class="status-badge status-off">Off</span></div><div style="font-size:11px" id="header-conn">📡 <span id="conn-text">Offline</span></div></div></div></div><div class="nav"><a href="/">Home</a><a href="/timer">Timer</a><a href="/sensor">Sensor</a><a href="/settings" class="active">Settings</a><a href="/calibration">Calibration</a><a href="/online">Online</a><a href="/trends">Trends</a><a href="/update">Update</a></div><div class="container"><div class="card"><h3>Date & Time Setup</h3><div class="mono" id="current-time">Current: --:--:--</div><div style="margin-top:12px"><label style="display:block;margin-bottom:6px">Set date:</label><input id="date-input" type="date" style="font-size:16px;padding:8px;width:160px"></div><div style="margin-top:12px"><label style="display:block;margin-bottom:6px">Set time:</label><input id="time-input" type="time" value="12:00" style="font-size:16px;padding:8px;width:120px"></div><div class="row" style="margin-top:12px"><button class="primary" onclick="setTime()">Set Date & Time</button></div><div class="muted" style="margin-top:8px">
+Note: Time resets on power loss. Battery backup recommended.
+</div></div><div class="card"><h3>⏰ Time Zone</h3><p class="muted">Set your local timezone. Device will use this for scheduling and time display.</p><div style="margin:12px 0"><label>Select Timezone:</label><br><select id="timezone-select" style="width:100%;max-width:400px;margin-top:4px;font-size:16px;padding:8px;border:1px solid #ccc;border-radius:8px"><optgroup label="🌍 Europe"><option value="GMT0BST,M3.5.0,M10.5.0">🇬🇧 London (UTC+0/+1)</option><option value="WET0WEST,M3.5.0,M10.5.0">🇵🇹 Lisbon (UTC+0/+1)</option><option value="CET-1CEST,M3.5.0,M10.5.0/3">🇩🇪 Berlin/Paris/Rome (UTC+1/+2)</option><option value="EET-2EEST,M3.5.0,M10.5.0/3">🇺🇦 Kiev/Athens (UTC+2/+3)</option><option value="MSK-3">🇷🇺 Moscow (UTC+3)</option><option value="<TRT>-3">🇹🇷 Istanbul (UTC+3)</option></optgroup><optgroup label="🌎 North America"><option value="AKST9AKDT,M3.2.0,M11.1.0">🇺🇸 Alaska (UTC-9/-8)</option><option value="PST8PDT,M3.2.0,M11.1.0">🇺🇸 Los Angeles (UTC-8/-7)</option><option value="MST7MDT,M3.2.0,M11.1.0">🇺🇸 Denver (UTC-7/-6)</option><option value="MST7">🇺🇸 Arizona (UTC-7)</option><option value="CST6CDT,M3.2.0,M11.1.0">🇺🇸 Chicago/Mexico (UTC-6/-5)</option><option value="EST5EDT,M3.2.0,M11.1.0">🇺🇸 New York/Toronto (UTC-5/-4)</option><option value="AST4">🇵🇷 Puerto Rico (UTC-4)</option><option value="NST3:30NDT,M3.2.0,M11.1.0">🇨🇦 Newfoundland (UTC-3:30/-2:30)</option><option value="HST10">🇺🇸 Hawaii (UTC-10)</option></optgroup><optgroup label="🌎 South America"><option value="<-03>3">🇧🇷 Brasília/Buenos Aires (UTC-3)</option><option value="<-04>4">🇻🇪 Caracas (UTC-4)</option><option value="<-05>5">🇵🇪 Lima/Bogotá (UTC-5)</option><option value="<CLT>4<CLST>,M9.1.6/24,M4.1.6/24">🇨🇱 Santiago (UTC-4/-3)</option></optgroup><optgroup label="🌏 Asia - East"><option value="JST-9">🇯🇵 Tokyo (UTC+9)</option><option value="KST-9">🇰🇷 Seoul (UTC+9)</option><option value="CST-8">🇨🇳 Beijing/Hong Kong (UTC+8)</option><option value="<+07>-7">🇹🇭 Bangkok/Jakarta (UTC+7)</option><option value="<+0545>-5:45">🇳🇵 Kathmandu (UTC+5:45)</option><option value="IST-5:30">🇮🇳 Mumbai/Delhi (UTC+5:30)</option></optgroup><optgroup label="🌏 Asia - Middle East"><option value="<+04>-4">🇦🇪 Dubai (UTC+4)</option><option value="<+03>-3">🇸🇦 Riyadh/Kuwait (UTC+3)</option><option value="IST-2IDT,M3.4.4/26,M10.5.0">🇮🇱 Jerusalem (UTC+2/+3)</option></optgroup><optgroup label="🌏 Asia - Central"><option value="<+06>-6">🇰🇿 Almaty (UTC+6)</option><option value="<+05>-5">🇵🇰 Karachi (UTC+5)</option><option value="<+045>-4:30">🇦🇫 Kabul (UTC+4:30)</option></optgroup><optgroup label="🌍 Africa"><option value="EET-2">🇪🇬 Cairo (UTC+2)</option><option value="CAT-2">🇿🇦 Johannesburg (UTC+2)</option><option value="EAT-3">🇰🇪 Nairobi (UTC+3)</option><option value="WAT-1">🇳🇬 Lagos (UTC+1)</option></optgroup><optgroup label="🌏 Oceania"><option value="AEST-10AEDT,M10.1.0,M4.1.0">🇦🇺 Sydney/Melbourne (UTC+10/+11)</option><option value="ACST-9:30ACDT,M10.1.0,M4.1.0">🇦🇺 Adelaide (UTC+9:30/+10:30)</option><option value="AWST-8">🇦🇺 Perth (UTC+8)</option><option value="NZST-12NZDT,M9.5.0,M4.1.0">🇳🇿 Auckland (UTC+12/+13)</option><option value="<+11>-11">🇫🇯 Fiji (UTC+11)</option></optgroup><optgroup label="🌊 Pacific Islands"><option value="<+10>-10">🇵🇬 Papua New Guinea (UTC+10)</option><option value="<-11>11">🇦🇸 Samoa (UTC-11)</option></optgroup></select></div><div class="row" style="margin-top:12px"><button class="primary" onclick="saveTimezone()">Save Timezone</button></div><div class="muted" style="margin-top:8px" id="timezone-status">Current: Loading...</div></div><div class="card"><h3>Device Identity</h3><p class="muted">Organize your devices: Location → Room → Device Name</p><div style="margin:12px 0"><label>Location (e.g. Greenhouse-1, Balcony-North)</label><br><input id="device-location" type="text" placeholder="Location" style="width:100%;max-width:400px;margin-top:4px;font-size:16px"></div><div style="margin:12px 0"><label>Room/Zone (e.g. Section-A, Shelf-2)</label><br><input id="device-room" type="text" placeholder="Room or Zone" style="width:100%;max-width:400px;margin-top:4px;font-size:16px"></div><div style="margin:12px 0"><label>Device Name (e.g. Tomato-1, Basil-Main)</label><br><input id="device-name-input" type="text" placeholder="Device Name" value="Plant" style="width:100%;max-width:400px;margin-top:4px;font-size:16px"></div><div class="row" style="margin-top:12px"><button class="primary" onclick="saveDeviceInfo()">Save Identity</button></div></div><div class="card"><h3>Device Info</h3><div style="margin:8px 0"><span class="muted">Access Point:</span><span class="mono">Polivalka</span></div><div style="margin:8px 0"><span class="muted">IP Address:</span><span class="mono" id="device-ip">192.168.4.1</span></div><div style="margin:8px 0"><span class="muted">Connection:</span><span class="mono" id="device-connection">Offline (AP Mode)</span></div><div style="margin:8px 0"><span class="muted">Firmware:</span><span class="mono">L1 MVP</span></div></div><div class="card"><h3>Reset Device</h3><p class="muted" style="color:#b00">⚠️ Warning: This will reset all settings to factory defaults</p><div class="row"><button style="background:#ffebee;border-color:#c62828;color:#c62828" onclick="resetDevice()">Reset to Factory Defaults</button></div></div></div>
+<script>
+// Header + Device Info
+async function loadAllData(){
+  try {
+    const s = await API.get('/status');
+
+    // Header
+    if (s.system_state?.device_name) {
+      document.getElementById('device-name').textContent = '🌱 ' + s.system_state.device_name;
+    }
+    if (s.system_state?.location) {
+      document.getElementById('location-text').textContent = s.system_state.location;
+    }
+    if (s.system_state?.room) {
+      document.getElementById('room-text').textContent = s.system_state.room;
+    }
+    const mode = s.system_state?.mode || 'off';
+    const modeBadge = document.getElementById('mode-badge');
+    const modeText = mode.charAt(0).toUpperCase() + mode.slice(1);
+    modeBadge.textContent = modeText;
+    modeBadge.className = 'status-badge status-' + mode;
+
+    // Connection status
+    const connText = document.getElementById('conn-text');
+    if (s.wifi_connected) {
+      connText.textContent = 'Online';
+      connText.style.color = '#0a0';
+    } else {
+      connText.textContent = 'Offline';
+      connText.style.color = '#999';
+    }
+
+    // Device Info
+    if (s.ip) {
+      document.getElementById('device-ip').textContent = s.ip;
+    }
+
+    // Update connection status
+    const connectionEl = document.getElementById('device-connection');
+    if (s.wifi_connected) {
+      connectionEl.textContent = 'Online (STA Mode)';
+      connectionEl.style.color = '#0a0';
+    } else {
+      connectionEl.textContent = 'Offline (AP Mode)';
+      connectionEl.style.color = '#999';
+    }
+
+    if (s.system_state?.device_name) {
+      document.getElementById('device-name-input').value = s.system_state.device_name;
+    }
+    if (s.system_state?.location) {
+      document.getElementById('device-location').value = s.system_state.location;
+    }
+    if (s.system_state?.room) {
+      document.getElementById('device-room').value = s.system_state.room;
+    }
+  } catch(e) {
+    console.error('Load failed:', e);
+  }
+}
+
+async function saveDeviceInfo(){
+  const name = document.getElementById('device-name-input').value.trim();
+  const location = document.getElementById('device-location').value.trim();
+  const room = document.getElementById('device-room').value.trim();
+
+  if (!name) {
+    alert('Please enter a device name');
+    return;
+  }
+
+  try {
+    const data = JSON.stringify({name, location, room});
+    await API.get('/device/info?data=' + encodeURIComponent(data), {cache:'no-store'});
+    alert('Device identity saved!');
+    loadAllData();
+  } catch(e) {
+    alert('Error saving device identity: ' + e.message);
+  }
+}
+
+async function updateTime(){
+  try {
+    const t = await API.get('/time/status');
+    const timeEl = document.getElementById('header-time');
+    const currentTimeEl = document.getElementById('current-time');
+
+    if (t.time_set && t.current_time !== 'not set') {
+      // current_time format: "YYYY-MM-DD HH:MM:SS"
+      // Extract HH:MM (starts at position 11)
+      const timeStr = t.current_time.substring(11, 16);
+      timeEl.textContent='Time: '+ timeStr;
+      timeEl.className = 'mono ok';
+      currentTimeEl.textContent = 'Current: ' + t.current_time;
+      currentTimeEl.className = 'mono ok';
+    } else {
+      timeEl.textContent = 'Time: not set';
+      timeEl.className = 'mono danger';
+      currentTimeEl.textContent = 'Current: not set';
+      currentTimeEl.className = 'mono danger';
+    }
+  } catch(e) {
+    console.error('Time update failed:', e);
+  }
+}
+
+async function setTime(){
+  const dateInput = document.getElementById('date-input').value;
+  const timeInput = document.getElementById('time-input').value;
+
+  if (!dateInput || !timeInput) {
+    alert('Please enter both date and time');
+    return;
+  }
+
+  try {
+    // Parse date and time into components
+    const [year, month, day] = dateInput.split('-').map(Number);
+    const [hour, minute] = timeInput.split(':').map(Number);
+
+    // Send POST request with JSON
+    const response = await API.post('/time/set', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({year, month, day, hour, minute, second: 0}),
+      cache: 'no-store'
+    });
+
+    const data = await response.json();
+
+    if (data.success) {
+      alert('Date & Time set successfully!');
+      updateTime();
+    } else {
+      alert('Error: ' + (data.error || 'Unknown error'));
+    }
+  } catch(e) {
+    alert('Error setting time: ' + e.message);
+  }
+}
+
+async function resetDevice(){
+  if (!confirm('Are you sure? This will reset ALL settings to factory defaults!')) return;
+  if (!confirm('Last warning: All calibration data, schedules, and settings will be lost!')) return;
+
+  try {
+    await API.get('/reset/device');
+    alert('Device reset! Restarting...\n\nWait 5 seconds then refresh the page.');
+    // Ждем перезагрузки ESP32 и перезагружаем страницу (игнорируя кэш)
+    setTimeout(() => location.reload(true), 5000);
+  } catch(e) {
+    // Ошибка ожидаема - ESP32 перезагружается
+    alert('Device is restarting...\n\nWait 5 seconds then refresh the page.');
+    setTimeout(() => location.reload(true), 5000);
+  }
+}
+
+async function loadTimezone(){
+  try {
+    const t = await API.get('/time/timezone');
+    if (t.timezone) {
+      document.getElementById('timezone-select').value = t.timezone;
+      // Find timezone name from dropdown
+      const selectEl = document.getElementById('timezone-select');
+      const selectedOption = selectEl.options[selectEl.selectedIndex];
+      const tzName = selectedOption ? selectedOption.text : t.timezone;
+      document.getElementById('timezone-status').textContent = 'Current: ' + tzName;
+    }
+  } catch(e) {
+    console.error('Load timezone failed:', e);
+    document.getElementById('timezone-status').textContent = 'Current: Unknown';
+  }
+}
+
+async function saveTimezone(){
+  const timezone = document.getElementById('timezone-select').value;
+  if (!timezone) {
+    alert('Please select a timezone');
+    return;
+  }
+
+  try {
+    const response = await API.get('/time/timezone', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({timezone}),
+      cache: 'no-store'
+    });
+
+    const data = await response.json();
+
+    if (data.success) {
+      alert('Timezone saved!\n\nTime will update after next NTP sync or manual time set.');
+      loadTimezone();
+      updateTime();
+    } else {
+      alert('Error: ' + (data.error || 'Unknown error'));
+    }
+  } catch(e) {
+    alert('Error saving timezone: ' + e.message);
+  }
+}
+
+// Initial load - SINGLE fetch instead of 3
+updateTime();
+loadAllData();
+loadTimezone();
+
+// Track WiFi mode to detect disconnection
+var lastWiFiMode = null;
+var lastStaIp = null;
+
+async function monitorWiFiMode() {
+  try {
+    const response = await fetch('/api/wifi/status', {
+      method: 'POST',
+      cache: 'no-store'
+    });
+    const result = await response.json();
+    const currentMode = result.mode;
+    const currentStaIp = result.sta_ip || null;
+
+    // Initialize on first call
+    if (lastWiFiMode === null) {
+      lastWiFiMode = currentMode;
+      lastStaIp = currentStaIp;
+      return;
+    }
+
+    // Detect NEW connection to router (sta_ip appeared) - redirect immediately!
+    if (!lastStaIp && currentStaIp) {
+      console.log('Connected to router, redirecting to ' + currentStaIp);
+      window.location.href = 'http://' + currentStaIp + window.location.pathname;
+      return;
+    }
+
+    if (lastWiFiMode && (lastWiFiMode === 'sta' || lastWiFiMode === 'apsta') && currentMode === 'ap') {
+      console.log('WiFi disconnected, redirecting to AP mode...');
+      window.location.href = 'http://192.168.4.1' + window.location.pathname;
+      return;
+    }
+
+    lastWiFiMode = currentMode;
+    lastStaIp = currentStaIp;
+  } catch(e) {
+    // Connection lost - try AP fallback
+    console.log('Connection lost, trying AP fallback...');
+    try {
+      await fetch('http://192.168.4.1/api/wifi/status', {
+        method: 'POST',
+        cache: 'no-store'
+      });
+      // AP is accessible - redirect
+      console.log('AP accessible, redirecting...');
+      window.location.href = 'http://192.168.4.1' + window.location.pathname;
+    } catch(e2) {
+      // AP not accessible yet, will retry on next poll
+    }
+  }
+}
+
+// Cloud mode: показать device ID в header сразу
+if (IS_CLOUD && DEVICE_ID) {
+  document.getElementById('device-name').textContent = `🌱 Polivalka-${DEVICE_ID}`;
+  document.title = `Polivalka-${DEVICE_ID} — Settings`;
+  document.getElementById('location-text').textContent = 'Cloud';
+  document.getElementById('room-text').textContent = DEVICE_ID;
+}
+
+// Only time updates automatically (lightweight)
+setInterval(updateTime, 60000);
+if (!IS_CLOUD) { setInterval(monitorWiFiMode, 10000);
+monitorWiFiMode();
+</script>
+</body></html>

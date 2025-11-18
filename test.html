@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>API Test</title>
+  <script src="api-adapter.js"></script>
+</head>
+<body>
+  <h1>API Connection Test</h1>
+  <button onclick="testAPI()">Test /devices</button>
+  <button onclick="testPump()">Test Pump Start</button>
+  <pre id="result"></pre>
+
+  <script>
+    console.log('[API Adapter] Mode:', window.location.hostname);
+    console.log('[API Adapter] IS_CLOUD:', typeof IS_CLOUD !== 'undefined' ? IS_CLOUD : 'undefined');
+    console.log('[API Adapter] DEVICE_ID:', typeof DEVICE_ID !== 'undefined' ? DEVICE_ID : 'undefined');
+    console.log('[API Adapter] cloudBase:', typeof API !== 'undefined' ? API.cloudBase : 'undefined');
+
+    async function testAPI() {
+      const result = document.getElementById('result');
+      result.textContent = 'Loading...';
+
+      try {
+        const url = API.getEndpoint('/devices');
+        console.log('Fetching:', url);
+        result.textContent += '\nURL: ' + url;
+
+        const data = await API.get('/devices');
+        console.log('Success!', data);
+        result.textContent = 'SUCCESS!\n\n' + JSON.stringify(data, null, 2);
+      } catch (e) {
+        console.error('Error:', e);
+        result.textContent = 'ERROR!\n\n' + e.toString() + '\n\n' + e.stack;
+      }
+    }
+
+    async function testPump() {
+      const result = document.getElementById('result');
+      result.textContent = 'Starting pump...';
+
+      try {
+        const url = API.getEndpoint('/device/Polivalka-BB00C1/pump?sec=3');
+        console.log('Fetching:', url);
+        result.textContent += '\nURL: ' + url;
+
+        const response = await API.post('/device/Polivalka-BB00C1/pump?sec=3');
+        console.log('Success!', response);
+        result.textContent = 'PUMP STARTED!\n\n' + JSON.stringify(response, null, 2);
+      } catch (e) {
+        console.error('Error:', e);
+        result.textContent = 'ERROR!\n\n' + e.toString() + '\n\n' + e.stack;
+      }
+    }
+  </script>
+</body>
+</html>

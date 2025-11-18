@@ -1,0 +1,744 @@
+<!doctype html><html><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width, initial-scale=1"><title>Polivalka — Home</title>
+<script src="api-adapter.js"></script>
+<style>
+    body{font-family:system-ui,Arial;margin:0;padding:0;max-width:100%}
+    .header{position:sticky;top:0;z-index:1000;background:#2c5f2d;color:#fff;padding:8px 10px;display:flex;justify-content:space-between;align-items:center;gap:8px}
+    .header h1{margin:0;font-size:18px}
+    .header-info{font-size:12px;text-align:right;line-height:1.3}
+    .nav{position:sticky;top:65px;z-index:999;background:#f0f0f0;padding:5px 8px;display:flex;gap:2px;border-bottom:1px solid #ddd;overflow-x:auto;white-space:nowrap;-webkit-overflow-scrolling:touch}
+    .nav a{text-decoration:none;color:#333;padding:6px 8px;border-radius:6px;font-size:14px;flex-shrink:0}
+    .nav a.active{background:#2c5f2d;color:#fff}
+    .nav a:hover{background:#ddd}
+    .container{padding:18px;max-width:760px}
+    .card{border:1px solid #ddd;padding:16px;border-radius:12px;margin:12px 0}
+    .row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+    .mono{font-family:ui-monospace,monospace}
+    button{padding:8px 12px;border-radius:8px;border:1px solid #888;background:#fafafa;cursor:pointer}
+    input{padding:6px 10px;border:1px solid #ccc;border-radius:8px;width:120px}
+    .muted{color:#666}
+    .danger{color:#b00}
+    .ok{color:#0a0}
+    .status-badge{display:inline-block;padding:4px 10px;border-radius:12px;font-size:13px;font-weight:600}
+    .status-timer{background:#e3f2fd;color:#1976d2}
+    .status-sensor{background:#fff3e0;color:#f57c00}
+    .status-off{background:#fce4ec;color:#c2185b}
+    .status-active{background:#e0f7fa;color:#00838f}
+    .status-launch{background:#fff3e0;color:#f57c00;animation:blink 1s ease-in-out infinite}
+    @keyframes blink{0%,100%{opacity:1} 50%{opacity:0.4}}
+    .mode-selector{display:flex;gap:4px;margin:12px 0;justify-content:center}
+    .mode-btn{flex:1;max-width:110px;padding:10px 6px;border:2px solid #ddd;border-radius:12px;background:#fff;cursor:pointer;text-align:center;transition:all 0.2s}
+    .mode-btn:hover{background:#f5f5f5}
+    .mode-btn.selected{border-color:#2c5f2d;background:#e8f5e9}
+    .mode-btn .mode-icon{font-size:28px;margin-bottom:6px}
+    .mode-btn .mode-name{font-weight:600;font-size:14px}
+
+    /* iOS-style toggle switch */
+    .toggle-row{display:flex;justify-content:space-between;align-items:center;padding:12px 0}
+    .toggle-switch{position:relative;display:inline-block;width:51px;height:31px;flex-shrink:0}
+    .toggle-switch input{opacity:0;width:0;height:0}
+    .toggle-slider{position:absolute;cursor:pointer;top:0;left:0;right:0;bottom:0;background:#ccc;border-radius:31px;transition:0.3s}
+    .toggle-slider:before{position:absolute;content:"";height:27px;width:27px;left:2px;bottom:2px;background:#fff;border-radius:50%;transition:0.3s}
+    input:checked+.toggle-slider{background:#34c759}
+    input:checked+.toggle-slider:before{transform:translateX(20px)}
+
+    /* Adaptive layout for narrow screens */
+    @media (max-width: 400px) {
+      .status-row{flex-direction:column;align-items:flex-start!important}
+      .status-row>div{width:100%;margin-bottom:12px}
+    }
+
+  </style> </head><body><div class="header"><div><h1 id="device-name" style="margin:0;font-size:18px">🌱 Polivalka</h1><div style="font-size:11px;opacity:0.8"><span id="location-text">—</span> / <span id="room-text">—</span></div><div id="battery-status" style="font-size:11px;margin-top:4px">🔋 —</div></div><div id="header-warning" style="display:none;flex:1;text-align:center;padding:0 8px"><div style="background:#ff9800;color:#fff;padding:4px 12px;border-radius:12px;font-size:12px;font-weight:600;display:inline-block">⚠️ <span id="warning-text">Warning</span></div></div><div class="header-info"><div id="header-time" class="mono" style="font-size:11px">Time: --:--</div><div style="font-size:11px" id="header-mode">Mode: <span id="mode-badge" class="status-badge status-off">Off</span></div><div style="font-size:11px" id="header-conn">📡 <span id="conn-text">Offline</span></div></div></div></div><div class="nav"><a href="/" class="active">Home</a><a href="/timer">Timer</a><a href="/sensor">Sensor</a><a href="/settings">Settings</a><a href="/calibration">Calibration</a><a href="/online">Online</a><a href="/trends">Trends</a><a href="/update">Update</a></div><div class="container"><div class="card"><h3>💧 Moisture Sensor</h3><div class="mono" style="font-size:16px;margin:8px 0" id="sensor-vals">ADC: — | Moisture: — %</div><div class="row"><button onclick="location.href='/calibration'">Calibrate Sensor</button></div></div><div class="card"><h3>🚰 Manual Control</h3><div class="row"><label>Duration:</label><input id="manual-duration" type="number" min="1" max="300" value="5" style="width:80px"><select id="manual-unit" style="padding:6px"><option value="sec">seconds</option><option value="min">minutes</option></select><button id="btn-manual" onclick="manualWater()">Water Now</button><button id="btn-stop" onclick="stopPump()" style="background:#b00;color:#fff;border-color:#900" disabled>STOP</button></div><div id="pump-running" style="display:none;margin-top:12px;padding:12px;background:#e8f5e9;border-radius:8px;border:2px solid #2c5f2d"><div style="display:flex;justify-content:space-between;align-items:center"><div><div style="font-weight:600;color:#2c5f2d">💧 Pump Running</div><div class="mono" style="font-size:13px;margin-top:4px"><span id="pump-elapsed">0s</span> / <span id="pump-total">0s</span><span id="pump-remaining" style="margin-left:8px">(—)</span></div></div></div></div><div class="row" style="margin-top:12px"><button onclick="location.href='/calibration#pump'">Calibrate Pump</button></div></div><div class="card"><h3>Operating Mode</h3><p class="muted">Select how the system should water your plants</p><div class="mode-selector"><div class="mode-btn" data-mode="off" onclick="selectMode('off')"><div class="mode-icon">✋</div><div class="mode-name">Manual</div><div class="muted" style="font-size:11px">Manual watering only</div></div><div class="mode-btn" data-mode="timer" onclick="selectMode('timer')"><div class="mode-icon">⏰</div><div class="mode-name">Timer</div><div class="muted" style="font-size:11px">Schedule-based</div></div><div class="mode-btn" data-mode="sensor" onclick="selectMode('sensor')"><div class="mode-icon">💧</div><div class="mode-name">Sensor</div><div class="muted" style="font-size:11px">Moisture-based</div></div></div><p class="muted" style="margin-top:12px;font-size:12px"> ℹ️ Configure schedules on <b>Timer</b> page, sensor settings on <b>Sensor</b> page, and calibration on <b>Calibration</b> page.</p></div><div class="card" style="padding:12px"><h3 style="margin-top:0">System Status</h3><div style="display:flex;gap:16px;flex-wrap:wrap;margin-bottom:12px"><div style="flex:1;min-width:100px"><div class="muted" style="font-size:12px">State</div><div id="current-state" class="mono" style="font-size:14px">—</div></div><div style="flex:1;min-width:100px"><div class="muted" style="font-size:12px">Mode</div><div id="current-mode" style="font-size:14px">—</div></div><div style="flex:1;min-width:120px"><div class="muted" style="font-size:12px">Last Watering</div><div id="last-watering" class="mono" style="font-size:14px">—</div></div></div><div id="sensor-status-details" style="display:none;border-top:1px solid #ddd;padding-top:12px;margin-top:4px"><div style="display:flex;gap:16px;flex-wrap:wrap;margin-bottom:8px"><div style="flex:1;min-width:100px"><div class="muted" style="font-size:12px">Current Moisture</div><div id="status-current-moisture" class="mono" style="font-size:14px">—</div></div><div style="flex:1;min-width:100px"><div class="muted" style="font-size:12px">Target Range</div><div id="status-target-range" class="mono" style="font-size:14px">—</div></div><div style="flex:1;min-width:120px"><div class="muted" style="font-size:12px">Daily Water</div><div id="status-daily-water" class="mono" style="font-size:14px">—</div></div></div><div id="status-progress-row" style="display:none;margin-bottom:8px"><div class="muted" style="font-size:12px">Watering Progress</div><div id="status-watering-progress" class="mono" style="font-size:14px">—</div></div><div id="status-warning-row" style="display:none;padding:8px;background:#fff3cd;border-radius:8px;border:1px solid #ffc107"><div style="font-weight:600;color:#856404">⚠️ Warning</div><div id="status-warning-message" style="font-size:13px;color:#856404;margin-top:4px">—</div></div></div><div id="timer-status-details" style="display:none;border-top:1px solid #ddd;padding-top:12px;margin-top:4px"><div style="display:flex;gap:16px;flex-wrap:wrap;margin-bottom:8px"><div style="flex:1;min-width:100px"><div class="muted" style="font-size:12px">Next Watering</div><div id="status-next-watering" class="mono" style="font-size:14px">—</div></div><div style="flex:1;min-width:100px"><div class="muted" style="font-size:12px">Schedules</div><div id="status-schedule-count" class="mono" style="font-size:14px">—</div></div><div style="flex:1;min-width:120px"><div class="muted" style="font-size:12px">Daily Water</div><div id="timer-daily-water" class="mono" style="font-size:14px">—</div></div></div><div id="timer-watering-row" style="display:none;margin-bottom:8px"><div class="muted" style="font-size:12px">Watering Duration</div><div id="timer-watering-duration" class="mono" style="font-size:14px">—</div></div><div id="timer-warning-row" style="display:none;padding:8px;background:#fff3cd;border-radius:8px;border:1px solid #ffc107"><div style="font-weight:600;color:#856404">⚠️ Warning</div><div id="timer-warning-message" style="font-size:13px;color:#856404;margin-top:4px">—</div></div></div></div><div class="card"><h3>Automation Control</h3><p class="muted" id="auto-instruction">Select Timer or Sensor mode to enable automation</p><div id="timer-auto-control" style="display:none;margin-top:12px"><div class="toggle-row"><div><div style="font-weight:600">Timer Auto Watering</div><div class="muted" style="font-size:12px">Schedule-based automatic watering</div></div><label class="toggle-switch"><input type="checkbox" id="timer-auto-toggle" onchange="toggleTimerAuto(this.checked)"><span class="toggle-slider"></span></label></div><div id="timer-arming-cancel-section" style="display:none;margin-top:12px;padding:12px;background:#fff3e0;border-radius:8px;border:2px solid #f57c00"><div style="display:flex;justify-content:space-between;align-items:center"><div><div style="font-weight:600;color:#e65100">⏰ Timer Countdown</div><div class="muted" style="font-size:13px;margin-top:4px">Timer mode starting in <span id="timer-arming-countdown-display" style="font-weight:600">15</span> seconds...</div></div><button onclick="cancelTimerArming()" style="background:#b00;color:#fff;border-color:#900;padding:8px 16px;font-weight:600">CANCEL</button></div></div><p class="muted" style="margin-top:8px;font-size:12px"> ⚠️ Before enabling: make sure pump and delivery tubes are properly connected! </p></div><div id="sensor-auto-control" style="display:none;margin-top:12px"><div class="toggle-row"><div><div style="font-weight:600">Sensor Auto Watering</div><div class="muted" style="font-size:12px">Moisture-based automatic watering</div></div><label class="toggle-switch"><input type="checkbox" id="sensor-auto-toggle" onchange="toggleSensorAuto(this.checked)"><span class="toggle-slider"></span></label></div><div id="arming-cancel-section" style="display:none;margin-top:12px;padding:12px;background:#fff3e0;border-radius:8px;border:2px solid #f57c00"><div style="display:flex;justify-content:space-between;align-items:center"><div><div style="font-weight:600;color:#e65100">🚀 Launch Countdown</div><div class="muted" style="font-size:13px;margin-top:4px">Sensor mode starting in <span id="arming-countdown-display" style="font-weight:600">60</span> seconds...</div></div><button onclick="cancelArming()" style="background:#b00;color:#fff;border-color:#900;padding:8px 16px;font-weight:600">CANCEL</button></div></div><p class="muted" style="margin-top:8px;font-size:12px"> ⚠️ Before enabling: make sure sensor is inserted in soil and calibrated! </p></div></div></div> <script>
+function sleep(ms){ return new Promise(r=>setTimeout(r,ms)); }
+
+// Флаги для предотвращения рекурсии при программном изменении toggles
+let updatingTimerToggle = false;
+let updatingSensorToggle = false;
+
+// Глобальные переменные для хранения состояний контроллеров (для badge индикации)
+let lastSensorState = 'DISABLED';
+let lastTimerState = 'DISABLED';
+
+async function updateStatus(){
+  try {
+    const s = await API.get('/status');
+
+    // Device Name, Location, Room
+    if (s.system_state?.device_name) {
+      document.getElementById('device-name').textContent = '🌱 ' + s.system_state.device_name;
+    }
+    if (s.system_state?.location) {
+      document.getElementById('location-text').textContent = s.system_state.location;
+    }
+    if (s.system_state?.room) {
+      document.getElementById('room-text').textContent = s.system_state.room;
+    }
+
+    // Sensor data
+    document.getElementById('sensor-vals').textContent =
+      `ADC: ${s.adc}  |  Moisture: ${s.percent===null?'—':s.percent+' %'}`;
+
+    // System State (в System Status card, не в header!)
+    const state = s.system_state?.state || 'OFF';
+    document.getElementById('current-state').textContent = state;
+
+    // Mode badge с учётом state контроллера
+    const mode = s.system_state?.mode || 'off';
+    const modeBadge = document.getElementById('mode-badge');
+    const modeText = mode.charAt(0).toUpperCase() + mode.slice(1);
+    modeBadge.textContent = modeText;
+
+    // Определяем класс badge на основе state контроллера
+    let badgeClass = 'status-badge';
+    if (mode === 'sensor') {
+      if (lastSensorState === 'LAUNCH') {
+        badgeClass += ' status-launch'; // Мигающий оранжевый
+      } else if (lastSensorState !== 'DISABLED') {
+        badgeClass += ' status-active'; // Голубой (STANDBY, PULSE, SETTLE, CHECK, COOLDOWN)
+      } else {
+        badgeClass += ' status-sensor'; // Обычный sensor (оранжевый)
+      }
+    } else if (mode === 'timer') {
+      if (lastTimerState === 'LAUNCH') {
+        badgeClass += ' status-launch'; // Мигающий оранжевый
+      } else if (lastTimerState === 'ACTIVE' || lastTimerState === 'WATERING') {
+        badgeClass += ' status-active'; // Голубой (ACTIVE, WATERING)
+      } else {
+        badgeClass += ' status-timer'; // Обычный timer (голубой)
+      }
+    } else {
+      badgeClass += ' status-off'; // Серый (OFF)
+    }
+    modeBadge.className = badgeClass;
+
+    document.getElementById('current-mode').textContent = modeText;
+
+    // Connection status
+    const connText = document.getElementById('conn-text');
+    if (s.wifi_connected) {
+      connText.textContent = 'Online';
+      connText.style.color = '#0a0';
+    } else {
+      connText.textContent = 'Offline';
+      connText.style.color = '#999';
+    }
+
+    // Mode selector - highlight current mode
+    document.querySelectorAll('.mode-btn').forEach(btn => {
+      btn.classList.toggle('selected', btn.dataset.mode === mode);
+    });
+
+    // Last watering
+    if (s.system_state?.last_watering) {
+      document.getElementById('last-watering').textContent = s.system_state.last_watering;
+    }
+
+    // Pump Running Indicator
+    const pumpIndicator = document.getElementById('pump-running');
+    const stopBtn = document.getElementById('btn-stop');
+    const manualBtn = document.getElementById('btn-manual');
+
+    if (s.pump_running) {
+      pumpIndicator.style.display = 'block';
+      stopBtn.disabled = false;
+
+      // Disable manual button while pump is running
+      manualBtn.disabled = true;
+      manualBtn.style.background = '#ccc';
+      manualBtn.style.borderColor = '#aaa';
+
+      const elapsedSec = Math.floor(s.pump_elapsed_ms / 1000);
+      const totalSec = s.pump_remaining_ms > 0 ? Math.floor((s.pump_elapsed_ms + s.pump_remaining_ms) / 1000) : elapsedSec;
+      const remainingSec = s.pump_remaining_ms > 0 ? Math.floor(s.pump_remaining_ms / 1000) : 0;
+
+      // Show elapsed timer as button text
+      manualBtn.textContent = `Watering ${elapsedSec}s`;
+
+      document.getElementById('pump-elapsed').textContent = elapsedSec + 's';
+      document.getElementById('pump-total').textContent = totalSec + 's';
+      document.getElementById('pump-remaining').textContent = s.pump_remaining_ms > 0 ? `(${remainingSec}s left)` : '(manual mode)';
+    } else {
+      pumpIndicator.style.display = 'none';
+      stopBtn.disabled = true;
+
+      // Re-enable manual button when pump stops
+      manualBtn.disabled = false;
+      manualBtn.textContent = 'Water Now';
+      manualBtn.style.background = '';
+      manualBtn.style.borderColor = '';
+    }
+
+    // Automation Control - показываем нужную секцию
+    const timerControl = document.getElementById('timer-auto-control');
+    const sensorControl = document.getElementById('sensor-auto-control');
+    const instruction = document.getElementById('auto-instruction');
+
+    if (mode === 'timer') {
+      timerControl.style.display = 'block';
+      sensorControl.style.display = 'none';
+      instruction.style.display = 'none';
+
+      // NOTE: Toggle state will be updated by updateTimerControllerStatus()
+      // based on actual timer_controller state (not just mode)
+    } else if (mode === 'sensor') {
+      timerControl.style.display = 'none';
+      sensorControl.style.display = 'block';
+      instruction.style.display = 'none';
+
+      // NOTE: Toggle state will be updated by updateSensorControllerStatus()
+      // based on actual sensor_controller state (not just mode)
+    } else {
+      timerControl.style.display = 'none';
+      sensorControl.style.display = 'none';
+      instruction.style.display = 'block';
+    }
+  } catch(e) {
+    console.error('Status update failed:', e);
+  }
+}
+
+async function updateTime(){
+  try {
+    const t = await API.get('/time/status');
+    const timeEl = document.getElementById('header-time');
+    if (t.time_set && t.current_time) {
+      timeEl.textContent='Time: '+t.current_time.substring(11,16);
+      timeEl.className = 'mono ok';
+    } else {
+      timeEl.textContent = 'Time: not set';
+      timeEl.className = 'mono danger';
+    }
+  } catch(e) {
+    console.error('Time update failed:', e);
+  }
+}
+
+async function updateBattery(){
+  try {
+    const b = await API.get('/battery/status');
+    const batteryStatus = document.getElementById('battery-status');
+
+    if (b.available && b.percent !== undefined) {
+      // Батарея подключена - показываем процент
+      const percent = Math.round(b.percent);
+      const charging = b.charging ? ' ⚡' : '';
+      batteryStatus.textContent = `🔋 ${percent}%${charging}`;
+    } else if (!b.available && b.charging) {
+      // Батарея НЕ подключена, но устройство работает от USB/питания
+      batteryStatus.textContent = '⚡';
+    } else {
+      // Неизвестное состояние
+      batteryStatus.textContent = '🔋 —';
+    }
+  } catch(e) {
+    document.getElementById('battery-status').textContent = '🔋 —';
+  }
+}
+
+async function selectMode(mode) {
+  try {
+    // Check if switching away from active controller
+    const currentMode = document.querySelector('.mode-btn.selected')?.getAttribute('data-mode');
+
+    if (currentMode === 'timer' && lastTimerState !== 'DISABLED' && mode !== 'timer') {
+      if (!confirm('⚠️ Timer automation is active!\n\nSwitching mode will disable it.\nYou will need to re-enable automation after switching back.\n\nContinue?')) {
+        return; // User cancelled
+      }
+    }
+
+    if (currentMode === 'sensor' && lastSensorState !== 'DISABLED' && mode !== 'sensor') {
+      if (!confirm('⚠️ Sensor automation is active!\n\nSwitching mode will disable it.\nYou will need to re-enable automation after switching back.\n\nContinue?')) {
+        return; // User cancelled
+      }
+    }
+
+    await API.post('/mode/set?mode=' + mode);
+    updateStatus();
+    updateControllerStatus(); // Immediately update controller status for new mode
+  } catch(e) {
+    alert('Error setting mode: ' + e.message);
+  }
+}
+
+async function manualWater(){
+  const duration = parseInt(document.getElementById('manual-duration').value);
+  const unit = document.getElementById('manual-unit').value;
+  const sec = unit === 'min' ? duration * 60 : duration;
+
+  const btn = document.getElementById('btn-manual');
+  btn.disabled = true;
+  btn.textContent = 'Starting...';
+  btn.style.background = '#ccc';
+
+  try {
+    await API.post('/pump?sec=' + sec);
+    updateStatus();  // Сразу обновляем статус (покажет pump running)
+  } catch(e) {
+    alert('Error: ' + e.message);
+    btn.disabled = false;
+    btn.textContent = 'Water Now';
+    btn.style.background = '';
+  }
+}
+
+async function toggleTimerAuto(checked){
+  // Ignore programmatic changes
+  if (updatingTimerToggle) return;
+
+  try {
+    if (checked) {
+      // Enable timer controller (starts LAUNCH countdown)
+      const resp = await API.post('/timer/controller/enable');
+      if (!resp.success) {
+        alert(resp.message || 'Failed to enable timer controller');
+        document.getElementById('timer-auto-toggle').checked = false;
+        return;
+      }
+    } else {
+      // Disable timer controller (but keep mode as timer)
+      await API.post('/timer/controller/disable');
+    }
+    updateStatus();
+    updateControllerStatus(); // Update UI immediately
+  } catch(e) {
+    alert('Error: ' + e.message);
+    document.getElementById('timer-auto-toggle').checked = !checked; // revert on error
+  }
+}
+
+async function toggleSensorAuto(checked){
+  // Ignore programmatic changes
+  if (updatingSensorToggle) return;
+
+  try {
+    if (checked) {
+      // Enable sensor controller (starts LAUNCH countdown)
+      const resp = await API.post('/sensor/controller/enable');
+      if (!resp.success) {
+        alert(resp.message || 'Failed to enable sensor controller');
+        document.getElementById('sensor-auto-toggle').checked = false;
+        return;
+      }
+    } else {
+      // Disable sensor controller (but keep mode as sensor)
+      await API.post('/sensor/controller/disable');
+    }
+    updateStatus();
+    updateControllerStatus(); // Update UI immediately
+  } catch(e) {
+    alert('Error: ' + e.message);
+    document.getElementById('sensor-auto-toggle').checked = !checked; // revert on error
+  }
+}
+
+async function stopPump(){
+  try {
+    await API.post('/pump/stop');
+    updateStatus();
+  } catch(e) {
+    alert('Error: ' + e.message);
+  }
+}
+
+async function cancelArming(){
+  try {
+    const resp = await API.post('/sensor/controller/cancel');
+    if (resp.success) {
+      // Also disable the toggle
+      document.getElementById('sensor-auto-toggle').checked = false;
+      updateStatus();
+      updateControllerStatus(); // Use unified update instead
+    } else {
+      alert(resp.message || 'Failed to cancel launch');
+    }
+  } catch(e) {
+    alert('Error: ' + e.message);
+  }
+}
+
+// Track WiFi mode and IP to detect changes
+var lastWiFiMode = null;
+var lastStaIp = null;
+
+async function monitorWiFiMode() {
+  try {
+    const response = await fetch('/api/wifi/status', {
+      method: 'POST',
+      cache: 'no-store'
+    });
+    const result = await response.json();
+    const currentMode = result.mode; // "ap", "sta", "apsta"
+    const currentStaIp = result.sta_ip || null;
+
+    // Initialize on first call
+    if (lastWiFiMode === null) {
+      lastWiFiMode = currentMode;
+      lastStaIp = currentStaIp;
+      return;
+    }
+
+    // Detect NEW connection to router (sta_ip appeared) - redirect immediately!
+    if (!lastStaIp && currentStaIp) {
+      console.log('Connected to router, redirecting to ' + currentStaIp);
+      window.location.href = 'http://' + currentStaIp + window.location.pathname;
+      return;
+    }
+
+    // Detect transition from online (sta/apsta) to offline (ap)
+    if (lastWiFiMode && (lastWiFiMode === 'sta' || lastWiFiMode === 'apsta') && currentMode === 'ap') {
+      // WiFi disconnected - redirect to AP IP
+      console.log('WiFi disconnected, redirecting to AP mode...');
+      window.location.href = 'http://192.168.4.1' + window.location.pathname;
+      return;
+    }
+
+    lastWiFiMode = currentMode;
+    lastStaIp = currentStaIp;
+  } catch(e) {
+    // Connection lost - try AP fallback
+    console.log('Connection lost, trying AP fallback...');
+    try {
+      await fetch('http://192.168.4.1/api/wifi/status', {
+        method: 'POST',
+        cache: 'no-store'
+      });
+      // AP is accessible - redirect
+      console.log('AP accessible, redirecting...');
+      window.location.href = 'http://192.168.4.1' + window.location.pathname;
+    } catch(e2) {
+      // AP not accessible yet, will retry on next poll
+    }
+  }
+}
+
+// КРИТИЧНО: последовательная загрузка, не одновременно!
+// Интервалы разнесены чтобы не нагружать ESP32 одновременными запросами
+setInterval(updateStatus, 5000);   // каждые 5 сек
+setInterval(updateTime, 60000);    // каждые 60 сек
+setInterval(updateBattery, 10000); // каждые 10 сек (было 5, конфликтовало с updateStatus)
+// WiFi monitoring только в локальном режиме (не нужно в Cloud)
+if (!IS_CLOUD) {
+  setInterval(monitorWiFiMode, 5000); // каждые 5 сек - баланс UX/нагрузка (активные операции)
+}
+
+// Cloud mode: показать device ID в header сразу (до загрузки данных из API)
+if (IS_CLOUD && DEVICE_ID) {
+  document.getElementById('device-name').textContent = `🌱 ${DEVICE_ID}`;
+  document.title = `${DEVICE_ID} — Home`;
+
+  // Fallback location/room (пока API не загрузил реальные данные)
+  document.getElementById('location-text').textContent = 'Cloud';
+  document.getElementById('room-text').textContent = DEVICE_ID;
+} else if (IS_CLOUD && !DEVICE_ID) {
+  // ERROR: Cloud mode requires device_id parameter
+  document.body.innerHTML = `
+    <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100vh;text-align:center;padding:20px">
+      <h1 style="color:#b00">⚠️ Missing Device ID</h1>
+      <p style="font-size:16px;color:#666;max-width:500px">
+        This page requires a device ID parameter to work in cloud mode.<br>
+        Please select a device from the fleet page.
+      </p>
+      <a href="fleet.html" style="display:inline-block;margin-top:20px;padding:12px 24px;background:#2c5f2d;color:#fff;text-decoration:none;border-radius:8px;font-weight:600">
+        ← Go to Fleet
+      </a>
+      <p style="margin-top:40px;font-size:13px;color:#999">
+        Expected URL format: home.html?device=Polivalka-BB00C1
+      </p>
+    </div>
+  `;
+  throw new Error('Missing device_id parameter in cloud mode');
+}
+
+// Первая загрузка: последовательно с задержками
+updateStatus();
+setTimeout(() => updateTime(), 500);     // через 0.5 сек
+setTimeout(() => updateBattery(), 1000); // через 1 сек
+if (!IS_CLOUD) {
+  setTimeout(() => monitorWiFiMode(), 1500); // через 1.5 сек (только для локального режима)
+}
+
+// Sensor Controller Status (for Sensor mode)
+var sensorPresetCache = null;
+
+async function updateSensorControllerStatus() {
+  try {
+    const mode = document.querySelector('.mode-btn.selected')?.getAttribute('data-mode');
+
+    // Hide sensor details if not in sensor mode
+    const detailsSection = document.getElementById('sensor-status-details');
+    if (mode !== 'sensor') {
+      detailsSection.style.display = 'none';
+      document.getElementById('header-warning').style.display = 'none';
+      return;
+    }
+
+    // Fetch sensor controller status
+    const sc = await API.get('/sensor/controller/status');
+
+    // Save state globally for badge indication
+    lastSensorState = sc.state;
+
+    // Fetch preset config (cache for 10 seconds to reduce load)
+    if (!sensorPresetCache || Date.now() - sensorPresetCache.timestamp > 10000) {
+      const preset = await API.get('/sensor/preset');
+      sensorPresetCache = {data: preset, timestamp: Date.now()};
+    }
+    const preset = sensorPresetCache.data;
+
+    // Show sensor details section
+    detailsSection.style.display = 'block';
+
+    // Only update State field if we're actually in sensor mode!
+    if (mode === 'sensor') {
+      const stateEl = document.getElementById('current-state');
+      let stateText = sc.state;
+      let stateColor = '#333';
+
+      if (sc.state === 'LAUNCH') {
+        stateText = `🚀 LAUNCH IN ${sc.arming_countdown}s`;
+        stateColor = '#f57c00';
+      } else if (sc.state === 'STANDBY') {
+        stateText = '👀 Monitoring';
+        stateColor = '#2c5f2d';
+      } else if (sc.state === 'PULSE') {
+        stateText = '💧 Watering';
+        stateColor = '#1976d2';
+      } else if (sc.state === 'SETTLE') {
+        stateText = '⏳ Absorbing';
+        stateColor = '#9c27b0';
+      } else if (sc.state === 'CHECK') {
+        stateText = '🔍 Checking';
+        stateColor = '#ff9800';
+      } else if (sc.state === 'COOLDOWN') {
+        const cooldownMin = Math.floor(sc.cooldown_remaining / 60);
+        stateText = `😴 Resting (${cooldownMin}m)`;
+        stateColor = '#607d8b';
+      } else if (sc.state === 'DISABLED') {
+        stateText = '⏸️ Disabled';
+        stateColor = '#999';
+      }
+
+      stateEl.innerHTML = stateText;
+      stateEl.style.color = stateColor;
+    }
+
+    // Current Moisture (duplicate from sensor reading)
+    document.getElementById('status-current-moisture').textContent = sc.moisture_pct + '%';
+
+    // Target Range
+    if (preset && preset.start_pct && preset.stop_pct) {
+      document.getElementById('status-target-range').textContent =
+        `${preset.start_pct}-${preset.stop_pct}%`;
+    }
+
+    // Daily Water
+    if (preset && preset.max_water_day_ml) {
+      const dailyText = `${sc.daily_water_ml} / ${preset.max_water_day_ml} ml`;
+      const dailyEl = document.getElementById('status-daily-water');
+      dailyEl.textContent = dailyText;
+
+      // Color code if approaching or exceeding limit
+      if (sc.daily_hard_limit_reached) {
+        dailyEl.style.color = '#b00';
+        dailyEl.style.fontWeight = '600';
+      } else if (sc.daily_water_ml > preset.max_water_day_ml * 0.8) {
+        dailyEl.style.color = '#f57c00';
+      } else {
+        dailyEl.style.color = '#333';
+        dailyEl.style.fontWeight = 'normal';
+      }
+    }
+
+    // Watering Progress (show only during active watering cycle)
+    const progressRow = document.getElementById('status-progress-row');
+    if (sc.state === 'PULSE' || sc.state === 'SETTLE' || sc.state === 'CHECK') {
+      progressRow.style.display = 'block';
+      const progressText = `Pulse ${sc.pulses_delivered} / ${preset.max_pulses || '?'}, ${sc.total_water_ml} ml delivered`;
+      document.getElementById('status-watering-progress').textContent = progressText;
+    } else {
+      progressRow.style.display = 'none';
+    }
+
+    // Warning display
+    const warningRow = document.getElementById('status-warning-row');
+    const headerWarning = document.getElementById('header-warning');
+
+    if (sc.warning_active && sc.warning_msg) {
+      warningRow.style.display = 'block';
+      document.getElementById('status-warning-message').textContent = sc.warning_msg;
+
+      // Show warning in header
+      headerWarning.style.display = 'flex';
+      document.getElementById('warning-text').textContent = sc.warning_msg.substring(0, 40) + (sc.warning_msg.length > 40 ? '...' : '');
+    } else {
+      warningRow.style.display = 'none';
+      headerWarning.style.display = 'none';
+    }
+
+    // Launch cancel section (show only during LAUNCH state)
+    const armingSection = document.getElementById('arming-cancel-section');
+    if (sc.state === 'LAUNCH') {
+      armingSection.style.display = 'block';
+      document.getElementById('arming-countdown-display').textContent = sc.arming_countdown;
+    } else {
+      armingSection.style.display = 'none';
+    }
+
+    // Update toggle state ONLY if we're actually in sensor mode
+    // This prevents fighting between timer and sensor toggles
+    const currentModeEl = document.querySelector('.mode-btn.selected');
+    if (currentModeEl && currentModeEl.getAttribute('data-mode') === 'sensor') {
+      const toggleEl = document.getElementById('sensor-auto-toggle');
+      const shouldBeChecked = (sc.state !== 'DISABLED');
+      if (toggleEl && toggleEl.checked !== shouldBeChecked) {
+        updatingSensorToggle = true;
+        toggleEl.checked = shouldBeChecked;
+        updatingSensorToggle = false;
+      }
+    }
+
+  } catch(e) {
+    console.error('Sensor Controller status update failed:', e);
+  }
+}
+
+// Removed individual sensor controller interval - now handled by unified updateLoop
+
+// Timer Controller Status (for Timer mode)
+async function updateTimerControllerStatus() {
+  try {
+    const mode = document.querySelector('.mode-btn.selected')?.getAttribute('data-mode');
+
+    // Hide timer details if not in timer mode
+    const detailsSection = document.getElementById('timer-status-details');
+    if (mode !== 'timer') {
+      detailsSection.style.display = 'none';
+      return;
+    }
+
+    // Fetch timer controller status
+    const tc = await API.get('/timer/controller/status');
+
+    // Save state globally for badge indication
+    lastTimerState = tc.state;
+
+    // Fetch schedules count
+    const schedules = await API.get('/schedules');
+
+    // Show timer details section
+    detailsSection.style.display = 'block';
+
+    // Only update State field if we're actually in timer mode!
+    if (mode === 'timer') {
+      const stateEl = document.getElementById('current-state');
+      let stateText = tc.state;
+      let stateColor = '#333';
+
+      if (tc.state === 'LAUNCH') {
+        stateText = `⏰ LAUNCH ${tc.arming_countdown_sec}s`;
+        stateColor = '#f57c00';
+      } else if (tc.state === 'ACTIVE') {
+        stateText = '⏰ Active';
+        stateColor = '#2c5f2d';
+      } else if (tc.state === 'WATERING') {
+        stateText = '💧 Watering';
+        stateColor = '#1976d2';
+      } else if (tc.state === 'DISABLED') {
+        stateText = '✋ Disabled';
+        stateColor = '#666';
+      }
+
+      stateEl.textContent = stateText;
+      stateEl.style.color = stateColor;
+    }
+
+    // Update timer details
+    document.getElementById('status-next-watering').textContent = tc.next_watering_str || 'No schedules';
+    document.getElementById('status-schedule-count').textContent = tc.schedule_exists ? `${schedules.count} active` : 'None';
+    document.getElementById('timer-daily-water').textContent = tc.daily_water_ml + ' ml';
+
+    // Watering duration (if currently watering)
+    const wateringRow = document.getElementById('timer-watering-row');
+    if (tc.state === 'WATERING' && tc.current_duration_sec > 0) {
+      wateringRow.style.display = 'block';
+      document.getElementById('timer-watering-duration').textContent = `${tc.current_duration_sec}s`;
+    } else {
+      wateringRow.style.display = 'none';
+    }
+
+    // Warning display
+    const warningRow = document.getElementById('timer-warning-row');
+    const headerWarning = document.getElementById('header-warning');
+
+    if (tc.warning_active && tc.warning_msg) {
+      warningRow.style.display = 'block';
+      document.getElementById('timer-warning-message').textContent = tc.warning_msg;
+
+      // Show warning in header (if sensor not already showing one)
+      if (mode === 'timer') {
+        headerWarning.style.display = 'flex';
+        document.getElementById('warning-text').textContent = tc.warning_msg.substring(0, 40) + (tc.warning_msg.length > 40 ? '...' : '');
+      }
+    } else {
+      warningRow.style.display = 'none';
+      if (mode === 'timer') {
+        headerWarning.style.display = 'none';
+      }
+    }
+
+    // Launch cancel section (show only during LAUNCH state)
+    const armingSection = document.getElementById('timer-arming-cancel-section');
+    if (tc.state === 'LAUNCH') {
+      armingSection.style.display = 'block';
+      document.getElementById('timer-arming-countdown-display').textContent = tc.arming_countdown_sec;
+    } else {
+      armingSection.style.display = 'none';
+    }
+
+    // Update toggle state ONLY if we're actually in timer mode
+    // This prevents fighting between timer and sensor toggles
+    const currentModeEl = document.querySelector('.mode-btn.selected');
+    if (currentModeEl && currentModeEl.getAttribute('data-mode') === 'timer') {
+      const toggleEl = document.getElementById('timer-auto-toggle');
+      const shouldBeChecked = (tc.state !== 'DISABLED');
+      if (toggleEl && toggleEl.checked !== shouldBeChecked) {
+        updatingTimerToggle = true;
+        toggleEl.checked = shouldBeChecked;
+        updatingTimerToggle = false;
+      }
+    }
+
+  } catch(e) {
+    console.error('Timer Controller status update failed:', e);
+  }
+}
+
+// Cancel timer arming
+async function cancelTimerArming() {
+  try {
+    await API.post('/timer/controller/cancel');
+    updateControllerStatus(); // Use unified update instead
+  } catch(e) {
+    alert('Error canceling timer: ' + e.message);
+  }
+}
+
+// Removed individual timer controller interval - now handled by unified updateLoop
+
+// Unified controller status update loop - only update the active mode's controller
+async function updateControllerStatus() {
+  const mode = document.querySelector('.mode-btn.selected')?.getAttribute('data-mode');
+
+  // Only update the controller for the current mode
+  // This prevents toggle fighting and saves energy
+  if (mode === 'sensor') {
+    await updateSensorControllerStatus();
+  } else if (mode === 'timer') {
+    await updateTimerControllerStatus();
+  }
+  // If mode is 'off', neither controller needs updating
+}
+
+// Single update loop for controller status (saves energy, prevents conflicts)
+setInterval(updateControllerStatus, 2000); // every 2 seconds
+setTimeout(updateControllerStatus, 1000); // initial load after 1 sec
+</script> </body></html>

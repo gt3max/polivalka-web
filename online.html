@@ -1,0 +1,667 @@
+<!doctype html><html><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width, initial-scale=1"><title>Polivalka — Online</title>
+<style>
+    body{font-family:system-ui,Arial;margin:0;padding:0;max-width:100%}
+    .header{position:sticky;top:0;z-index:1000;background:#2c5f2d;color:#fff;padding:8px 10px;display:flex;justify-content:space-between;align-items:center;gap:8px}
+    .header h1{margin:0;font-size:18px}
+    .header-info{font-size:12px;text-align:right;line-height:1.3}
+    .nav{position:sticky;top:65px;z-index:999;background:#f0f0f0;padding:5px 8px;display:flex;gap:2px;border-bottom:1px solid #ddd;overflow-x:auto;white-space:nowrap;-webkit-overflow-scrolling:touch}
+    .nav a{text-decoration:none;color:#333;padding:6px 8px;border-radius:6px;font-size:14px;flex-shrink:0}
+    .nav a.active{background:#2c5f2d;color:#fff}
+    .nav a:hover{background:#ddd}
+    .container{padding:18px;max-width:760px}
+    .card{border:1px solid #ddd;padding:16px;border-radius:12px;margin:12px 0}
+    .mono{font-family:ui-monospace,monospace}
+    .muted{color:#666;font-size:14px}
+    .ok{color:#0a0}
+    .danger{color:#b00}
+    .status-badge{display:inline-block;padding:4px 10px;border-radius:12px;font-size:13px;font-weight:600}
+    .status-timer{background:#e3f2fd;color:#1976d2}
+    .status-sensor{background:#fff3e0;color:#f57c00}
+    .status-off{background:#fce4ec;color:#c2185b}
+  </style>
+</head><body><div class="header"><div><h1 id="device-name" style="margin:0;font-size:18px">🌱 Polivalka</h1><div style="font-size:11px;opacity:0.8"><span id="location-text">—</span> / <span id="room-text">—</span></div></div><div class="header-info"><div id="header-time" class="mono" style="font-size:11px">Time: --:--</div><div style="font-size:11px" id="header-mode">Mode: <span id="mode-badge" class="status-badge status-off">Off</span></div><div style="font-size:11px" id="header-conn">📡 <span id="conn-text">Offline</span></div></div></div></div><div class="nav"><a href="/">Home</a><a href="/timer">Timer</a><a href="/sensor">Sensor</a><a href="/settings">Settings</a><a href="/calibration">Calibration</a><a href="/online" class="active">Online</a><a href="/trends">Trends</a><a href="/update">Update</a></div><div class="container"><div class="card"><h3>🌐 Online Mode</h3><p class="muted">Connect your Polivalka to home WiFi for internet access and automatic time sync.</p><div style="margin-top:16px"><p><b>Current features:</b></p><ul class="muted"><li>✅ WiFi connection to home/office network</li><li>✅ Automatic time sync via NTP (SNTP)</li><li>✅ Dual connection: accessible on both AP and WiFi simultaneously</li><li>✅ No restart required when switching connections</li><li>🚧 Remote access from anywhere (future)</li><li>🚧 Cloud backup & analytics (future)</li></ul></div><div id="mode-info-box" style="margin-top:16px;padding:12px;background:#fff3cd;border-radius:6px;color:#856404">
+ℹ️ Currently in <b>AP Connection</b> - your Polivalka creates its own WiFi network for local access.
+</div></div><div class="card"><h3>WiFi Connection</h3><p class="muted">Connect to your home WiFi network for online access</p><div id="wifi-credentials-form"><div style="margin:12px 0"><label>WiFi Network (SSID)</label><br><input id="wifi_ssid" type="text" placeholder="Your WiFi Network Name" style="width:100%;max-width:400px;margin-top:4px;padding:8px;border:1px solid #ddd;border-radius:6px"></div><div style="margin:12px 0"><label>WiFi Password</label><br><input id="wifi_password" type="password" placeholder="Your WiFi Password" style="width:100%;max-width:400px;margin-top:4px;padding:8px;border:1px solid #ddd;border-radius:6px"></div><div style="margin:12px 0"><label><input type="checkbox" onclick="togglePassword()"> Show Password</label></div><div id="wifi_errors" style="margin:12px 0;color:#b00;font-size:14px"></div></div><div class="row" style="margin-top:12px"><button id="connect_btn" onclick="connectWiFi()" style="padding:10px 16px;border-radius:8px;border:1px solid #2c5f2d;background:#2c5f2d;color:#fff;cursor:pointer;font-size:14px">Connect to WiFi</button><button id="disconnect_btn" onclick="disconnectWiFi()" style="display:none;padding:10px 16px;border-radius:8px;border:1px solid #b00;background:#b00;color:#fff;cursor:pointer;font-size:14px">Disconnect</button></div><div id="wifi_status" style="margin-top:12px;padding:10px;background:#f5f5f5;border-radius:6px;font-size:14px"></div></div><div class="card"><h3>Connection Info</h3><div style="margin:8px 0"><span class="muted">Connection:</span> <span class="mono" id="conn-mode">AP Only</span></div><div style="margin:8px 0"><span class="muted">Network:</span> <span class="mono" id="conn-network">Polivalka-BC67E9</span></div><div style="margin:8px 0"><span class="muted">IP Address:</span> <span class="mono" id="device-ip">192.168.4.1</span></div><div style="margin:8px 0"><span class="muted">Cloud:</span> <span class="mono" id="cloud-status">Disconnected</span></div><div style="margin:8px 0"><span class="muted">Firmware:</span> <span class="mono" id="firmware-version">L0-C</span></div></div><div class="card"><h3>📊 Recent Connection Attempts</h3><p class="muted">Last 3 WiFi connection attempts</p><div id="wifi-history-list" style="margin-top:12px"><div style="color:#999;font-size:14px">Loading...</div></div></div></div>
+<script>
+async function updateTime(){
+  try {
+    const t = await fetch('/api/time/status',{cache:'no-store'}).then(r=>r.json());
+    const timeEl = document.getElementById('header-time');
+    if (t.time_set && t.current_time) {
+      timeEl.textContent='Time: '+t.current_time.substring(11,16);
+      timeEl.className = 'mono ok';
+    } else {
+      timeEl.textContent = 'Time: not set';
+      timeEl.className = 'mono danger';
+    }
+  } catch(e) {}
+}
+
+async function updateHeader(){
+  try {
+    const s = await fetch('/api/status',{cache:'no-store'}).then(r=>r.json());
+
+    if (s.system_state?.device_name) {
+      document.getElementById('device-name').textContent = '🌱 ' + s.system_state.device_name;
+    }
+    if (s.system_state?.location) {
+      document.getElementById('location-text').textContent = s.system_state.location;
+    }
+    if (s.system_state?.room) {
+      document.getElementById('room-text').textContent = s.system_state.room;
+    }
+
+    const mode = s.system_state?.mode || 'off';
+    const modeBadge = document.getElementById('mode-badge');
+    const modeText = mode.charAt(0).toUpperCase() + mode.slice(1);
+    modeBadge.textContent = modeText;
+    modeBadge.className = 'status-badge status-' + mode;
+
+    // Connection status
+    const connText = document.getElementById('conn-text');
+    if (s.wifi_connected) {
+      connText.textContent = 'Online';
+      connText.style.color = '#0a0';
+    } else {
+      connText.textContent = 'Offline';
+      connText.style.color = '#999';
+    }
+
+    // Connection Info card - show current connection type
+    const connMode = document.getElementById('conn-mode');
+    if (s.ap_enabled && s.wifi_connected) {
+      connMode.textContent = 'Dual (AP+STA)';
+    } else if (s.ap_enabled) {
+      connMode.textContent = 'AP Only';
+    } else if (s.wifi_connected) {
+      connMode.textContent = 'STA Only';
+    } else {
+      connMode.textContent = 'Disconnected';
+    }
+
+    // Network - show STA SSID if connected to WiFi, otherwise AP SSID
+    const connNetwork = document.getElementById('conn-network');
+    if (s.wifi_connected && s.sta_ssid) {
+      connNetwork.textContent = s.sta_ssid;
+    } else if (s.ap_ssid) {
+      connNetwork.textContent = s.ap_ssid;
+    }
+
+    // IP Address - show STA IP if connected to WiFi, otherwise AP IP
+    const deviceIp = document.getElementById('device-ip');
+    if (s.wifi_connected && s.sta_ip) {
+      deviceIp.textContent = s.sta_ip;
+    } else {
+      deviceIp.textContent = '192.168.4.1';
+    }
+
+    // Cloud status
+    const cloudStatus = document.getElementById('cloud-status');
+    if (s.aws_connected) {
+      cloudStatus.textContent = 'Connected';
+      cloudStatus.style.color = '#0a0';
+    } else {
+      cloudStatus.textContent = 'Disconnected';
+      cloudStatus.style.color = '#999';
+    }
+
+    // Update button visibility and input fields based on WiFi connection state
+    const connectBtn = document.getElementById('connect_btn');
+    const disconnectBtn = document.getElementById('disconnect_btn');
+    const credentialsForm = document.getElementById('wifi-credentials-form');
+
+    if (s.wifi_connected) {
+      // Connected - hide input fields, show Disconnect button
+      credentialsForm.style.display = 'none';
+      connectBtn.style.display = 'none';
+      disconnectBtn.style.display = 'inline-block';
+      disconnectBtn.disabled = false;
+      disconnectBtn.textContent = 'Disconnect';
+    } else {
+      // Not connected - show input fields, show Connect button
+      credentialsForm.style.display = 'block';
+      connectBtn.style.display = 'inline-block';
+      connectBtn.disabled = false;
+      disconnectBtn.style.display = 'none';
+    }
+
+    // Connection info box (блок вверху)
+    const modeInfoBox = document.getElementById('mode-info-box');
+
+    // Check if user is accessing via AP
+    const userOnAP = (window.location.hostname === '192.168.4.1');
+
+    // 2.2 OFFICE: User on AP, device connected to Office WiFi (client isolation)
+    // Distinguish 2.2.1 (AWS works) vs 2.2.2 (AWS disabled)
+    if (userOnAP && s.wifi_connected && s.client_isolation) {
+      // Show OFFICE mode (yellow)
+      modeInfoBox.style.background = '#fff3cd';
+      modeInfoBox.style.color = '#856404';
+
+      // Scenario number based on AWS status
+      const officeScenario = s.aws_connected ? '2.2.1 OFFICE + AWS' : '2.2.2 OFFICE (AWS Disabled)';
+      modeInfoBox.innerHTML = '⚠️ <b>[' + officeScenario + '] WiFi Connected (Client Isolation)</b><br><br>';
+      modeInfoBox.innerHTML += '<b>Current status:</b><br>';
+      modeInfoBox.innerHTML += '• <b>Network:</b> ' + (s.sta_ssid || '—') + '<br>';
+      modeInfoBox.innerHTML += '• <b>Device IP:</b> ' + (s.sta_ip || '—') + '<br>';
+      modeInfoBox.innerHTML += '• <b>Local access (.local):</b> Blocked by router ❌<br>';
+      modeInfoBox.innerHTML += '• <b>Cloud (AWS):</b> ' + (s.aws_connected ? 'Connected ✅' : 'Reconnecting...') + '<br>';
+      modeInfoBox.innerHTML += '• <b>Time sync:</b> ' + (s.time_set ? 'Working ✅' : 'Not set ❌') + '<br><br>';
+      modeInfoBox.innerHTML += '<b style="color:#f57c00">⚠️ WiFi will stay connected for cloud access</b><br><br>';
+
+      modeInfoBox.innerHTML += '<b>How to access device:</b><br>';
+      modeInfoBox.innerHTML += '<b>1️⃣ Local access (via AP):</b><br>';
+      modeInfoBox.innerHTML += '   • You are here: <b>192.168.4.1</b> ✅<br>';
+      modeInfoBox.innerHTML += '   • Connect to AP: <b>' + (s.ap_ssid || 'Polivalka-XXXXXX') + '</b><br>';
+      modeInfoBox.innerHTML += '   • Password: 12345678<br><br>';
+
+      modeInfoBox.innerHTML += '<small style="color:#666">💡 This is normal for corporate WiFi networks<br>';
+      modeInfoBox.innerHTML += 'AP will stay active permanently in this mode</small>';
+
+      // Show main disconnect button (hide duplicate)
+      document.getElementById('disconnect_btn').style.display = 'inline-block';
+      document.getElementById('connect_btn').style.display = 'none';
+    }
+    // 2.1 HOME: User on AP, device connected to WiFi router (no client isolation)
+    // Distinguish 2.1.1 (AWS works) vs 2.1.2 (AWS disabled)
+    else if (userOnAP && s.wifi_connected && s.client_isolation === false) {
+      modeInfoBox.style.background = '#d4edda';
+      modeInfoBox.style.color = '#155724';
+
+      // Scenario number based on AWS status
+      const homeScenario = s.aws_connected ? '2.1.1 HOME + AWS' : '2.1.2 HOME (AWS Disabled)';
+      modeInfoBox.innerHTML = '✅ <b>[' + homeScenario + '] WiFi Router Connected (No Restrictions)</b><br><br>';
+      modeInfoBox.innerHTML += '<b>Current status:</b><br>';
+      modeInfoBox.innerHTML += '• <b>Network:</b> ' + (s.sta_ssid || '—') + '<br>';
+      modeInfoBox.innerHTML += '• <b>Device IP:</b> ' + (s.sta_ip || '—') + '<br>';
+      modeInfoBox.innerHTML += '• <b>mDNS:</b> ' + (s.mdns_hostname || 'polivalka-BB00C1') + '.local<br>';
+      modeInfoBox.innerHTML += '• <b>Local access:</b> Available via WiFi router ✅<br>';
+      modeInfoBox.innerHTML += '• <b>Cloud (AWS):</b> ' + (s.aws_connected ? 'Connected ✅' : 'Disconnected ❌') + '<br>';
+      modeInfoBox.innerHTML += '• <b>Time sync:</b> ' + (s.time_set ? 'Working ✅' : 'Not set ❌') + '<br><br>';
+
+      modeInfoBox.innerHTML += '<b style="color:#f57c00">⚠️ AP will disable in ~10 minutes to save battery</b><br><br>';
+
+      modeInfoBox.innerHTML += '<b>How to access device:</b><br>';
+      modeInfoBox.innerHTML += '<b>1️⃣ Local access (via .local):</b><br>';
+      const mdnsHostname = (s.mdns_hostname || 'polivalka-BB00C1') + '.local';
+      modeInfoBox.innerHTML += '   • Switch phone to WiFi: <b>' + (s.sta_ssid || '—') + '</b><br>';
+      modeInfoBox.innerHTML += '   • Open: <code style="background:#fff;padding:2px 6px;border-radius:4px">' + (s.sta_ip || '—') + '</code> OR<br>';
+      modeInfoBox.innerHTML += '   • Open: <code style="background:#fff;padding:2px 6px;border-radius:4px">' + mdnsHostname + '</code><br><br>';
+
+      modeInfoBox.innerHTML += '<small style="color:#666">💡 If AP disappears before you switch:<br>';
+      modeInfoBox.innerHTML += '→ Connect to <b>' + (s.ap_ssid || 'Polivalka-XXXXXX') + '</b> (password: 12345678)<br>';
+      modeInfoBox.innerHTML += '→ Open 192.168.4.1 in browser</small>';
+    }
+    // 2.1/2.2 UNKNOWN: Detection in progress (first 60 sec), user on AP
+    else if (userOnAP && s.wifi_connected && s.client_isolation === undefined) {
+      modeInfoBox.style.background = '#e3f2fd';
+      modeInfoBox.style.color = '#1565c0';
+      modeInfoBox.innerHTML = '🔍 <b>[2.1/2.2 ?] Detecting Network Type...</b><br><br>';
+      modeInfoBox.innerHTML += '<b>Connected to:</b> ' + (s.sta_ssid || '—') + '<br>';
+      modeInfoBox.innerHTML += '<b>Device IP:</b> ' + (s.sta_ip || '—') + '<br>';
+      modeInfoBox.innerHTML += '<b>Cloud (AWS):</b> ' + (s.aws_connected ? 'Connected ✅' : 'Connecting...' ) + '<br><br>';
+      modeInfoBox.innerHTML += '⏱️ <b>Checking if this is Home or Office WiFi...</b><br>';
+      modeInfoBox.innerHTML += '• Testing network connectivity (~60 seconds)<br>';
+      modeInfoBox.innerHTML += '• AP will stay active during detection<br><br>';
+      modeInfoBox.innerHTML += '<div style="background:#fff3cd;padding:10px;border-radius:6px;margin-top:12px">';
+      modeInfoBox.innerHTML += '🔄 <b>Refresh this page in 60 seconds</b> to see final result<br>';
+      modeInfoBox.innerHTML += '<small>(HOME or OFFICE mode will be shown)</small>';
+      modeInfoBox.innerHTML += '</div>';
+    }
+    // OFFLINE: User on AP, device NOT connected to WiFi (AP-only mode)
+    else if (userOnAP && !s.wifi_connected) {
+      modeInfoBox.style.background = '#fff3cd';
+      modeInfoBox.style.color = '#856404';
+      modeInfoBox.innerHTML = 'ℹ️ <b>[1.0 OFFLINE] AP-Only Mode</b><br><br>';
+      modeInfoBox.innerHTML += 'Device creates its own WiFi network for local access';
+    }
+    // 2.2.1 OFFICE + AWS: User on WiFi (not AP), client isolation + AWS works
+    else if (s.ap_enabled && s.wifi_connected && s.client_isolation && s.aws_connected) {
+      modeInfoBox.style.background = '#fff3cd';
+      modeInfoBox.style.color = '#856404';
+      modeInfoBox.innerHTML = '⚠️ <b>[2.2.1 OFFICE + AWS - on WiFi] Client Isolation (Cloud Only)</b><br><br>';
+      modeInfoBox.innerHTML += 'WiFi network blocks local access, but cloud works:<br>';
+      modeInfoBox.innerHTML += '• <b>Local access (.local):</b> Blocked ❌<br>';
+      modeInfoBox.innerHTML += '• <b>Cloud (AWS):</b> Connected ✅<br>';
+      modeInfoBox.innerHTML += '• <b>Time sync:</b> ' + (s.time_set ? 'Working ✅' : 'Not set ❌') + '<br><br>';
+
+      modeInfoBox.innerHTML += '<b>Local access:</b> Connect to AP <b>' + (s.ap_ssid || 'Polivalka-XXXXXX') + '</b> → 192.168.4.1<br><br>';
+      modeInfoBox.innerHTML += '<small style="color:#f57c00">💡 APSTA mode will stay active permanently</small>';
+    }
+    // 2.2.2 OFFICE (AWS Disabled): User on WiFi (not AP), client isolation + AWS failed
+    else if (s.ap_enabled && s.wifi_connected && s.client_isolation && !s.aws_connected) {
+      modeInfoBox.style.background = '#fff3cd';
+      modeInfoBox.style.color = '#856404';
+      modeInfoBox.innerHTML = '⚠️ <b>[2.2.2 OFFICE (AWS Disabled) - on WiFi] Client Isolation</b><br><br>';
+      modeInfoBox.innerHTML += 'WiFi network blocks local access, AWS reconnecting:<br>';
+      modeInfoBox.innerHTML += '• <b>Local access (.local):</b> Blocked ❌<br>';
+      modeInfoBox.innerHTML += '• <b>Cloud (AWS):</b> Reconnecting... ⏱️<br>';
+      modeInfoBox.innerHTML += '• <b>Time sync:</b> ' + (s.time_set ? 'Working ✅' : 'Not set ❌') + '<br><br>';
+
+      modeInfoBox.innerHTML += '<b>Use AP for local access:</b><br>';
+      modeInfoBox.innerHTML += 'Connect to <b>' + (s.ap_ssid || 'Polivalka-XXXXXX') + '</b> → 192.168.4.1<br><br>';
+
+      modeInfoBox.innerHTML += '<small style="color:#f57c00">💡 APSTA mode will stay active. Cloud will work when AWS reconnects.</small>';
+    }
+    // 2.1.1/2.1.2 HOME: User on WiFi (not AP), no client isolation, APSTA mode
+    else if (s.ap_enabled && s.wifi_connected && s.client_isolation === false) {
+      modeInfoBox.style.background = '#d4edda';
+      modeInfoBox.style.color = '#155724';
+      const homeOnWiFiScenario = s.aws_connected ? '2.1.1 HOME + AWS' : '2.1.2 HOME (AWS Disabled)';
+      modeInfoBox.innerHTML = '✅ <b>[' + homeOnWiFiScenario + ' - on WiFi] Router Connected</b><br><br>';
+      modeInfoBox.innerHTML += '<b>Device is accessible:</b><br>';
+      modeInfoBox.innerHTML += '• <b>Via WiFi:</b> ' + (s.sta_ip || '—') + ' ✅<br>';
+      modeInfoBox.innerHTML += '• <b>Via mDNS:</b> ' + (s.mdns_hostname || 'polivalka-BB00C1') + '.local ✅<br>';
+      modeInfoBox.innerHTML += '• <b>Via AP:</b> 192.168.4.1 (will disable in ~10 min) ⏱️<br><br>';
+      modeInfoBox.innerHTML += '<small style="color:#2e7d32">💡 AP will auto-disable to save battery. Use IP or mDNS address above.</small>';
+    }
+    // 2.1/2.2 UNKNOWN: Detection in progress (first 10 min), user on WiFi
+    else if (s.ap_enabled && s.wifi_connected && s.client_isolation === undefined) {
+      modeInfoBox.style.background = '#e3f2fd';
+      modeInfoBox.style.color = '#1565c0';
+      modeInfoBox.innerHTML = '🔍 <b>[2.1/2.2 ? - on WiFi] Detecting Network Type...</b><br><br>';
+      modeInfoBox.innerHTML += '<b>Connected to:</b> ' + (s.sta_ssid || '—') + '<br>';
+      modeInfoBox.innerHTML += '<b>Accessible at:</b> ' + (s.sta_ip || '—') + '<br>';
+      modeInfoBox.innerHTML += '<b>Cloud (AWS):</b> ' + (s.aws_connected ? 'Connected ✅' : 'Connecting...' ) + '<br><br>';
+      modeInfoBox.innerHTML += '⏱️ <b>Checking if this is Home or Office WiFi...</b><br>';
+      modeInfoBox.innerHTML += '• Testing network connectivity (~10 minutes)<br>';
+      modeInfoBox.innerHTML += '• You can use current IP address<br><br>';
+      modeInfoBox.innerHTML += '<small style="color:#666">💡 AP (192.168.4.1) also available</small>';
+    }
+    // 2.1 HOME: STA-only mode (AP already disabled)
+    else if (s.wifi_connected) {
+      modeInfoBox.style.background = '#d4edda';
+      modeInfoBox.style.color = '#155724';
+      modeInfoBox.innerHTML = '✅ <b>[2.1 HOME - STA only] Online</b><br><br>';
+      modeInfoBox.innerHTML += 'Accessible only via Home WiFi: ' + (s.sta_ip || '—');
+    }
+    // OFFLINE: AP-only mode (no WiFi)
+    else if (s.ap_enabled) {
+      modeInfoBox.style.background = '#fff3cd';
+      modeInfoBox.style.color = '#856404';
+      modeInfoBox.innerHTML = 'ℹ️ <b>[1.0 OFFLINE] AP-Only Mode</b><br><br>';
+      modeInfoBox.innerHTML += 'Device creates its own WiFi network for local access (192.168.4.1)';
+    }
+    // ERROR: Disconnected (no AP, no WiFi)
+    else {
+      modeInfoBox.style.background = '#ffebee';
+      modeInfoBox.style.color = '#c62828';
+      modeInfoBox.innerHTML = '⚠️ <b>[ERROR] Disconnected</b> - no network connection';
+    }
+
+    // Add Cloud Dashboard button (ALWAYS show, but disable if no AWS)
+    if (s.mdns_hostname) {
+      const deviceId = s.mdns_hostname.replace('polivalka-', '').replace('.local', '');
+      const isActive = s.aws_connected;
+      const btnStyle = isActive
+        ? 'display:inline-block;background:#3f51b5;color:#fff;padding:10px 20px;border-radius:8px;text-decoration:none;font-weight:bold;margin-top:8px;cursor:pointer'
+        : 'display:inline-block;background:#ccc;color:#999;padding:10px 20px;border-radius:8px;text-decoration:none;font-weight:bold;margin-top:8px;cursor:not-allowed;pointer-events:none';
+      const statusText = isActive
+        ? '<small style="color:#666">Remote access from anywhere via AWS IoT</small>'
+        : '<small style="color:#999">⏱️ Waiting for internet connection...</small>';
+      const cloudBtn = '<div style="margin-top:16px;padding-top:16px;border-top:2px solid #ddd"><b>🌐 Cloud Access:</b><br><a href="https://gt3max.github.io/polivalka-web/home.html?device=' + deviceId + '" target="_blank" style="' + btnStyle + '">Open Cloud Dashboard</a><br>' + statusText + '</div>';
+      modeInfoBox.innerHTML += cloudBtn;
+    }
+  } catch(e) {}
+}
+
+async function updateWiFiHistory(){
+  try {
+    const h = await fetch('/api/wifi/history',{cache:'no-store'}).then(r=>r.json());
+    const historyList = document.getElementById('wifi-history-list');
+
+    if (!h.attempts || h.attempts.length === 0) {
+      historyList.innerHTML = '<div style="color:#999;font-size:14px">No connection attempts yet</div>';
+      return;
+    }
+
+    let html = '';
+    h.attempts.forEach(function(attempt) {
+      // Format timestamp (Unix timestamp to local time)
+      const date = new Date(attempt.timestamp * 1000);
+      const timeStr = date.toLocaleTimeString('en-US', {hour: '2-digit', minute: '2-digit', hour12: false});
+      const dateStr = date.toLocaleDateString('en-US', {month: 'short', day: 'numeric'});
+
+      // Status icon and text
+      let statusIcon = '';
+      let statusText = '';
+      let statusColor = '';
+
+      if (attempt.success) {
+        statusIcon = '✅';
+        statusText = 'Success';
+        statusColor = '#0a0';
+      } else {
+        statusIcon = '⚠️';
+        statusText = 'Blocked';
+        statusColor = '#f57c00';
+      }
+
+      // Time synced badge
+      const timeSyncBadge = attempt.time_synced
+        ? '<span style="background:#e3f2fd;color:#1976d2;padding:2px 6px;border-radius:4px;font-size:11px;margin-left:6px">time synced</span>'
+        : '';
+
+      html += '<div style="padding:10px;margin:6px 0;background:#f5f5f5;border-radius:6px;border-left:3px solid ' + statusColor + '">';
+      html += '<div style="display:flex;justify-content:space-between;align-items:center">';
+      html += '<div><span class="mono" style="font-size:13px;color:#666">' + dateStr + ' ' + timeStr + '</span></div>';
+      html += '<div><span style="font-weight:600;color:' + statusColor + '">' + statusIcon + ' ' + statusText + '</span>' + timeSyncBadge + '</div>';
+      html += '</div>';
+      html += '<div style="margin-top:4px;font-weight:600">' + attempt.ssid + '</div>';
+      html += '</div>';
+    });
+
+    historyList.innerHTML = html;
+  } catch(e) {
+    document.getElementById('wifi-history-list').innerHTML = '<div style="color:#999;font-size:14px">Error loading history</div>';
+  }
+}
+
+// Update once on page load
+updateTime();
+updateHeader();
+updateWiFiHistory();
+
+// Auto-update intervals
+setInterval(updateTime, 60000);        // Time: every minute
+setInterval(updateHeader, 30000);      // Status/Cloud/Mode: every 30 seconds
+setInterval(updateWiFiHistory, 30000); // WiFi history: every 30 seconds
+
+// WiFi connection functionality
+var wifiStatusInterval = null;
+var cachedApSsid = 'Polivalka-XXXXXX';  // Cache AP SSID for disconnect instructions
+
+function togglePassword() {
+  var x = document.getElementById('wifi_password');
+  if (x.type === 'password') {
+    x.type = 'text';
+  } else {
+    x.type = 'password';
+  }
+}
+
+function checkCredentials() {
+  var ssid = document.getElementById('wifi_ssid').value;
+  var password = document.getElementById('wifi_password').value;
+  var errors = '';
+
+  if (ssid === '') {
+    errors += 'Please enter WiFi network name<br>';
+  }
+  if (password === '') {
+    errors += 'Please enter WiFi password<br>';
+  }
+
+  document.getElementById('wifi_errors').innerHTML = errors;
+  return errors === '';
+}
+
+async function connectWiFi() {
+  if (!checkCredentials()) {
+    return;
+  }
+
+  var ssid = document.getElementById('wifi_ssid').value;
+  var password = document.getElementById('wifi_password').value;
+
+  document.getElementById('wifi_errors').innerHTML = '';
+  document.getElementById('wifi_status').innerHTML = '⏳ Connecting to ' + ssid + '...';
+  document.getElementById('wifi_status').style.background = '#e3f2fd';
+  document.getElementById('connect_btn').disabled = true;
+
+  try {
+    var response = await fetch('/api/wifi/connect', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ssid: ssid, password: password})
+    });
+
+    var result = await response.json();
+
+    if (result.success) {
+      startStatusPolling();
+    } else {
+      document.getElementById('wifi_status').innerHTML = '❌ Error: ' + (result.error || 'Failed to connect');
+      document.getElementById('wifi_status').style.background = '#ffebee';
+      document.getElementById('connect_btn').disabled = false;
+    }
+  } catch (e) {
+    document.getElementById('wifi_status').innerHTML = '❌ Network error';
+    document.getElementById('wifi_status').style.background = '#ffebee';
+    document.getElementById('connect_btn').disabled = false;
+  }
+}
+
+async function getWiFiStatus() {
+  try {
+    var response = await fetch('/api/wifi/status', {
+      method: 'POST',
+      cache: 'no-store'
+    });
+
+    var result = await response.json();
+    var status = result.wifi_connect_status;
+
+    // Cache AP SSID for disconnect instructions
+    if (result.ap_ssid) {
+      cachedApSsid = result.ap_ssid;
+    }
+
+    if (status === 1) {
+      // Connecting
+      document.getElementById('wifi_status').innerHTML = '⏳ Connecting...';
+      document.getElementById('wifi_status').style.background = '#e3f2fd';
+    } else if (status === 3) {
+      // Connected - clear input fields and hide form
+      document.getElementById('wifi_ssid').value = '';
+      document.getElementById('wifi_password').value = '';
+      document.getElementById('wifi-credentials-form').style.display = 'none';
+
+      // Check for client isolation
+      if (result.client_isolation && result.aws_connected) {
+        // ОФИС: Client Isolation BUT AWS connected - YELLOW (useful mode)
+        var warningMsg = '⚠️ <b>Client Isolation Detected</b><br><br>';
+        warningMsg += 'Your Polivalka is connected to:<br>';
+        warningMsg += '<b style="font-size: 16px;">' + result.sta_ssid + '</b><br>';
+        warningMsg += '<small style="color: #666;">IP: ' + result.sta_ip + '</small><br><br>';
+        warningMsg += '<div style="background: #fff3cd; padding: 12px; border-radius: 6px; margin: 12px 0; border-left: 4px solid #f57c00;">';
+        warningMsg += '⚠️ <b>Local Access Blocked</b><br><br>';
+        warningMsg += 'This network blocks device-to-device communication (common in office/guest WiFi).<br><br>';
+        warningMsg += '• <b>Local access:</b> NOT working ❌<br>';
+        warningMsg += '• <b>Cloud (AWS):</b> Working ✅<br>';
+        warningMsg += '• <b>Time sync:</b> Working ✅<br>';
+        warningMsg += '</div>';
+        warningMsg += '<div style="background: #d4edda; padding: 12px; border-radius: 6px; margin: 12px 0;">';
+        warningMsg += '✅ <b>GOOD NEWS:</b><br><br>';
+        warningMsg += 'Cloud connection is working! Device will send data to AWS.<br>';
+        warningMsg += 'Use AP (192.168.4.1) for local access if needed.<br>';
+        warningMsg += '</div>';
+
+        document.getElementById('wifi_status').innerHTML = warningMsg;
+        document.getElementById('wifi_status').style.background = '#fff3cd';
+        document.getElementById('connect_btn').style.display = 'none';
+        document.getElementById('disconnect_btn').style.display = 'inline-block';
+        stopStatusPolling();
+      } else {
+        // NORMAL CONNECTION - show success message
+        // Build device URL (mDNS preferred, IP as fallback)
+        var deviceUrl = 'http://' + result.mdns_hostname + '.local/online';
+        var deviceUrlDisplay = result.mdns_hostname + '.local';
+
+        var successMsg = '✅ <b>Connected to Home WiFi!</b><br><br>';
+        successMsg += 'Your Polivalka is now connected to:<br>';
+        successMsg += '<b style="font-size: 16px;">' + result.sta_ssid + '</b><br>';
+        successMsg += '<small style="color: #666;">IP: ' + result.sta_ip + '</small><br><br>';
+        successMsg += '<div style="background: #fff3cd; padding: 12px; border-radius: 6px; margin: 12px 0;">';
+        successMsg += '📱 <b>WHAT TO DO NEXT:</b><br><br>';
+        successMsg += '1. <b>Open WiFi settings</b> on your phone<br>';
+        successMsg += '2. <b>Disconnect</b> from "<b>' + result.ap_ssid + '</b>"<br>';
+        successMsg += '3. <b>Connect</b> to "<b>' + result.sta_ssid + '</b>"<br>';
+        successMsg += '4. <b>Return here</b> and tap the green button below<br>';
+        successMsg += '</div>';
+        successMsg += '<button onclick="openDeviceWithCountdown(\'' + deviceUrl + '\', \'' + result.ap_ssid + '\')" style="padding: 14px 28px; font-size: 17px; background: #4CAF50; color: white; border: none; border-radius: 8px; cursor: pointer; font-weight: 600; box-shadow: 0 2px 4px rgba(0,0,0,0.2);">📱 Open Device Page</button><br><br>';
+        successMsg += '<small style="color: #666;">✅ Button will open: <b>' + deviceUrlDisplay + '</b></small><br><br>';
+        successMsg += '<small style="color: #4CAF50;">✅ The network "<b>' + result.ap_ssid + '</b>" will remain active (APSTA mode)</small>';
+
+        document.getElementById('wifi_status').innerHTML = successMsg;
+        document.getElementById('wifi_status').style.background = '#e8f5e9';
+        document.getElementById('connect_btn').style.display = 'none';
+        document.getElementById('disconnect_btn').style.display = 'inline-block';
+        stopStatusPolling();
+      }
+    } else if (status === 2) {
+      // Failed
+      document.getElementById('wifi_status').innerHTML = '❌ Connection failed. Please verify your WiFi credentials and try again.';
+      document.getElementById('wifi_status').style.background = '#ffebee';
+      stopStatusPolling();
+      document.getElementById('connect_btn').disabled = false;
+    }
+  } catch (e) {
+    console.log('Error checking WiFi status:', e);
+  }
+}
+
+function startStatusPolling() {
+  if (wifiStatusInterval !== null) {
+    clearInterval(wifiStatusInterval);
+  }
+  wifiStatusInterval = setInterval(getWiFiStatus, 2800);
+}
+
+function stopStatusPolling() {
+  if (wifiStatusInterval !== null) {
+    clearInterval(wifiStatusInterval);
+    wifiStatusInterval = null;
+  }
+}
+
+async function disconnectWiFi() {
+  if (!confirm('Disconnect from home WiFi?\\n\\nDevice will remain in AP mode (192.168.4.1).\\nNo restart required.')) {
+    return;
+  }
+
+  // Disable button immediately
+  const disconnectBtn = document.getElementById('disconnect_btn');
+  disconnectBtn.disabled = true;
+  disconnectBtn.textContent = 'Disconnecting...';
+
+  // Show status
+  document.getElementById('wifi_status').innerHTML = '⏳ Disconnecting from WiFi...';
+  document.getElementById('wifi_status').style.background = '#fff3cd';
+
+  try {
+    const response = await fetch('/api/wifi/disconnect', {
+      method: 'POST'
+    });
+
+    const result = await response.json();
+
+    if (result.success) {
+      // Use cached AP SSID (obtained earlier from getWiFiStatus)
+      var disconnectMsg = '✅ <b>Disconnected from Home WiFi!</b><br><br>';
+      disconnectMsg += 'Your Polivalka is now in <b>AP-only mode</b>.<br>';
+      disconnectMsg += '<small style="color: #f57c00;">⚠️ Connection will be lost in a few seconds.</small><br><br>';
+      disconnectMsg += '<div style="background: #fff3cd; padding: 12px; border-radius: 6px; margin: 12px 0;">';
+      disconnectMsg += '📱 <b>WHAT TO DO NEXT:</b><br><br>';
+      disconnectMsg += '1. <b>Open WiFi settings</b> on your phone<br>';
+      disconnectMsg += '2. <b>Find and connect</b> to:<br>';
+      disconnectMsg += '<b style="font-size: 16px;">' + cachedApSsid + '</b><br>';
+      disconnectMsg += 'Password: <b>12345678</b><br><br>';
+      disconnectMsg += '3. <b>Return here</b> and tap the green button below<br>';
+      disconnectMsg += '</div>';
+      disconnectMsg += '<button onclick="window.location.href=\'http://192.168.4.1/online\'" style="padding: 14px 28px; font-size: 17px; background: #4CAF50; color: white; border: none; border-radius: 8px; cursor: pointer; font-weight: 600; box-shadow: 0 2px 4px rgba(0,0,0,0.2);">📱 Open Device Page</button><br><br>';
+      disconnectMsg += '<small style="color: #666;">Button opens: <b>192.168.4.1/online</b></small>';
+
+      document.getElementById('wifi_status').innerHTML = disconnectMsg;
+      document.getElementById('wifi_status').style.background = '#e8f5e9';
+
+      // Show credentials form and connect button again
+      document.getElementById('wifi-credentials-form').style.display = 'block';
+      document.getElementById('connect_btn').style.display = 'inline-block';
+      document.getElementById('connect_btn').disabled = false;
+      disconnectBtn.style.display = 'none';
+
+      // Update Connection Info immediately
+      // Check if user accessed via WiFi (not AP) - if so, connection will drop
+      const currentHost = window.location.hostname;
+      if (currentHost === '192.168.4.1') {
+        // Accessed via AP - can safely call updateHeader()
+        updateHeader();
+      } else {
+        // Accessed via WiFi - connection will drop, manually update UI
+        document.getElementById('conn-text').textContent = 'Offline';
+        document.getElementById('conn-text').style.color = '#999';
+        document.getElementById('conn-mode').textContent = 'AP Only';
+        document.getElementById('conn-network').textContent = cachedApSsid;
+        document.getElementById('device-ip').textContent = '192.168.4.1';
+        document.getElementById('cloud-status').textContent = 'Disconnected';
+        document.getElementById('cloud-status').style.color = '#999';
+      }
+    } else {
+      document.getElementById('wifi_status').innerHTML = '❌ Error: ' + (result.error || 'Failed to disconnect');
+      document.getElementById('wifi_status').style.background = '#ffebee';
+      disconnectBtn.disabled = false;
+      disconnectBtn.textContent = 'Disconnect';
+    }
+  } catch (e) {
+    document.getElementById('wifi_status').innerHTML = '❌ Network error';
+    document.getElementById('wifi_status').style.background = '#ffebee';
+    disconnectBtn.disabled = false;
+    disconnectBtn.textContent = 'Disconnect';
+  }
+}
+
+// Open device with countdown and fallback instruction
+function openDeviceWithCountdown(deviceUrl, apSsid) {
+  // Show countdown message
+  var countdownMsg = '🔄 <b>Opening device page...</b><br><br>';
+  countdownMsg += 'Please wait <span id="countdown">15</span> seconds<br>';
+  countdownMsg += '<div style="margin-top:10px;background:#e3f2fd;height:24px;border-radius:12px;overflow:hidden"><div id="progress-bar" style="background:#1976d2;height:100%;width:100%;transition:width 1s linear"></div></div>';
+
+  document.getElementById('wifi_status').innerHTML = countdownMsg;
+  document.getElementById('wifi_status').style.background = '#fff3cd';
+
+  var secondsLeft = 15;
+  var countdownInterval = setInterval(function() {
+    secondsLeft--;
+    var countdownEl = document.getElementById('countdown');
+    var progressBar = document.getElementById('progress-bar');
+    if (countdownEl) {
+      countdownEl.textContent = secondsLeft;
+    }
+    if (progressBar) {
+      progressBar.style.width = ((15 - secondsLeft) / 15 * 100) + '%';
+    }
+  }, 1000);
+
+  // Try to open device URL
+  setTimeout(function() {
+    window.location.href = deviceUrl;
+  }, 500);
+
+  // After 15 seconds, show fallback instruction if page didn't load
+  setTimeout(function() {
+    clearInterval(countdownInterval);
+
+    var fallbackMsg = '⚠️ <b>Cannot connect via home WiFi</b><br><br>';
+    fallbackMsg += 'Your router may block device discovery<br><br>';
+    fallbackMsg += '<div style="background: #fff3cd; padding: 12px; border-radius: 6px; margin: 12px 0;">';
+    fallbackMsg += '📱 <b>What to do:</b><br><br>';
+    fallbackMsg += '1. Go to WiFi settings<br>';
+    fallbackMsg += '2. Connect to <b>' + apSsid + '</b><br>';
+    fallbackMsg += '3. Open <b>192.168.4.1</b> in browser<br><br>';
+    fallbackMsg += '<small>You may disconnect from home WiFi on Online page<br>(AP remains active in APSTA mode)</small>';
+    fallbackMsg += '</div>';
+
+    document.getElementById('wifi_status').innerHTML = fallbackMsg;
+    document.getElementById('wifi_status').style.background = '#ffebee';
+  }, 15000);
+}
+
+// Remote control via AWS IoT
+// Check connection status on page load
+window.addEventListener('load', function() {
+  getWiFiStatus();
+});
+</script>
+</body></html>

@@ -1,0 +1,367 @@
+<!doctype html><html><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width, initial-scale=1"><title>Polivalka — Sensor Mode</title>
+<script src="api-adapter.js"></script>
+<style>
+    body{font-family:system-ui,Arial;margin:0;padding:0;max-width:100%}
+    .header{position:sticky;top:0;z-index:1000;background:#2c5f2d;color:#fff;padding:8px 10px;display:flex;justify-content:space-between;align-items:center;gap:8px}
+    .header h1{margin:0;font-size:18px}
+    .header-info{font-size:12px;text-align:right;line-height:1.3}
+    .nav{position:sticky;top:65px;z-index:999;background:#f0f0f0;padding:5px 8px;display:flex;gap:2px;border-bottom:1px solid #ddd;overflow-x:auto;white-space:nowrap;-webkit-overflow-scrolling:touch}
+    .nav a{text-decoration:none;color:#333;padding:6px 8px;border-radius:6px;font-size:14px;flex-shrink:0}
+    .nav a.active{background:#2c5f2d;color:#fff}
+    .nav a:hover{background:#ddd}
+    .container{padding:18px;max-width:760px}
+    .card{border:1px solid #ddd;padding:16px;border-radius:12px;margin:12px 0}
+    .row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+    .mono{font-family:ui-monospace,monospace}
+    button{padding:8px 12px;border-radius:8px;border:1px solid #888;background:#fafafa;cursor:pointer}
+    button.primary{background:#2c5f2d;color:#fff;border-color:#2c5f2d}
+    input,select{padding:6px 10px;border:1px solid #ccc;border-radius:8px}
+    .muted{color:#666;font-size:14px}
+    .danger{color:#b00}
+    .ok{color:#0a0}
+    .status-badge{display:inline-block;padding:4px 10px;border-radius:12px;font-size:13px;font-weight:600}
+    .status-timer{background:#e3f2fd;color:#1976d2}
+    .status-sensor{background:#fff3e0;color:#f57c00}
+    .status-off{background:#fce4ec;color:#c2185b}
+    .advanced-toggle{cursor:pointer;padding:8px;margin:12px 0;background:#f5f5f5;border-radius:8px;user-select:none}
+    .advanced-toggle:hover{background:#e0e0e0}
+    .advanced-section{display:none;padding:12px;background:#fafafa;border-radius:8px;margin-top:8px}
+    .advanced-section.open{display:block}
+    .autosave-indicator{display:inline-block;margin-left:8px;font-size:12px;color:#666;opacity:0;transition:opacity 0.3s}
+    .autosave-indicator.saving{opacity:1;color:#f57c00}
+    .autosave-indicator.saved{opacity:1;color:#0a0}
+  </style>
+</head><body><div class="header"><div><h1 id="device-name" style="margin:0;font-size:18px">🌱 Polivalka</h1><div style="font-size:11px;opacity:0.8"><span id="location-text">—</span> / <span id="room-text">—</span></div></div><div class="header-info"><div id="header-time" class="mono" style="font-size:11px">Time: --:--</div><div style="font-size:11px" id="header-mode">Mode: <span id="mode-badge" class="status-badge status-off">Off</span></div><div style="font-size:11px" id="header-conn">📡 <span id="conn-text">Offline</span></div></div></div></div><div class="nav"><a href="/">Home</a><a href="/timer">Timer</a><a href="/sensor" class="active">Sensor</a><a href="/settings">Settings</a><a href="/calibration">Calibration</a><a href="/online">Online</a><a href="/trends">Trends</a><a href="/update">Update</a></div><div class="container"><div class="card"><h3>Sensor Mode Settings <span id="autosave-indicator" class="autosave-indicator"></span></h3><p class="muted">Automatic watering based on soil moisture level with pulsed delivery</p><p class="muted">See current moisture on <a href="/">Home</a> page or <a href="/calibration">Calibration</a> page (Measure button)</p><div style="margin-top:16px"><label><b>Plant Type (preset)</b></label><br><select id="plant-preset" onchange="applyPreset()" style="width:100%;max-width:400px;padding:8px;font-size:14px"><option value="Succulents">Succulents/Cacti (15→25%)</option><option value="Standard">Standard houseplants (35→55%)</option><option value="Tropical">Tropical/Moisture-loving (55→75%)</option><option value="Herbs">Herbs/Seedlings (30→45%)</option><option value="Custom">— Custom (manually adjusted) —</option></select></div><div style="margin-top:12px"><label>Start Watering at (%)</label><br><input id="start-moisture-pct" type="number" min="5" max="90" value="30" style="width:80px" onchange="autoSave()"> %<br>
+<span class="muted" style="font-size:12px">Lower threshold to begin watering cycle</span></div><div style="margin-top:12px"><label>Stop Watering at (%)</label><br><input id="stop-moisture-pct" type="number" min="10" max="100" value="60" style="width:80px" onchange="autoSave()"> %<br>
+<span class="muted" style="font-size:12px">Target moisture level (≥ Start + 10pp recommended)</span></div><div style="margin-top:12px"><label>Pulse sec</label><br><input id="pulse-sec" type="number" min="1" max="60" value="5" style="width:80px" onchange="autoSave()"> sec <span id="pulse-ml-hint" class="muted" style="font-size:12px">(≈ 12.5 ml)</span>
+<br><span class="muted" style="font-size:12px">Duration of each pump pulse</span></div><div class="advanced-toggle" onclick="toggleAdvanced()"><b>▶ Advanced Parameters</b> (fine-tuning for experts)</div><div id="advanced-section" class="advanced-section"><div style="margin-top:12px"><label>Wait sec</label><br><input id="wait-sec" type="number" min="30" max="1200" value="120" style="width:80px" onchange="autoSave()"> sec<br>
+<span class="muted" style="font-size:12px">Pause after pulse for water absorption + sensor settling</span></div><div style="margin-top:12px"><label>Max pulses</label><br><input id="max-pulses" type="number" min="1" max="20" value="5" style="width:80px" onchange="autoSave()"> pulses<br>
+<span class="muted" style="font-size:12px">Maximum pulses per cycle (safety limit)</span></div><div style="margin-top:12px"><label>Cooldown (min)</label><br><input id="cooldown-min" type="number" min="10" max="1440" value="120" style="width:80px" onchange="autoSave()"> min<br>
+<span class="muted" style="font-size:12px">Minimum pause after completed cycle</span></div><div style="margin-top:12px"><label>Max water/day (ml)</label><br><input id="max-water-day-ml" type="number" min="50" max="2000" value="400" style="width:80px" onchange="autoSave()"> ml<br>
+<span class="muted" style="font-size:12px">Daily soft limit (24h rolling window)</span></div><div style="margin-top:12px"><label>No-rise check volume (ml)</label><br><input id="no-rise-check-ml" type="number" min="10" max="500" value="300" style="width:80px" onchange="autoSave()"> ml<br>
+<span class="muted" style="font-size:12px">Alert if moisture doesn't rise after this amount (leak/hose misalignment detection)</span></div><div style="margin-top:12px"><label>Idle check interval (min)</label><br><input id="idle-check-interval-min" type="number" min="5" max="180" value="60" style="width:80px" onchange="autoSave()"> min<br>
+<span class="muted" style="font-size:12px">How often to check moisture in standby mode</span></div><div style="margin-top:12px"><label>Micro-prime interval (h)</label><br><input id="microprime-interval-hours" type="number" min="12" max="168" value="48" style="width:80px" onchange="autoSave()"> hours<br>
+<span class="muted" style="font-size:12px">Periodic tiny pulses for baseline learning (0 to disable)</span></div><div style="margin-top:12px"><label>Micro-prime pulse (sec)</label><br><input id="microprime-pulse-sec" type="number" min="1" max="20" value="4" style="width:80px" onchange="autoSave()"> sec<br>
+<span class="muted" style="font-size:12px">Duration of micro-prime pulse</span></div><div style="margin-top:12px"><label>Micro-prime settle (sec)</label><br><input id="microprime-settle-sec" type="number" min="30" max="600" value="90" style="width:80px" onchange="autoSave()"> sec<br>
+<span class="muted" style="font-size:12px">Pause after micro-prime before measurement</span></div><div style="margin-top:12px"><label>Δ%/ml baseline</label><br><input id="baseline-delta" type="text" value="0.0000" style="width:100px;background:#f5f5f5" disabled> %/ml<br>
+<span class="muted" style="font-size:12px">Auto-learned soil sensitivity (not editable)</span></div></div><div class="muted" style="margin-top:12px;padding:12px;background:#e3f2fd;border-radius:8px"><div style="cursor:pointer" onclick="document.getElementById('help-text').style.display = document.getElementById('help-text').style.display === 'none' ? 'block' : 'none'"><b>▶ How it works (Pulsed Watering) - click to expand</b></div><div id="help-text" style="display:none;margin-top:8px">
+<b>1. ARMING:</b> 60-second countdown when auto-watering enabled<br>
+<b>2. STANDBY:</b> Moisture checked by schedule (Idle check interval, default 60 min) and once after enabling<br>
+<b>3. When moisture < Start Watering at % → PULSE cycle begins:</b><br>
+&nbsp;&nbsp;• Pump ON for <b>Pulse sec</b> → water delivered<br>
+&nbsp;&nbsp;• <b>SETTLE:</b> Wait <b>Wait sec</b> for soil absorption + sensor stabilization<br>
+&nbsp;&nbsp;• <b>CHECK:</b> Measure moisture<br>
+&nbsp;&nbsp;• If moisture < <b>Stop Watering at %</b> → next pulse<br>
+&nbsp;&nbsp;• Repeat until: target reached OR <b>Max pulses</b> exceeded<br>
+<b>4. COOLDOWN:</b> Rest for <b>Cooldown min</b> before next check<br>
+<b>5. Return to STANDBY</b><br><br><b>Safety:</b> No-rise detection, daily limits, global 2000ml hard cap, preflight checks
+</div></div></div></div>
+<script>
+var pumpCalibration = 2.5;  // ml/sec, will be loaded from API
+var autoSaveTimer = null;   // Debounce timer for auto-save
+
+async function updateStatus(){
+  try {
+    const s = await API.get('/status');
+
+    // Device Name, Location, Room
+    if (s.system_state?.device_name) {
+      document.getElementById('device-name').textContent = '🌱 ' + s.system_state.device_name;
+    }
+    if (s.system_state?.location) {
+      document.getElementById('location-text').textContent = s.system_state.location;
+    }
+    if (s.system_state?.room) {
+      document.getElementById('room-text').textContent = s.system_state.room;
+    }
+
+    // Mode
+    const mode = s.system_state?.mode || 'off';
+    const modeBadge = document.getElementById('mode-badge');
+    const modeText = mode.charAt(0).toUpperCase() + mode.slice(1);
+    modeBadge.textContent = modeText;
+    modeBadge.className = 'status-badge status-' + mode;
+
+    // Connection status
+    const connText = document.getElementById('conn-text');
+    if (s.wifi_connected) {
+      connText.textContent = 'Online';
+      connText.style.color = '#0a0';
+    } else {
+      connText.textContent = 'Offline';
+      connText.style.color = '#999';
+    }
+
+    // Pump calibration for ml hint
+    if (s.pump?.calibration_ml_per_sec) {
+      pumpCalibration = s.pump.calibration_ml_per_sec;
+      updatePulseHint();
+    }
+  } catch(e) {
+    console.error('Status update failed:', e);
+  }
+}
+
+async function updateTime(){
+  try {
+    const t = await API.get('/time/status');
+    const timeEl = document.getElementById('header-time');
+    if (t.time_set && t.current_time) {
+      timeEl.textContent='Time: '+t.current_time.substring(11,16);
+      timeEl.className = 'mono ok';
+    } else {
+      timeEl.textContent = 'Time: not set';
+      timeEl.className = 'mono danger';
+    }
+  } catch(e) {}
+}
+
+function updatePulseHint(){
+  const pulseSec = parseInt(document.getElementById('pulse-sec').value) || 0;
+  const ml = (pulseSec * pumpCalibration).toFixed(1);
+  document.getElementById('pulse-ml-hint').textContent = '(≈ ' + ml + ' ml)';
+}
+
+function toggleAdvanced(){
+  const section = document.getElementById('advanced-section');
+  const toggle = document.querySelector('.advanced-toggle');
+  if (section.classList.contains('open')) {
+    section.classList.remove('open');
+    toggle.innerHTML = '<b>▶ Advanced Parameters</b> (fine-tuning for experts)';
+  } else {
+    section.classList.add('open');
+    toggle.innerHTML = '<b>▼ Advanced Parameters</b> (fine-tuning for experts)';
+  }
+}
+
+function showAutoSaveIndicator(state){
+  const indicator = document.getElementById('autosave-indicator');
+  indicator.className = 'autosave-indicator';
+
+  if (state === 'saving') {
+    indicator.textContent = '💾 Saving...';
+    indicator.classList.add('saving');
+  } else if (state === 'saved') {
+    indicator.textContent = '✓ Saved';
+    indicator.classList.add('saved');
+    setTimeout(() => {
+      indicator.className = 'autosave-indicator';
+      indicator.textContent = '';
+    }, 2000);
+  }
+}
+
+function autoSave(){
+  // Switch to Custom preset if not already
+  const presetSelect = document.getElementById('plant-preset');
+  if (presetSelect.value !== 'Custom') {
+    presetSelect.value = 'Custom';
+  }
+
+  // Update ml hint if pulse_sec changed
+  if (event.target.id === 'pulse-sec') {
+    updatePulseHint();
+  }
+
+  // Clear existing timer
+  if (autoSaveTimer) {
+    clearTimeout(autoSaveTimer);
+  }
+
+  // Set new timer (1 second debounce)
+  autoSaveTimer = setTimeout(async () => {
+    await saveSettings();
+  }, 1000);
+}
+
+async function saveSettings(){
+  // Get all parameter values
+  const startPct = parseInt(document.getElementById('start-moisture-pct').value);
+  const stopPct = parseInt(document.getElementById('stop-moisture-pct').value);
+  const pulseSec = parseInt(document.getElementById('pulse-sec').value);
+  const waitSec = parseInt(document.getElementById('wait-sec').value);
+  const maxPulses = parseInt(document.getElementById('max-pulses').value);
+  const cooldownMin = parseInt(document.getElementById('cooldown-min').value);
+  const maxWaterDayMl = parseInt(document.getElementById('max-water-day-ml').value);
+  const noRiseCheckMl = parseInt(document.getElementById('no-rise-check-ml').value);
+  const idleCheckMin = parseInt(document.getElementById('idle-check-interval-min').value);
+  const microprimeHours = parseInt(document.getElementById('microprime-interval-hours').value);
+  const microprimePulseSec = parseInt(document.getElementById('microprime-pulse-sec').value);
+  const microprimeSettleSec = parseInt(document.getElementById('microprime-settle-sec').value);
+
+  // Validation
+  if (stopPct <= startPct) {
+    alert('Stop moisture must be higher than start moisture!\nRecommended: Stop ≥ Start + 10pp');
+    return;
+  }
+  if (maxWaterDayMl > 2000) {
+    alert('Daily limit cannot exceed 2000ml (global hard cap)');
+    return;
+  }
+
+  showAutoSaveIndicator('saving');
+
+  try {
+    // Build query string with all parameters
+    const query =
+      'start_moisture_pct=' + startPct +
+      '&stop_moisture_pct=' + stopPct +
+      '&pulse_sec=' + pulseSec +
+      '&wait_sec=' + waitSec +
+      '&max_pulses=' + maxPulses +
+      '&cooldown_min=' + cooldownMin +
+      '&max_water_day_ml=' + maxWaterDayMl +
+      '&no_rise_check_ml=' + noRiseCheckMl +
+      '&idle_check_interval_min=' + idleCheckMin +
+      '&microprime_interval_hours=' + microprimeHours +
+      '&microprime_pulse_sec=' + microprimePulseSec +
+      '&microprime_settle_sec=' + microprimeSettleSec;
+
+    const resp = await fetch('/sensor/preset/custom?' + query, {
+      method: 'POST',
+      cache: 'no-store'
+    }).then(r => r.json());
+
+    if (resp.success) {
+      showAutoSaveIndicator('saved');
+      console.log('[AutoSave] Settings saved successfully');
+    } else {
+      alert('❌ Error: ' + (resp.message || 'Failed to save'));
+    }
+  } catch(e) {
+    alert('Error saving settings: ' + e.message);
+  }
+}
+
+async function applyPreset(){
+  const presetName = document.getElementById('plant-preset').value;
+  console.log('[Preset] Selected:', presetName);
+
+  if (presetName === 'Custom') {
+    console.log('[Preset] Custom - no changes applied');
+    return;
+  }
+
+  showAutoSaveIndicator('saving');
+
+  try {
+    // Set preset via API
+    await fetch('/sensor/preset/set?preset=' + encodeURIComponent(presetName), {
+      method: 'POST',
+      cache: 'no-store'
+    });
+
+    // Reload configuration from backend
+    await loadSensorSettings();
+
+    showAutoSaveIndicator('saved');
+    console.log('[Preset] Applied:', presetName);
+  } catch(e) {
+    alert('Error applying preset: ' + e.message);
+  }
+}
+
+async function loadSensorSettings(){
+  try {
+    const config = await API.get('/sensor/preset');
+
+    console.log('[Load] Preset config:', config);
+
+    // Set preset dropdown
+    document.getElementById('plant-preset').value = config.preset || 'Custom';
+
+    // Set all parameters
+    document.getElementById('start-moisture-pct').value = config.start_pct || 30;
+    document.getElementById('stop-moisture-pct').value = config.stop_pct || 60;
+    document.getElementById('pulse-sec').value = config.pulse_sec || 5;
+    document.getElementById('wait-sec').value = config.wait_sec || 120;
+    document.getElementById('max-pulses').value = config.max_pulses || 5;
+    document.getElementById('cooldown-min').value = config.cooldown_min || 120;
+    document.getElementById('max-water-day-ml').value = config.max_water_day_ml || 400;
+    document.getElementById('no-rise-check-ml').value = config.no_rise_check_ml || 60;
+    document.getElementById('idle-check-interval-min').value = config.idle_check_interval_min || 60;
+    document.getElementById('microprime-interval-hours').value = config.microprime_interval_hours || 48;
+    document.getElementById('microprime-pulse-sec').value = config.microprime_pulse_sec || 4;
+    document.getElementById('microprime-settle-sec').value = config.microprime_settle_sec || 90;
+    document.getElementById('baseline-delta').value = (config.baseline_delta_pct_per_ml || 0).toFixed(4);
+
+    // Update ml hint
+    updatePulseHint();
+
+    console.log('[Load] Settings loaded successfully');
+  } catch(e) {
+    console.error('[Load] Error:', e);
+  }
+}
+
+// Track WiFi mode to detect disconnection
+var lastWiFiMode = null;
+var lastStaIp = null;
+
+async function monitorWiFiMode() {
+  try {
+    const response = await fetch('/api/wifi/status', {
+      method: 'POST',
+      cache: 'no-store'
+    });
+    const result = await response.json();
+    const currentMode = result.mode;
+    const currentStaIp = result.sta_ip || null;
+
+    // Initialize on first call
+    if (lastWiFiMode === null) {
+      lastWiFiMode = currentMode;
+      lastStaIp = currentStaIp;
+      return;
+    }
+
+    // Detect NEW connection to router (sta_ip appeared) - redirect immediately!
+    if (!lastStaIp && currentStaIp) {
+      console.log('Connected to router, redirecting to ' + currentStaIp);
+      window.location.href = 'http://' + currentStaIp + window.location.pathname;
+      return;
+    }
+
+    if (lastWiFiMode && (lastWiFiMode === 'sta' || lastWiFiMode === 'apsta') && currentMode === 'ap') {
+      console.log('WiFi disconnected, redirecting to AP mode...');
+      window.location.href = 'http://192.168.4.1' + window.location.pathname;
+      return;
+    }
+
+    lastWiFiMode = currentMode;
+    lastStaIp = currentStaIp;
+  } catch(e) {
+    // Connection lost - try AP fallback
+    console.log('Connection lost, trying AP fallback...');
+    try {
+      await fetch('http://192.168.4.1/api/wifi/status', {
+        method: 'POST',
+        cache: 'no-store'
+      });
+      // AP is accessible - redirect
+      console.log('AP accessible, redirecting...');
+      window.location.href = 'http://192.168.4.1' + window.location.pathname;
+    } catch(e2) {
+      // AP not accessible yet, will retry on next poll
+    }
+  }
+}
+
+// Cloud mode: показать device ID в header сразу
+if (IS_CLOUD && DEVICE_ID) {
+  document.getElementById('device-name').textContent = `🌱 Polivalka-${DEVICE_ID}`;
+  document.title = `Polivalka-${DEVICE_ID} — Sensor Mode`;
+  document.getElementById('location-text').textContent = 'Cloud';
+  document.getElementById('room-text').textContent = DEVICE_ID;
+}
+
+setInterval(updateStatus, 30000);  // 30s interval (reduced load)
+setInterval(updateTime, 60000);
+if (!IS_CLOUD) { setInterval(monitorWiFiMode, 5000);  // 5 sec - balance UX/load (active settings editing)
+}
+updateStatus();
+updateTime();
+if (!IS_CLOUD) { monitorWiFiMode(); }
+loadSensorSettings();
+</script>
+</body></html>
