@@ -113,6 +113,19 @@
     0%,100%{opacity:1}
     50%{opacity:0.5}
   }
+
+  /* Debug Console */
+  .debug-console{position:fixed;bottom:0;left:0;right:0;height:250px;background:#1e1e1e;color:#d4d4d4;border-top:2px solid #007acc;font-family:ui-monospace,monospace;font-size:12px;display:flex;flex-direction:column;z-index:2000}
+  .console-header{background:#2d2d2d;padding:8px 12px;display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid #3e3e3e}
+  .console-header h4{margin:0;font-size:13px;color:#fff}
+  .console-body{flex:1;overflow-y:auto;padding:8px}
+  .console-line{padding:2px 4px;border-bottom:1px solid #2d2d2d}
+  .console-line.error{color:#f48771;background:#3f1a1a}
+  .console-line.success{color:#89d185;background:#1a3f1a}
+  .console-line.info{color:#75beff}
+  .console-timestamp{color:#858585;margin-right:8px}
+  .console-toggle{position:fixed;bottom:260px;right:20px;z-index:2001;background:#007acc;color:#fff;border:none;padding:8px 16px;border-radius:8px 8px 0 0;cursor:pointer;font-size:11px}
+  .console-toggle.closed{bottom:0;border-radius:8px}
 </style>
 </head>
 <body>
@@ -732,7 +745,107 @@ function viewLogs() {
   console.log('View logs');
   alert('System logs (TODO: implement)');
 }
+
+// ========== DEBUG CONSOLE ==========
+const consoleLines = [];
+const MAX_CONSOLE_LINES = 100;
+
+function logToConsole(message, type = 'info') {
+  const timestamp = new Date().toISOString().substr(11, 8);
+  const line = { timestamp, message, type };
+  consoleLines.push(line);
+
+  if (consoleLines.length > MAX_CONSOLE_LINES) {
+    consoleLines.shift();
+  }
+
+  renderConsole();
+}
+
+function renderConsole() {
+  const consoleBody = document.getElementById('consoleBody');
+  if (!consoleBody) return;
+
+  consoleBody.innerHTML = consoleLines.map(line =>
+    `<div class="console-line ${line.type}">
+      <span class="console-timestamp">${line.timestamp}</span>
+      <span>${line.message}</span>
+    </div>`
+  ).join('');
+
+  // Auto-scroll to bottom
+  consoleBody.scrollTop = consoleBody.scrollHeight;
+}
+
+function toggleConsole() {
+  const console = document.getElementById('debugConsole');
+  const toggle = document.getElementById('consoleToggle');
+
+  if (console.style.display === 'none') {
+    console.style.display = 'flex';
+    toggle.textContent = '▼ Hide Console';
+    toggle.classList.remove('closed');
+  } else {
+    console.style.display = 'none';
+    toggle.textContent = '▲ Show Console';
+    toggle.classList.add('closed');
+  }
+}
+
+function clearConsole() {
+  consoleLines.length = 0;
+  renderConsole();
+}
+
+// Log all fetch requests
+const originalFetch = window.fetch;
+window.fetch = async function(...args) {
+  const url = args[0];
+  const options = args[1] || {};
+
+  logToConsole(`→ ${options.method || 'GET'} ${url}`, 'info');
+
+  try {
+    const response = await originalFetch.apply(this, args);
+    const clonedResponse = response.clone();
+
+    try {
+      const data = await clonedResponse.json();
+      if (response.ok) {
+        logToConsole(`← ${response.status} ${url}: ${JSON.stringify(data).substr(0, 100)}`, 'success');
+      } else {
+        logToConsole(`← ${response.status} ${url}: ${JSON.stringify(data).substr(0, 100)}`, 'error');
+      }
+    } catch(e) {
+      logToConsole(`← ${response.status} ${url}: (non-JSON response)`, response.ok ? 'success' : 'error');
+    }
+
+    return response;
+  } catch(error) {
+    logToConsole(`✗ ${url}: ${error.message}`, 'error');
+    throw error;
+  }
+};
+
+// Initialize console on load
+window.addEventListener('DOMContentLoaded', () => {
+  logToConsole('Fleet Management Console initialized', 'success');
+});
 </script>
+
+<!-- Debug Console -->
+<button id="consoleToggle" class="console-toggle" onclick="toggleConsole()">▲ Show Console</button>
+
+<div id="debugConsole" class="debug-console" style="display:none">
+  <div class="console-header">
+    <h4>🐛 Debug Console</h4>
+    <div>
+      <button onclick="clearConsole()" style="padding:4px 12px;margin-right:8px;background:#444;color:#fff;border:none;border-radius:4px;cursor:pointer">Clear</button>
+      <button onclick="toggleConsole()" style="padding:4px 12px;background:#444;color:#fff;border:none;border-radius:4px;cursor:pointer">Close</button>
+    </div>
+  </div>
+  <div id="consoleBody" class="console-body"></div>
+</div>
 
 </body>
 </html>
