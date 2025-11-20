@@ -126,6 +126,11 @@
   .console-timestamp{color:#858585;margin-right:8px}
   .console-toggle{position:fixed;bottom:260px;right:20px;z-index:2001;background:#007acc;color:#fff;border:none;padding:8px 16px;border-radius:8px 8px 0 0;cursor:pointer;font-size:11px}
   .console-toggle.closed{bottom:0;border-radius:8px}
+
+  /* Toggle button for Water Now */
+  .btn-water-toggle{transition:all 0.3s;position:relative}
+  .btn-water-toggle.active{background:#2c5f2d !important;color:#fff !important;border-color:#2c5f2d !important;box-shadow:inset 0 3px 5px rgba(0,0,0,0.3)}
+  .water-hint{font-size:11px;color:#666;margin-left:4px;font-weight:normal}
 </style>
 </head>
 <body>
@@ -265,6 +270,11 @@ let currentUser = null;
 let allDevices = [];
 let currentView = 'list'; // 'cards' or 'list' (default: list for mobile-first)
 
+// Pump settings (will be loaded from device status or use defaults)
+let pumpCalibration = 2.5;  // ml/sec default
+let maxWateringTime = 60;   // seconds default
+let pumpRunningDevices = new Set();  // Track which devices have pump running
+
 function mockLogin() {
   currentUser = {username: 'admin', role: 'admin'};
   document.getElementById('auth-section').style.display = 'none';
@@ -322,13 +332,18 @@ function createExpandableRow(device, isOnline, hasWarnings, isCritical) {
   else if (hasWarnings) cardClass += ' warning';
 
   div.className = cardClass;
+  div.setAttribute('data-device-id', device.device_id);
 
   // Moisture & battery colors (как на home.html)
   let moistureColor = device.moisture_pct < 20 ? '#b00' : device.moisture_pct < 40 ? '#f57c00' : '#0a0';
-  let batteryColor = device.battery_pct < 10 ? '#b00' : device.battery_pct < 30 ? '#f57c00' : '#0a0';
+  let batteryColor = device.battery_pct === null ? '#0a0' : device.battery_pct < 10 ? '#b00' : device.battery_pct < 30 ? '#f57c00' : '#0a0';
 
   // Charging icon (⚡ если на розетке, как на home.html)
   const chargingIcon = device.battery_charging ? ' ⚡' : '';
+
+  // Battery display text (null = AC power, no battery)
+  const batteryDisplay = device.battery_pct !== null ? `🔋${device.battery_pct}%${chargingIcon}` : '⚡ AC';
+  const batteryDisplayLong = device.battery_pct !== null ? `🔋 Battery: ${device.battery_pct}%${chargingIcon}` : '⚡ AC Power';
 
   // Time ago (handles both seconds and milliseconds)
   const lastWateringAgo = timeAgo(device.last_watering);
@@ -354,7 +369,7 @@ function createExpandableRow(device, isOnline, hasWarnings, isCritical) {
       <span class="device-name">🌱 ${device.name}</span>
       <div class="device-quick-info">
         <span style="color:${moistureColor}">💧${device.moisture_pct}%</span>
-        <span style="color:${batteryColor}">🔋${device.battery_pct}%${chargingIcon}</span>
+        <span style="color:${batteryColor}">${batteryDisplay}</span>
         ${lastWateringBadge}
         <span class="device-status ${isOnline ? 'online' : 'offline'}">${isOnline ? '● Online' : '○ Offline'}</span>
       </div>
@@ -370,7 +385,7 @@ function createExpandableRow(device, isOnline, hasWarnings, isCritical) {
 
       <div class="detail-row" style="margin-top:8px">
         <span class="detail-item" style="color:${moistureColor}">💧 Moisture: ${device.moisture_pct}% (ADC: ${device.adc_raw || 'N/A'})</span>
-        <span class="detail-item" style="color:${batteryColor}">🔋 Battery: ${device.battery_pct !== null ? device.battery_pct + '%' : 'N/A'}${chargingIcon}</span>
+        <span class="detail-item" style="color:${batteryColor}">${batteryDisplayLong}</span>
         <span class="detail-item">Last watering: ${lastWateringAgo}</span>
       </div>
 
@@ -382,8 +397,8 @@ function createExpandableRow(device, isOnline, hasWarnings, isCritical) {
 
       <div class="device-actions">
         <button onclick="event.stopPropagation(); refreshSensor('${device.device_id}')" class="btn-secondary">🔄 Refresh Sensor</button>
-        <button onclick="event.stopPropagation(); startPump('${device.device_id}')" class="btn-primary">💧 Start Pump</button>
-        <button onclick="event.stopPropagation(); stopPump('${device.device_id}')" class="btn-danger">⛔ Stop Pump</button>
+        <button onclick="event.stopPropagation(); startPump('${device.device_id}')" class="btn-primary btn-water-toggle">💧 Water Now <span class="water-hint">(≈${(maxWateringTime * pumpCalibration).toFixed(0)}ml)</span></button>
+        <button onclick="event.stopPropagation(); stopPump('${device.device_id}')" class="btn-danger">⛔ Stop</button>
         <button onclick="event.stopPropagation(); viewDevice('${device.device_id}')">📊 Details</button>
         <button onclick="event.stopPropagation(); deviceUpdate('${device.device_id}')">📦 OTA Update</button>
       </div>
@@ -428,7 +443,7 @@ function switchView(view) {
 
     const lastUpdateMs = device.last_update < 10000000000 ? device.last_update * 1000 : device.last_update;
     const isOnline = (Date.now() - lastUpdateMs) < 2 * 60 * 60 * 1000;
-    const hasWarnings = device.warnings.length > 0 || device.battery_pct < 10 || device.moisture_pct < 15;
+    const hasWarnings = device.warnings.length > 0 || (device.battery_pct !== null && device.battery_pct < 10) || device.moisture_pct < 15;
     if (status === 'online' && !isOnline) return false;
     if (status === 'offline' && isOnline) return false;
     if (status === 'warning' && !hasWarnings) return false;
@@ -445,7 +460,7 @@ function createDeviceCard(device) {
   const lastUpdateMs = device.last_update < 10000000000 ? device.last_update * 1000 : device.last_update;
   const isOnline = (Date.now() - lastUpdateMs) < 2 * 60 * 60 * 1000; // 2h threshold
   const hasWarnings = device.warnings.length > 0;
-  const isCritical = device.battery_pct < 10 || device.moisture_pct < 15;
+  const isCritical = (device.battery_pct !== null && device.battery_pct < 10) || device.moisture_pct < 15;
 
   let cardClass = 'device-card';
   if (!isOnline) cardClass += ' offline';
@@ -453,6 +468,7 @@ function createDeviceCard(device) {
   else if (hasWarnings) cardClass += ' warning';
 
   div.className = cardClass;
+  div.setAttribute('data-device-id', device.device_id);
 
   // List mode: expandable row
   if (currentView === 'list') {
@@ -468,8 +484,10 @@ function createDeviceCard(device) {
 
   // Battery color
   let batteryClass = 'good';
-  if (device.battery_pct < 10) batteryClass = 'low';
-  else if (device.battery_pct < 30) batteryClass = 'medium';
+  if (device.battery_pct !== null) {
+    if (device.battery_pct < 10) batteryClass = 'low';
+    else if (device.battery_pct < 30) batteryClass = 'medium';
+  }
 
   // Mode badge
   const modeBadge = `<span class="mode-badge mode-${device.mode}">${device.mode.charAt(0).toUpperCase() + device.mode.slice(1)}</span>`;
@@ -478,8 +496,9 @@ function createDeviceCard(device) {
   const isWatering = device.state === 'PULSE' || device.state === 'WATERING';
   const wateringBadge = isWatering ? '<span style="color:#1976d2;font-weight:600">💧 Watering...</span>' : '';
 
-  // Battery charging
+  // Battery display (null = AC power, no battery)
   const chargingIcon = device.battery_charging ? ' ⚡' : '';
+  const batteryMetric = device.battery_pct !== null ? `${device.battery_pct}%${chargingIcon}` : '⚡ AC Power';
 
   // Time ago
   const lastWateringAgo = timeAgo(device.last_watering);
@@ -505,7 +524,7 @@ function createDeviceCard(device) {
       </div>
       <div class="metric">
         <div class="metric-label">🔋 Battery</div>
-        <div class="metric-value ${batteryClass}">${device.battery_pct}%${chargingIcon}</div>
+        <div class="metric-value ${batteryClass}">${batteryMetric}</div>
       </div>
     </div>
 
@@ -522,8 +541,8 @@ function createDeviceCard(device) {
 
     <div class="device-actions">
       <button onclick="refreshSensor('${device.device_id}')" class="btn-primary">🔄 Refresh</button>
-      <button onclick="startPump('${device.device_id}')" class="btn-primary">💧 Start Pump</button>
-      <button onclick="stopPump('${device.device_id}')" class="btn-danger">⛔ Stop Pump</button>
+      <button onclick="startPump('${device.device_id}')" class="btn-primary btn-water-toggle">💧 Water Now <span class="water-hint">(≈${(maxWateringTime * pumpCalibration).toFixed(0)}ml)</span></button>
+      <button onclick="stopPump('${device.device_id}')" class="btn-danger">⛔ Stop</button>
       <button onclick="viewDevice('${device.device_id}')">📊 Details</button>
       <button onclick="deviceUpdate('${device.device_id}')">📦 OTA Update</button>
     </div>
@@ -563,7 +582,7 @@ function filterDevices() {
     // Status filter
     const lastUpdateMs = device.last_update < 10000000000 ? device.last_update * 1000 : device.last_update;
     const isOnline = (Date.now() - lastUpdateMs) < 2 * 60 * 60 * 1000;
-    const hasWarnings = device.warnings.length > 0 || device.battery_pct < 10 || device.moisture_pct < 15;
+    const hasWarnings = device.warnings.length > 0 || (device.battery_pct !== null && device.battery_pct < 10) || device.moisture_pct < 15;
     if (status === 'online' && !isOnline) return false;
     if (status === 'offline' && isOnline) return false;
     if (status === 'warning' && !hasWarnings) return false;
@@ -598,6 +617,43 @@ function updateTime() {
   const now = new Date();
   const timeStr = now.toTimeString().substring(0, 5);
   document.getElementById('header-time').textContent = 'Time: ' + timeStr;
+}
+
+function showToast(message, type = 'info') {
+  // Create toast element
+  const toast = document.createElement('div');
+  toast.className = `toast toast-${type}`;
+  toast.textContent = message;
+
+  // Style the toast
+  Object.assign(toast.style, {
+    position: 'fixed',
+    top: '20px',
+    right: '20px',
+    padding: '12px 20px',
+    borderRadius: '8px',
+    backgroundColor: type === 'error' ? '#dc3545' : '#28a745',
+    color: 'white',
+    fontSize: '14px',
+    fontWeight: '500',
+    boxShadow: '0 4px 12px rgba(0,0,0,0.3)',
+    zIndex: 10000,
+    opacity: 0,
+    transition: 'opacity 0.3s ease',
+    maxWidth: '400px'
+  });
+
+  // Add to page
+  document.body.appendChild(toast);
+
+  // Fade in
+  setTimeout(() => toast.style.opacity = 1, 10);
+
+  // Remove after 4 seconds
+  setTimeout(() => {
+    toast.style.opacity = 0;
+    setTimeout(() => toast.remove(), 300);
+  }, 4000);
 }
 
 // Device actions
@@ -643,14 +699,13 @@ async function refreshSensor(deviceId) {
       updateStats(allDevices);
     }
 
-    alert(`✓ Sensor updated!\nMoisture: ${result.moisture_pct}%\nADC: ${result.adc_raw}`);
+    // Silent success - data updated on card (no alert needed)
 
   } catch(e) {
-    if (e.message.includes('408')) {
-      alert('⚠️ Device did not respond\n\nDevice may be offline or sleeping.\nTry again in a few moments.');
-    } else {
-      alert(`Error: ${e.message}`);
-    }
+    // Show error toast (non-blocking)
+    showToast(e.message.includes('408') ?
+      '⚠️ Device offline or sleeping. Try again later.' :
+      `❌ Error: ${e.message}`, 'error');
   } finally {
     // Restore button
     const button = event.target;
@@ -660,38 +715,54 @@ async function refreshSensor(deviceId) {
 }
 
 async function startPump(deviceId) {
-  const duration = prompt('Water duration (seconds):', '10');
-  if (!duration || duration < 1 || duration > 300) {
-    return;
-  }
-
   try {
-    // Use pump shortcut endpoint
-    const result = await API.post(`/device/${deviceId}/pump?sec=${duration}`);
+    // Start pump for maxWateringTime
+    await API.post(`/device/${deviceId}/pump?sec=${maxWateringTime}`);
 
-    alert(`✓ Pump started for ${duration}s\nCommand ID: ${result.command_id}`);
+    // Mark device as pump running
+    pumpRunningDevices.add(deviceId);
 
+    // Update button state immediately
+    updatePumpButton(deviceId, true);
+
+    // Silent success - device card will update automatically
     setTimeout(() => loadDevices(), 2000);
   } catch(e) {
-    alert(`Error: ${e.message}`);
+    showToast(`❌ Failed to start pump: ${e.message}`, 'error');
   }
 }
 
 async function stopPump(deviceId) {
-  if (!confirm('Stop pump immediately?')) {
-    return;
-  }
-
   try {
-    // Use pump/stop shortcut endpoint
-    const result = await API.post(`/device/${deviceId}/pump/stop`);
+    // Stop pump immediately (no confirmation for safety - quick action)
+    await API.post(`/device/${deviceId}/pump/stop`);
 
-    alert(`✓ Pump stopped\nCommand ID: ${result.command_id}`);
+    // Remove from pump running set
+    pumpRunningDevices.delete(deviceId);
 
+    // Update button state immediately
+    updatePumpButton(deviceId, false);
+
+    // Silent success - device card will update automatically
     setTimeout(() => loadDevices(), 1000);
   } catch(e) {
-    alert(`Error: ${e.message}`);
+    showToast(`❌ Failed to stop pump: ${e.message}`, 'error');
   }
+}
+
+function updatePumpButton(deviceId, isRunning) {
+  // Find and update Water Now button state for this device
+  const buttons = document.querySelectorAll(`[data-device-id="${deviceId}"] .btn-water-toggle`);
+  buttons.forEach(btn => {
+    if (isRunning) {
+      btn.classList.add('active');
+      btn.textContent = `💧 Watering...`;
+    } else {
+      btn.classList.remove('active');
+      const ml = (maxWateringTime * pumpCalibration).toFixed(0);
+      btn.innerHTML = `💧 Water Now <span class="water-hint">(≈${ml}ml)</span>`;
+    }
+  });
 }
 
 function viewDevice(deviceId) {
