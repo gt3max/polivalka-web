@@ -276,6 +276,9 @@ let maxWateringTime = 60;   // seconds default
 let pumpRunningDevices = new Set();  // Track which devices have pump running
 let pumpTimers = {};  // Track timers for each device
 
+// Track expanded devices (to preserve state across re-renders)
+let expandedDevices = new Set();
+
 function mockLogin() {
   currentUser = {username: 'admin', role: 'admin'};
   document.getElementById('auth-section').style.display = 'none';
@@ -321,6 +324,16 @@ function renderDevices(devices) {
   devices.forEach(device => {
     const card = createDeviceCard(device);
     container.appendChild(card);
+
+    // Restore expanded state if device was expanded before
+    if (expandedDevices.has(device.device_id)) {
+      const rowElement = card.querySelector('.device-row');
+      const detailsElement = card.querySelector(`#details-${device.device_id}`);
+      if (rowElement && detailsElement) {
+        rowElement.classList.add('expanded');
+        detailsElement.classList.add('expanded');
+      }
+    }
   });
 }
 
@@ -387,9 +400,9 @@ function createExpandableRow(device, isOnline, hasWarnings, isCritical) {
     <!-- Expanded details (hidden by default) -->
     <div class="device-details" id="details-${device.device_id}">
       <div class="detail-row">
-        <span class="detail-item">📍 ${device.location} / ${device.room}</span>
-        ${modeName ? `<span class="detail-item">Mode: ${modeName}</span>` : ''}
+        ${modeName ? `<span class="detail-item">Mode: ${modeName}</span>` : '<span class="detail-item">Mode: Off</span>'}
         <span class="detail-item">Water: ≈${(maxWateringTime * pumpCalibration).toFixed(0)}ml / ${maxWateringTime}s</span>
+        <span class="detail-item">📍 ${device.location} / ${device.room}</span>
       </div>
 
       <div class="detail-row" style="margin-top:8px">
@@ -425,10 +438,15 @@ function toggleDeviceExpand(rowElement, deviceId) {
     // Collapse
     detailsElement.classList.remove('expanded');
     rowElement.classList.remove('expanded');
+    expandedDevices.delete(deviceId);
   } else {
     // Expand
     detailsElement.classList.add('expanded');
     rowElement.classList.add('expanded');
+    expandedDevices.add(deviceId);
+
+    // Auto-refresh sensor data when expanding (to show fresh data in Details)
+    refreshSensorSilent(deviceId);
   }
 }
 
@@ -727,6 +745,34 @@ async function refreshSensor(deviceId) {
     const button = event.target;
     button.textContent = '🔄 Refresh';
     button.disabled = false;
+  }
+}
+
+// Silent version for auto-refresh when expanding Details (no UI feedback)
+async function refreshSensorSilent(deviceId) {
+  try {
+    // Call real-time sensor endpoint
+    const result = await API.get(`/device/${deviceId}/sensor`);
+
+    // Update device in allDevices array
+    const device = allDevices.find(d => d.device_id === deviceId);
+    if (device) {
+      device.moisture_pct = result.moisture_pct;
+      device.adc_raw = result.adc_raw;
+      device.last_update = result.timestamp;
+
+      // Re-render devices (will preserve expanded state)
+      renderDevices(allDevices);
+      updateStats(allDevices);
+    }
+
+    // Silent success - no toasts, no button updates
+
+  } catch(e) {
+    // Only show error toast if request fails
+    showToast(e.message.includes('408') ?
+      '⚠️ Device offline or sleeping.' :
+      `❌ Error refreshing: ${e.message}`, 'error');
   }
 }
 
