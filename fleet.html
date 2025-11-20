@@ -498,8 +498,15 @@ function createDeviceCard(device) {
     else if (device.battery_pct < 30) batteryClass = 'medium';
   }
 
-  // Mode badge
-  const modeBadge = `<span class="mode-badge mode-${device.mode}">${device.mode.charAt(0).toUpperCase() + device.mode.slice(1)}</span>`;
+  // Mode badge (List view - с иконками, скрываем 'off')
+  const modeMapList = {
+    'manual': '🔧 Manual',
+    'timer': '⏰ Timer',
+    'sensor': '💧 Sensor',
+    'off': ''
+  };
+  const modeNameList = modeMapList[device.mode] || '';
+  const modeBadge = modeNameList ? `<span class="mode-badge mode-${device.mode}">${modeNameList}</span>` : '';
 
   // Watering status
   const isWatering = device.state === 'PULSE' || device.state === 'WATERING';
