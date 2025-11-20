@@ -1,0 +1,237 @@
+<!doctype html>
+<html>
+<head>
+<script src="api-adapter.js"></script>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Polivalka — OTA Update</title>
+<style>
+body{font-family:system-ui,Arial;margin:0;padding:20px;background:#f5f5f5}
+.container{max-width:600px;margin:0 auto;background:#fff;padding:30px;border-radius:12px;box-shadow:0 2px 8px rgba(0,0,0,0.1)}
+h1{margin:0 0 20px 0;font-size:24px;color:#2c5f2d}
+.device-info{background:#f9f9f9;padding:15px;border-radius:8px;margin-bottom:20px}
+.device-info div{margin:5px 0;font-size:14px}
+.upload-area{border:2px dashed #ccc;border-radius:8px;padding:40px;text-align:center;margin:20px 0;cursor:pointer;transition:all 0.3s}
+.upload-area:hover{border-color:#2c5f2d;background:#f0f7f0}
+.upload-area.dragover{border-color:#2c5f2d;background:#e8f5e9}
+input[type="file"]{display:none}
+.file-info{margin:15px 0;padding:15px;background:#e8f5e9;border-radius:8px;font-size:14px}
+.btn{padding:12px 24px;border:none;border-radius:8px;font-size:16px;cursor:pointer;width:100%;margin-top:10px}
+.btn-primary{background:#2c5f2d;color:#fff}
+.btn-primary:disabled{background:#ccc;cursor:not-allowed}
+.progress{display:none;margin:20px 0}
+.progress-bar{width:100%;height:30px;background:#f0f0f0;border-radius:8px;overflow:hidden}
+.progress-fill{height:100%;background:#2c5f2d;transition:width 0.3s;display:flex;align-items:center;justify-content:center;color:#fff;font-size:14px;font-weight:600}
+.status{margin:20px 0;padding:15px;border-radius:8px;font-size:14px;display:none}
+.status.success{background:#e8f5e9;color:#2e7d32;border:1px solid #2e7d32}
+.status.error{background:#ffebee;color:#c62828;border:1px solid #c62828}
+.warning{background:#fff3cd;padding:15px;border-radius:8px;margin:20px 0;font-size:13px;color:#856404;border:1px solid #ffc107}
+</style>
+</head>
+<body>
+<div class="container">
+  <h1>🔄 OTA Firmware Update</h1>
+
+  <div class="device-info">
+    <div><strong>Device:</strong> <span id="device-name">Loading...</span></div>
+    <div><strong>Location:</strong> <span id="device-location">—</span></div>
+    <div><strong>Current:</strong> <span id="current-version">—</span></div>
+    <div><strong>Status:</strong> <span id="device-status">—</span></div>
+  </div>
+
+  <div class="warning">
+    ⚠️ <strong>Warning:</strong> Do NOT power off device during update!
+    Update takes ~2-3 minutes. Device will restart automatically.
+  </div>
+
+  <div class="upload-area" id="uploadArea" onclick="document.getElementById('fileInput').click()">
+    <div style="font-size:48px;margin-bottom:10px">📦</div>
+    <div style="font-size:16px;font-weight:600;margin-bottom:5px">Click to select firmware file</div>
+    <div style="font-size:13px;color:#666">or drag and drop polivalka.bin here</div>
+  </div>
+
+  <input type="file" id="fileInput" accept=".bin">
+
+  <div class="file-info" id="fileInfo" style="display:none">
+    <div><strong>File:</strong> <span id="fileName">—</span></div>
+    <div><strong>Size:</strong> <span id="fileSize">—</span></div>
+  </div>
+
+  <button class="btn btn-primary" id="uploadBtn" disabled onclick="startOTA()">
+    Upload & Update Firmware
+  </button>
+
+  <div class="progress" id="progress">
+    <div class="progress-bar">
+      <div class="progress-fill" id="progressFill">0%</div>
+    </div>
+    <div style="text-align:center;margin-top:10px;font-size:13px;color:#666" id="progressText">
+      Uploading firmware...
+    </div>
+  </div>
+
+  <div class="status" id="status"></div>
+
+  <div style="margin-top:30px;text-align:center">
+    <a href="fleet.html" style="color:#2c5f2d;text-decoration:none">← Back to Fleet</a>
+  </div>
+</div>
+
+<script>
+const deviceId = new URLSearchParams(window.location.search).get('device') || 'Polivalka-BB00C1';
+
+let selectedFile = null;
+
+// Load device info
+async function loadDeviceInfo() {
+  try {
+    const devices = await API.get('/devices');
+    const device = devices.find(d => d.device_id === deviceId);
+
+    if (device) {
+      document.getElementById('device-name').textContent = device.name || device.device_id;
+      document.getElementById('device-location').textContent = `${device.location || '—'} / ${device.room || '—'}`;
+      document.getElementById('current-version').textContent = 'v1.0.0';  // TODO: get from telemetry
+      document.getElementById('device-status').textContent = device.online ? '● Online' : '○ Offline';
+      document.getElementById('device-status').style.color = device.online ? '#2e7d32' : '#999';
+    } else {
+      document.getElementById('device-name').textContent = deviceId;
+      document.getElementById('device-status').textContent = '○ Unknown';
+    }
+  } catch(e) {
+    console.error('Failed to load device info:', e);
+    document.getElementById('device-name').textContent = deviceId;
+    document.getElementById('device-status').textContent = '⚠ Error loading';
+  }
+}
+
+// File input handler
+document.getElementById('fileInput').addEventListener('change', function(e) {
+  const file = e.target.files[0];
+  if (file && file.name.endsWith('.bin')) {
+    selectedFile = file;
+    showFileInfo(file);
+  } else {
+    showStatus('Please select a .bin file', 'error');
+  }
+});
+
+// Drag & drop
+const uploadArea = document.getElementById('uploadArea');
+uploadArea.addEventListener('dragover', (e) => {
+  e.preventDefault();
+  uploadArea.classList.add('dragover');
+});
+uploadArea.addEventListener('dragleave', () => {
+  uploadArea.classList.remove('dragover');
+});
+uploadArea.addEventListener('drop', (e) => {
+  e.preventDefault();
+  uploadArea.classList.remove('dragover');
+  const file = e.dataTransfer.files[0];
+  if (file && file.name.endsWith('.bin')) {
+    selectedFile = file;
+    showFileInfo(file);
+  } else {
+    showStatus('Please select a .bin file', 'error');
+  }
+});
+
+function showFileInfo(file) {
+  document.getElementById('fileName').textContent = file.name;
+  document.getElementById('fileSize').textContent = (file.size / 1024 / 1024).toFixed(2) + ' MB';
+  document.getElementById('fileInfo').style.display = 'block';
+  document.getElementById('uploadBtn').disabled = false;
+}
+
+async function startOTA() {
+  if (!selectedFile) return;
+
+  const uploadBtn = document.getElementById('uploadBtn');
+  const progressDiv = document.getElementById('progress');
+  const statusDiv = document.getElementById('status');
+
+  uploadBtn.disabled = true;
+  progressDiv.style.display = 'block';
+  statusDiv.style.display = 'none';
+
+  try {
+    // Upload to S3
+    updateProgress(10, 'Uploading to S3...');
+    const firmwareUrl = await uploadToS3(selectedFile);
+
+    updateProgress(50, 'Triggering OTA update...');
+
+    // Trigger OTA via Lambda
+    // API adapter already adds /device/${deviceId} prefix in cloud mode
+    const response = await API.post('/ota', {
+      url: firmwareUrl,
+      version: 'v1.0.0'
+    });
+
+    updateProgress(100, 'OTA update triggered!');
+
+    setTimeout(() => {
+      showStatus(`✅ OTA update started! Device will restart in ~60 seconds. <br>Check Fleet page for status.`, 'success');
+      progressDiv.style.display = 'none';
+    }, 1000);
+
+  } catch(e) {
+    console.error('OTA failed:', e);
+    showStatus(`❌ Failed: ${e.message}`, 'error');
+    progressDiv.style.display = 'none';
+    uploadBtn.disabled = false;
+  }
+}
+
+async function uploadToS3(file) {
+  try {
+    // 1. Get presigned upload URL from Lambda
+    // API adapter already adds /device/${deviceId} prefix in cloud mode
+    const urlResponse = await API.get('/ota/upload-url');
+
+    if (!urlResponse.upload_url) {
+      throw new Error('Failed to get upload URL');
+    }
+
+    const { upload_url, download_url } = urlResponse;
+
+    // 2. Upload file directly to S3 using presigned URL
+    const uploadResponse = await fetch(upload_url, {
+      method: 'PUT',
+      body: file,
+      headers: {
+        'Content-Type': 'application/octet-stream'
+      }
+    });
+
+    if (!uploadResponse.ok) {
+      throw new Error(`S3 upload failed: ${uploadResponse.status}`);
+    }
+
+    // 3. Return the public download URL
+    return download_url;
+
+  } catch (error) {
+    console.error('Upload error:', error);
+    throw new Error(`Upload failed: ${error.message}`);
+  }
+}
+
+function updateProgress(percent, text) {
+  document.getElementById('progressFill').style.width = percent + '%';
+  document.getElementById('progressFill').textContent = percent + '%';
+  document.getElementById('progressText').textContent = text;
+}
+
+function showStatus(message, type) {
+  const statusDiv = document.getElementById('status');
+  statusDiv.innerHTML = message;
+  statusDiv.className = `status ${type}`;
+  statusDiv.style.display = 'block';
+}
+
+loadDeviceInfo();
+</script>
+</body>
+</html>
