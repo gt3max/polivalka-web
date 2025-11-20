@@ -274,6 +274,7 @@ let currentView = 'list'; // 'cards' or 'list' (default: list for mobile-first)
 let pumpCalibration = 2.5;  // ml/sec default
 let maxWateringTime = 60;   // seconds default
 let pumpRunningDevices = new Set();  // Track which devices have pump running
+let pumpTimers = {};  // Track timers for each device
 
 function mockLogin() {
   currentUser = {username: 'admin', role: 'admin'};
@@ -360,6 +361,7 @@ function createExpandableRow(device, isOnline, hasWarnings, isCritical) {
 
   // Mode badge
   const modeName = device.mode.charAt(0).toUpperCase() + device.mode.slice(1);
+  const modeBadgeCompact = `<span class="mode-badge mode-${device.mode}" style="font-size:11px;padding:2px 6px">${modeName}</span>`;
 
   div.innerHTML = `
     <!-- Compact row (click to expand) -->
@@ -370,6 +372,7 @@ function createExpandableRow(device, isOnline, hasWarnings, isCritical) {
       <div class="device-quick-info">
         <span style="color:${moistureColor}">💧${device.moisture_pct}%</span>
         <span style="color:${batteryColor}">${batteryDisplay}</span>
+        ${modeBadgeCompact}
         ${lastWateringBadge}
         <span class="device-status ${isOnline ? 'online' : 'offline'}">${isOnline ? '● Online' : '○ Offline'}</span>
       </div>
@@ -380,7 +383,7 @@ function createExpandableRow(device, isOnline, hasWarnings, isCritical) {
       <div class="detail-row">
         <span class="detail-item">📍 ${device.location} / ${device.room}</span>
         <span class="detail-item">Mode: ${modeName}</span>
-        <span class="detail-item">Last update: ${timeAgo(device.last_update)}</span>
+        <span class="detail-item">Water: ≈${(maxWateringTime * pumpCalibration).toFixed(0)}ml / ${maxWateringTime}s</span>
       </div>
 
       <div class="detail-row" style="margin-top:8px">
@@ -397,8 +400,8 @@ function createExpandableRow(device, isOnline, hasWarnings, isCritical) {
 
       <div class="device-actions">
         <button onclick="event.stopPropagation(); refreshSensor('${device.device_id}')" class="btn-secondary">🔄 Refresh Sensor</button>
-        <button onclick="event.stopPropagation(); startPump('${device.device_id}')" class="btn-primary btn-water-toggle">💧 Water Now <span class="water-hint">(≈${(maxWateringTime * pumpCalibration).toFixed(0)}ml)</span></button>
-        <button onclick="event.stopPropagation(); stopPump('${device.device_id}')" class="btn-danger">⛔ Stop</button>
+        <button onclick="event.stopPropagation(); startPump('${device.device_id}', event)" class="btn-primary btn-water-toggle">💧 Water Now</button>
+        <button onclick="event.stopPropagation(); stopPump('${device.device_id}', event)" class="btn-danger">⛔ Stop</button>
         <button onclick="event.stopPropagation(); viewDevice('${device.device_id}')">📊 Details</button>
         <button onclick="event.stopPropagation(); deviceUpdate('${device.device_id}')">📦 OTA Update</button>
       </div>
@@ -541,8 +544,8 @@ function createDeviceCard(device) {
 
     <div class="device-actions">
       <button onclick="refreshSensor('${device.device_id}')" class="btn-primary">🔄 Refresh</button>
-      <button onclick="startPump('${device.device_id}')" class="btn-primary btn-water-toggle">💧 Water Now <span class="water-hint">(≈${(maxWateringTime * pumpCalibration).toFixed(0)}ml)</span></button>
-      <button onclick="stopPump('${device.device_id}')" class="btn-danger">⛔ Stop</button>
+      <button onclick="startPump('${device.device_id}', event)" class="btn-primary btn-water-toggle">💧 Water Now</button>
+      <button onclick="stopPump('${device.device_id}', event)" class="btn-danger">⛔ Stop</button>
       <button onclick="viewDevice('${device.device_id}')">📊 Details</button>
       <button onclick="deviceUpdate('${device.device_id}')">📦 OTA Update</button>
     </div>
@@ -714,7 +717,9 @@ async function refreshSensor(deviceId) {
   }
 }
 
-async function startPump(deviceId) {
+async function startPump(deviceId, event) {
+  if (event) event.stopPropagation();
+
   try {
     // Start pump for maxWateringTime
     await API.post(`/device/${deviceId}/pump?sec=${maxWateringTime}`);
@@ -723,7 +728,10 @@ async function startPump(deviceId) {
     pumpRunningDevices.add(deviceId);
 
     // Update button state immediately
-    updatePumpButton(deviceId, true);
+    updatePumpButton(deviceId, true, 0, maxWateringTime);
+
+    // Start timer to update elapsed time
+    startPumpTimer(deviceId);
 
     // Silent success - device card will update automatically
     setTimeout(() => loadDevices(), 2000);
@@ -732,13 +740,18 @@ async function startPump(deviceId) {
   }
 }
 
-async function stopPump(deviceId) {
+async function stopPump(deviceId, event) {
+  if (event) event.stopPropagation();
+
   try {
     // Stop pump immediately (no confirmation for safety - quick action)
     await API.post(`/device/${deviceId}/pump/stop`);
 
     // Remove from pump running set
     pumpRunningDevices.delete(deviceId);
+
+    // Stop timer
+    stopPumpTimer(deviceId);
 
     // Update button state immediately
     updatePumpButton(deviceId, false);
@@ -750,19 +763,41 @@ async function stopPump(deviceId) {
   }
 }
 
-function updatePumpButton(deviceId, isRunning) {
+function updatePumpButton(deviceId, isRunning, elapsed = 0, total = maxWateringTime) {
   // Find and update Water Now button state for this device
   const buttons = document.querySelectorAll(`[data-device-id="${deviceId}"] .btn-water-toggle`);
   buttons.forEach(btn => {
     if (isRunning) {
       btn.classList.add('active');
-      btn.textContent = `💧 Watering...`;
+      const remaining = total - elapsed;
+      btn.textContent = `💧 Watering... ${elapsed}s / ${total}s`;
     } else {
       btn.classList.remove('active');
-      const ml = (maxWateringTime * pumpCalibration).toFixed(0);
-      btn.innerHTML = `💧 Water Now <span class="water-hint">(≈${ml}ml)</span>`;
+      btn.textContent = `💧 Water Now`;
     }
   });
+}
+
+function startPumpTimer(deviceId) {
+  let elapsed = 0;
+  pumpTimers[deviceId] = setInterval(() => {
+    elapsed++;
+    updatePumpButton(deviceId, true, elapsed, maxWateringTime);
+
+    // Auto-stop timer when reaching max time
+    if (elapsed >= maxWateringTime) {
+      stopPumpTimer(deviceId);
+      pumpRunningDevices.delete(deviceId);
+      updatePumpButton(deviceId, false);
+    }
+  }, 1000);
+}
+
+function stopPumpTimer(deviceId) {
+  if (pumpTimers[deviceId]) {
+    clearInterval(pumpTimers[deviceId]);
+    delete pumpTimers[deviceId];
+  }
 }
 
 function viewDevice(deviceId) {
