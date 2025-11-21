@@ -1002,26 +1002,62 @@ function exportData() {
 }
 
 async function viewLogs(deviceId) {
-  try {
-    // Show loading
-    document.getElementById('logsModal').style.display = 'flex';
-    document.getElementById('logsModalTitle').textContent = `📝 Activity Log - ${deviceId}`;
-    document.getElementById('logsContent').textContent = 'Loading...';
+  // Store device ID globally for tab switching
+  currentLogsDeviceId = deviceId;
 
-    // Fetch activity log
+  // Show modal
+  document.getElementById('logsModal').style.display = 'flex';
+  document.getElementById('logsModalTitle').textContent = `📝 Logs - ${deviceId}`;
+
+  // Load Activity logs by default (highlight Activity tab)
+  await switchLogsTab('activity');
+}
+
+function closeLogsModal() {
+  document.getElementById('logsModal').style.display = 'none';
+}
+
+// Global variable to store current device ID for logs modal
+let currentLogsDeviceId = null;
+
+// Switch between Activity and Device logs tabs
+async function switchLogsTab(tab) {
+  if (!currentLogsDeviceId) return;
+
+  // Update tab button styles
+  const activityBtn = document.getElementById('logsTabActivity');
+  const deviceBtn = document.getElementById('logsTabDevice');
+
+  if (tab === 'activity') {
+    activityBtn.style.background = '#4CAF50';
+    activityBtn.style.color = 'white';
+    deviceBtn.style.background = '';
+    deviceBtn.style.color = '';
+    await viewActivityLogs(currentLogsDeviceId);
+  } else if (tab === 'device') {
+    deviceBtn.style.background = '#2196F3';
+    deviceBtn.style.color = 'white';
+    activityBtn.style.background = '';
+    activityBtn.style.color = '';
+    await viewDeviceLogs(currentLogsDeviceId);
+  }
+}
+
+// View Activity logs (DynamoDB - 7 days)
+async function viewActivityLogs(deviceId) {
+  try {
+    document.getElementById('logsContent').textContent = 'Loading Activity logs...';
+
     const data = await API.get(`/device/${deviceId}/activity`);
 
-    // Format as ESP32 monitor logs
     const logLines = data.activity.map(item => {
       const date = new Date(item.timestamp * 1000);
-      // Full date + time format: "2025-11-21 14:23:45"
-      const dateStr = date.toLocaleDateString('en-CA'); // YYYY-MM-DD
-      const timeStr = date.toLocaleTimeString('en-US', {hour12: false}); // HH:MM:SS
+      const dateStr = date.toLocaleDateString('en-CA');
+      const timeStr = date.toLocaleTimeString('en-US', {hour12: false});
       const datetime = `${dateStr} ${timeStr}`;
       const level = item.level || 'INFO';
       const component = item.component || 'UNKNOWN';
 
-      // Different formatting based on type
       if (item.type === 'COMMAND') {
         const statusIcon = item.status === 'success' ? '✅' : item.status === 'error' ? '❌' : '⏳';
         const msg = item.message || `Command: ${item.command}`;
@@ -1033,15 +1069,37 @@ async function viewLogs(deviceId) {
       }
     }).join('\n');
 
-    document.getElementById('logsContent').textContent = logLines || 'No activity logs available';
+    document.getElementById('logsContent').textContent = logLines || 'No activity logs available (last 7 days)';
 
   } catch(e) {
-    document.getElementById('logsContent').textContent = `Error loading logs: ${e.message}`;
+    document.getElementById('logsContent').textContent = `Error loading Activity logs: ${e.message}`;
   }
 }
 
-function closeLogsModal() {
-  document.getElementById('logsModal').style.display = 'none';
+// View Device RAM logs (ESP32 circular buffer - 100 events)
+async function viewDeviceLogs(deviceId) {
+  try {
+    document.getElementById('logsContent').textContent = 'Loading Device RAM logs...';
+
+    const data = await API.get(`/device/${deviceId}/logs`);
+
+    // Format logs with uptime
+    const uptimeSec = (data.uptime_ms / 1000).toFixed(2);
+    const header = `Device Uptime: ${uptimeSec}s | RAM Buffer: ${data.count} events\n${'='.repeat(80)}\n`;
+
+    const logLines = data.logs.map(log => {
+      return log.formatted; // Already formatted by Lambda as "[  123.456] EVENT_TEXT"
+    }).join('\n');
+
+    document.getElementById('logsContent').textContent = header + (logLines || 'No device logs available');
+
+  } catch(e) {
+    if (e.message.includes('408')) {
+      document.getElementById('logsContent').textContent = '⚠️ Device is offline or sleeping.\n\nDevice RAM logs are only available when device is online and awake.';
+    } else {
+      document.getElementById('logsContent').textContent = `Error loading Device logs: ${e.message}`;
+    }
+  }
 }
 
 // ========== DEBUG CONSOLE ==========
@@ -1134,8 +1192,14 @@ window.addEventListener('DOMContentLoaded', () => {
 <!-- Logs Modal -->
 <div id="logsModal" class="modal" style="display:none">
   <div class="modal-content" style="max-width:900px;max-height:80vh">
-    <div class="modal-header">
-      <h3 id="logsModalTitle">📝 Device Logs</h3>
+    <div class="modal-header" style="display:flex;align-items:center;justify-content:space-between">
+      <div style="display:flex;align-items:center;gap:16px">
+        <h3 id="logsModalTitle">📝 Device Logs</h3>
+        <div style="display:flex;gap:8px">
+          <button id="logsTabActivity" onclick="switchLogsTab('activity')" class="btn-secondary" style="padding:6px 12px;font-size:14px">Activity (7d)</button>
+          <button id="logsTabDevice" onclick="switchLogsTab('device')" class="btn-secondary" style="padding:6px 12px;font-size:14px">Device RAM</button>
+        </div>
+      </div>
       <button onclick="closeLogsModal()" style="background:none;border:none;font-size:24px;cursor:pointer;padding:0">×</button>
     </div>
     <div class="modal-body" style="max-height:60vh;overflow-y:auto">
