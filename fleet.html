@@ -188,7 +188,6 @@
         <button onclick="bulkAction('refresh')">🔄 Refresh All</button>
         <button onclick="bulkAction('ota')">📦 Mass OTA Update</button>
         <button onclick="exportData()">📥 Export All Data</button>
-        <button onclick="viewLogs()">📝 System Logs</button>
       </div>
     </div>
 
@@ -423,6 +422,7 @@ function createExpandableRow(device, isOnline, hasWarnings, isCritical) {
         <button onclick="event.stopPropagation(); stopPump('${device.device_id}', event)" class="btn-danger">⛔ Stop</button>
         <button onclick="event.stopPropagation(); viewDevice('${device.device_id}')">📊 Details</button>
         <button onclick="event.stopPropagation(); deviceUpdate('${device.device_id}')">📦 OTA Update</button>
+        <button onclick="event.stopPropagation(); viewLogs('${device.device_id}')">📝 Logs</button>
       </div>
     </div>
   `;
@@ -579,6 +579,7 @@ function createDeviceCard(device) {
       <button onclick="stopPump('${device.device_id}', event)" class="btn-danger">⛔ Stop</button>
       <button onclick="viewDevice('${device.device_id}')">📊 Details</button>
       <button onclick="deviceUpdate('${device.device_id}')">📦 OTA Update</button>
+      <button onclick="viewLogs('${device.device_id}')">📝 Logs</button>
     </div>
   `;
 
@@ -1000,9 +1001,44 @@ function exportData() {
   alert('Export all data (TODO: implement)');
 }
 
-function viewLogs() {
-  console.log('View logs');
-  alert('System logs (TODO: implement)');
+async function viewLogs(deviceId) {
+  try {
+    // Show loading
+    document.getElementById('logsModal').style.display = 'flex';
+    document.getElementById('logsModalTitle').textContent = `📝 Activity Log - ${deviceId}`;
+    document.getElementById('logsContent').textContent = 'Loading...';
+
+    // Fetch activity log
+    const data = await API.get(`/device/${deviceId}/activity`);
+
+    // Format as ESP32 monitor logs
+    const logLines = data.activity.map(item => {
+      const date = new Date(item.timestamp * 1000);
+      const time = date.toLocaleTimeString('en-US', {hour12: false});
+      const level = item.level || 'INFO';
+      const component = item.component || 'UNKNOWN';
+
+      // Different formatting based on type
+      if (item.type === 'COMMAND') {
+        const statusIcon = item.status === 'success' ? '✅' : item.status === 'error' ? '❌' : '⏳';
+        const msg = item.message || `Command: ${item.command}`;
+        return `${level.charAt(0)} (${time}) ${component}: ${item.command} → ${statusIcon} ${msg}`;
+      } else if (item.type === 'SYSTEM') {
+        return `${level.charAt(0)} (${time}) ${component}: ${item.message}`;
+      } else {
+        return `${level.charAt(0)} (${time}) ${component}: ${JSON.stringify(item)}`;
+      }
+    }).join('\n');
+
+    document.getElementById('logsContent').textContent = logLines || 'No activity logs available';
+
+  } catch(e) {
+    document.getElementById('logsContent').textContent = `Error loading logs: ${e.message}`;
+  }
+}
+
+function closeLogsModal() {
+  document.getElementById('logsModal').style.display = 'none';
 }
 
 // ========== DEBUG CONSOLE ==========
@@ -1091,6 +1127,22 @@ window.addEventListener('DOMContentLoaded', () => {
   logToConsole('Fleet Management Console initialized', 'success');
 });
 </script>
+
+<!-- Logs Modal -->
+<div id="logsModal" class="modal" style="display:none">
+  <div class="modal-content" style="max-width:900px;max-height:80vh">
+    <div class="modal-header">
+      <h3 id="logsModalTitle">📝 Device Logs</h3>
+      <button onclick="closeLogsModal()" style="background:none;border:none;font-size:24px;cursor:pointer;padding:0">×</button>
+    </div>
+    <div class="modal-body" style="max-height:60vh;overflow-y:auto">
+      <div id="logsContent" style="font-family:monospace;font-size:13px;line-height:1.6;white-space:pre-wrap;background:#1e1e1e;color:#d4d4d4;padding:16px;border-radius:8px;overflow-x:auto"></div>
+    </div>
+    <div class="modal-footer">
+      <button onclick="closeLogsModal()" class="btn-secondary">Close</button>
+    </div>
+  </div>
+</div>
 
 <!-- Debug Console -->
 <button id="consoleToggle" class="console-toggle" onclick="toggleConsole()">▲ Show Console</button>
