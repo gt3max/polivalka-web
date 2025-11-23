@@ -413,10 +413,11 @@ async function monitorWiFiMode() {
 // КРИТИЧНО: последовательная загрузка, не одновременно!
 // Интервалы разнесены чтобы не нагружать ESP32 одновременными запросами
 setInterval(updateStatus, 5000);   // каждые 5 сек
-setInterval(updateTime, 60000);    // каждые 60 сек
-setInterval(updateBattery, 10000); // каждые 10 сек (было 5, конфликтовало с updateStatus)
-// WiFi monitoring только в локальном режиме (не нужно в Cloud)
+
+// Time/Battery/WiFi monitoring только в локальном режиме (Cloud получает данные через /status)
 if (!IS_CLOUD) {
+  setInterval(updateTime, 60000);    // каждые 60 сек
+  setInterval(updateBattery, 10000); // каждые 10 сек (было 5, конфликтовало с updateStatus)
   setInterval(monitorWiFiMode, 5000); // каждые 5 сек - баланс UX/нагрузка (активные операции)
 }
 
@@ -450,10 +451,12 @@ if (IS_CLOUD && DEVICE_ID) {
 
 // Первая загрузка: последовательно с задержками
 updateStatus();
-setTimeout(() => updateTime(), 500);     // через 0.5 сек
-setTimeout(() => updateBattery(), 1000); // через 1 сек
+
+// Time/Battery/WiFi только для локального режима
 if (!IS_CLOUD) {
-  setTimeout(() => monitorWiFiMode(), 1500); // через 1.5 сек (только для локального режима)
+  setTimeout(() => updateTime(), 500);     // через 0.5 сек
+  setTimeout(() => updateBattery(), 1000); // через 1 сек
+  setTimeout(() => monitorWiFiMode(), 1500); // через 1.5 сек
 }
 
 // Sensor Controller Status (for Sensor mode)

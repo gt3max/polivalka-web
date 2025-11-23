@@ -713,12 +713,6 @@ async function readSensor(deviceId) {
 
 async function refreshSensor(deviceId) {
   try {
-    // Show loading state
-    const button = event.target;
-    const originalText = button.textContent;
-    button.textContent = '⏳ Reading...';
-    button.disabled = true;
-
     // Call real-time sensor endpoint
     const result = await API.get(`/device/${deviceId}/sensor`);
 
@@ -734,18 +728,13 @@ async function refreshSensor(deviceId) {
       updateStats(allDevices);
     }
 
-    // Silent success - data updated on card (no alert needed)
+    // Silent success - data updated on card (no toast needed)
 
   } catch(e) {
     // Show error toast (non-blocking)
     showToast(e.message.includes('408') ?
       '⚠️ Device offline or sleeping. Try again later.' :
       `❌ Error: ${e.message}`, 'error');
-  } finally {
-    // Restore button
-    const button = event.target;
-    button.textContent = '🔄 Refresh';
-    button.disabled = false;
   }
 }
 

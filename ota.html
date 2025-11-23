@@ -85,19 +85,14 @@ let selectedFile = null;
 // Load device info
 async function loadDeviceInfo() {
   try {
-    const devices = await API.get('/devices');
-    const device = devices.find(d => d.device_id === deviceId);
+    // Use /status endpoint for single device (works in both Local and Cloud mode)
+    const device = await API.get('/status');
 
-    if (device) {
-      document.getElementById('device-name').textContent = device.name || device.device_id;
-      document.getElementById('device-location').textContent = `${device.location || '—'} / ${device.room || '—'}`;
-      document.getElementById('current-version').textContent = 'v1.0.0';  // TODO: get from telemetry
-      document.getElementById('device-status').textContent = device.online ? '● Online' : '○ Offline';
-      document.getElementById('device-status').style.color = device.online ? '#2e7d32' : '#999';
-    } else {
-      document.getElementById('device-name').textContent = deviceId;
-      document.getElementById('device-status').textContent = '○ Unknown';
-    }
+    document.getElementById('device-name').textContent = deviceId;
+    document.getElementById('device-location').textContent = `${device.system_state?.location || '—'} / ${device.system_state?.room || '—'}`;
+    document.getElementById('current-version').textContent = 'v1.0.0';  // TODO: get from telemetry
+    document.getElementById('device-status').textContent = device.percent !== undefined ? '● Online' : '○ Offline';
+    document.getElementById('device-status').style.color = device.percent !== undefined ? '#2e7d32' : '#999';
   } catch(e) {
     console.error('Failed to load device info:', e);
     document.getElementById('device-name').textContent = deviceId;
