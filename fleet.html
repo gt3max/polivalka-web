@@ -732,9 +732,10 @@ async function refreshSensor(deviceId) {
       // Re-render devices
       renderDevices(allDevices);
       updateStats(allDevices);
-    }
 
-    // Silent success - data updated on card (no toast needed)
+      // Show success feedback with updated values
+      showToast(`✅ Sensor refreshed: ${result.moisture_pct}% (ADC: ${result.adc_raw})`, 'success');
+    }
 
   } catch(e) {
     // Show error toast (non-blocking)
