@@ -236,22 +236,24 @@
 // Используем РЕАЛЬНЫЕ устройства: BB00C1 и BC67E8
 const MOCK_DEVICES = [
   {
-    device_id: 'BB00C1',
+    device_id: 'Polivalka-BB00C1',  // Правильный формат
     name: 'Polivalka-BB00C1',  // Default name (пользователь может переименовать)
     location: 'Home',
     room: 'Kitchen',
     moisture_pct: 45,
-    battery_pct: 78,
-    battery_charging: true,  // На розетке - показываем ⚡
+    battery_pct: null,  // AC power - нет батареи
+    battery_charging: false,  // На розетке, но не заряжается (нет батареи)
     mode: 'sensor',
     state: 'STANDBY',
+    firmware_version: 'v1.0.0',
+    reboot_count: 5,
     last_watering: Date.now() - 2 * 3600 * 1000, // 2h ago
     last_update: Date.now() - 5 * 60 * 1000, // 5min ago
     warnings: []
   },
   {
-    device_id: 'BC67E8',
-    name: 'Polivalka-BC67E8',  // Default name
+    device_id: 'Polivalka-BC67E9',  // Правильный формат
+    name: 'Polivalka-BC67E9',  // Default name
     location: 'Home',
     room: 'Bedroom',
     moisture_pct: 18,
@@ -259,9 +261,11 @@ const MOCK_DEVICES = [
     battery_charging: false,
     mode: 'sensor',
     state: 'STANDBY',
+    firmware_version: 'v1.0.0',
+    reboot_count: 3,
     last_watering: Date.now() - 24 * 3600 * 1000, // 1d ago
     last_update: Date.now() - 10 * 60 * 1000, // 10min ago
-    warnings: ['Low battery (10%)', 'Moisture too low (18%)']  // Battery warning at 10%
+    warnings: ['Low battery (12%)', 'Moisture too low (18%)']  // Battery warning
   }
 ];
 
@@ -515,7 +519,7 @@ function createDeviceCard(device) {
   if (device.moisture_pct < 20) moistureClass = 'low';
   else if (device.moisture_pct < 40) moistureClass = 'medium';
 
-  // Battery color
+  // Battery color (safe null check)
   let batteryClass = 'good';
   if (device.battery_pct !== null) {
     if (device.battery_pct < 10) batteryClass = 'low';
@@ -598,7 +602,7 @@ function updateStats(devices) {
     const lastUpdateMs = d.last_update < 10000000000 ? d.last_update * 1000 : d.last_update;
     return (Date.now() - lastUpdateMs) < 2 * 60 * 60 * 1000;
   }).length;
-  const warnings = devices.filter(d => d.warnings.length > 0 || d.battery_pct < 10 || d.moisture_pct < 15).length;
+  const warnings = devices.filter(d => d.warnings.length > 0 || (d.battery_pct !== null && d.battery_pct < 10) || d.moisture_pct < 15).length;
   const watering = devices.filter(d => d.state === 'PULSE' || d.state === 'WATERING').length;
 
   document.getElementById('stat-total').textContent = total;
@@ -825,7 +829,7 @@ async function stopPump(deviceId, event) {
   } catch(e) {
     // On error, revert state (mark as running again)
     pumpRunningDevices.add(deviceId);
-    updatePumpButton(deviceId, true, 0, maxWateringTime);
+    // startPumpTimer will call updatePumpButton internally
     startPumpTimer(deviceId);
     showToast(`❌ Failed to stop pump: ${e.message}`, 'error');
   }
@@ -849,6 +853,11 @@ function updatePumpButton(deviceId, isRunning, elapsed = 0, total = maxWateringT
 }
 
 function startPumpTimer(deviceId) {
+  // Clear existing timer if any (prevent memory leak)
+  if (pumpTimers[deviceId]) {
+    clearInterval(pumpTimers[deviceId]);
+  }
+
   let elapsed = 0;
   pumpTimers[deviceId] = setInterval(() => {
     elapsed++;
