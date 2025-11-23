@@ -355,8 +355,8 @@ function createExpandableRow(device, isOnline, hasWarnings, isCritical) {
   const chargingIcon = device.battery_charging ? ' ⚡' : '';
 
   // Battery display text (null = AC power, no battery)
-  const batteryDisplay = device.battery_pct !== null ? `🔋${device.battery_pct}%${chargingIcon}` : '⚡ AC';
-  const batteryDisplayLong = device.battery_pct !== null ? `🔋 Battery: ${device.battery_pct}%${chargingIcon}` : '⚡ AC Power';
+  const batteryDisplay = device.battery_pct !== null ? `🔋${Math.round(device.battery_pct)}%${chargingIcon}` : '⚡ AC';
+  const batteryDisplayLong = device.battery_pct !== null ? `🔋 Battery: ${Math.round(device.battery_pct)}%${chargingIcon}` : '⚡ AC Power';
 
   // Time ago (handles both seconds and milliseconds)
   const lastWateringAgo = timeAgo(device.last_watering);
@@ -538,7 +538,7 @@ function createDeviceCard(device) {
 
   // Battery display (null = AC power, no battery)
   const chargingIcon = device.battery_charging ? ' ⚡' : '';
-  const batteryMetric = device.battery_pct !== null ? `${device.battery_pct}%${chargingIcon}` : '⚡ AC Power';
+  const batteryMetric = device.battery_pct !== null ? `${Math.round(device.battery_pct)}%${chargingIcon}` : '⚡ AC Power';
 
   // Time ago
   const lastWateringAgo = timeAgo(device.last_watering);
