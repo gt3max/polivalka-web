@@ -825,10 +825,12 @@ function updatePumpButton(deviceId, isRunning, elapsed = 0, total = maxWateringT
     if (isRunning) {
       btn.classList.add('active');
       const remaining = total - elapsed;
-      btn.textContent = `💧 Watering... ${elapsed}s / ${total}s`;
+      btn.textContent = `🛑 Stop (${elapsed}s / ${total}s)`;
+      btn.onclick = (e) => stopPump(deviceId, e);
     } else {
       btn.classList.remove('active');
       btn.textContent = `💧 Water Now`;
+      btn.onclick = (e) => startPump(deviceId, e);
     }
   });
 }
