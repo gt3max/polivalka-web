@@ -1087,7 +1087,8 @@ async function viewActivityLogs(deviceId) {
       } else if (item.type === 'SYSTEM') {
         return `${level.charAt(0)} (${datetime}) ${component}: ${item.message}`;
       } else {
-        return `${level.charAt(0)} (${datetime}) ${component}: ${JSON.stringify(item)}`;
+        // SENSOR, BATTERY, PUMP - все имеют item.message
+        return `${level.charAt(0)} (${datetime}) ${component}: ${item.message}`;
       }
     }).join('\n');
 
