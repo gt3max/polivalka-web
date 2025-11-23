@@ -217,14 +217,14 @@ async function updateBattery(){
     const b = await API.get('/battery/status');
     const batteryStatus = document.getElementById('battery-status');
 
-    if (b.available && b.percent !== undefined) {
+    if (b.percent !== null && b.percent !== undefined) {
       // Батарея подключена - показываем процент
       const percent = Math.round(b.percent);
       const charging = b.charging ? ' ⚡' : '';
       batteryStatus.textContent = `🔋 ${percent}%${charging}`;
-    } else if (!b.available && b.charging) {
-      // Батарея НЕ подключена, но устройство работает от USB/питания
-      batteryStatus.textContent = '⚡';
+    } else if (b.percent === null) {
+      // Батарея НЕ подключена, устройство работает от AC/USB питания
+      batteryStatus.textContent = '⚡ AC';
     } else {
       // Неизвестное состояние
       batteryStatus.textContent = '🔋 —';
