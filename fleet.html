@@ -891,9 +891,8 @@ function deviceUpdate(deviceId) {
 // Admin actions
 async function bulkAction(action) {
   if (action === 'refresh') {
-    if (!confirm(`Refresh all device data for ${allDevices.length} devices?\n\nThis will update mode, sensor, battery, and online status.\n\nThis may take 10-30 seconds.`)) {
-      return;
-    }
+    // Show non-blocking toast instead of confirm dialog
+    showToast(`🔄 Refreshing ${allDevices.length} devices...`, 'info');
 
     const results = [];
     for (const device of allDevices) {
@@ -907,9 +906,10 @@ async function bulkAction(action) {
         device.last_update = result.timestamp;
 
         // Online/Offline detection (based on timestamp)
+        // Device publishes every 30-60 min, so threshold = 90 min (1.5x longest interval)
         const now = Math.floor(Date.now() / 1000);
         const age_minutes = (now - result.timestamp) / 60;
-        device.online = age_minutes < 60; // Online if telemetry < 60 min old
+        device.online = age_minutes < 90; // Online if telemetry < 90 min old
 
         results.push({device_id: device.device_id, success: true});
       } catch(e) {
@@ -921,9 +921,10 @@ async function bulkAction(action) {
     renderDevices(allDevices);
     updateStats(allDevices);
 
+    // Show non-blocking toast instead of alert
     const successful = results.filter(r => r.success).length;
     const failed = results.filter(r => !r.success).length;
-    alert(`✓ Refresh complete!\n\nSuccessful: ${successful}\nFailed: ${failed}\n\nUpdated: mode, sensor, battery, online status`);
+    showToast(`✅ Refresh complete! ${successful} OK, ${failed} failed`, failed > 0 ? 'warning' : 'success');
 
   } else if (action === 'ota') {
     massOTAUpdate();
