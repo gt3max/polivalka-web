@@ -375,14 +375,14 @@ function createExpandableRow(device, isOnline, hasWarnings, isCritical) {
     lastWateringBadge = `<span class="last-watering-badge">🕐 ${Math.floor(hoursSinceWatering)}h ago</span>`;
   }
 
-  // Mode badge (с иконками, скрываем 'off')
+  // Mode badge (с иконками)
   const modeMap = {
     'manual': '🔧 Manual',
     'timer': '⏰ Timer',
     'sensor': '💧 Sensor',
-    'off': ''
+    'off': '✋ Manual (legacy)'  // Should not happen (Lambda transforms off→manual), but graceful fallback
   };
-  const modeName = modeMap[device.mode] || '';
+  const modeName = modeMap[device.mode] || '❓ Unknown';
   const modeBadgeCompact = modeName ? `<span class="mode-badge mode-${device.mode}" style="font-size:11px;padding:2px 6px">${modeName}</span>` : '';
 
   div.innerHTML = `
@@ -403,7 +403,7 @@ function createExpandableRow(device, isOnline, hasWarnings, isCritical) {
     <!-- Expanded details (hidden by default) -->
     <div class="device-details" id="details-${device.device_id}">
       <div class="detail-row">
-        ${modeName ? `<span class="detail-item">Mode: ${modeName}</span>` : '<span class="detail-item">Mode: Off</span>'}
+        <span class="detail-item">Mode: ${modeName}</span>
         <span class="detail-item">Water: ≈${(maxWateringTime * pumpCalibration).toFixed(0)}ml / ${maxWateringTime}s</span>
         <span class="detail-item">📍 ${device.location} / ${device.room}</span>
       </div>
