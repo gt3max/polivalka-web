@@ -1084,6 +1084,9 @@ async function viewActivityLogs(deviceId) {
       } else if (item.type === 'OTA') {
         // OTA Update event
         return `I (${datetime}) ${component}: ${item.message}`;
+      } else if (item.type === 'REBOOT') {
+        // Reboot event (crash, power loss, manual restart)
+        return `${level.charAt(0)} (${datetime}) ${component}: ${item.message}`;
       } else if (item.type === 'SYSTEM') {
         return `${level.charAt(0)} (${datetime}) ${component}: ${item.message}`;
       } else {
