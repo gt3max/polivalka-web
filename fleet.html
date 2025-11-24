@@ -891,16 +891,26 @@ function deviceUpdate(deviceId) {
 // Admin actions
 async function bulkAction(action) {
   if (action === 'refresh') {
-    if (!confirm(`Refresh sensor data for all ${allDevices.length} devices?\n\nThis may take 10-30 seconds.`)) {
+    if (!confirm(`Refresh all device data for ${allDevices.length} devices?\n\nThis will update mode, sensor, battery, and online status.\n\nThis may take 10-30 seconds.`)) {
       return;
     }
 
     const results = [];
     for (const device of allDevices) {
       try {
-        const result = await API.get(`/device/${device.device_id}/sensor`);
-        device.moisture_pct = result.moisture_pct;
+        const result = await API.get(`/device/${device.device_id}/status`);
+
+        // Update all device data from /status endpoint
+        device.moisture_pct = result.percent;
+        device.mode = result.system_state?.mode || 'manual';
+        device.battery = result.battery;
         device.last_update = result.timestamp;
+
+        // Online/Offline detection (based on timestamp)
+        const now = Math.floor(Date.now() / 1000);
+        const age_minutes = (now - result.timestamp) / 60;
+        device.online = age_minutes < 60; // Online if telemetry < 60 min old
+
         results.push({device_id: device.device_id, success: true});
       } catch(e) {
         results.push({device_id: device.device_id, success: false, error: e.message});
@@ -913,7 +923,7 @@ async function bulkAction(action) {
 
     const successful = results.filter(r => r.success).length;
     const failed = results.filter(r => !r.success).length;
-    alert(`✓ Refresh complete!\n\nSuccessful: ${successful}\nFailed: ${failed}`);
+    alert(`✓ Refresh complete!\n\nSuccessful: ${successful}\nFailed: ${failed}\n\nUpdated: mode, sensor, battery, online status`);
 
   } else if (action === 'ota') {
     massOTAUpdate();
