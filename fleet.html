@@ -905,12 +905,7 @@ async function bulkAction(action) {
         device.mode = result.system_state?.mode || 'manual';
         device.battery = result.battery;
         device.last_update = result.timestamp;
-
-        // Online/Offline detection (based on timestamp)
-        // Device publishes every 30-60 min, so threshold = 90 min (1.5x longest interval)
-        const now = Math.floor(Date.now() / 1000);
-        const age_minutes = (now - result.timestamp) / 60;
-        device.online = age_minutes < 90; // Online if telemetry < 90 min old
+        device.online = result.online;  // Use online status from backend (90 min threshold)
 
         results.push({device_id: device.device_id, success: true});
       } catch(e) {
