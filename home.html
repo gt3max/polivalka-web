@@ -251,7 +251,7 @@ async function selectMode(mode) {
       }
     }
 
-    await API.post('/mode/set?mode=' + mode);
+    await API.post('/mode', {mode: mode});
     updateStatus();
     updateControllerStatus(); // Immediately update controller status for new mode
   } catch(e) {
