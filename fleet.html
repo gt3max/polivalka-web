@@ -733,6 +733,7 @@ async function refreshSensor(deviceId) {
       device.moisture_pct = result.moisture_pct;
       device.adc_raw = result.adc_raw;
       device.last_update = result.timestamp;
+      device.online = true;  // Device responded → Online
 
       // Re-render devices
       renderDevices(allDevices);
@@ -743,6 +744,14 @@ async function refreshSensor(deviceId) {
     }
 
   } catch(e) {
+    // Device didn't respond → Offline
+    const device = allDevices.find(d => d.device_id === deviceId);
+    if (device) {
+      device.online = false;
+      renderDevices(allDevices);
+      updateStats(allDevices);
+    }
+
     // Show error toast (non-blocking)
     showToast(e.message.includes('408') ?
       '⚠️ Device offline or sleeping. Try again later.' :
@@ -762,6 +771,7 @@ async function refreshSensorSilent(deviceId) {
       device.moisture_pct = result.moisture_pct;
       device.adc_raw = result.adc_raw;
       device.last_update = result.timestamp;
+      device.online = true;  // Device responded → Online
 
       // Re-render devices (will preserve expanded state)
       renderDevices(allDevices);
@@ -771,6 +781,14 @@ async function refreshSensorSilent(deviceId) {
     // Silent success - no toasts, no button updates
 
   } catch(e) {
+    // Device didn't respond → Offline
+    const device = allDevices.find(d => d.device_id === deviceId);
+    if (device) {
+      device.online = false;
+      renderDevices(allDevices);
+      updateStats(allDevices);
+    }
+
     // Only show error toast if request fails
     showToast(e.message.includes('408') ?
       '⚠️ Device offline or sleeping.' :
