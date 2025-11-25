@@ -392,10 +392,25 @@ function createExpandableRow(device, isOnline, hasWarnings, isCritical) {
 
   // Automation control (show if mode is sensor or timer)
   const automationEnabled = device.controller_enabled || (device.mode === 'sensor' || device.mode === 'timer');
+
+  // Determine display text based on mode
+  let automationText = '';
+  if (automationEnabled) {
+    if (device.mode === 'sensor') {
+      automationText = '✅ Sensor-Auto-ON';
+    } else if (device.mode === 'timer') {
+      automationText = '✅ Timer-Auto-ON';
+    } else {
+      automationText = '✅ Auto ON';
+    }
+  } else {
+    automationText = '⭕ Auto OFF';
+  }
+
   const automationControl = (device.mode === 'sensor' || device.mode === 'timer') ? `
     <span class="automation-control" onclick="event.stopPropagation(); toggleAutomation('${device.device_id}', ${!automationEnabled})">
       <span style="color: ${automationEnabled ? '#0a0' : '#999'}">
-        ${automationEnabled ? '✅ Auto ON' : '⭕ Auto OFF'}
+        ${automationText}
       </span>
     </span>
   ` : '';
