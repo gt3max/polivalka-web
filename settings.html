@@ -307,7 +307,9 @@ if (IS_CLOUD && DEVICE_ID) {
 
 // Only time updates automatically (lightweight)
 setInterval(updateTime, 60000);
-if (!IS_CLOUD) { setInterval(monitorWiFiMode, 10000);
-monitorWiFiMode();
+if (!IS_CLOUD) {
+  setInterval(monitorWiFiMode, 10000);
+  monitorWiFiMode();
+}
 </script>
 </body></html>
