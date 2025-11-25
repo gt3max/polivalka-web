@@ -99,10 +99,19 @@ async function saveDeviceInfo(){
   }
 
   try {
-    const data = JSON.stringify({name, location, room});
-    await API.get('/device/info?data=' + encodeURIComponent(data), {cache:'no-store'});
-    alert('Device identity saved!');
-    loadAllData();
+    // Use POST to save device info to DynamoDB
+    const response = await API.post('/device/' + DEVICE_ID + '/info', {
+      name: name,
+      location: location || 'Home',
+      room: room || 'Living Room'
+    });
+
+    if (response.success) {
+      alert('Device identity saved!');
+      loadAllData(); // Reload to show updated values
+    } else {
+      alert('Error: ' + (response.message || 'Failed to save'));
+    }
   } catch(e) {
     alert('Error saving device identity: ' + e.message);
   }
