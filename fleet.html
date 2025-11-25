@@ -724,7 +724,7 @@ async function readSensor(deviceId) {
 
 async function refreshSensor(deviceId) {
   try {
-    // Call real-time sensor endpoint
+    // Call real-time status endpoint (returns sensor + mode + battery + pump)
     const result = await API.get(`/device/${deviceId}/sensor`);
 
     // Update device in allDevices array
@@ -732,6 +732,8 @@ async function refreshSensor(deviceId) {
     if (device) {
       device.moisture_pct = result.moisture_pct;
       device.adc_raw = result.adc_raw;
+      device.mode = result.mode;  // Update mode (manual/timer/sensor)
+      device.battery = result.battery;  // Update battery data
       device.last_update = result.timestamp;
       device.online = true;  // Device responded → Online
 
@@ -740,7 +742,7 @@ async function refreshSensor(deviceId) {
       updateStats(allDevices);
 
       // Show success feedback with updated values
-      showToast(`✅ Sensor refreshed: ${result.moisture_pct}% (ADC: ${result.adc_raw})`, 'success');
+      showToast(`✅ Refreshed: ${result.moisture_pct}% | Mode: ${result.mode}`, 'success');
     }
 
   } catch(e) {
@@ -762,7 +764,7 @@ async function refreshSensor(deviceId) {
 // Silent version for auto-refresh when expanding Details (no UI feedback)
 async function refreshSensorSilent(deviceId) {
   try {
-    // Call real-time sensor endpoint
+    // Call real-time status endpoint (returns sensor + mode + battery + pump)
     const result = await API.get(`/device/${deviceId}/sensor`);
 
     // Update device in allDevices array
@@ -770,6 +772,8 @@ async function refreshSensorSilent(deviceId) {
     if (device) {
       device.moisture_pct = result.moisture_pct;
       device.adc_raw = result.adc_raw;
+      device.mode = result.mode;  // Update mode (manual/timer/sensor)
+      device.battery = result.battery;  // Update battery data
       device.last_update = result.timestamp;
       device.online = true;  // Device responded → Online
 
@@ -917,12 +921,14 @@ async function bulkAction(action) {
     // Max time = 10 seconds (longest timeout), NOT 10 * device_count
     const promises = allDevices.map(async device => {
       try {
-        // Real-time sensor check (waits for device response, max 10 sec)
+        // Real-time status check (returns sensor + mode + battery + pump)
         const result = await API.get(`/device/${device.device_id}/sensor`);
 
         // Update device data
         device.moisture_pct = result.moisture_pct;
         device.adc_raw = result.adc_raw;
+        device.mode = result.mode;  // Update mode (manual/timer/sensor)
+        device.battery = result.battery;  // Update battery data
         device.last_update = result.timestamp;
         device.online = true;  // Device responded → Online
 
