@@ -236,20 +236,8 @@ async function updateBattery(){
 
 async function selectMode(mode) {
   try {
-    // Check if switching away from active controller
-    const currentMode = document.querySelector('.mode-btn.selected')?.getAttribute('data-mode');
-
-    if (currentMode === 'timer' && lastTimerState !== 'DISABLED' && mode !== 'timer') {
-      if (!confirm('⚠️ Timer automation is active!\n\nSwitching mode will disable it.\nYou will need to re-enable automation after switching back.\n\nContinue?')) {
-        return; // User cancelled
-      }
-    }
-
-    if (currentMode === 'sensor' && lastSensorState !== 'DISABLED' && mode !== 'sensor') {
-      if (!confirm('⚠️ Sensor automation is active!\n\nSwitching mode will disable it.\nYou will need to re-enable automation after switching back.\n\nContinue?')) {
-        return; // User cancelled
-      }
-    }
+    // No confirmation dialogs - just switch mode
+    // Controller state will be handled by ESP32
 
     await API.post('/mode', {mode: mode});
     updateStatus();
