@@ -131,6 +131,11 @@
   .btn-water-toggle{transition:all 0.3s;position:relative}
   .btn-water-toggle.active{background:#2c5f2d !important;color:#fff !important;border-color:#2c5f2d !important;box-shadow:inset 0 3px 5px rgba(0,0,0,0.3)}
   .water-hint{font-size:11px;color:#666;margin-left:4px;font-weight:normal}
+
+  /* Automation Control Toggle */
+  .automation-control{cursor:pointer;padding:4px 8px;border-radius:4px;transition:all 0.2s;display:inline-block;margin-left:8px;font-size:12px;font-weight:600}
+  .automation-control:hover{background:rgba(0,170,0,0.1)}
+  .automation-control span{user-select:none}
 </style>
 </head>
 <body>
@@ -385,6 +390,16 @@ function createExpandableRow(device, isOnline, hasWarnings, isCritical) {
   const modeName = modeMap[device.mode] || '❓ Unknown';
   const modeBadgeCompact = modeName ? `<span class="mode-badge mode-${device.mode}" style="font-size:11px;padding:2px 6px">${modeName}</span>` : '';
 
+  // Automation control (show if mode is sensor or timer)
+  const automationEnabled = device.controller_enabled || (device.mode === 'sensor' || device.mode === 'timer');
+  const automationControl = (device.mode === 'sensor' || device.mode === 'timer') ? `
+    <span class="automation-control" onclick="event.stopPropagation(); toggleAutomation('${device.device_id}', ${!automationEnabled})">
+      <span style="color: ${automationEnabled ? '#0a0' : '#999'}">
+        ${automationEnabled ? '✅ Auto ON' : '⭕ Auto OFF'}
+      </span>
+    </span>
+  ` : '';
+
   div.innerHTML = `
     <!-- Compact row (click to expand) -->
     <div class="device-row ${hasWarnings ? 'has-warnings' : ''}" onclick="toggleDeviceExpand(this, '${device.device_id}')">
@@ -395,6 +410,7 @@ function createExpandableRow(device, isOnline, hasWarnings, isCritical) {
         <span style="color:${moistureColor}">💧${device.moisture_pct}%</span>
         <span style="color:${batteryColor}">${batteryDisplay}</span>
         ${modeBadgeCompact}
+        ${automationControl}
         ${lastWateringBadge}
         <span class="device-status ${isOnline ? 'online' : 'offline'}">${isOnline ? '● Online' : '○ Offline'}</span>
       </div>
@@ -855,6 +871,65 @@ async function stopPump(deviceId, event) {
     // startPumpTimer will call updatePumpButton internally
     startPumpTimer(deviceId);
     showToast(`❌ Failed to stop pump: ${e.message}`, 'error');
+  }
+}
+
+async function toggleAutomation(deviceId, enable) {
+  // Toggle automation (controller enabled/disabled)
+  try {
+    // Show loading state
+    const toggles = document.querySelectorAll(`[data-device-id="${deviceId}"] .automation-control`);
+    toggles.forEach(toggle => {
+      toggle.style.opacity = '0.5';
+      toggle.style.pointerEvents = 'none';
+    });
+
+    // Determine the mode to set
+    let newMode;
+    if (enable) {
+      // Enable automation - use the last known automated mode or default to sensor
+      const device = allDevices.find(d => d.device_id === deviceId);
+      if (device && device.last_auto_mode) {
+        newMode = device.last_auto_mode; // timer or sensor
+      } else {
+        newMode = 'sensor'; // Default to sensor mode
+      }
+    } else {
+      // Disable automation - switch to manual mode
+      newMode = 'manual';
+    }
+
+    // Send mode change command
+    const result = await API.post(`/device/${deviceId}/mode`, { mode: newMode });
+
+    if (result.success) {
+      showToast(`Automation ${enable ? 'enabled' : 'disabled'} (${newMode} mode)`, 'success');
+
+      // Update local device data
+      const device = allDevices.find(d => d.device_id === deviceId);
+      if (device) {
+        device.mode = newMode;
+        device.controller_enabled = enable;
+        if (enable && (newMode === 'sensor' || newMode === 'timer')) {
+          device.last_auto_mode = newMode; // Remember the automated mode
+        }
+      }
+
+      // Re-render the device to update UI
+      renderDevices(allDevices);
+    } else {
+      showToast(`Failed to ${enable ? 'enable' : 'disable'} automation`, 'error');
+    }
+  } catch (error) {
+    console.error('Toggle automation error:', error);
+    showToast(`Failed to ${enable ? 'enable' : 'disable'} automation: ${error.message}`, 'error');
+  } finally {
+    // Restore toggle state
+    const toggles = document.querySelectorAll(`[data-device-id="${deviceId}"] .automation-control`);
+    toggles.forEach(toggle => {
+      toggle.style.opacity = '1';
+      toggle.style.pointerEvents = 'auto';
+    });
   }
 }
 
