@@ -55,17 +55,8 @@ async function loadSchedules(){
     const addBtn = document.getElementById('add-schedule-btn');
     const limitInfo = document.getElementById('schedule-limit-info');
 
-    // Cloud mode: read-only view (editing via local network only)
-    if (IS_CLOUD) {
-      addBtn.disabled = true;
-      if (data.source === 'cloud_sync') {
-        limitInfo.textContent = 'View only (edit via local)';
-        limitInfo.style.color = '#1976d2';
-      } else {
-        limitInfo.textContent = 'Waiting for sync...';
-        limitInfo.style.color = '#f57c00';
-      }
-    } else if (count >= maxSchedules) {
+    // Cloud mode: editing enabled via MQTT commands
+    if (count >= maxSchedules) {
       addBtn.disabled = true;
       limitInfo.textContent = 'Maximum reached';
       limitInfo.style.color = '#b00';
@@ -75,14 +66,7 @@ async function loadSchedules(){
     }
 
     if (!data.schedules || data.schedules.length === 0) {
-      if (IS_CLOUD) {
-        list.innerHTML = `<div class="muted" style="padding:16px;background:#e3f2fd;border-radius:8px;border:1px solid #1976d2">
-          <div style="font-weight:600;color:#1565c0;margin-bottom:8px">☁️ Cloud Sync</div>
-          <div style="color:#666">No schedules synced yet. Configure schedules via local network, they will appear here automatically.</div>
-        </div>`;
-      } else {
-        list.innerHTML = '<div class="muted">No schedules configured.</div>';
-      }
+      list.innerHTML = '<div class="muted">No schedules configured. Click "+ Add Schedule" to create one.</div>';
       return;
     }
 
@@ -118,8 +102,8 @@ async function loadSchedules(){
       const durationText = `${s.duration} ${unitText}`;
       const statusIcon = s.enabled ? '✅' : '❌';
 
-      // In Cloud mode, hide edit/delete buttons
-      const buttons = IS_CLOUD ? '' : `
+      // Edit/Delete buttons (enabled in both Cloud and Local modes)
+      const buttons = `
         <div class="row">
           <button onclick="editSchedule(${s.id})">Edit</button>
           <button class="danger" onclick="deleteSchedule(${s.id})">Delete</button>
@@ -270,12 +254,6 @@ async function saveSchedule() {
     return;
   }
 
-  // Cloud mode: schedules are managed on ESP32, not in Cloud
-  if (IS_CLOUD) {
-    alert('Schedules can only be edited from local network (AP mode or .local).\n\nConnect to device directly to manage schedules.');
-    return;
-  }
-
   try {
     let id;
     if (editingId !== null) {
@@ -316,14 +294,13 @@ async function saveSchedule() {
 async function deleteSchedule(id) {
   if (!confirm('Delete this schedule?')) return;
 
-  // Cloud mode: schedules are managed on ESP32, not in Cloud
-  if (IS_CLOUD) {
-    alert('Schedules can only be deleted from local network (AP mode or .local).\n\nConnect to device directly to manage schedules.');
-    return;
-  }
-
   try {
-    await API.get('/schedule/delete?id=' + id);
+    // Cloud mode: use POST with body, Local mode: use GET with query param
+    if (IS_CLOUD) {
+      await API.post('/schedule/delete', { id: id });
+    } else {
+      await API.get('/schedule/delete?id=' + id);
+    }
     loadSchedules();
   } catch(e) {
     alert('Error deleting schedule: ' + e.message);
