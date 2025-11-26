@@ -275,6 +275,12 @@ async function updateBattery(){
     const b = await API.get('/battery/status');
     const batteryStatus = document.getElementById('battery-status');
 
+    // Check if no battery data at all (Cloud mode - data not yet received)
+    if (b.no_data) {
+      batteryStatus.textContent = '🔋 —';
+      return;
+    }
+
     if (b.percent !== null && b.percent !== undefined) {
       // Батарея подключена - показываем процент
       const percent = Math.round(b.percent);

@@ -358,14 +358,26 @@ function createExpandableRow(device, isOnline, hasWarnings, isCritical) {
 
   // Moisture & battery colors (как на home.html)
   let moistureColor = device.moisture_pct < 20 ? '#b00' : device.moisture_pct < 40 ? '#f57c00' : '#0a0';
-  let batteryColor = device.battery_pct === null ? '#0a0' : device.battery_pct < 10 ? '#b00' : device.battery_pct < 30 ? '#f57c00' : '#0a0';
+  let batteryColor = device.battery_no_data ? '#999' : device.battery_pct === null ? '#0a0' : device.battery_pct < 10 ? '#b00' : device.battery_pct < 30 ? '#f57c00' : '#0a0';
 
   // Charging icon (⚡ если на розетке, как на home.html)
   const chargingIcon = device.battery_charging ? ' ⚡' : '';
 
-  // Battery display text (null = AC power, no battery)
-  const batteryDisplay = device.battery_pct !== null ? `🔋${Math.round(device.battery_pct)}%${chargingIcon}` : '⚡ AC';
-  const batteryDisplayLong = device.battery_pct !== null ? `🔋 Battery: ${Math.round(device.battery_pct)}%${chargingIcon}` : '⚡ AC Power';
+  // Battery display text:
+  // - battery_no_data=true → "—" (no telemetry yet)
+  // - battery_pct=null → "AC" (device reported no battery)
+  // - battery_pct=number → show percentage
+  let batteryDisplay, batteryDisplayLong;
+  if (device.battery_no_data) {
+    batteryDisplay = '🔋 —';
+    batteryDisplayLong = '🔋 Battery: —';
+  } else if (device.battery_pct !== null) {
+    batteryDisplay = `🔋${Math.round(device.battery_pct)}%${chargingIcon}`;
+    batteryDisplayLong = `🔋 Battery: ${Math.round(device.battery_pct)}%${chargingIcon}`;
+  } else {
+    batteryDisplay = '⚡ AC';
+    batteryDisplayLong = '⚡ AC Power';
+  }
 
   // Time ago (handles both seconds and milliseconds)
   const lastWateringAgo = timeAgo(device.last_watering);
