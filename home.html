@@ -293,12 +293,16 @@ async function toggleTimerAuto(checked){
         document.getElementById('timer-auto-toggle').checked = false;
         return;
       }
+      // In Cloud mode, wait for ESP32 to publish updated telemetry
+      if (IS_CLOUD) await sleep(2000);
     } else {
       // Disable timer controller (but keep mode as timer)
       await API.post('/timer/controller/disable');
+      // In Cloud mode, wait for ESP32 to publish updated telemetry
+      if (IS_CLOUD) await sleep(2000);
     }
     updateStatus();
-    updateControllerStatus(); // Update UI immediately
+    updateControllerStatus(); // Update UI
   } catch(e) {
     alert('Error: ' + e.message);
     document.getElementById('timer-auto-toggle').checked = !checked; // revert on error
@@ -318,12 +322,16 @@ async function toggleSensorAuto(checked){
         document.getElementById('sensor-auto-toggle').checked = false;
         return;
       }
+      // In Cloud mode, wait for ESP32 to publish updated telemetry
+      if (IS_CLOUD) await sleep(2000);
     } else {
       // Disable sensor controller (but keep mode as sensor)
       await API.post('/sensor/controller/disable');
+      // In Cloud mode, wait for ESP32 to publish updated telemetry
+      if (IS_CLOUD) await sleep(2000);
     }
     updateStatus();
-    updateControllerStatus(); // Update UI immediately
+    updateControllerStatus(); // Update UI
   } catch(e) {
     alert('Error: ' + e.message);
     document.getElementById('sensor-auto-toggle').checked = !checked; // revert on error
