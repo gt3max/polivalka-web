@@ -422,13 +422,14 @@ function createExpandableRow(device, isOnline, hasWarnings, isCritical) {
     <div class="device-row ${hasWarnings ? 'has-warnings' : ''}" onclick="toggleDeviceExpand(this, '${device.device_id}')">
       <span class="expand-icon">▶</span>
       ${hasWarnings ? '<span class="warning-badge">⚠️</span>' : ''}
-      <span class="device-name">🌱 ${device.name}</span>
+      <span class="device-name">🌱 ${device.device_id} ${device.name !== device.device_id ? device.name : ''}</span>
       <div class="device-quick-info">
         <span style="color:${moistureColor}">💧${device.moisture_pct}%</span>
         <span style="color:${batteryColor}">${batteryDisplay}</span>
         ${modeBadgeCompact}
         ${automationControl}
         ${lastWateringBadge}
+        <span class="device-status" style="background:${device.state === 'WATERING' || device.state === 'PULSE' ? '#e3f2fd' : device.state === 'EMERGENCY' ? '#ffebee' : '#f5f5f5'};color:${device.state === 'WATERING' || device.state === 'PULSE' ? '#1976d2' : device.state === 'EMERGENCY' ? '#c62828' : '#666'}">${device.state || 'STANDBY'}</span>
         <span class="device-status ${isOnline ? 'online' : 'offline'}">${isOnline ? '● Online' : '○ Offline'}</span>
       </div>
     </div>
@@ -585,7 +586,7 @@ function createDeviceCard(device) {
   div.innerHTML = `
     <div class="device-header">
       <div>
-        <div class="device-name">🌱 ${device.name}</div>
+        <div class="device-name">🌱 ${device.device_id} ${device.name !== device.device_id ? device.name : ''}</div>
         <div class="device-location">📍 ${device.location} / ${device.room}</div>
       </div>
       <div class="device-status ${isOnline ? 'online' : 'offline'}">${isOnline ? '● Online' : '○ Offline'}</div>
