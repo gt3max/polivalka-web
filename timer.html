@@ -166,29 +166,58 @@ async function showModalWithCheck() {
 
 function showModal(id = null) {
   editingId = id;
-  document.getElementById('modal-title').textContent = id ? 'Edit Schedule' : 'Add Schedule';
+  document.getElementById('modal-title').textContent = id !== null ? 'Edit Schedule' : 'Add Schedule';
 
-  if (id) {
-    // Load existing schedule
+  if (id !== null) {
+    // Load existing schedule for editing
     API.get('/schedules')
-      .then(r=>r.json())
       .then(data => {
         const s = data.schedules.find(x => x.id === id);
         if (s) {
-          document.getElementById('edit-time').value = s.time;
+          // Handle time format: "HH:MM" string or separate hour/minute
+          let timeVal;
+          if (s.time) {
+            timeVal = s.time;
+          } else if (s.hour !== undefined && s.minute !== undefined) {
+            timeVal = `${String(s.hour).padStart(2,'0')}:${String(s.minute).padStart(2,'0')}`;
+          } else {
+            timeVal = '07:00';
+          }
+          document.getElementById('edit-time').value = timeVal;
           document.getElementById('edit-duration').value = s.duration;
-          document.getElementById('edit-unit').value = s.unit;
-          document.getElementById('edit-enabled').checked = s.enabled;
 
-          // Set days
+          // Handle unit: number (0/1/2) or string ('sec'/'min'/'hr')
+          let unitVal;
+          if (typeof s.unit === 'string') {
+            unitVal = s.unit;
+          } else {
+            unitVal = ['sec', 'min', 'hr'][s.unit] || 'sec';
+          }
+          document.getElementById('edit-unit').value = unitVal;
+          document.getElementById('edit-enabled').checked = s.enabled !== false;
+
+          // Convert days_mask to days array if needed, then set UI
+          let days = [];
+          if (s.days && Array.isArray(s.days)) {
+            days = s.days;
+          } else if (s.days_mask !== undefined) {
+            for (let i = 0; i < 7; i++) {
+              if (s.days_mask & (1 << i)) days.push(i + 1);
+            }
+          }
+
           document.querySelectorAll('.day-btn').forEach(btn => {
             const day = parseInt(btn.dataset.day);
-            btn.classList.toggle('active', s.days.includes(day));
+            btn.classList.toggle('active', days.includes(day));
           });
 
           // Open modal AFTER data is loaded
           document.getElementById('modal').classList.add('show');
         }
+      })
+      .catch(e => {
+        console.error('Failed to load schedule for editing:', e);
+        alert('Failed to load schedule');
       });
   } else {
     // Reset form
