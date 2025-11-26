@@ -417,19 +417,28 @@ function createExpandableRow(device, isOnline, hasWarnings, isCritical) {
     </span>
   `;
 
+  // Determine actual state (DISABLED if controller is off)
+  const actualState = !controllerEnabled ? 'DISABLED' : (device.state || 'STANDBY');
+  const stateColor = actualState === 'WATERING' || actualState === 'PULSE' ? '#1976d2' : actualState === 'EMERGENCY' ? '#c62828' : actualState === 'DISABLED' ? '#999' : '#666';
+  const stateBg = actualState === 'WATERING' || actualState === 'PULSE' ? '#e3f2fd' : actualState === 'EMERGENCY' ? '#ffebee' : '#f5f5f5';
+
+  // Custom name (plant name) - show only if different from device_id
+  const plantName = device.name !== device.device_id ? device.name : '';
+
   div.innerHTML = `
     <!-- Compact row (click to expand) -->
     <div class="device-row ${hasWarnings ? 'has-warnings' : ''}" onclick="toggleDeviceExpand(this, '${device.device_id}')">
       <span class="expand-icon">▶</span>
       ${hasWarnings ? '<span class="warning-badge">⚠️</span>' : ''}
-      <span class="device-name">🌱 ${device.device_id} ${device.name !== device.device_id ? device.name : ''}</span>
+      <span class="device-name">🌱 ${device.device_id}</span>
       <div class="device-quick-info">
+        ${plantName ? `<span style="font-weight:600">${plantName}</span>` : ''}
         <span style="color:${moistureColor}">💧${device.moisture_pct}%</span>
         <span style="color:${batteryColor}">${batteryDisplay}</span>
         ${modeBadgeCompact}
         ${automationControl}
         ${lastWateringBadge}
-        <span class="device-status" style="background:${device.state === 'WATERING' || device.state === 'PULSE' ? '#e3f2fd' : device.state === 'EMERGENCY' ? '#ffebee' : '#f5f5f5'};color:${device.state === 'WATERING' || device.state === 'PULSE' ? '#1976d2' : device.state === 'EMERGENCY' ? '#c62828' : '#666'}">${device.state || 'STANDBY'}</span>
+        <span class="device-status" style="background:${stateBg};color:${stateColor}">${actualState}</span>
         <span class="device-status ${isOnline ? 'online' : 'offline'}">${isOnline ? '● Online' : '○ Offline'}</span>
       </div>
     </div>
@@ -437,21 +446,21 @@ function createExpandableRow(device, isOnline, hasWarnings, isCritical) {
     <!-- Expanded details (hidden by default) -->
     <div class="device-details" id="details-${device.device_id}">
       <div class="detail-row">
+        <span class="detail-item">📍 ${device.location || 'Home'} / ${device.room || 'Room'}${plantName ? ' / ' + plantName : ''}</span>
+        <span class="detail-item">State: ${actualState}</span>
         <span class="detail-item">Mode: ${modeName}</span>
-        <span class="detail-item">Water: ≈${(maxWateringTime * pumpCalibration).toFixed(0)}ml / ${maxWateringTime}s</span>
-        <span class="detail-item">📍 ${device.location} / ${device.room}</span>
       </div>
 
       <div class="detail-row" style="margin-top:8px">
         <span class="detail-item" style="color:${moistureColor}">💧 Moisture: ${device.moisture_pct}% (ADC: ${device.adc_raw || 'N/A'})</span>
         <span class="detail-item" style="color:${batteryColor}">${batteryDisplayLong}</span>
-        <span class="detail-item">Last watering: ${lastWateringAgo}</span>
+        <span class="detail-item">Water: ≈${((device.watering_duration || maxWateringTime) * (device.pump_calibration || pumpCalibration)).toFixed(0)}ml / ${device.watering_duration || maxWateringTime}s</span>
       </div>
 
       <div class="detail-row" style="margin-top:8px">
+        <span class="detail-item">Last watering: ${lastWateringAgo}</span>
         <span class="detail-item">🔧 Firmware: ${device.firmware_version || 'v1.0.0'}</span>
         <span class="detail-item">🔄 Reboots: ${device.reboot_count || 'N/A'}</span>
-        <span class="detail-item">⏱ Uptime: ${device.uptime || 'N/A'}</span>
       </div>
 
       ${hasWarnings ? `
@@ -583,16 +592,20 @@ function createDeviceCard(device) {
   const lastWateringAgo = timeAgo(device.last_watering);
   const lastUpdateAgo = timeAgo(device.last_update);
 
+  // Custom name for Cards view
+  const cardPlantName = device.name !== device.device_id ? device.name : '';
+
   div.innerHTML = `
     <div class="device-header">
       <div>
-        <div class="device-name">🌱 ${device.device_id} ${device.name !== device.device_id ? device.name : ''}</div>
-        <div class="device-location">📍 ${device.location} / ${device.room}</div>
+        <div class="device-name">🌱 ${device.device_id}</div>
+        <div class="device-location">📍 ${device.location || 'Home'} / ${device.room || 'Room'}${cardPlantName ? ' / ' + cardPlantName : ''}</div>
       </div>
       <div class="device-status ${isOnline ? 'online' : 'offline'}">${isOnline ? '● Online' : '○ Offline'}</div>
     </div>
 
     <div style="margin:8px 0">
+      ${cardPlantName ? `<span style="font-weight:600;margin-right:8px">${cardPlantName}</span>` : ''}
       ${modeBadge} ${wateringBadge}
     </div>
 
