@@ -88,7 +88,13 @@ if (IS_CLOUD) {
       const remaining = Math.max(0, SENSOR_LAUNCH_DURATION - elapsed);
       document.getElementById('arming-countdown-display').textContent = remaining;
       const stateEl = document.getElementById('current-state');
-      if (stateEl && remaining > 0) stateEl.innerHTML = `🚀 LAUNCH IN ${remaining}s`;
+      if (stateEl) {
+        if (remaining > 0) {
+          stateEl.innerHTML = `🚀 LAUNCH IN ${remaining}s`;
+        } else {
+          stateEl.innerHTML = `🚀 Starting...`;
+        }
+      }
     }
     // Timer countdown
     if (lastTimerState === 'LAUNCH' && timerLaunchStartTime) {
@@ -96,7 +102,13 @@ if (IS_CLOUD) {
       const remaining = Math.max(0, TIMER_LAUNCH_DURATION - elapsed);
       document.getElementById('timer-arming-countdown-display').textContent = remaining;
       const stateEl = document.getElementById('current-state');
-      if (stateEl && remaining > 0) stateEl.textContent = `⏰ LAUNCH ${remaining}s`;
+      if (stateEl) {
+        if (remaining > 0) {
+          stateEl.textContent = `⏰ LAUNCH ${remaining}s`;
+        } else {
+          stateEl.textContent = `⏰ Starting...`;
+        }
+      }
     }
   }, 1000);
 }
