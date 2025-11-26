@@ -595,6 +595,21 @@ function createDeviceCard(device) {
   // Custom name for Cards view
   const cardPlantName = device.name !== device.device_id ? device.name : '';
 
+  // State and automation for Cards (same logic as List)
+  const cardControllerEnabled = device.controller_enabled === true;
+  const cardActualState = !cardControllerEnabled ? 'DISABLED' : (device.state || 'STANDBY');
+  const cardStateColor = cardActualState === 'WATERING' || cardActualState === 'PULSE' ? '#1976d2' : cardActualState === 'EMERGENCY' ? '#c62828' : cardActualState === 'DISABLED' ? '#999' : '#666';
+
+  // Automation text for Cards
+  let cardAutoText = '';
+  if (cardControllerEnabled && device.mode === 'sensor') {
+    cardAutoText = '✅ Auto ON';
+  } else if (cardControllerEnabled && device.mode === 'timer') {
+    cardAutoText = '✅ Auto ON';
+  } else {
+    cardAutoText = '⭕ Auto OFF';
+  }
+
   div.innerHTML = `
     <div class="device-header">
       <div>
@@ -604,15 +619,18 @@ function createDeviceCard(device) {
       <div class="device-status ${isOnline ? 'online' : 'offline'}">${isOnline ? '● Online' : '○ Offline'}</div>
     </div>
 
-    <div style="margin:8px 0">
-      ${cardPlantName ? `<span style="font-weight:600;margin-right:8px">${cardPlantName}</span>` : ''}
-      ${modeBadge} ${wateringBadge}
+    <div style="margin:8px 0;display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+      ${cardPlantName ? `<span style="font-weight:600">${cardPlantName}</span>` : ''}
+      ${modeBadge}
+      <span style="color:${cardControllerEnabled ? '#0a0' : '#999'};font-weight:600">${cardAutoText}</span>
+      <span style="background:#f5f5f5;color:${cardStateColor};padding:2px 6px;border-radius:6px;font-size:11px">${cardActualState}</span>
+      ${wateringBadge}
     </div>
 
     <div class="device-metrics">
       <div class="metric">
         <div class="metric-label">💧 Moisture</div>
-        <div class="metric-value ${moistureClass}">${device.moisture_pct}%</div>
+        <div class="metric-value ${moistureClass}">${device.moisture_pct}% <span style="font-size:11px;color:#666">(ADC: ${device.adc_raw || 'N/A'})</span></div>
       </div>
       <div class="metric">
         <div class="metric-label">🔋 Battery</div>
@@ -621,8 +639,9 @@ function createDeviceCard(device) {
     </div>
 
     <div class="muted" style="font-size:12px;margin:8px 0">
-      Last watering: ${lastWateringAgo}<br>
-      Last update: ${lastUpdateAgo}
+      Water: ≈${((device.watering_duration || 60) * (device.pump_calibration || 2.5)).toFixed(0)}ml / ${device.watering_duration || 60}s<br>
+      Last watering: ${lastWateringAgo} | Last update: ${lastUpdateAgo}<br>
+      🔧 ${device.firmware_version || 'v1.0.0'} | 🔄 Reboots: ${device.reboot_count || 'N/A'}
     </div>
 
     ${hasWarnings ? `
