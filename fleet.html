@@ -429,9 +429,9 @@ function createExpandableRow(device, isOnline, hasWarnings, isCritical) {
     </span>
   `;
 
-  // Device name (user-friendly) - always show (default: "Polivalka", user can rename)
+  // Device name (user-friendly) - always show (default: "Polivalka", user can rename in Settings)
   const deviceName = device.name || 'Polivalka';
-  const deviceNameDisplay = ` | ${deviceName}`;
+  const deviceNameDisplay = ` ${deviceName}`;
 
   // State badge (STANDBY/WATERING/EMERGENCY)
   const stateColors = {
@@ -443,7 +443,7 @@ function createExpandableRow(device, isOnline, hasWarnings, isCritical) {
     'UNKNOWN': '#999'
   };
   const stateColor = stateColors[device.state] || '#666';
-  const stateBadge = device.state ? `<span style="color:${stateColor};font-size:11px">[${device.state}]</span>` : '';
+  const stateBadge = device.state ? `<span style="color:${stateColor};font-size:11px">${device.state}</span>` : '';
 
   div.innerHTML = `
     <!-- Compact row (click to expand) -->
