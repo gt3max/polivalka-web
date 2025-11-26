@@ -390,17 +390,19 @@ function createExpandableRow(device, isOnline, hasWarnings, isCritical) {
   const modeName = modeMap[device.mode] || '❓ Unknown';
   const modeBadgeCompact = modeName ? `<span class="mode-badge mode-${device.mode}" style="font-size:11px;padding:2px 6px">${modeName}</span>` : '';
 
-  // Automation control - show if automation is active
-  const automationEnabled = device.mode === 'sensor' || device.mode === 'timer';
+  // Automation control - use controller_enabled, not just mode!
+  // mode = selected mode (sensor/timer/manual)
+  // controller_enabled = automation actually running
+  const controllerEnabled = device.controller_enabled === true;
 
-  // Show automation status, not just mode
+  // Show automation status based on controller_enabled
   let automationText = '';
   let automationColor = '#666';
 
-  if (device.mode === 'sensor') {
+  if (controllerEnabled && device.mode === 'sensor') {
     automationText = '✅ Auto ON (Sensor)';
     automationColor = '#0a0';
-  } else if (device.mode === 'timer') {
+  } else if (controllerEnabled && device.mode === 'timer') {
     automationText = '✅ Auto ON (Timer)';
     automationColor = '#0a0';
   } else {
