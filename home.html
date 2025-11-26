@@ -247,7 +247,10 @@ async function updateStatus(){
       instruction.style.display = 'block';
     }
   } catch(e) {
-    console.error('Status update failed:', e);
+    // Suppress noisy network errors (ERR_INTERNET_DISCONNECTED, Failed to fetch)
+    if (!e.message?.includes('fetch')) {
+      console.error('Status update failed:', e);
+    }
   }
 }
 
@@ -665,7 +668,10 @@ async function updateSensorControllerStatus() {
     }
 
   } catch(e) {
-    console.error('Sensor Controller status update failed:', e);
+    // Suppress noisy network errors
+    if (!e.message?.includes('fetch')) {
+      console.error('Sensor Controller status update failed:', e);
+    }
   }
 }
 
@@ -782,7 +788,10 @@ async function updateTimerControllerStatus() {
     }
 
   } catch(e) {
-    console.error('Timer Controller status update failed:', e);
+    // Suppress noisy network errors
+    if (!e.message?.includes('fetch')) {
+      console.error('Timer Controller status update failed:', e);
+    }
   }
 }
 
