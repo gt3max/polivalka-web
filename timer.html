@@ -313,7 +313,9 @@ async function saveSchedule() {
     }
 
     closeModal();
-    loadSchedules();
+    // Cloud mode: ESP32 publishes to DynamoDB via IoT Rule (async)
+    // Wait 1.5 sec for DynamoDB to update before refreshing
+    setTimeout(() => loadSchedules(), 1500);
   } catch(e) {
     console.error('Save error:', e);
     alert('Error saving schedule: ' + e.message);
@@ -327,10 +329,12 @@ async function deleteSchedule(id) {
     // Cloud mode: use POST with body, Local mode: use GET with query param
     if (IS_CLOUD) {
       await API.post('/schedule/delete', { id: id });
+      // Cloud mode: wait for DynamoDB to update
+      setTimeout(() => loadSchedules(), 1500);
     } else {
       await API.get('/schedule/delete?id=' + id);
+      loadSchedules();
     }
-    loadSchedules();
   } catch(e) {
     alert('Error deleting schedule: ' + e.message);
   }
