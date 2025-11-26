@@ -55,11 +55,16 @@ async function loadSchedules(){
     const addBtn = document.getElementById('add-schedule-btn');
     const limitInfo = document.getElementById('schedule-limit-info');
 
-    // Cloud mode: disable schedule management (schedules are on ESP32)
+    // Cloud mode: read-only view (editing via local network only)
     if (IS_CLOUD) {
       addBtn.disabled = true;
-      limitInfo.textContent = 'Local only';
-      limitInfo.style.color = '#f57c00';
+      if (data.source === 'cloud_sync') {
+        limitInfo.textContent = 'View only (edit via local)';
+        limitInfo.style.color = '#1976d2';
+      } else {
+        limitInfo.textContent = 'Waiting for sync...';
+        limitInfo.style.color = '#f57c00';
+      }
     } else if (count >= maxSchedules) {
       addBtn.disabled = true;
       limitInfo.textContent = 'Maximum reached';
@@ -70,11 +75,10 @@ async function loadSchedules(){
     }
 
     if (!data.schedules || data.schedules.length === 0) {
-      // Show Cloud-specific message if schedules are managed locally
-      if (IS_CLOUD && data.message) {
-        list.innerHTML = `<div class="muted" style="padding:16px;background:#fff3e0;border-radius:8px;border:1px solid #f57c00">
-          <div style="font-weight:600;color:#e65100;margin-bottom:8px">📱 Local Management Only</div>
-          <div style="color:#666">${data.message}</div>
+      if (IS_CLOUD) {
+        list.innerHTML = `<div class="muted" style="padding:16px;background:#e3f2fd;border-radius:8px;border:1px solid #1976d2">
+          <div style="font-weight:600;color:#1565c0;margin-bottom:8px">☁️ Cloud Sync</div>
+          <div style="color:#666">No schedules synced yet. Configure schedules via local network, they will appear here automatically.</div>
         </div>`;
       } else {
         list.innerHTML = '<div class="muted">No schedules configured.</div>';
@@ -83,22 +87,53 @@ async function loadSchedules(){
     }
 
     list.innerHTML = data.schedules.map(s => {
-      const daysText = formatDays(s.days);
-      const durationText = `${s.duration} ${s.unit}`;
+      // Handle both formats: days (array from AP) and days_mask (bitmask from Cloud sync)
+      let daysText;
+      if (s.days) {
+        daysText = formatDays(s.days);
+      } else if (s.days_mask !== undefined) {
+        daysText = formatDaysFromMask(s.days_mask);
+      } else {
+        daysText = 'Unknown';
+      }
+
+      // Handle time format: either "HH:MM" string or separate hour/minute
+      let timeText;
+      if (s.time) {
+        timeText = s.time;
+      } else if (s.hour !== undefined && s.minute !== undefined) {
+        timeText = `${String(s.hour).padStart(2,'0')}:${String(s.minute).padStart(2,'0')}`;
+      } else {
+        timeText = '--:--';
+      }
+
+      // Handle unit: 0=sec, 1=min, 2=hr OR string 'sec'/'min'/'hr'
+      let unitText;
+      if (typeof s.unit === 'string') {
+        unitText = s.unit;
+      } else {
+        unitText = ['sec', 'min', 'hr'][s.unit] || 'sec';
+      }
+
+      const durationText = `${s.duration} ${unitText}`;
       const statusIcon = s.enabled ? '✅' : '❌';
+
+      // In Cloud mode, hide edit/delete buttons
+      const buttons = IS_CLOUD ? '' : `
+        <div class="row">
+          <button onclick="editSchedule(${s.id})">Edit</button>
+          <button class="danger" onclick="deleteSchedule(${s.id})">Delete</button>
+        </div>`;
 
       return `
         <div class="schedule-item ${s.enabled?'':'disabled'}">
           <div class="schedule-header">
             <div>
               <span style="font-size:24px">${statusIcon}</span>
-              <span class="schedule-time">${s.time}</span>
+              <span class="schedule-time">${timeText}</span>
               <span class="muted">• ${durationText}</span>
             </div>
-            <div class="row">
-              <button onclick="editSchedule(${s.id})">Edit</button>
-              <button class="danger" onclick="deleteSchedule(${s.id})">Delete</button>
-            </div>
+            ${buttons}
           </div>
           <div class="schedule-days muted">${daysText}</div>
         </div>
@@ -107,6 +142,18 @@ async function loadSchedules(){
   } catch(e) {
     console.error('Load schedules failed:', e);
   }
+}
+
+// Convert days_mask bitmask to human-readable text
+function formatDaysFromMask(mask) {
+  const dayNames = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+  const days = [];
+  for (let i = 0; i < 7; i++) {
+    if (mask & (1 << i)) days.push(dayNames[i]);
+  }
+  if (days.length === 7) return 'Every day';
+  if (days.length === 5 && days.join('') === 'MonTueWedThuFri') return 'Weekdays';
+  return days.join(', ') || 'No days';
 }
 
 function formatDays(days) {
