@@ -99,11 +99,11 @@ async function saveDeviceInfo(){
   }
 
   try {
-    // Use POST to save device info to DynamoDB
-    const response = await API.post('/device/' + DEVICE_ID + '/info', {
+    // POST to /info - sends MQTT command to ESP32 (ESP32 is source of truth)
+    const response = await API.post('/info', {
       name: name,
       location: location || 'Home',
-      room: room || 'Living Room'
+      room: room || 'Room'
     });
 
     if (response.success) {
