@@ -199,6 +199,12 @@ async function saveSettings(){
     return;
   }
 
+  // Cloud mode: read-only, no saving
+  if (IS_CLOUD) {
+    console.log('[saveSettings] Skipped - Cloud mode is read-only');
+    return;
+  }
+
   showAutoSaveIndicator('saving');
 
   try {
@@ -217,10 +223,7 @@ async function saveSettings(){
       '&microprime_pulse_sec=' + microprimePulseSec +
       '&microprime_settle_sec=' + microprimeSettleSec;
 
-    const resp = await fetch('/sensor/preset/custom?' + query, {
-      method: 'POST',
-      cache: 'no-store'
-    }).then(r => r.json());
+    const resp = await API.post('/sensor/preset/custom?' + query);
 
     if (resp.success) {
       showAutoSaveIndicator('saved');
@@ -242,14 +245,20 @@ async function applyPreset(){
     return;
   }
 
+  // Cloud mode: read-only, no preset changes
+  if (IS_CLOUD) {
+    console.log('[Preset] Skipped - Cloud mode is read-only');
+    alert('Cloud mode is view-only. Use local AP mode to change presets.');
+    // Reset to current value
+    await loadSensorSettings();
+    return;
+  }
+
   showAutoSaveIndicator('saving');
 
   try {
     // Set preset via API
-    await fetch('/sensor/preset/set?preset=' + encodeURIComponent(presetName), {
-      method: 'POST',
-      cache: 'no-store'
-    });
+    await API.post('/sensor/preset/set?preset=' + encodeURIComponent(presetName));
 
     // Reload configuration from backend
     await loadSensorSettings();
@@ -363,5 +372,26 @@ updateStatus();
 updateTime();
 if (!IS_CLOUD) { monitorWiFiMode(); }
 loadSensorSettings();
+
+// Cloud mode: make inputs read-only and show notice
+if (IS_CLOUD) {
+  document.addEventListener('DOMContentLoaded', function() {
+    // Disable all inputs and selects
+    document.querySelectorAll('input, select').forEach(el => {
+      el.disabled = true;
+      el.style.opacity = '0.7';
+      el.style.cursor = 'not-allowed';
+    });
+
+    // Add read-only notice at top of card
+    const card = document.querySelector('.card');
+    if (card) {
+      const notice = document.createElement('div');
+      notice.style.cssText = 'background:#fff3e0;color:#e65100;padding:10px 12px;border-radius:8px;margin-bottom:12px;font-size:13px';
+      notice.innerHTML = '<b>View Only</b> — Connect to device AP to change settings';
+      card.insertBefore(notice, card.firstChild);
+    }
+  });
+}
 </script>
 </body></html>
