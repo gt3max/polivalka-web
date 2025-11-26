@@ -17,6 +17,14 @@ const DEVICE_ID = urlParams.get('device');
 const IS_CLOUD = window.location.hostname === 'gt3max.github.io' ||
                  window.location.hostname === 'localhost';
 
+// Redirect to fleet.html if Cloud mode without device ID (except for fleet.html itself)
+const currentPage = window.location.pathname.split('/').pop() || 'index.html';
+const deviceRequiredPages = ['home.html', 'sensor.html', 'timer.html', 'settings.html', 'calibration.html', 'update.html', 'trends.html', 'online.html'];
+if (IS_CLOUD && !DEVICE_ID && deviceRequiredPages.includes(currentPage)) {
+  console.warn('[API Adapter] No device ID in Cloud mode, redirecting to fleet.html');
+  window.location.href = 'fleet.html';
+}
+
 // API configuration
 const API = {
   // Cloud API (AWS Lambda) - EU region (Frankfurt) - HTTP API v2 ($default stage, no /prod)
