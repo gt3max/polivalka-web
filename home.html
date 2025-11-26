@@ -73,6 +73,34 @@ let updatingSensorToggle = false;
 let lastSensorState = 'DISABLED';
 let lastTimerState = 'DISABLED';
 
+// Cloud mode: локальный countdown (ESP32 не шлёт countdown каждую секунду - экономия)
+let sensorLaunchStartTime = null;  // timestamp когда увидели LAUNCH
+let timerLaunchStartTime = null;
+const SENSOR_LAUNCH_DURATION = 60;  // секунд
+const TIMER_LAUNCH_DURATION = 15;   // секунд
+
+// Локальный countdown ticker для Cloud mode
+if (IS_CLOUD) {
+  setInterval(() => {
+    // Sensor countdown
+    if (lastSensorState === 'LAUNCH' && sensorLaunchStartTime) {
+      const elapsed = Math.floor((Date.now() - sensorLaunchStartTime) / 1000);
+      const remaining = Math.max(0, SENSOR_LAUNCH_DURATION - elapsed);
+      document.getElementById('arming-countdown-display').textContent = remaining;
+      const stateEl = document.getElementById('current-state');
+      if (stateEl && remaining > 0) stateEl.innerHTML = `🚀 LAUNCH IN ${remaining}s`;
+    }
+    // Timer countdown
+    if (lastTimerState === 'LAUNCH' && timerLaunchStartTime) {
+      const elapsed = Math.floor((Date.now() - timerLaunchStartTime) / 1000);
+      const remaining = Math.max(0, TIMER_LAUNCH_DURATION - elapsed);
+      document.getElementById('timer-arming-countdown-display').textContent = remaining;
+      const stateEl = document.getElementById('current-state');
+      if (stateEl && remaining > 0) stateEl.textContent = `⏰ LAUNCH ${remaining}s`;
+    }
+  }, 1000);
+}
+
 async function updateStatus(){
   try {
     const s = await API.get('/status');
@@ -497,6 +525,12 @@ async function updateSensorControllerStatus() {
     const sc = await API.get('/sensor/controller/status');
 
     // Save state globally for badge indication
+    // Cloud mode: track LAUNCH start time for local countdown
+    if (IS_CLOUD && sc.state === 'LAUNCH' && lastSensorState !== 'LAUNCH') {
+      sensorLaunchStartTime = Date.now();  // Just entered LAUNCH
+    } else if (sc.state !== 'LAUNCH') {
+      sensorLaunchStartTime = null;  // Exited LAUNCH
+    }
     lastSensorState = sc.state;
 
     // Fetch preset config (cache for 10 seconds to reduce load)
@@ -641,6 +675,12 @@ async function updateTimerControllerStatus() {
     const tc = await API.get('/timer/controller/status');
 
     // Save state globally for badge indication
+    // Cloud mode: track LAUNCH start time for local countdown
+    if (IS_CLOUD && tc.state === 'LAUNCH' && lastTimerState !== 'LAUNCH') {
+      timerLaunchStartTime = Date.now();  // Just entered LAUNCH
+    } else if (tc.state !== 'LAUNCH') {
+      timerLaunchStartTime = null;  // Exited LAUNCH
+    }
     lastTimerState = tc.state;
 
     // Fetch schedules count
