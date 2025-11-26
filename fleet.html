@@ -429,17 +429,34 @@ function createExpandableRow(device, isOnline, hasWarnings, isCritical) {
     </span>
   `;
 
+  // Device name (user-friendly) - show if different from device_id
+  const hasCustomName = device.name && device.name !== device.device_id;
+  const deviceNameDisplay = hasCustomName ? ` (${device.name})` : '';
+
+  // State badge (STANDBY/WATERING/EMERGENCY)
+  const stateColors = {
+    'STANDBY': '#666',
+    'WATERING': '#1976d2',
+    'ACTIVE': '#1976d2',
+    'EMERGENCY': '#b00',
+    'DISABLED': '#999',
+    'UNKNOWN': '#999'
+  };
+  const stateColor = stateColors[device.state] || '#666';
+  const stateBadge = device.state ? `<span style="color:${stateColor};font-size:11px">[${device.state}]</span>` : '';
+
   div.innerHTML = `
     <!-- Compact row (click to expand) -->
     <div class="device-row ${hasWarnings ? 'has-warnings' : ''}" onclick="toggleDeviceExpand(this, '${device.device_id}')">
       <span class="expand-icon">▶</span>
       ${hasWarnings ? '<span class="warning-badge">⚠️</span>' : ''}
-      <span class="device-name">🌱 ${device.name}</span>
+      <span class="device-name">🌱 ${device.device_id}${deviceNameDisplay}</span>
       <div class="device-quick-info">
-        <span style="color:${moistureColor}">💧${device.moisture_pct}%</span>
+        <span style="color:${moistureColor}">💧${device.moisture_pct !== null ? device.moisture_pct + '%' : '—'}</span>
         <span style="color:${batteryColor}">${batteryDisplay}</span>
         ${modeBadgeCompact}
         ${automationControl}
+        ${stateBadge}
         ${lastWateringBadge}
         <span class="device-status ${isOnline ? 'online' : 'offline'}">${isOnline ? '● Online' : '○ Offline'}</span>
       </div>
@@ -448,13 +465,17 @@ function createExpandableRow(device, isOnline, hasWarnings, isCritical) {
     <!-- Expanded details (hidden by default) -->
     <div class="device-details" id="details-${device.device_id}">
       <div class="detail-row">
+        <span class="detail-item">📛 Name: ${device.name || device.device_id}</span>
+        <span class="detail-item">📍 ${device.location} / ${device.room}</span>
+        <span class="detail-item">State: <span style="color:${stateColor}">${device.state || 'UNKNOWN'}</span></span>
+      </div>
+      <div class="detail-row" style="margin-top:8px">
         <span class="detail-item">Mode: ${modeName}</span>
         <span class="detail-item">Water: ≈${(maxWateringTime * pumpCalibration).toFixed(0)}ml / ${maxWateringTime}s</span>
-        <span class="detail-item">📍 ${device.location} / ${device.room}</span>
       </div>
 
       <div class="detail-row" style="margin-top:8px">
-        <span class="detail-item" style="color:${moistureColor}">💧 Moisture: ${device.moisture_pct}% (ADC: ${device.adc_raw || 'N/A'})</span>
+        <span class="detail-item" style="color:${moistureColor}">💧 Moisture: ${device.moisture_pct !== null ? device.moisture_pct + '%' : '—'} (ADC: ${device.adc_raw || 'N/A'})</span>
         <span class="detail-item" style="color:${batteryColor}">${batteryDisplayLong}</span>
         <span class="detail-item">Last watering: ${lastWateringAgo}</span>
       </div>
