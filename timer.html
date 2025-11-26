@@ -152,7 +152,8 @@ function formatDaysFromMask(mask) {
     if (mask & (1 << i)) days.push(dayNames[i]);
   }
   if (days.length === 7) return 'Every day';
-  if (days.length === 5 && days.join('') === 'MonTueWedThuFri') return 'Weekdays';
+  // Check weekdays by mask value: bits 0-4 set = Mon-Fri = 0b00011111 = 31
+  if (mask === 31) return 'Weekdays';
   return days.join(', ') || 'No days';
 }
 
