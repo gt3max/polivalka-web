@@ -256,9 +256,9 @@ async function monitorWiFiMode() {
 // Auto-update intervals
 setInterval(updateTime, 60000);      // Time: every minute
 setInterval(updateHeader, 30000);    // Status: every 30 seconds
-if (!IS_CLOUD) { setInterval(monitorWiFiMode, 3000);  // WiFi mode: every 3 seconds (CRITICAL - OTA can brick device if WiFi drops)
-
-// Initial load
-monitorWiFiMode();
+if (!IS_CLOUD) {
+  setInterval(monitorWiFiMode, 3000);  // WiFi mode: every 3 seconds (CRITICAL - OTA can brick device if WiFi drops)
+  monitorWiFiMode();  // Initial load - only in local mode
+}
 </script>
 </body></html>

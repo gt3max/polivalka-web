@@ -173,7 +173,9 @@ async function monitorWiFiMode() {
 }
 
 setInterval(updateTime, 60000);
-if (!IS_CLOUD) { setInterval(monitorWiFiMode, 5000);  // 5 sec - balance UX/load (active calibration operations)
-monitorWiFiMode();
+if (!IS_CLOUD) {
+  setInterval(monitorWiFiMode, 5000);  // 5 sec - balance UX/load (active calibration operations)
+  monitorWiFiMode();  // Initial load - only in local mode
+}
 </script>
 </body></html>

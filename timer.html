@@ -54,7 +54,13 @@ async function loadSchedules(){
     // Update limit info and button state
     const addBtn = document.getElementById('add-schedule-btn');
     const limitInfo = document.getElementById('schedule-limit-info');
-    if (count >= maxSchedules) {
+
+    // Cloud mode: disable schedule management (schedules are on ESP32)
+    if (IS_CLOUD) {
+      addBtn.disabled = true;
+      limitInfo.textContent = 'Local only';
+      limitInfo.style.color = '#f57c00';
+    } else if (count >= maxSchedules) {
       addBtn.disabled = true;
       limitInfo.textContent = 'Maximum reached';
       limitInfo.style.color = '#b00';
@@ -64,7 +70,15 @@ async function loadSchedules(){
     }
 
     if (!data.schedules || data.schedules.length === 0) {
-      list.innerHTML = '<div class="muted">No schedules configured.</div>';
+      // Show Cloud-specific message if schedules are managed locally
+      if (IS_CLOUD && data.message) {
+        list.innerHTML = `<div class="muted" style="padding:16px;background:#fff3e0;border-radius:8px;border:1px solid #f57c00">
+          <div style="font-weight:600;color:#e65100;margin-bottom:8px">📱 Local Management Only</div>
+          <div style="color:#666">${data.message}</div>
+        </div>`;
+      } else {
+        list.innerHTML = '<div class="muted">No schedules configured.</div>';
+      }
       return;
     }
 
@@ -208,6 +222,12 @@ async function saveSchedule() {
     return;
   }
 
+  // Cloud mode: schedules are managed on ESP32, not in Cloud
+  if (IS_CLOUD) {
+    alert('Schedules can only be edited from local network (AP mode or .local).\n\nConnect to device directly to manage schedules.');
+    return;
+  }
+
   try {
     let id;
     if (editingId !== null) {
@@ -216,7 +236,8 @@ async function saveSchedule() {
     } else {
       // Find free slot (0-7)
       const data = await API.get('/schedules');
-      const usedIds = data.schedules.map(s => s.id);
+      const schedules = data.schedules || [];
+      const usedIds = schedules.map(s => s.id);
       id = [0,1,2,3,4,5,6,7].find(i => !usedIds.includes(i));
       if (id === undefined) {
         alert('Maximum 8 schedules allowed');
@@ -227,14 +248,8 @@ async function saveSchedule() {
     const schedule = { id, time, days, duration, unit, enabled };
     console.log('Saving schedule:', schedule);
 
-    const response = await API.post('/schedule/set', {
-      method: 'POST',
-      headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify(schedule),
-      cache: 'no-store'
-    });
-
-    const result = await response.json();
+    // API.post already returns parsed JSON
+    const result = await API.post('/schedule/set', schedule);
     console.log('Server response:', result);
 
     if (!result.success) {
@@ -253,11 +268,14 @@ async function saveSchedule() {
 async function deleteSchedule(id) {
   if (!confirm('Delete this schedule?')) return;
 
+  // Cloud mode: schedules are managed on ESP32, not in Cloud
+  if (IS_CLOUD) {
+    alert('Schedules can only be deleted from local network (AP mode or .local).\n\nConnect to device directly to manage schedules.');
+    return;
+  }
+
   try {
-    await API.get('/schedule/delete?id=' + id, {
-      method: 'POST',
-      cache: 'no-store'
-    });
+    await API.get('/schedule/delete?id=' + id);
     loadSchedules();
   } catch(e) {
     alert('Error deleting schedule: ' + e.message);
@@ -389,7 +407,9 @@ if (!IS_CLOUD) {
 // Initial load
 updateTime();
 updateMode();
-monitorWiFiMode();
+if (!IS_CLOUD) {
+  monitorWiFiMode();  // Only monitor WiFi in local mode
+}
 loadSchedules();
 </script>
 </body></html>
