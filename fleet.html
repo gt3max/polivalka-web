@@ -429,9 +429,9 @@ function createExpandableRow(device, isOnline, hasWarnings, isCritical) {
     </span>
   `;
 
-  // Device name (user-friendly) - show if different from device_id
-  const hasCustomName = device.name && device.name !== device.device_id;
-  const deviceNameDisplay = hasCustomName ? ` (${device.name})` : '';
+  // Device name (user-friendly) - always show (default: "Polivalka", user can rename)
+  const deviceName = device.name || 'Polivalka';
+  const deviceNameDisplay = ` | ${deviceName}`;
 
   // State badge (STANDBY/WATERING/EMERGENCY)
   const stateColors = {
