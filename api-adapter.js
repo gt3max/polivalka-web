@@ -92,11 +92,18 @@ if (IS_CLOUD && DEVICE_ID) {
       header.insertBefore(backButton, header.firstChild);
     }
 
-    // Обновить navigation links (добавить ?device=XX)
-    document.querySelectorAll('.nav a').forEach(link => {
+    // Обновить ВСЕ внутренние links (добавить ?device=XX)
+    // Включает nav, кнопки в карточках, и любые другие ссылки на страницы
+    document.querySelectorAll('a[href]').forEach(link => {
       const href = link.getAttribute('href');
-      if (href && !href.includes('?') && !href.includes('fleet.html')) {
+      // Только локальные ссылки на .html страницы (не fleet, не внешние)
+      if (href && href.endsWith('.html') && !href.includes('?') && !href.includes('fleet.html') && !href.startsWith('http')) {
         link.setAttribute('href', `${href.split('?')[0]}?device=${DEVICE_ID}`);
+      }
+      // Ссылки с якорем (calibration.html#pump)
+      if (href && href.includes('.html#') && !href.includes('?') && !href.startsWith('http')) {
+        const [page, anchor] = href.split('#');
+        link.setAttribute('href', `${page}?device=${DEVICE_ID}#${anchor}`);
       }
     });
   });
