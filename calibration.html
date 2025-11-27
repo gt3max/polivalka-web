@@ -65,11 +65,30 @@ async function calib(kind){
 document.getElementById('btn-air').disabled=true;document.getElementById('btn-water').disabled=true;
 document.getElementById('btn-soil').disabled=true;const CAL_SEC=2;
 for(let t=CAL_SEC;t>0;t--){await new Promise(r=>setTimeout(r,1000));}
-const params={'air':'dry=1','water':'wet=1','soil':'soil=1'};
-await fetch('/calibrate?'+params[kind]+'&hold='+(CAL_SEC*1000),{cache:'no-store'});
+try {
+  if (IS_CLOUD) {
+    // Cloud: use MQTT command
+    await API.post('/command', {command: 'calibrate_sensor', params: {type: kind}});
+    await new Promise(r=>setTimeout(r,2000)); // Wait for MQTT propagation
+  } else {
+    // Local: direct ESP32 API
+    const params={'air':'dry=1','water':'wet=1','soil':'soil=1'};
+    await fetch('/api/calibrate?'+params[kind]+'&hold='+(CAL_SEC*1000),{cache:'no-store'});
+  }
+} catch(e) { console.error('Calibration error:', e); }
 document.getElementById('btn-air').disabled=false;document.getElementById('btn-water').disabled=false;
 document.getElementById('btn-soil').disabled=false;updateCalibration();}
-async function resetCalib(){await API.get('/reset');updateCalibration();}
+async function resetCalib(){
+  try {
+    if (IS_CLOUD) {
+      await API.post('/command', {command: 'reset_sensor_calibration', params: {}});
+      await new Promise(r=>setTimeout(r,2000));
+    } else {
+      await fetch('/api/reset',{cache:'no-store'});
+    }
+  } catch(e) { console.error('Reset error:', e); }
+  updateCalibration();
+}
 async function loadPumpCalibration(){
 try{const s=await API.get('/pump/status');
 const ml=s.ml_per_sec||10.0;document.getElementById('current-ml-per-sec').textContent=ml.toFixed(2)+' ml/sec';
@@ -79,9 +98,18 @@ else{pumpBadge.textContent='⚠️ Defaults';pumpBadge.style.background='#fff3e0
 async function pumpTest(duration){
 const btn=document.getElementById('test-'+duration+'s');if(!btn)return;
 btn.disabled=true;btn.textContent='⏳';
-try{await fetch('/pump/test?sec='+duration,{cache:'no-store'});btn.textContent='✓';
-setTimeout(()=>{btn.textContent='Run '+duration+'s';btn.disabled=false;},2000);}
-catch(e){btn.textContent='❌';setTimeout(()=>{btn.textContent='Run '+duration+'s';btn.disabled=false;},2000);}}
+try{
+  if (IS_CLOUD) {
+    // Cloud: use pump endpoint with duration
+    await API.post('/pump?sec='+duration);
+    await new Promise(r=>setTimeout(r,2000)); // Wait for MQTT
+  } else {
+    // Local: direct ESP32 API
+    await fetch('/api/pump/test?sec='+duration,{cache:'no-store'});
+  }
+  btn.textContent='✓';
+  setTimeout(()=>{btn.textContent='Run '+duration+'s';btn.disabled=false;},2000);
+} catch(e){btn.textContent='❌';setTimeout(()=>{btn.textContent='Run '+duration+'s';btn.disabled=false;},2000);}}
 function calculateResults(){
 const ml10=parseFloat(document.getElementById('ml-10s').value)||0;
 const ml30=parseFloat(document.getElementById('ml-30s').value)||0;
@@ -104,11 +132,25 @@ else{document.getElementById('pump-result').style.display='none';document.getEle
 async function saveCalibration(){
 const avgText=document.getElementById('avg-ml-per-sec').textContent;const ml_per_sec=parseFloat(avgText);
 if(!ml_per_sec||ml_per_sec<=0){alert('Invalid value');return;}
-try{await fetch('/pump/calibrate?ml_per_sec='+ml_per_sec,{cache:'no-store'});
-alert('Saved: '+ml_per_sec.toFixed(2)+' ml/sec');loadPumpCalibration();}catch(e){alert('Save failed');}}
+try{
+  if (IS_CLOUD) {
+    await API.post('/command', {command: 'set_pump_calibration', params: {ml_per_sec: ml_per_sec}});
+    await new Promise(r=>setTimeout(r,2000));
+  } else {
+    await fetch('/api/pump/calibrate?ml_per_sec='+ml_per_sec,{cache:'no-store'});
+  }
+  alert('Saved: '+ml_per_sec.toFixed(2)+' ml/sec');loadPumpCalibration();
+}catch(e){alert('Save failed');}}
 async function resetPumpCalib(){
-try{await API.get('/pump/reset');
-alert('Pump calibration reset to default (2.5 ml/sec)');loadPumpCalibration();}catch(e){alert('Reset failed');}}
+try{
+  if (IS_CLOUD) {
+    await API.post('/command', {command: 'reset_pump_calibration', params: {}});
+    await new Promise(r=>setTimeout(r,2000));
+  } else {
+    await fetch('/api/pump/reset',{cache:'no-store'});
+  }
+  alert('Pump calibration reset to default (2.5 ml/sec)');loadPumpCalibration();
+}catch(e){alert('Reset failed');}}
 // Cloud mode: показать device ID в header сразу
 if (IS_CLOUD && DEVICE_ID) {
   document.getElementById('device-name').textContent = `🌱 Polivalka-${DEVICE_ID}`;
@@ -117,47 +159,16 @@ if (IS_CLOUD && DEVICE_ID) {
   document.getElementById('room-text').textContent = DEVICE_ID;
 }
 
-// Cloud mode: disable calibration buttons (requires physical access)
+// Cloud mode: show remote assistance notice (buttons work!)
 if (IS_CLOUD) {
   document.addEventListener('DOMContentLoaded', function() {
-    // Add notice at top
     const container = document.querySelector('.container');
     if (container) {
       const notice = document.createElement('div');
-      notice.style.cssText = 'background:#fff3e0;color:#e65100;padding:12px 16px;border-radius:8px;margin-bottom:12px;font-size:14px';
-      notice.innerHTML = '<b>⚠️ View Only</b> — Calibration requires physical access to the sensor. Connect to device AP (192.168.4.1) to calibrate.';
+      notice.style.cssText = 'background:#e3f2fd;color:#1565c0;padding:12px 16px;border-radius:8px;margin-bottom:12px;font-size:14px';
+      notice.innerHTML = '<b>📞 Remote Calibration</b> — You can calibrate remotely while someone assists at the device.';
       container.insertBefore(notice, container.firstChild);
     }
-
-    // Disable all calibration buttons
-    const buttonsToDisable = [
-      'btn-air', 'btn-water', 'btn-soil',  // Sensor calibration
-      'test-10s', 'test-30s', 'test-60s'   // Pump tests
-    ];
-    buttonsToDisable.forEach(id => {
-      const btn = document.getElementById(id);
-      if (btn) {
-        btn.disabled = true;
-        btn.style.opacity = '0.5';
-        btn.style.cursor = 'not-allowed';
-      }
-    });
-
-    // Disable Reset buttons and Save button
-    document.querySelectorAll('button').forEach(btn => {
-      const text = btn.textContent.toLowerCase();
-      if (text.includes('reset') || text.includes('save') || text.includes('read')) {
-        btn.disabled = true;
-        btn.style.opacity = '0.5';
-        btn.style.cursor = 'not-allowed';
-      }
-    });
-
-    // Disable input fields
-    document.querySelectorAll('input[type="number"]').forEach(input => {
-      input.disabled = true;
-      input.style.opacity = '0.7';
-    });
   });
 }
 
