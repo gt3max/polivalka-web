@@ -372,11 +372,27 @@ async function selectMode(mode) {
       }
     }
 
+    // Optimistic UI update - immediately show selected mode
+    document.querySelectorAll('.mode-btn').forEach(btn => {
+      btn.classList.toggle('selected', btn.dataset.mode === mode);
+    });
+    document.getElementById('current-mode').textContent = mode.charAt(0).toUpperCase() + mode.slice(1);
+    const modeBadge = document.getElementById('mode-badge');
+    modeBadge.textContent = mode.charAt(0).toUpperCase() + mode.slice(1);
+    modeBadge.className = 'status-badge status-' + mode;
+
     await API.post('/mode', {mode: mode});
+
+    // Cloud mode: wait for MQTT to propagate, then refresh
+    if (IS_CLOUD) {
+      await sleep(2000);
+    }
     updateStatus();
-    updateControllerStatus(); // Immediately update controller status for new mode
+    updateControllerStatus();
   } catch(e) {
     alert('Error setting mode: ' + e.message);
+    // Revert optimistic update on error
+    updateStatus();
   }
 }
 
