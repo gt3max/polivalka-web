@@ -143,6 +143,33 @@ async function updateStatus(){
   try {
     const s = await API.get('/status');
 
+    // Cloud mode: update time and battery from /status (no separate endpoints)
+    if (IS_CLOUD) {
+      // Time: use timestamp from telemetry
+      const timeEl = document.getElementById('header-time');
+      if (s.timestamp) {
+        const date = new Date(s.timestamp * 1000);
+        const timeStr = date.toLocaleTimeString('en-US', {hour: '2-digit', minute: '2-digit', hour12: false});
+        timeEl.textContent = 'Time: ' + timeStr;
+        timeEl.className = 'mono ok';
+      } else {
+        timeEl.textContent = 'Time: —';
+        timeEl.className = 'mono';
+      }
+
+      // Battery: from /status response
+      const batteryStatus = document.getElementById('battery-status');
+      if (s.battery && s.battery.percent !== undefined && s.battery.percent !== null) {
+        const percent = Math.round(s.battery.percent);
+        const charging = s.battery.charging ? ' ⚡' : '';
+        batteryStatus.textContent = `🔋 ${percent}%${charging}`;
+      } else if (s.battery && s.battery.percent === null) {
+        batteryStatus.textContent = '⚡ AC';
+      } else {
+        batteryStatus.textContent = '🔋 —';
+      }
+    }
+
     // Device Name, Location, Room
     if (s.system_state?.device_name) {
       document.getElementById('device-name').textContent = '🌱 ' + s.system_state.device_name;
