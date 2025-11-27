@@ -237,6 +237,15 @@
 </div>
 
 <script>
+// Map RSSI to signal strength icon and color
+function getRssiDisplay(rssi) {
+  if (!rssi || rssi === 0) return { icon: '', color: '#999', text: '' };
+  if (rssi >= -50) return { icon: '📶', color: '#0a0', text: rssi + ' dBm' };       // Excellent
+  if (rssi >= -60) return { icon: '📶', color: '#2e7d32', text: rssi + ' dBm' };    // Good
+  if (rssi >= -70) return { icon: '📶', color: '#f57c00', text: rssi + ' dBm' };    // Fair
+  return { icon: '📶', color: '#c62828', text: rssi + ' dBm' };                       // Weak
+}
+
 // Map internal controller states to user-friendly display
 // Standby 💤, Watering 💧, Emergency ⚠️
 function mapStateToDisplay(state, pumpRunning) {
@@ -451,6 +460,10 @@ function createExpandableRow(device, isOnline, hasWarnings, isCritical) {
         ${automationControl}
         <span class="device-status" style="background:${stateBg};color:${stateColor}">${stateText}</span>
         <span class="device-status ${isOnline ? 'online' : 'offline'}">${isOnline ? '● Online' : '○ Offline'}</span>
+        ${(() => {
+          const rssiData = getRssiDisplay(device.sta_rssi);
+          return rssiData.icon ? `<span style="color:${rssiData.color};font-size:12px">${rssiData.icon} ${rssiData.text}</span>` : '';
+        })()}
       </div>
     </div>
 
@@ -472,6 +485,7 @@ function createExpandableRow(device, isOnline, hasWarnings, isCritical) {
         <span class="detail-item">Last watering: ${lastWateringAgo}</span>
         <span class="detail-item">🔧 Firmware: ${device.firmware_version || 'v1.0.0'}</span>
         <span class="detail-item">🔄 Reboots: ${device.reboot_count || 'N/A'}</span>
+        ${device.sta_rssi ? `<span class="detail-item" style="color:${getRssiDisplay(device.sta_rssi).color}">📶 Signal: ${device.sta_rssi} dBm</span>` : ''}
       </div>
 
       ${hasWarnings ? `
@@ -654,7 +668,7 @@ function createDeviceCard(device) {
     <div class="muted" style="font-size:12px;margin:8px 0">
       Water: ≈${((device.watering_duration || 60) * (device.pump_calibration || 2.5)).toFixed(0)}ml / ${device.watering_duration || 60}s<br>
       Last watering: ${lastWateringAgo} | Last update: ${lastUpdateAgo}<br>
-      🔧 ${device.firmware_version || 'v1.0.0'} | 🔄 Reboots: ${device.reboot_count || 'N/A'}
+      🔧 ${device.firmware_version || 'v1.0.0'} | 🔄 Reboots: ${device.reboot_count || 'N/A'}${device.sta_rssi ? ` | <span style="color:${getRssiDisplay(device.sta_rssi).color}">📶 ${device.sta_rssi} dBm</span>` : ''}
     </div>
 
     ${hasWarnings ? `

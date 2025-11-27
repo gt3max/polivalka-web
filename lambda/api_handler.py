@@ -178,6 +178,7 @@ def get_devices(user_id):
             'state': latest.get('system', {}).get('state', 'UNKNOWN'),
             'firmware_version': latest.get('system', {}).get('firmware_version', 'v1.0.0'),
             'reboot_count': latest.get('system', {}).get('reboot_count'),
+            'sta_rssi': latest.get('system', {}).get('sta_rssi'),  # WiFi signal strength
             'last_watering': item.get('last_watering_timestamp'),
             'last_update': latest.get('last_update'),
             'online': is_device_online(latest.get('last_update')),
