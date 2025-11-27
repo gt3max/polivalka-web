@@ -1061,6 +1061,9 @@ async function bulkAction(action) {
     // Wait for all requests (parallel, max 10 sec total)
     const results = await Promise.all(promises);
 
+    console.log('Refresh results:', results);
+    console.log('Devices after refresh:', allDevices.map(d => ({id: d.device_id, online: d.online})));
+
     // Re-render with updated online/offline status
     renderDevices(allDevices);
     updateStats(allDevices);
@@ -1069,6 +1072,9 @@ async function bulkAction(action) {
     const successful = results.filter(r => r.success).length;
     const failed = results.filter(r => !r.success).length;
     showToast(`✅ Refresh complete! ${successful} online, ${failed} offline`, failed > 0 ? 'warning' : 'success');
+
+    // Also refresh from backend to ensure sync (after 1 sec delay)
+    setTimeout(() => loadDevices(), 1000);
 
   } else if (action === 'ota') {
     massOTAUpdate();
