@@ -275,6 +275,28 @@ async function saveSchedule() {
   const unit = document.getElementById('edit-unit').value;
   const enabled = document.getElementById('edit-enabled').checked;
 
+  // Duration validation with reasonable limits
+  const maxLimits = { sec: 300, min: 60, hr: 2 };  // 5min, 1hr, 2hr max
+  const unitNames = { sec: 'seconds', min: 'minutes', hr: 'hours' };
+
+  if (duration <= 0) {
+    alert('Duration must be greater than 0');
+    return;
+  }
+
+  if (duration > maxLimits[unit]) {
+    alert(`Maximum duration for ${unitNames[unit]}: ${maxLimits[unit]}\n\nFor longer watering, consider multiple shorter schedules.`);
+    return;
+  }
+
+  // Calculate total seconds and warn for large volumes
+  const totalSec = duration * (unit === 'hr' ? 3600 : unit === 'min' ? 60 : 1);
+  const estimatedMl = totalSec * 2.5;  // ~2.5 ml/sec pump calibration
+
+  if (totalSec > 600 && !confirm(`⚠️ Warning: ${Math.round(totalSec/60)} minutes of watering!\n\nEstimated water: ~${Math.round(estimatedMl)} ml\n\nAre you sure?`)) {
+    return;
+  }
+
   const days = Array.from(document.querySelectorAll('.day-btn.active'))
     .map(btn => parseInt(btn.dataset.day));
 

@@ -117,6 +117,50 @@ if (IS_CLOUD && DEVICE_ID) {
   document.getElementById('room-text').textContent = DEVICE_ID;
 }
 
+// Cloud mode: disable calibration buttons (requires physical access)
+if (IS_CLOUD) {
+  document.addEventListener('DOMContentLoaded', function() {
+    // Add notice at top
+    const container = document.querySelector('.container');
+    if (container) {
+      const notice = document.createElement('div');
+      notice.style.cssText = 'background:#fff3e0;color:#e65100;padding:12px 16px;border-radius:8px;margin-bottom:12px;font-size:14px';
+      notice.innerHTML = '<b>⚠️ View Only</b> — Calibration requires physical access to the sensor. Connect to device AP (192.168.4.1) to calibrate.';
+      container.insertBefore(notice, container.firstChild);
+    }
+
+    // Disable all calibration buttons
+    const buttonsToDisable = [
+      'btn-air', 'btn-water', 'btn-soil',  // Sensor calibration
+      'test-10s', 'test-30s', 'test-60s'   // Pump tests
+    ];
+    buttonsToDisable.forEach(id => {
+      const btn = document.getElementById(id);
+      if (btn) {
+        btn.disabled = true;
+        btn.style.opacity = '0.5';
+        btn.style.cursor = 'not-allowed';
+      }
+    });
+
+    // Disable Reset buttons and Save button
+    document.querySelectorAll('button').forEach(btn => {
+      const text = btn.textContent.toLowerCase();
+      if (text.includes('reset') || text.includes('save') || text.includes('read')) {
+        btn.disabled = true;
+        btn.style.opacity = '0.5';
+        btn.style.cursor = 'not-allowed';
+      }
+    });
+
+    // Disable input fields
+    document.querySelectorAll('input[type="number"]').forEach(input => {
+      input.disabled = true;
+      input.style.opacity = '0.7';
+    });
+  });
+}
+
 updateTime();loadAllData();loadPumpCalibration();
 
 // Track WiFi mode to detect disconnection
