@@ -237,6 +237,16 @@
 </div>
 
 <script>
+// Map internal controller states to user-friendly display
+// Standby 💤, Watering 💧, Emergency ⚠️
+function mapStateToDisplay(state, pumpRunning) {
+  if (pumpRunning) return { text: 'Watering', emoji: '💧', color: '#1976d2', bg: '#e3f2fd' };
+  const s = (state || '').toUpperCase();
+  if (s === 'EMERGENCY' || s.includes('ERROR')) return { text: 'Emergency', emoji: '⚠️', color: '#c62828', bg: '#ffebee' };
+  if (['WATERING', 'PULSE', 'SETTLE', 'CHECK'].includes(s)) return { text: 'Watering', emoji: '💧', color: '#1976d2', bg: '#e3f2fd' };
+  return { text: 'Standby', emoji: '💤', color: '#666', bg: '#f5f5f5' };
+}
+
 // Mock data (will be replaced by Lambda API)
 // Используем РЕАЛЬНЫЕ устройства: BB00C1 и BC67E8
 const MOCK_DEVICES = [
@@ -417,10 +427,12 @@ function createExpandableRow(device, isOnline, hasWarnings, isCritical) {
     </span>
   `;
 
-  // Determine actual state (DISABLED if controller is off)
-  const actualState = !controllerEnabled ? 'DISABLED' : (device.state || 'STANDBY');
-  const stateColor = actualState === 'WATERING' || actualState === 'PULSE' ? '#1976d2' : actualState === 'EMERGENCY' ? '#c62828' : actualState === 'DISABLED' ? '#999' : '#666';
-  const stateBg = actualState === 'WATERING' || actualState === 'PULSE' ? '#e3f2fd' : actualState === 'EMERGENCY' ? '#ffebee' : '#f5f5f5';
+  // Determine actual state using mapStateToDisplay for consistent UX
+  const rawState = !controllerEnabled ? 'DISABLED' : (device.state || 'STANDBY');
+  const displayState = mapStateToDisplay(rawState, device.pump_running);
+  const stateText = `${displayState.emoji} ${displayState.text}`;
+  const stateColor = displayState.color;
+  const stateBg = displayState.bg;
 
   // Custom name (plant name) - show only if different from device_id
   const plantName = device.name !== device.device_id ? device.name : '';
@@ -437,7 +449,7 @@ function createExpandableRow(device, isOnline, hasWarnings, isCritical) {
         <span style="color:${batteryColor}">${batteryDisplay}</span>
         ${modeBadgeCompact}
         ${automationControl}
-        <span class="device-status" style="background:${stateBg};color:${stateColor}">${actualState}</span>
+        <span class="device-status" style="background:${stateBg};color:${stateColor}">${stateText}</span>
         <span class="device-status ${isOnline ? 'online' : 'offline'}">${isOnline ? '● Online' : '○ Offline'}</span>
       </div>
     </div>
@@ -446,7 +458,7 @@ function createExpandableRow(device, isOnline, hasWarnings, isCritical) {
     <div class="device-details" id="details-${device.device_id}">
       <div class="detail-row">
         <span class="detail-item">📍 ${device.location || 'Home'} / ${device.room || 'Room'}${plantName ? ' / ' + plantName : ''}</span>
-        <span class="detail-item">State: ${actualState}</span>
+        <span class="detail-item">State: ${stateText}</span>
         <span class="detail-item">Mode: ${modeName}</span>
       </div>
 
@@ -596,8 +608,10 @@ function createDeviceCard(device) {
 
   // State and automation for Cards (same logic as List)
   const cardControllerEnabled = device.controller_enabled === true;
-  const cardActualState = !cardControllerEnabled ? 'DISABLED' : (device.state || 'STANDBY');
-  const cardStateColor = cardActualState === 'WATERING' || cardActualState === 'PULSE' ? '#1976d2' : cardActualState === 'EMERGENCY' ? '#c62828' : cardActualState === 'DISABLED' ? '#999' : '#666';
+  const cardRawState = !cardControllerEnabled ? 'DISABLED' : (device.state || 'STANDBY');
+  const cardDisplayState = mapStateToDisplay(cardRawState, device.pump_running);
+  const cardStateText = `${cardDisplayState.emoji} ${cardDisplayState.text}`;
+  const cardStateColor = cardDisplayState.color;
 
   // Automation text for Cards
   let cardAutoText = '';
@@ -622,7 +636,7 @@ function createDeviceCard(device) {
       ${cardPlantName ? `<span style="font-weight:600">${cardPlantName}</span>` : ''}
       ${modeBadge}
       <span style="color:${cardControllerEnabled ? '#0a0' : '#999'};font-weight:600">${cardAutoText}</span>
-      <span style="background:#f5f5f5;color:${cardStateColor};padding:2px 6px;border-radius:6px;font-size:11px">${cardActualState}</span>
+      <span style="background:#f5f5f5;color:${cardStateColor};padding:2px 6px;border-radius:6px;font-size:11px">${cardStateText}</span>
       ${wateringBadge}
     </div>
 
