@@ -199,12 +199,6 @@ async function saveSettings(){
     return;
   }
 
-  // Cloud mode: read-only, no saving
-  if (IS_CLOUD) {
-    console.log('[saveSettings] Skipped - Cloud mode is read-only');
-    return;
-  }
-
   showAutoSaveIndicator('saving');
 
   try {
@@ -242,15 +236,6 @@ async function applyPreset(){
 
   if (presetName === 'Custom') {
     console.log('[Preset] Custom - no changes applied');
-    return;
-  }
-
-  // Cloud mode: read-only, no preset changes
-  if (IS_CLOUD) {
-    console.log('[Preset] Skipped - Cloud mode is read-only');
-    alert('Cloud mode is view-only. Use local AP mode to change presets.');
-    // Reset to current value
-    await loadSensorSettings();
     return;
   }
 
@@ -373,22 +358,15 @@ updateTime();
 if (!IS_CLOUD) { monitorWiFiMode(); }
 loadSensorSettings();
 
-// Cloud mode: make inputs read-only and show notice
+// Cloud mode: show info notice (editing via MQTT is now supported!)
 if (IS_CLOUD) {
   document.addEventListener('DOMContentLoaded', function() {
-    // Disable all inputs and selects
-    document.querySelectorAll('input, select').forEach(el => {
-      el.disabled = true;
-      el.style.opacity = '0.7';
-      el.style.cursor = 'not-allowed';
-    });
-
-    // Add read-only notice at top of card
+    // Add cloud notice at top of card
     const card = document.querySelector('.card');
     if (card) {
       const notice = document.createElement('div');
-      notice.style.cssText = 'background:#fff3e0;color:#e65100;padding:10px 12px;border-radius:8px;margin-bottom:12px;font-size:13px';
-      notice.innerHTML = '<b>View Only</b> — Connect to device AP to change settings';
+      notice.style.cssText = 'background:#e3f2fd;color:#1565c0;padding:10px 12px;border-radius:8px;margin-bottom:12px;font-size:13px';
+      notice.innerHTML = '<b>Cloud Mode</b> — Changes are sent to device via MQTT (may take 1-2 seconds)';
       card.insertBefore(notice, card.firstChild);
     }
   });
