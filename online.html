@@ -1,4 +1,5 @@
 <!doctype html><html><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width, initial-scale=1"><title>Polivalka — Online</title>
+<script src="api-adapter.js"></script>
 <style>
     body{font-family:system-ui,Arial;margin:0;padding:0;max-width:100%}
     .header{position:sticky;top:0;z-index:1000;background:#2c5f2d;color:#fff;padding:8px 10px;display:flex;justify-content:space-between;align-items:center;gap:8px}
@@ -661,7 +662,168 @@ function openDeviceWithCountdown(deviceUrl, apSsid) {
 // Remote control via AWS IoT
 // Check connection status on page load
 window.addEventListener('load', function() {
-  getWiFiStatus();
+  if (!IS_CLOUD) {
+    getWiFiStatus();
+  }
 });
+
+// ========== CLOUD MODE ==========
+if (IS_CLOUD) {
+  // Update device name in header
+  if (DEVICE_ID) {
+    document.getElementById('device-name').textContent = `🌱 Polivalka-${DEVICE_ID}`;
+    document.title = `Polivalka-${DEVICE_ID} — Online`;
+    document.getElementById('location-text').textContent = 'Cloud';
+    document.getElementById('room-text').textContent = DEVICE_ID;
+  }
+
+  // Cloud mode: replace entire page content with cloud-specific view
+  document.addEventListener('DOMContentLoaded', async function() {
+    const container = document.querySelector('.container');
+    if (!container) return;
+
+    // Show loading state
+    container.innerHTML = `
+      <div class="card">
+        <h3>🌐 Cloud Connection Status</h3>
+        <p class="muted">Loading device status...</p>
+      </div>
+    `;
+
+    try {
+      // Load system telemetry from DynamoDB
+      const status = await API.get('/status');
+
+      // Update header with actual data
+      const mode = status.system_state?.mode || 'off';
+      const modeBadge = document.getElementById('mode-badge');
+      modeBadge.textContent = mode.charAt(0).toUpperCase() + mode.slice(1);
+      modeBadge.className = 'status-badge status-' + mode;
+
+      // Connection status in header
+      const connText = document.getElementById('conn-text');
+      if (status.wifi_connected) {
+        connText.textContent = 'Online';
+        connText.style.color = '#0a0';
+      } else {
+        connText.textContent = 'Offline';
+        connText.style.color = '#999';
+      }
+
+      // Build cloud status page
+      const awsConnected = status.aws_connected;
+      const wifiConnected = status.wifi_connected;
+      const timeSet = status.time_set;
+      const deviceName = status.system_state?.device_name || `Polivalka-${DEVICE_ID}`;
+      const staIp = status.sta_ip || '—';
+      const staSsid = status.sta_ssid || '—';
+
+      // Calculate last seen from timestamp
+      const lastTimestamp = status.timestamp;
+      let lastSeenText = '—';
+      if (lastTimestamp) {
+        const now = Math.floor(Date.now() / 1000);
+        const diff = now - lastTimestamp;
+        if (diff < 60) lastSeenText = 'Just now';
+        else if (diff < 3600) lastSeenText = Math.floor(diff / 60) + ' min ago';
+        else if (diff < 86400) lastSeenText = Math.floor(diff / 3600) + ' hours ago';
+        else lastSeenText = Math.floor(diff / 86400) + ' days ago';
+      }
+
+      container.innerHTML = `
+        <div class="card">
+          <h3>🌐 Cloud Connection Status</h3>
+          <p class="muted">View device connection status from AWS IoT.</p>
+
+          <div style="background:#e3f2fd;color:#1565c0;padding:12px 16px;border-radius:8px;margin:12px 0;font-size:14px">
+            <b>ℹ️ View Only</b> — WiFi configuration requires physical access to the device.<br>
+            <small>Connect to device AP (192.168.4.1) to change WiFi settings.</small>
+          </div>
+        </div>
+
+        <div class="card">
+          <h3>Device Status</h3>
+          <div style="margin:12px 0">
+            <div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid #eee">
+              <span class="muted">Device Name:</span>
+              <span class="mono" style="font-weight:600">${deviceName}</span>
+            </div>
+            <div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid #eee">
+              <span class="muted">Last Seen:</span>
+              <span class="mono" style="color:${awsConnected ? '#0a0' : '#f57c00'}">${lastSeenText}</span>
+            </div>
+            <div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid #eee">
+              <span class="muted">AWS Connection:</span>
+              <span style="color:${awsConnected ? '#0a0' : '#b00'}">${awsConnected ? '✅ Connected' : '❌ Disconnected'}</span>
+            </div>
+            <div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid #eee">
+              <span class="muted">WiFi Status:</span>
+              <span style="color:${wifiConnected ? '#0a0' : '#999'}">${wifiConnected ? '✅ Connected' : '⚪ Not connected'}</span>
+            </div>
+            <div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid #eee">
+              <span class="muted">WiFi Network:</span>
+              <span class="mono">${staSsid}</span>
+            </div>
+            <div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid #eee">
+              <span class="muted">Device IP:</span>
+              <span class="mono">${staIp}</span>
+            </div>
+            <div style="display:flex;justify-content:space-between;padding:8px 0">
+              <span class="muted">Time Sync:</span>
+              <span style="color:${timeSet ? '#0a0' : '#b00'}">${timeSet ? '✅ Synced' : '❌ Not set'}</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <h3>📱 Local Access</h3>
+          <p class="muted">To configure WiFi or access device locally:</p>
+          <ol style="margin:12px 0;padding-left:20px;line-height:1.8">
+            <li>Connect your phone/laptop to device AP: <b>Polivalka-${DEVICE_ID}</b></li>
+            <li>Password: <b>12345678</b></li>
+            <li>Open <b>192.168.4.1</b> in browser</li>
+            <li>Go to <b>Online</b> page to configure WiFi</li>
+          </ol>
+          <div style="margin-top:12px;padding:10px;background:#f5f5f5;border-radius:6px;font-size:13px">
+            <b>💡 Tip:</b> Once connected to home WiFi, device will sync with AWS IoT
+            and you can monitor it from this Cloud interface.
+          </div>
+        </div>
+      `;
+
+      // Update time in header
+      const timeEl = document.getElementById('header-time');
+      if (status.current_time) {
+        timeEl.textContent = 'Time: ' + status.current_time.substring(11, 16);
+        timeEl.className = 'mono ok';
+      } else if (timeSet) {
+        timeEl.textContent = 'Time: synced';
+        timeEl.className = 'mono ok';
+      } else {
+        timeEl.textContent = 'Time: not set';
+        timeEl.className = 'mono danger';
+      }
+
+    } catch (e) {
+      console.error('Failed to load status:', e);
+      container.innerHTML = `
+        <div class="card">
+          <h3>🌐 Cloud Connection Status</h3>
+          <div style="background:#ffebee;color:#c62828;padding:12px 16px;border-radius:8px;margin:12px 0">
+            <b>⚠️ Error loading device status</b><br>
+            <small>Device may be offline or not yet registered.</small>
+          </div>
+          <p class="muted">To register this device:</p>
+          <ol style="margin:12px 0;padding-left:20px;line-height:1.8">
+            <li>Connect to device AP: <b>Polivalka-${DEVICE_ID || 'XXXXXX'}</b></li>
+            <li>Password: <b>12345678</b></li>
+            <li>Open <b>192.168.4.1</b> → Online page</li>
+            <li>Connect device to home WiFi</li>
+          </ol>
+        </div>
+      `;
+    }
+  });
+}
 </script>
 </body></html>
