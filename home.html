@@ -157,16 +157,17 @@ async function updateStatus(){
         timeEl.className = 'mono';
       }
 
-      // Battery: from /status response
+      // Battery: from /status response (3 states only)
+      // 1. 🔋 XX% - battery, not charging
+      // 2. 🔋 XX% ⚡ - battery, charging
+      // 3. ⚡ AC - no battery, AC power
       const batteryStatus = document.getElementById('battery-status');
-      if (s.battery && s.battery.percent !== undefined && s.battery.percent !== null) {
+      if (s.battery && s.battery.percent !== null && s.battery.percent !== undefined) {
         const percent = Math.round(s.battery.percent);
         const charging = s.battery.charging ? ' ⚡' : '';
         batteryStatus.textContent = `🔋 ${percent}%${charging}`;
-      } else if (s.battery && s.battery.percent === null) {
-        batteryStatus.textContent = '⚡ AC';
       } else {
-        batteryStatus.textContent = '🔋 —';
+        batteryStatus.textContent = '⚡ AC';
       }
     }
 
@@ -332,26 +333,19 @@ async function updateBattery(){
     const b = await API.get('/battery/status');
     const batteryStatus = document.getElementById('battery-status');
 
-    // Check if no battery data at all (Cloud mode - data not yet received)
-    if (b.no_data) {
-      batteryStatus.textContent = '🔋 —';
-      return;
-    }
-
+    // 3 states only:
+    // 1. 🔋 XX% - battery, not charging
+    // 2. 🔋 XX% ⚡ - battery, charging
+    // 3. ⚡ AC - no battery, AC power
     if (b.percent !== null && b.percent !== undefined) {
-      // Батарея подключена - показываем процент
       const percent = Math.round(b.percent);
       const charging = b.charging ? ' ⚡' : '';
       batteryStatus.textContent = `🔋 ${percent}%${charging}`;
-    } else if (b.percent === null) {
-      // Батарея НЕ подключена, устройство работает от AC/USB питания
-      batteryStatus.textContent = '⚡ AC';
     } else {
-      // Неизвестное состояние
-      batteryStatus.textContent = '🔋 —';
+      batteryStatus.textContent = '⚡ AC';
     }
   } catch(e) {
-    document.getElementById('battery-status').textContent = '🔋 —';
+    document.getElementById('battery-status').textContent = '⚡ AC';
   }
 }
 
