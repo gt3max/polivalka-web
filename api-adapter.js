@@ -79,24 +79,15 @@ const API = {
   }
 };
 
-// Добавить кнопку "Back to Fleet" если в cloud mode
+// В Cloud mode: добавить ?device=XX ко всем внутренним ссылкам (кроме fleet.html)
 if (IS_CLOUD && DEVICE_ID) {
   document.addEventListener('DOMContentLoaded', function() {
-    // Найти header
-    const header = document.querySelector('.header');
-    if (header) {
-      // Добавить кнопку "Back to Fleet" в начало
-      const backButton = document.createElement('div');
-      backButton.innerHTML = '<a href="fleet.html" style="color:#fff;text-decoration:none;font-size:14px">← Fleet</a>';
-      backButton.style.marginRight = '12px';
-      header.insertBefore(backButton, header.firstChild);
-    }
-
     // Обновить ВСЕ внутренние links (добавить ?device=XX)
     // Включает nav, кнопки в карточках, и любые другие ссылки на страницы
     document.querySelectorAll('a[href]').forEach(link => {
       const href = link.getAttribute('href');
       // Только локальные ссылки на .html страницы (не fleet, не внешние)
+      // fleet.html НЕ получает device ID - это страница списка устройств
       if (href && href.endsWith('.html') && !href.includes('?') && !href.includes('fleet.html') && !href.startsWith('http')) {
         link.setAttribute('href', `${href.split('?')[0]}?device=${DEVICE_ID}`);
       }
