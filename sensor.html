@@ -245,6 +245,12 @@ async function applyPreset(){
     // Set preset via API
     await API.post('/sensor/preset/set?preset=' + encodeURIComponent(presetName));
 
+    // Cloud mode: wait for DynamoDB to receive ESP32 telemetry update
+    if (IS_CLOUD) {
+      console.log('[Preset] Waiting for DynamoDB sync...');
+      await new Promise(r => setTimeout(r, 1500));
+    }
+
     // Reload configuration from backend
     await loadSensorSettings();
 
