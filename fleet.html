@@ -140,12 +140,69 @@
 </head>
 <body>
 
-<!-- Auth Section (placeholder for future) -->
+<!-- Auth Section -->
 <div id="auth-section" class="auth-section active">
-  <div style="text-align:center;padding:40px">
-    <h2>🌱 Polivalka Fleet Management</h2>
-    <p class="muted">User authentication will be here</p>
-    <button class="primary" onclick="mockLogin()">Continue as Admin (Mock)</button>
+  <div style="max-width:400px;margin:40px auto;padding:20px">
+    <div style="text-align:center;margin-bottom:24px">
+      <h2 style="color:#2c5f2d;margin-bottom:8px">🌱 PlantApp</h2>
+      <p class="muted">Smart Plant Watering System</p>
+    </div>
+
+    <!-- Login Form -->
+    <div id="login-form" class="card">
+      <h3 style="margin-top:0">Login</h3>
+      <div style="margin-bottom:12px">
+        <label style="display:block;font-size:13px;margin-bottom:4px">Email</label>
+        <input type="email" id="login-email" placeholder="your@email.com" style="width:100%;padding:10px;border:1px solid #ccc;border-radius:8px;box-sizing:border-box">
+      </div>
+      <div style="margin-bottom:16px">
+        <label style="display:block;font-size:13px;margin-bottom:4px">Password</label>
+        <input type="password" id="login-password" placeholder="••••••••" style="width:100%;padding:10px;border:1px solid #ccc;border-radius:8px;box-sizing:border-box">
+      </div>
+      <button class="primary" style="width:100%;padding:12px" onclick="handleLogin()">Login</button>
+      <div style="text-align:center;margin-top:16px">
+        <span class="muted">Don't have an account?</span>
+        <a href="#" onclick="showRegister();return false" style="color:#2c5f2d;font-weight:600">Register</a>
+      </div>
+      <div id="login-error" style="display:none;margin-top:12px;padding:10px;background:#ffebee;color:#c62828;border-radius:8px;font-size:13px"></div>
+      <div id="login-success" style="display:none;margin-top:12px;padding:10px;background:#e8f5e9;color:#2e7d32;border-radius:8px;font-size:13px"></div>
+    </div>
+
+    <!-- Register Form -->
+    <div id="register-form" class="card" style="display:none">
+      <h3 style="margin-top:0">Create Account</h3>
+      <div style="margin-bottom:12px">
+        <label style="display:block;font-size:13px;margin-bottom:4px">Email</label>
+        <input type="email" id="register-email" placeholder="your@email.com" style="width:100%;padding:10px;border:1px solid #ccc;border-radius:8px;box-sizing:border-box">
+      </div>
+      <div style="margin-bottom:16px">
+        <label style="display:block;font-size:13px;margin-bottom:4px">Password (min 8 characters)</label>
+        <input type="password" id="register-password" placeholder="••••••••" style="width:100%;padding:10px;border:1px solid #ccc;border-radius:8px;box-sizing:border-box">
+      </div>
+      <button class="primary" style="width:100%;padding:12px" onclick="handleRegister()">Register</button>
+      <div style="text-align:center;margin-top:16px">
+        <span class="muted">Already have an account?</span>
+        <a href="#" onclick="showLogin();return false" style="color:#2c5f2d;font-weight:600">Login</a>
+      </div>
+      <div id="register-error" style="display:none;margin-top:12px;padding:10px;background:#ffebee;color:#c62828;border-radius:8px;font-size:13px"></div>
+      <div id="register-success" style="display:none;margin-top:12px;padding:10px;background:#e8f5e9;color:#2e7d32;border-radius:8px;font-size:13px"></div>
+    </div>
+
+    <!-- Verify Form -->
+    <div id="verify-form" class="card" style="display:none">
+      <h3 style="margin-top:0">Verify Email</h3>
+      <p class="muted">We sent a 6-digit code to <span id="verify-email-display"></span></p>
+      <div style="margin-bottom:16px">
+        <label style="display:block;font-size:13px;margin-bottom:4px">Verification Code</label>
+        <input type="text" id="verify-code" placeholder="123456" maxlength="6" style="width:100%;padding:10px;border:1px solid #ccc;border-radius:8px;box-sizing:border-box;font-size:24px;text-align:center;letter-spacing:8px">
+      </div>
+      <button class="primary" style="width:100%;padding:12px" onclick="handleVerify()">Verify</button>
+      <div style="text-align:center;margin-top:16px">
+        <a href="#" onclick="showLogin();return false" style="color:#2c5f2d">Back to Login</a>
+      </div>
+      <div id="verify-error" style="display:none;margin-top:12px;padding:10px;background:#ffebee;color:#c62828;border-radius:8px;font-size:13px"></div>
+    </div>
+
   </div>
 </div>
 
@@ -306,11 +363,164 @@ let pumpTimers = {};  // Track timers for each device
 // Track expanded devices (to preserve state across re-renders)
 let expandedDevices = new Set();
 
-function mockLogin() {
-  currentUser = {username: 'admin', role: 'admin'};
+// ============ Auth API ============
+const AUTH_API = 'https://p0833p2v29.execute-api.eu-central-1.amazonaws.com';
+
+// Store pending email for verification
+let pendingEmail = '';
+
+function showLogin() {
+  document.getElementById('login-form').style.display = 'block';
+  document.getElementById('register-form').style.display = 'none';
+  document.getElementById('verify-form').style.display = 'none';
+  clearErrors();
+}
+
+function showRegister() {
+  document.getElementById('login-form').style.display = 'none';
+  document.getElementById('register-form').style.display = 'block';
+  document.getElementById('verify-form').style.display = 'none';
+  clearErrors();
+}
+
+function showVerify(email) {
+  pendingEmail = email;
+  document.getElementById('verify-email-display').textContent = email;
+  document.getElementById('login-form').style.display = 'none';
+  document.getElementById('register-form').style.display = 'none';
+  document.getElementById('verify-form').style.display = 'block';
+  clearErrors();
+}
+
+function clearErrors() {
+  ['login-error', 'login-success', 'register-error', 'register-success', 'verify-error'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.style.display = 'none';
+  });
+}
+
+function showError(elementId, message) {
+  const el = document.getElementById(elementId);
+  el.textContent = message;
+  el.style.display = 'block';
+}
+
+async function handleRegister() {
+  const email = document.getElementById('register-email').value.trim();
+  const password = document.getElementById('register-password').value;
+
+  if (!email || !password) {
+    showError('register-error', 'Please fill in all fields');
+    return;
+  }
+
+  if (password.length < 8) {
+    showError('register-error', 'Password must be at least 8 characters');
+    return;
+  }
+
+  try {
+    const response = await fetch(`${AUTH_API}/auth/register`, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({email, password})
+    });
+    const data = await response.json();
+
+    if (!response.ok) {
+      showError('register-error', data.error || 'Registration failed');
+      return;
+    }
+
+    // Show verification form
+    showVerify(email);
+
+  } catch (e) {
+    showError('register-error', 'Network error. Please try again.');
+    console.error('Register error:', e);
+  }
+}
+
+async function handleVerify() {
+  const code = document.getElementById('verify-code').value.trim();
+
+  if (!code || code.length !== 6) {
+    showError('verify-error', 'Please enter the 6-digit code');
+    return;
+  }
+
+  try {
+    const response = await fetch(`${AUTH_API}/auth/verify`, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({email: pendingEmail, code})
+    });
+    const data = await response.json();
+
+    if (!response.ok) {
+      showError('verify-error', data.error || 'Verification failed');
+      return;
+    }
+
+    // Success - show login with success message
+    showLogin();
+    document.getElementById('login-success').textContent = 'Email verified! You can now login.';
+    document.getElementById('login-success').style.display = 'block';
+    document.getElementById('login-email').value = pendingEmail;
+
+  } catch (e) {
+    showError('verify-error', 'Network error. Please try again.');
+    console.error('Verify error:', e);
+  }
+}
+
+async function handleLogin() {
+  const email = document.getElementById('login-email').value.trim();
+  const password = document.getElementById('login-password').value;
+
+  if (!email || !password) {
+    showError('login-error', 'Please fill in all fields');
+    return;
+  }
+
+  try {
+    const response = await fetch(`${AUTH_API}/auth/login`, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({email, password})
+    });
+    const data = await response.json();
+
+    if (!response.ok) {
+      // Check if email not verified
+      if (data.error && data.error.includes('not verified')) {
+        showVerify(email);
+        return;
+      }
+      showError('login-error', data.error || 'Login failed');
+      return;
+    }
+
+    // Store tokens
+    localStorage.setItem('access_token', data.access_token);
+    localStorage.setItem('refresh_token', data.refresh_token);
+    localStorage.setItem('user_email', data.email);
+
+    // Login success
+    loginSuccess(data.email);
+
+  } catch (e) {
+    showError('login-error', 'Network error. Please try again.');
+    console.error('Login error:', e);
+  }
+}
+
+function loginSuccess(email) {
+  currentUser = {username: email, role: 'user'};
   document.getElementById('auth-section').style.display = 'none';
   document.getElementById('fleet-view').style.display = 'block';
-  document.getElementById('username').textContent = currentUser.username;
+  document.getElementById('username').textContent = email;
+  document.getElementById('user-info').textContent = email;
 
   // Load devices
   loadDevices();
@@ -321,10 +531,49 @@ function mockLogin() {
 }
 
 function logout() {
+  // Clear tokens
+  localStorage.removeItem('access_token');
+  localStorage.removeItem('refresh_token');
+  localStorage.removeItem('user_email');
+
   currentUser = null;
   document.getElementById('auth-section').style.display = 'block';
   document.getElementById('fleet-view').style.display = 'none';
+
+  // Reset forms
+  document.getElementById('login-email').value = '';
+  document.getElementById('login-password').value = '';
+  showLogin();
 }
+
+// Auto-login if token exists
+function checkExistingSession() {
+  const token = localStorage.getItem('access_token');
+  const email = localStorage.getItem('user_email');
+
+  if (token && email) {
+    // Verify token is still valid
+    fetch(`${AUTH_API}/auth/me`, {
+      headers: {'Authorization': `Bearer ${token}`}
+    })
+    .then(r => r.json())
+    .then(data => {
+      if (data.email) {
+        loginSuccess(data.email);
+      } else {
+        // Token invalid, clear and show login
+        logout();
+      }
+    })
+    .catch(() => {
+      // Network error, try to use cached session anyway
+      loginSuccess(email);
+    });
+  }
+}
+
+// Check session on page load
+checkExistingSession();
 
 async function loadDevices() {
   // Load devices from API
