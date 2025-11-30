@@ -10,11 +10,13 @@
  */
 
 // Определяем режим работы (Local или Cloud)
-// Cloud: GitHub Pages (gt3max.github.io) или localhost (dev)
+// Cloud: GitHub Pages (gt3max.github.io), plantapp.pro, или localhost (dev)
 // Local: 192.168.x.x, polivalka-XX.local, 192.168.4.1
 const urlParams = new URLSearchParams(window.location.search);
 const DEVICE_ID = urlParams.get('device');
 const IS_CLOUD = window.location.hostname === 'gt3max.github.io' ||
+                 window.location.hostname === 'plantapp.pro' ||
+                 window.location.hostname === 'www.plantapp.pro' ||
                  window.location.hostname === 'localhost';
 
 // Redirect to fleet.html if Cloud mode without device ID (except for fleet.html itself)
