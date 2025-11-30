@@ -153,8 +153,8 @@ try{
 }catch(e){alert('Reset failed');}}
 // Cloud mode: показать device ID в header сразу
 if (IS_CLOUD && DEVICE_ID) {
-  document.getElementById('device-name').textContent = `🌱 Polivalka-${DEVICE_ID}`;
-  document.title = `Polivalka-${DEVICE_ID} — Calibration`;
+  document.getElementById('device-name').textContent = `🌱 ${DEVICE_ID}`;
+  document.title = `${DEVICE_ID} — Calibration`;
   document.getElementById('location-text').textContent = 'Cloud';
   document.getElementById('room-text').textContent = DEVICE_ID;
 }

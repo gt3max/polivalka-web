@@ -154,7 +154,7 @@ async function updateHeader(){
       modeInfoBox.innerHTML += '<b>1️⃣ Local access (via AP):</b><br>';
       modeInfoBox.innerHTML += '   • You are here: <b>192.168.4.1</b> ✅<br>';
       modeInfoBox.innerHTML += '   • Connect to AP: <b>' + (s.ap_ssid || 'Polivalka-XXXXXX') + '</b><br>';
-      modeInfoBox.innerHTML += '   • Password: 12345678<br><br>';
+      modeInfoBox.innerHTML += '   • Password: <b>' + (s.ap_password || 'msXXXXXX') + '</b><br><br>';
 
       modeInfoBox.innerHTML += '<small style="color:#666">💡 This is normal for corporate WiFi networks<br>';
       modeInfoBox.innerHTML += 'AP will stay active permanently in this mode</small>';
@@ -190,7 +190,7 @@ async function updateHeader(){
       modeInfoBox.innerHTML += '   • Open: <code style="background:#fff;padding:2px 6px;border-radius:4px">' + mdnsHostname + '</code><br><br>';
 
       modeInfoBox.innerHTML += '<small style="color:#666">💡 If AP disappears before you switch:<br>';
-      modeInfoBox.innerHTML += '→ Connect to <b>' + (s.ap_ssid || 'Polivalka-XXXXXX') + '</b> (password: 12345678)<br>';
+      modeInfoBox.innerHTML += '→ Connect to <b>' + (s.ap_ssid || 'Polivalka-XXXXXX') + '</b> (password: <b>' + (s.ap_password || 'msXXXXXX') + '</b>)<br>';
       modeInfoBox.innerHTML += '→ Open 192.168.4.1 in browser</small>';
     }
     // 2.1/2.2 UNKNOWN: Detection in progress (first 60 sec), user on AP
@@ -373,6 +373,7 @@ if (!IS_CLOUD) {
 // WiFi connection functionality
 var wifiStatusInterval = null;
 var cachedApSsid = 'Polivalka-XXXXXX';  // Cache AP SSID for disconnect instructions
+var cachedApPassword = 'msXXXXXX';  // Cache AP password for disconnect instructions
 
 function togglePassword() {
   var x = document.getElementById('wifi_password');
@@ -445,9 +446,12 @@ async function getWiFiStatus() {
     var result = await response.json();
     var status = result.wifi_connect_status;
 
-    // Cache AP SSID for disconnect instructions
+    // Cache AP SSID and password for disconnect instructions
     if (result.ap_ssid) {
       cachedApSsid = result.ap_ssid;
+    }
+    if (result.ap_password) {
+      cachedApPassword = result.ap_password;
     }
 
     if (status === 1) {
@@ -569,7 +573,7 @@ async function disconnectWiFi() {
       disconnectMsg += '1. <b>Open WiFi settings</b> on your phone<br>';
       disconnectMsg += '2. <b>Find and connect</b> to:<br>';
       disconnectMsg += '<b style="font-size: 16px;">' + cachedApSsid + '</b><br>';
-      disconnectMsg += 'Password: <b>12345678</b><br><br>';
+      disconnectMsg += 'Password: <b>' + cachedApPassword + '</b><br><br>';
       disconnectMsg += '3. <b>Return here</b> and tap the green button below<br>';
       disconnectMsg += '</div>';
       disconnectMsg += '<button onclick="window.location.href=\'http://192.168.4.1/online\'" style="padding: 14px 28px; font-size: 17px; background: #4CAF50; color: white; border: none; border-radius: 8px; cursor: pointer; font-weight: 600; box-shadow: 0 2px 4px rgba(0,0,0,0.2);">📱 Open Device Page</button><br><br>';
@@ -673,8 +677,8 @@ window.addEventListener('load', function() {
 if (IS_CLOUD) {
   // Update device name in header
   if (DEVICE_ID) {
-    document.getElementById('device-name').textContent = `🌱 Polivalka-${DEVICE_ID}`;
-    document.title = `Polivalka-${DEVICE_ID} — Online`;
+    document.getElementById('device-name').textContent = `🌱 ${DEVICE_ID}`;
+    document.title = `${DEVICE_ID} — Online`;
     document.getElementById('location-text').textContent = 'Cloud';
     document.getElementById('room-text').textContent = DEVICE_ID;
   }
@@ -714,9 +718,12 @@ if (IS_CLOUD) {
       }
 
       // Build cloud status page (use 'online' field from Cloud API)
-      const deviceName = status.system_state?.device_name || `Polivalka-${DEVICE_ID}`;
+      const deviceName = status.system_state?.device_name || DEVICE_ID;
       const location = status.system_state?.location || '—';
       const room = status.system_state?.room || '—';
+      // AP password = 'ms' + last 6 chars of device ID (e.g., Polivalka-9AC805 → ms9AC805)
+      const deviceSuffix = DEVICE_ID ? DEVICE_ID.replace('Polivalka-', '') : 'XXXXXX';
+      const apPassword = 'ms' + deviceSuffix;
 
       // Calculate last seen from timestamp
       const lastTimestamp = status.timestamp;
@@ -771,8 +778,8 @@ if (IS_CLOUD) {
           <h3>📱 Local Access</h3>
           <p class="muted">To configure WiFi or access device locally:</p>
           <ol style="margin:12px 0;padding-left:20px;line-height:1.8">
-            <li>Connect your phone/laptop to device AP: <b>Polivalka-${DEVICE_ID}</b></li>
-            <li>Password: <b>12345678</b></li>
+            <li>Connect your phone/laptop to device AP: <b>${DEVICE_ID}</b></li>
+            <li>Password: <b>${apPassword}</b></li>
             <li>Open <b>192.168.4.1</b> in browser</li>
             <li>Go to <b>Online</b> page to configure WiFi</li>
           </ol>
@@ -807,8 +814,8 @@ if (IS_CLOUD) {
           </div>
           <p class="muted">To register this device:</p>
           <ol style="margin:12px 0;padding-left:20px;line-height:1.8">
-            <li>Connect to device AP: <b>Polivalka-${DEVICE_ID || 'XXXXXX'}</b></li>
-            <li>Password: <b>12345678</b></li>
+            <li>Connect to device AP: <b>${DEVICE_ID || 'Polivalka-XXXXXX'}</b></li>
+            <li>Password: <b>ms${DEVICE_ID ? DEVICE_ID.replace('Polivalka-', '') : 'XXXXXX'}</b></li>
             <li>Open <b>192.168.4.1</b> → Online page</li>
             <li>Connect device to home WiFi</li>
           </ol>
