@@ -1,0 +1,329 @@
+<!doctype html><html><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width, initial-scale=1"><title>PlantApp — Admin</title>
+<script src="api-adapter.js"></script>
+<style>
+    body{font-family:system-ui,Arial;margin:0;padding:0;max-width:100%;background:#1a1a2e}
+    .header{position:sticky;top:0;z-index:1000;background:#b00;color:#fff;padding:8px 10px;display:flex;justify-content:space-between;align-items:center;gap:8px}
+    .header h1{margin:0;font-size:18px}
+    .header-info{font-size:12px;text-align:right;line-height:1.3}
+    .container{padding:18px;max-width:760px;margin:0 auto}
+    .card{border:1px solid #333;padding:16px;border-radius:12px;margin:12px 0;background:#252540}
+    .card h3{color:#fff;margin-top:0}
+    .row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+    .mono{font-family:ui-monospace,monospace}
+    button{padding:8px 12px;border-radius:8px;border:1px solid #888;background:#fafafa;cursor:pointer}
+    button.primary{background:#2c5f2d;color:#fff;border-color:#2c5f2d}
+    button.danger{background:#b00;color:#fff;border-color:#900}
+    input[type="number"]{padding:8px 10px;border:1px solid #555;border-radius:8px;background:#1a1a2e;color:#fff;width:80px;font-size:16px}
+    .muted{color:#999;font-size:14px}
+    .danger{color:#f44}
+    .ok{color:#4f4}
+    .warning-banner{background:#ff9800;color:#000;padding:12px;text-align:center;font-weight:600}
+
+    /* Toggle switch */
+    .toggle-row{display:flex;justify-content:space-between;align-items:center;padding:12px 0;border-bottom:1px solid #333}
+    .toggle-row:last-child{border-bottom:none}
+    .toggle-label{color:#fff}
+    .toggle-desc{color:#999;font-size:12px;margin-top:2px}
+    .toggle-switch{position:relative;display:inline-block;width:51px;height:31px;flex-shrink:0}
+    .toggle-switch input{opacity:0;width:0;height:0}
+    .toggle-slider{position:absolute;cursor:pointer;top:0;left:0;right:0;bottom:0;background:#555;border-radius:31px;transition:0.3s}
+    .toggle-slider:before{position:absolute;content:"";height:27px;width:27px;left:2px;bottom:2px;background:#fff;border-radius:50%;transition:0.3s}
+    input:checked+.toggle-slider{background:#4caf50}
+    input:checked+.toggle-slider:before{transform:translateX(20px)}
+
+    /* Section headers */
+    .section-header{color:#ff9800;font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:1px;margin-bottom:12px;padding-bottom:8px;border-bottom:1px solid #333}
+
+    /* Status indicator */
+    .status-dot{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:6px}
+    .status-dot.online{background:#4caf50}
+    .status-dot.offline{background:#f44}
+
+    /* Device selector */
+    select{padding:8px 12px;border:1px solid #555;border-radius:8px;background:#1a1a2e;color:#fff;font-size:14px;width:100%;max-width:300px}
+</style>
+</head><body>
+<div class="warning-banner">ADMIN PANEL — NOT FOR USERS</div>
+<div class="header">
+<div><h1>🔧 Admin Panel</h1><div style="font-size:11px;opacity:0.8">AWS IoT Configuration</div></div>
+<div class="header-info"><div class="mono" style="font-size:11px"><span class="status-dot" id="aws-status-dot"></span><span id="aws-status">Checking...</span></div></div>
+</div>
+
+<div class="container">
+
+<!-- Device Selector -->
+<div class="card">
+<h3>📱 Select Device</h3>
+<select id="device-select" onchange="loadDeviceConfig()">
+<option value="">— Select device —</option>
+</select>
+<div id="device-info" style="margin-top:12px;display:none">
+<div class="muted">Device ID: <span id="selected-device-id" class="mono">—</span></div>
+<div class="muted">Last seen: <span id="selected-device-lastseen" class="mono">—</span></div>
+</div>
+</div>
+
+<!-- Periodic Telemetry -->
+<div class="card">
+<h3>📊 Periodic Telemetry</h3>
+<p class="muted">Set intervals in minutes. 0 = disabled.</p>
+<div class="section-header">Intervals (minutes)</div>
+
+<div class="toggle-row">
+<div><div class="toggle-label">Sensor Telemetry</div><div class="toggle-desc">Moisture %, ADC raw value</div></div>
+<div class="row"><input type="number" id="interval-sensor" min="0" max="1440" value="60"><span class="muted">min</span></div>
+</div>
+
+<div class="toggle-row">
+<div><div class="toggle-label">Battery Telemetry</div><div class="toggle-desc">Voltage, SOC %, charging status</div></div>
+<div class="row"><input type="number" id="interval-battery" min="0" max="1440" value="60"><span class="muted">min</span></div>
+</div>
+
+<div class="toggle-row">
+<div><div class="toggle-label">System Heartbeat</div><div class="toggle-desc">Mode, state, connectivity, IP</div></div>
+<div class="row"><input type="number" id="interval-system" min="0" max="1440" value="30"><span class="muted">min</span></div>
+</div>
+</div>
+
+<!-- Event Telemetry -->
+<div class="card">
+<h3>⚡ Event Telemetry</h3>
+<p class="muted">Toggle which events are published to AWS IoT.</p>
+<div class="section-header">Event Types</div>
+
+<div class="toggle-row">
+<div><div class="toggle-label">Pump Events</div><div class="toggle-desc">Pump start/stop, duration, volume</div></div>
+<label class="toggle-switch"><input type="checkbox" id="event-pump" checked><span class="toggle-slider"></span></label>
+</div>
+
+<div class="toggle-row">
+<div><div class="toggle-label">Config Changes</div><div class="toggle-desc">Timer/sensor settings modified</div></div>
+<label class="toggle-switch"><input type="checkbox" id="event-config" checked><span class="toggle-slider"></span></label>
+</div>
+
+<div class="toggle-row">
+<div><div class="toggle-label">Command Responses</div><div class="toggle-desc">Acknowledgments to cloud commands</div></div>
+<label class="toggle-switch"><input type="checkbox" id="event-response" checked><span class="toggle-slider"></span></label>
+</div>
+</div>
+
+<!-- Actions -->
+<div class="card">
+<h3>💾 Apply Changes</h3>
+<p class="muted">Changes are sent to device via AWS IoT MQTT command.</p>
+<div class="row">
+<button class="primary" onclick="saveConfig()" id="save-btn" disabled>Save to Device</button>
+<button onclick="loadDeviceConfig()">Reload</button>
+</div>
+<div id="save-status" style="margin-top:12px;display:none" class="muted"></div>
+</div>
+
+<!-- Quick Actions -->
+<div class="card">
+<h3>🚀 Quick Actions</h3>
+<div class="row" style="margin-bottom:12px">
+<button onclick="setAllIntervals(60)">All to 60 min</button>
+<button onclick="setAllIntervals(30)">All to 30 min</button>
+<button onclick="setAllIntervals(5)">Testing (5 min)</button>
+<button class="danger" onclick="setAllIntervals(0)">Disable All</button>
+</div>
+<div class="row">
+<button onclick="enableAllEvents()">Enable All Events</button>
+<button class="danger" onclick="disableAllEvents()">Disable All Events</button>
+</div>
+</div>
+
+<!-- Costs Estimate -->
+<div class="card">
+<h3>💰 AWS Cost Estimate</h3>
+<p class="muted">Based on current settings</p>
+<div id="cost-estimate" style="color:#fff;font-size:14px">
+<div>Messages/month: <span id="est-messages" class="mono ok">—</span></div>
+<div>Within Free Tier: <span id="est-free-tier" class="mono">—</span></div>
+<div>Estimated cost: <span id="est-cost" class="mono">—</span></div>
+</div>
+</div>
+
+</div>
+
+<script>
+let selectedDeviceId = null;
+
+// Load device list (same as fleet.html)
+async function loadDevices() {
+  try {
+    const devices = await API.get('/devices');
+    const select = document.getElementById('device-select');
+    select.innerHTML = '<option value="">— Select device —</option>';
+
+    for (const d of devices) {
+      const opt = document.createElement('option');
+      opt.value = d.device_id;
+      opt.textContent = (d.device_name || d.device_id) + (d.online ? ' (online)' : ' (offline)');
+      select.appendChild(opt);
+    }
+
+    // Check AWS connection
+    document.getElementById('aws-status').textContent = 'Connected (' + devices.length + ' devices)';
+    document.getElementById('aws-status-dot').className = 'status-dot online';
+  } catch(e) {
+    console.error('Failed to load devices:', e);
+    document.getElementById('aws-status').textContent = 'Error: ' + e.message;
+    document.getElementById('aws-status-dot').className = 'status-dot offline';
+  }
+}
+
+// Load config for selected device
+async function loadDeviceConfig() {
+  const deviceId = document.getElementById('device-select').value;
+  if (!deviceId) {
+    document.getElementById('device-info').style.display = 'none';
+    document.getElementById('save-btn').disabled = true;
+    return;
+  }
+
+  selectedDeviceId = deviceId;
+  document.getElementById('selected-device-id').textContent = deviceId;
+  document.getElementById('device-info').style.display = 'block';
+  document.getElementById('save-btn').disabled = false;
+
+  try {
+    // Load telemetry config from device via cloud API
+    // Endpoint: GET /device/{deviceId}/telemetry/config
+    const res = await fetch(`${API.cloudBase}/device/${deviceId}/telemetry/config`, {
+      headers: API.getAuthHeaders(),
+      cache: 'no-store'
+    });
+
+    if (res.ok) {
+      const config = await res.json();
+
+      // Periodic intervals
+      document.getElementById('interval-sensor').value = config.sensor_interval_min || 60;
+      document.getElementById('interval-battery').value = config.battery_interval_min || 60;
+      document.getElementById('interval-system').value = config.system_interval_min || 30;
+
+      // Event toggles
+      document.getElementById('event-pump').checked = config.pump_events !== false;
+      document.getElementById('event-config').checked = config.config_events !== false;
+      document.getElementById('event-response').checked = config.response_events !== false;
+
+      document.getElementById('selected-device-lastseen').textContent = 'Config loaded';
+    } else {
+      // Endpoint not implemented yet - use defaults
+      console.log('Telemetry config endpoint not available, using defaults');
+      document.getElementById('selected-device-lastseen').textContent = 'Using defaults (endpoint TODO)';
+    }
+
+    updateCostEstimate();
+  } catch(e) {
+    console.error('Failed to load device config:', e);
+    document.getElementById('selected-device-lastseen').textContent = 'Error loading config';
+    // Use defaults
+    updateCostEstimate();
+  }
+}
+
+// Save config to device
+async function saveConfig() {
+  if (!selectedDeviceId) {
+    alert('Please select a device');
+    return;
+  }
+
+  const config = {
+    command: 'set_telemetry_config',
+    sensor_interval_min: parseInt(document.getElementById('interval-sensor').value) || 0,
+    battery_interval_min: parseInt(document.getElementById('interval-battery').value) || 0,
+    system_interval_min: parseInt(document.getElementById('interval-system').value) || 0,
+    pump_events: document.getElementById('event-pump').checked,
+    config_events: document.getElementById('event-config').checked,
+    response_events: document.getElementById('event-response').checked
+  };
+
+  const statusEl = document.getElementById('save-status');
+  statusEl.style.display = 'block';
+  statusEl.textContent = 'Sending command to device...';
+  statusEl.style.color = '#ff9800';
+
+  try {
+    // Send command via cloud API
+    // Endpoint: POST /device/{deviceId}/command
+    const res = await fetch(`${API.cloudBase}/device/${selectedDeviceId}/command`, {
+      method: 'POST',
+      headers: {
+        ...API.getAuthHeaders(),
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(config)
+    });
+
+    if (res.ok) {
+      statusEl.textContent = '✓ Command sent! Device will apply settings.';
+      statusEl.style.color = '#4caf50';
+    } else {
+      const err = await res.json().catch(() => ({}));
+      statusEl.textContent = '✗ Failed: ' + (err.error || res.status);
+      statusEl.style.color = '#f44';
+    }
+  } catch(e) {
+    statusEl.textContent = '✗ Failed: ' + e.message;
+    statusEl.style.color = '#f44';
+  }
+}
+
+// Quick actions
+function setAllIntervals(minutes) {
+  document.getElementById('interval-sensor').value = minutes;
+  document.getElementById('interval-battery').value = minutes;
+  document.getElementById('interval-system').value = minutes;
+  updateCostEstimate();
+}
+
+function enableAllEvents() {
+  document.getElementById('event-pump').checked = true;
+  document.getElementById('event-config').checked = true;
+  document.getElementById('event-response').checked = true;
+}
+
+function disableAllEvents() {
+  document.getElementById('event-pump').checked = false;
+  document.getElementById('event-config').checked = false;
+  document.getElementById('event-response').checked = false;
+}
+
+// Cost estimate
+function updateCostEstimate() {
+  const sensorMin = parseInt(document.getElementById('interval-sensor').value) || 0;
+  const batteryMin = parseInt(document.getElementById('interval-battery').value) || 0;
+  const systemMin = parseInt(document.getElementById('interval-system').value) || 0;
+
+  // Messages per month (30 days)
+  const msgsPerDay = (sensorMin > 0 ? 1440/sensorMin : 0) +
+                     (batteryMin > 0 ? 1440/batteryMin : 0) +
+                     (systemMin > 0 ? 1440/systemMin : 0);
+  const msgsPerMonth = Math.round(msgsPerDay * 30);
+
+  // Free tier: 250,000 messages/month (first 12 months), then 0
+  // Cost: $1 per million messages after free tier
+  const freeTierLimit = 250000;
+  const withinFreeTier = msgsPerMonth < freeTierLimit;
+  const cost = withinFreeTier ? 0 : ((msgsPerMonth - freeTierLimit) / 1000000).toFixed(4);
+
+  document.getElementById('est-messages').textContent = msgsPerMonth.toLocaleString();
+  document.getElementById('est-free-tier').textContent = withinFreeTier ? '✓ Yes' : '✗ No';
+  document.getElementById('est-free-tier').className = 'mono ' + (withinFreeTier ? 'ok' : 'danger');
+  document.getElementById('est-cost').textContent = '$' + cost + '/month';
+  document.getElementById('est-cost').className = 'mono ' + (cost == 0 ? 'ok' : 'danger');
+}
+
+// Update cost on input change
+document.querySelectorAll('input[type="number"]').forEach(input => {
+  input.addEventListener('input', updateCostEstimate);
+});
+
+// Init
+loadDevices();
+updateCostEstimate();
+</script>
+</body></html>
