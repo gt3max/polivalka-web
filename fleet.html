@@ -114,6 +114,13 @@
     50%{opacity:0.5}
   }
 
+  /* Modal */
+  .modal{position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.5);display:flex;align-items:center;justify-content:center;z-index:3000;padding:20px}
+  .modal-content{background:#fff;border-radius:16px;width:100%;max-width:500px;box-shadow:0 8px 32px rgba(0,0,0,0.2)}
+  .modal-header{padding:16px 20px;border-bottom:1px solid #eee}
+  .modal-body{padding:20px}
+  .modal-footer{padding:16px 20px;border-top:1px solid #eee;display:flex;gap:12px}
+
   /* Debug Console */
   .debug-console{position:fixed;bottom:0;left:0;right:0;height:250px;background:#1e1e1e;color:#d4d4d4;border-top:2px solid #007acc;font-family:ui-monospace,monospace;font-size:12px;display:flex;flex-direction:column;z-index:2000}
   .console-header{background:#2d2d2d;padding:8px 12px;display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid #3e3e3e}
@@ -240,6 +247,19 @@
       <div class="stat-card">
         <div class="stat-value" style="color:#1976d2" id="stat-watering">0</div>
         <div class="stat-label">Watering Now</div>
+      </div>
+    </div>
+
+    <!-- Add Device Button (for all users) -->
+    <div class="card" style="margin-bottom:20px;background:#e8f5e9;border:2px solid #2c5f2d">
+      <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px">
+        <div>
+          <h3 style="margin:0;color:#2c5f2d">➕ Add Your Device</h3>
+          <p class="muted" style="margin:4px 0 0">Enter the Device ID shown on your device's screen</p>
+        </div>
+        <button class="primary" onclick="showClaimModal()" style="padding:12px 24px;font-size:16px">
+          🌱 Claim Device
+        </button>
       </div>
     </div>
 
@@ -1642,11 +1662,112 @@ window.fetch = async function(...args) {
   }
 };
 
+// ========== CLAIM DEVICE ==========
+function showClaimModal() {
+  document.getElementById('claimModal').style.display = 'flex';
+  document.getElementById('claim-device-id').value = '';
+  document.getElementById('claim-error').style.display = 'none';
+  document.getElementById('claim-success').style.display = 'none';
+  document.getElementById('claim-device-id').focus();
+}
+
+function closeClaimModal() {
+  document.getElementById('claimModal').style.display = 'none';
+}
+
+async function claimDevice() {
+  const deviceIdInput = document.getElementById('claim-device-id');
+  const errorEl = document.getElementById('claim-error');
+  const successEl = document.getElementById('claim-success');
+  const claimBtn = document.getElementById('claim-btn');
+
+  // Get and normalize device ID
+  let deviceId = deviceIdInput.value.trim().toUpperCase();
+
+  // Remove "Polivalka-" prefix if user entered it
+  if (deviceId.startsWith('POLIVALKA-')) {
+    deviceId = deviceId.replace('POLIVALKA-', '');
+  }
+
+  if (!deviceId || deviceId.length < 4) {
+    errorEl.textContent = 'Please enter a valid Device ID (e.g., BB00C1)';
+    errorEl.style.display = 'block';
+    successEl.style.display = 'none';
+    return;
+  }
+
+  // Disable button and show loading
+  claimBtn.disabled = true;
+  claimBtn.textContent = 'Claiming...';
+  errorEl.style.display = 'none';
+  successEl.style.display = 'none';
+
+  try {
+    const response = await API.post('/devices/claim', { device_id: deviceId });
+
+    if (response.success) {
+      successEl.textContent = `✅ ${response.message} Device ${response.device_id} is now yours!`;
+      successEl.style.display = 'block';
+      errorEl.style.display = 'none';
+
+      // Reload devices after 1.5 seconds
+      setTimeout(() => {
+        closeClaimModal();
+        loadDevices();
+        showToast(`🎉 Device ${response.device_id} claimed successfully!`, 'success');
+      }, 1500);
+
+    } else {
+      errorEl.textContent = response.message || 'Failed to claim device';
+      errorEl.style.display = 'block';
+    }
+
+  } catch (e) {
+    console.error('Claim error:', e);
+    errorEl.textContent = e.message || 'Failed to claim device. Please try again.';
+    errorEl.style.display = 'block';
+  } finally {
+    claimBtn.disabled = false;
+    claimBtn.textContent = '🌱 Claim Device';
+  }
+}
+
 // Initialize console on load
 window.addEventListener('DOMContentLoaded', () => {
   logToConsole('Fleet Management Console initialized', 'success');
 });
 </script>
+
+<!-- Claim Device Modal -->
+<div id="claimModal" class="modal" style="display:none">
+  <div class="modal-content" style="max-width:450px">
+    <div class="modal-header" style="display:flex;align-items:center;justify-content:space-between">
+      <h3 style="margin:0">🌱 Claim Your Device</h3>
+      <button onclick="closeClaimModal()" style="background:none;border:none;font-size:24px;cursor:pointer;padding:0">×</button>
+    </div>
+    <div class="modal-body" style="padding:20px">
+      <p style="margin:0 0 16px;color:#666">
+        Enter the 6-character Device ID shown on your device's screen or label.
+        <br><br>
+        Example: <code style="background:#f5f5f5;padding:2px 8px;border-radius:4px;font-size:16px">BB00C1</code>
+      </p>
+      <div style="margin-bottom:16px">
+        <label style="display:block;font-size:13px;margin-bottom:4px;font-weight:600">Device ID</label>
+        <input type="text" id="claim-device-id"
+               placeholder="BB00C1"
+               maxlength="10"
+               style="width:100%;padding:14px;border:2px solid #2c5f2d;border-radius:8px;box-sizing:border-box;font-size:20px;text-align:center;text-transform:uppercase;letter-spacing:4px;font-family:monospace"
+               onkeyup="if(event.key==='Enter') claimDevice()">
+      </div>
+      <div id="claim-error" style="display:none;margin-bottom:16px;padding:12px;background:#ffebee;color:#c62828;border-radius:8px;font-size:13px"></div>
+      <div id="claim-success" style="display:none;margin-bottom:16px;padding:12px;background:#e8f5e9;color:#2e7d32;border-radius:8px;font-size:13px"></div>
+    </div>
+    <div class="modal-footer" style="display:flex;gap:12px;padding:16px;border-top:1px solid #eee">
+      <button onclick="closeClaimModal()" class="btn-secondary" style="flex:1;padding:12px">Cancel</button>
+      <button onclick="claimDevice()" class="primary" style="flex:2;padding:12px;font-size:16px" id="claim-btn">🌱 Claim Device</button>
+    </div>
+  </div>
+</div>
 
 <!-- Logs Modal -->
 <div id="logsModal" class="modal" style="display:none">
