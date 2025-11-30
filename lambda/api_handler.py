@@ -419,12 +419,16 @@ def verify_device_access(device_id, user_id):
 
 
 def is_device_online(last_update_timestamp):
-    """Check if device is online (updated within last 5 minutes)"""
+    """Check if device is online (updated within last 35 minutes)
+
+    Note: System telemetry is published every 30 min, so we need
+    a threshold of at least 35 min to avoid false "offline" status.
+    """
 
     if not last_update_timestamp:
         return False
 
-    return (int(time.time()) - last_update_timestamp) < 300  # 5 min
+    return (int(time.time()) - last_update_timestamp) < 2100  # 35 min
 
 
 def generate_warnings(telemetry):
