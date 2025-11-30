@@ -233,12 +233,14 @@ async function saveConfig() {
 
   const config = {
     command: 'set_telemetry_config',
-    sensor_interval_min: parseInt(document.getElementById('interval-sensor').value) || 0,
-    battery_interval_min: parseInt(document.getElementById('interval-battery').value) || 0,
-    system_interval_min: parseInt(document.getElementById('interval-system').value) || 0,
-    pump_events: document.getElementById('event-pump').checked,
-    config_events: document.getElementById('event-config').checked,
-    response_events: document.getElementById('event-response').checked
+    params: {
+      sensor_interval_min: parseInt(document.getElementById('interval-sensor').value) || 0,
+      battery_interval_min: parseInt(document.getElementById('interval-battery').value) || 0,
+      system_interval_min: parseInt(document.getElementById('interval-system').value) || 0,
+      pump_events: document.getElementById('event-pump').checked,
+      config_events: document.getElementById('event-config').checked,
+      response_events: document.getElementById('event-response').checked
+    }
   };
 
   const statusEl = document.getElementById('save-status');
