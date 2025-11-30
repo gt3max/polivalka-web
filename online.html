@@ -358,15 +358,17 @@ async function updateWiFiHistory(){
   }
 }
 
-// Update once on page load
-updateTime();
-updateHeader();
-updateWiFiHistory();
+// Update once on page load (LOCAL mode only - Cloud mode handled separately below)
+if (!IS_CLOUD) {
+  updateTime();
+  updateHeader();
+  updateWiFiHistory();
 
-// Auto-update intervals
-setInterval(updateTime, 60000);        // Time: every minute
-setInterval(updateHeader, 30000);      // Status/Cloud/Mode: every 30 seconds
-setInterval(updateWiFiHistory, 30000); // WiFi history: every 30 seconds
+  // Auto-update intervals (LOCAL mode only)
+  setInterval(updateTime, 60000);        // Time: every minute
+  setInterval(updateHeader, 30000);      // Status/Cloud/Mode: every 30 seconds
+  setInterval(updateWiFiHistory, 30000); // WiFi history: every 30 seconds
+}
 
 // WiFi connection functionality
 var wifiStatusInterval = null;
@@ -700,9 +702,10 @@ if (IS_CLOUD) {
       modeBadge.textContent = mode.charAt(0).toUpperCase() + mode.slice(1);
       modeBadge.className = 'status-badge status-' + mode;
 
-      // Connection status in header
+      // Connection status in header (Cloud API returns 'online' boolean)
       const connText = document.getElementById('conn-text');
-      if (status.wifi_connected) {
+      const isOnline = status.online === true;
+      if (isOnline) {
         connText.textContent = 'Online';
         connText.style.color = '#0a0';
       } else {
@@ -710,13 +713,10 @@ if (IS_CLOUD) {
         connText.style.color = '#999';
       }
 
-      // Build cloud status page
-      const awsConnected = status.aws_connected;
-      const wifiConnected = status.wifi_connected;
-      const timeSet = status.time_set;
+      // Build cloud status page (use 'online' field from Cloud API)
       const deviceName = status.system_state?.device_name || `Polivalka-${DEVICE_ID}`;
-      const staIp = status.sta_ip || '—';
-      const staSsid = status.sta_ssid || '—';
+      const location = status.system_state?.location || '—';
+      const room = status.system_state?.room || '—';
 
       // Calculate last seen from timestamp
       const lastTimestamp = status.timestamp;
@@ -749,28 +749,20 @@ if (IS_CLOUD) {
               <span class="mono" style="font-weight:600">${deviceName}</span>
             </div>
             <div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid #eee">
-              <span class="muted">Last Seen:</span>
-              <span class="mono" style="color:${awsConnected ? '#0a0' : '#f57c00'}">${lastSeenText}</span>
+              <span class="muted">Location:</span>
+              <span class="mono">${location}</span>
             </div>
             <div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid #eee">
-              <span class="muted">AWS Connection:</span>
-              <span style="color:${awsConnected ? '#0a0' : '#b00'}">${awsConnected ? '✅ Connected' : '❌ Disconnected'}</span>
+              <span class="muted">Room:</span>
+              <span class="mono">${room}</span>
             </div>
             <div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid #eee">
-              <span class="muted">WiFi Status:</span>
-              <span style="color:${wifiConnected ? '#0a0' : '#999'}">${wifiConnected ? '✅ Connected' : '⚪ Not connected'}</span>
-            </div>
-            <div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid #eee">
-              <span class="muted">WiFi Network:</span>
-              <span class="mono">${staSsid}</span>
-            </div>
-            <div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid #eee">
-              <span class="muted">Device IP:</span>
-              <span class="mono">${staIp}</span>
+              <span class="muted">Connection:</span>
+              <span style="color:${isOnline ? '#0a0' : '#b00'}">${isOnline ? '✅ Online' : '❌ Offline'}</span>
             </div>
             <div style="display:flex;justify-content:space-between;padding:8px 0">
-              <span class="muted">Time Sync:</span>
-              <span style="color:${timeSet ? '#0a0' : '#b00'}">${timeSet ? '✅ Synced' : '❌ Not set'}</span>
+              <span class="muted">Last Seen:</span>
+              <span class="mono" style="color:${isOnline ? '#0a0' : '#f57c00'}">${lastSeenText}</span>
             </div>
           </div>
         </div>
@@ -791,17 +783,17 @@ if (IS_CLOUD) {
         </div>
       `;
 
-      // Update time in header
+      // Update time in header (Cloud mode - use current_time from API or show last seen)
       const timeEl = document.getElementById('header-time');
       if (status.current_time) {
         timeEl.textContent = 'Time: ' + status.current_time.substring(11, 16);
         timeEl.className = 'mono ok';
-      } else if (timeSet) {
+      } else if (isOnline) {
         timeEl.textContent = 'Time: synced';
         timeEl.className = 'mono ok';
       } else {
-        timeEl.textContent = 'Time: not set';
-        timeEl.className = 'mono danger';
+        timeEl.textContent = lastSeenText;
+        timeEl.className = 'mono muted';
       }
 
     } catch (e) {
