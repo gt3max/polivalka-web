@@ -585,6 +585,15 @@ function initUserDisplay() {
     const fleetView = document.getElementById('fleet-view');
     if (authSection) authSection.style.display = 'none';
     if (fleetView) fleetView.style.display = 'block';
+
+    // Load devices if not already loaded
+    if (allDevices.length === 0) {
+      loadDevices();
+    }
+
+    // Update time
+    updateTime();
+    setInterval(updateTime, 60000);
   }
 }
 
