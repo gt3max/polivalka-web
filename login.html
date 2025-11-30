@@ -1,0 +1,517 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>PlantApp — Login</title>
+    <style>
+        * { box-sizing: border-box; }
+        body {
+            font-family: system-ui, -apple-system, Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+            min-height: 100vh;
+            background: linear-gradient(135deg, #e8f5e9 0%, #c8e6c9 100%);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .container {
+            width: 100%;
+            max-width: 400px;
+            padding: 20px;
+        }
+        .card {
+            background: #fff;
+            border-radius: 16px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+            padding: 32px;
+        }
+        .logo {
+            text-align: center;
+            margin-bottom: 24px;
+        }
+        .logo h1 {
+            margin: 0;
+            color: #2c5f2d;
+            font-size: 28px;
+        }
+        .logo p {
+            margin: 8px 0 0;
+            color: #666;
+            font-size: 14px;
+        }
+        .tabs {
+            display: flex;
+            margin-bottom: 24px;
+            border-bottom: 2px solid #e0e0e0;
+        }
+        .tab {
+            flex: 1;
+            padding: 12px;
+            text-align: center;
+            cursor: pointer;
+            color: #666;
+            font-weight: 600;
+            border-bottom: 2px solid transparent;
+            margin-bottom: -2px;
+            transition: all 0.2s;
+        }
+        .tab.active {
+            color: #2c5f2d;
+            border-bottom-color: #2c5f2d;
+        }
+        .tab:hover {
+            color: #2c5f2d;
+        }
+        .form-group {
+            margin-bottom: 16px;
+        }
+        .form-group label {
+            display: block;
+            margin-bottom: 6px;
+            font-weight: 500;
+            color: #333;
+            font-size: 14px;
+        }
+        .form-group input {
+            width: 100%;
+            padding: 12px 14px;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            font-size: 16px;
+            transition: border-color 0.2s;
+        }
+        .form-group input:focus {
+            outline: none;
+            border-color: #2c5f2d;
+        }
+        .btn {
+            width: 100%;
+            padding: 14px;
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .btn-primary {
+            background: #2c5f2d;
+            color: #fff;
+        }
+        .btn-primary:hover {
+            background: #1e4620;
+        }
+        .btn-primary:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+        }
+        .error {
+            background: #ffebee;
+            color: #c62828;
+            padding: 12px;
+            border-radius: 8px;
+            margin-bottom: 16px;
+            font-size: 14px;
+            display: none;
+        }
+        .success {
+            background: #e8f5e9;
+            color: #2e7d32;
+            padding: 12px;
+            border-radius: 8px;
+            margin-bottom: 16px;
+            font-size: 14px;
+            display: none;
+        }
+        .form-section {
+            display: none;
+        }
+        .form-section.active {
+            display: block;
+        }
+        .link {
+            text-align: center;
+            margin-top: 16px;
+            font-size: 14px;
+            color: #666;
+        }
+        .link a {
+            color: #2c5f2d;
+            text-decoration: none;
+            font-weight: 600;
+        }
+        .link a:hover {
+            text-decoration: underline;
+        }
+        .verification-code {
+            display: flex;
+            gap: 8px;
+            justify-content: center;
+        }
+        .verification-code input {
+            width: 45px;
+            height: 50px;
+            text-align: center;
+            font-size: 24px;
+            font-weight: bold;
+            border: 2px solid #ddd;
+            border-radius: 8px;
+        }
+        .verification-code input:focus {
+            border-color: #2c5f2d;
+            outline: none;
+        }
+        .spinner {
+            display: inline-block;
+            width: 16px;
+            height: 16px;
+            border: 2px solid #fff;
+            border-top-color: transparent;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+            margin-right: 8px;
+        }
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="card">
+            <div class="logo">
+                <h1>PlantApp</h1>
+                <p>Smart watering for your plants</p>
+            </div>
+
+            <div class="tabs">
+                <div class="tab active" onclick="showTab('login')">Login</div>
+                <div class="tab" onclick="showTab('register')">Register</div>
+            </div>
+
+            <div id="error" class="error"></div>
+            <div id="success" class="success"></div>
+
+            <!-- Login Form -->
+            <div id="login-form" class="form-section active">
+                <form onsubmit="handleLogin(event)">
+                    <div class="form-group">
+                        <label>Email</label>
+                        <input type="email" id="login-email" placeholder="your@email.com" required>
+                    </div>
+                    <div class="form-group">
+                        <label>Password</label>
+                        <input type="password" id="login-password" placeholder="Your password" required>
+                    </div>
+                    <button type="submit" class="btn btn-primary" id="login-btn">Login</button>
+                </form>
+            </div>
+
+            <!-- Register Form -->
+            <div id="register-form" class="form-section">
+                <form onsubmit="handleRegister(event)">
+                    <div class="form-group">
+                        <label>Email</label>
+                        <input type="email" id="register-email" placeholder="your@email.com" required>
+                    </div>
+                    <div class="form-group">
+                        <label>Password</label>
+                        <input type="password" id="register-password" placeholder="At least 8 characters" minlength="8" required>
+                    </div>
+                    <div class="form-group">
+                        <label>Confirm Password</label>
+                        <input type="password" id="register-password2" placeholder="Repeat password" minlength="8" required>
+                    </div>
+                    <button type="submit" class="btn btn-primary" id="register-btn">Create Account</button>
+                </form>
+            </div>
+
+            <!-- Verification Form -->
+            <div id="verify-form" class="form-section">
+                <p style="text-align:center;color:#666;margin-bottom:20px">
+                    We sent a verification code to<br>
+                    <strong id="verify-email-display"></strong>
+                </p>
+                <div class="form-group">
+                    <label style="text-align:center">Enter 6-digit code</label>
+                    <div class="verification-code">
+                        <input type="text" maxlength="1" id="code-1" oninput="handleCodeInput(this, 1)">
+                        <input type="text" maxlength="1" id="code-2" oninput="handleCodeInput(this, 2)">
+                        <input type="text" maxlength="1" id="code-3" oninput="handleCodeInput(this, 3)">
+                        <input type="text" maxlength="1" id="code-4" oninput="handleCodeInput(this, 4)">
+                        <input type="text" maxlength="1" id="code-5" oninput="handleCodeInput(this, 5)">
+                        <input type="text" maxlength="1" id="code-6" oninput="handleCodeInput(this, 6)">
+                    </div>
+                </div>
+                <button type="button" class="btn btn-primary" id="verify-btn" onclick="handleVerify()">Verify Email</button>
+                <div class="link">
+                    <a href="#" onclick="resendCode(); return false;">Resend code</a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE = 'https://p0833p2v29.execute-api.eu-central-1.amazonaws.com';
+        let pendingEmail = '';
+
+        function showTab(tab) {
+            document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+            document.querySelectorAll('.form-section').forEach(f => f.classList.remove('active'));
+
+            if (tab === 'login') {
+                document.querySelector('.tab:first-child').classList.add('active');
+                document.getElementById('login-form').classList.add('active');
+            } else if (tab === 'register') {
+                document.querySelector('.tab:last-child').classList.add('active');
+                document.getElementById('register-form').classList.add('active');
+            } else if (tab === 'verify') {
+                document.getElementById('verify-form').classList.add('active');
+            }
+
+            hideMessages();
+        }
+
+        function showError(msg) {
+            const el = document.getElementById('error');
+            el.textContent = msg;
+            el.style.display = 'block';
+            document.getElementById('success').style.display = 'none';
+        }
+
+        function showSuccess(msg) {
+            const el = document.getElementById('success');
+            el.textContent = msg;
+            el.style.display = 'block';
+            document.getElementById('error').style.display = 'none';
+        }
+
+        function hideMessages() {
+            document.getElementById('error').style.display = 'none';
+            document.getElementById('success').style.display = 'none';
+        }
+
+        function setLoading(btnId, loading) {
+            const btn = document.getElementById(btnId);
+            if (loading) {
+                btn.disabled = true;
+                btn.innerHTML = '<span class="spinner"></span>Please wait...';
+            } else {
+                btn.disabled = false;
+                if (btnId === 'login-btn') btn.textContent = 'Login';
+                else if (btnId === 'register-btn') btn.textContent = 'Create Account';
+                else if (btnId === 'verify-btn') btn.textContent = 'Verify Email';
+            }
+        }
+
+        async function handleLogin(e) {
+            e.preventDefault();
+            hideMessages();
+
+            const email = document.getElementById('login-email').value.trim().toLowerCase();
+            const password = document.getElementById('login-password').value;
+
+            setLoading('login-btn', true);
+
+            try {
+                const res = await fetch(`${API_BASE}/auth/login`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ email, password })
+                });
+
+                const data = await res.json();
+
+                if (!res.ok) {
+                    if (res.status === 403) {
+                        // Email not verified - show verification form
+                        pendingEmail = email;
+                        document.getElementById('verify-email-display').textContent = email;
+                        showTab('verify');
+                        showError(data.error || 'Please verify your email');
+                    } else {
+                        showError(data.error || 'Login failed');
+                    }
+                    return;
+                }
+
+                // Success - store tokens
+                localStorage.setItem('access_token', data.access_token);
+                localStorage.setItem('refresh_token', data.refresh_token);
+                localStorage.setItem('user_email', data.email);
+                localStorage.setItem('token_expires', Date.now() + (data.expires_in * 1000));
+
+                showSuccess('Login successful! Redirecting...');
+
+                // Redirect to fleet page
+                setTimeout(() => {
+                    window.location.href = 'fleet.html';
+                }, 1000);
+
+            } catch (err) {
+                showError('Network error. Please try again.');
+            } finally {
+                setLoading('login-btn', false);
+            }
+        }
+
+        async function handleRegister(e) {
+            e.preventDefault();
+            hideMessages();
+
+            const email = document.getElementById('register-email').value.trim().toLowerCase();
+            const password = document.getElementById('register-password').value;
+            const password2 = document.getElementById('register-password2').value;
+
+            if (password !== password2) {
+                showError('Passwords do not match');
+                return;
+            }
+
+            if (password.length < 8) {
+                showError('Password must be at least 8 characters');
+                return;
+            }
+
+            setLoading('register-btn', true);
+
+            try {
+                const res = await fetch(`${API_BASE}/auth/register`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ email, password })
+                });
+
+                const data = await res.json();
+
+                if (!res.ok) {
+                    showError(data.error || 'Registration failed');
+                    return;
+                }
+
+                // Success - show verification form
+                pendingEmail = email;
+                document.getElementById('verify-email-display').textContent = email;
+                showTab('verify');
+                showSuccess('Check your email for verification code');
+
+            } catch (err) {
+                showError('Network error. Please try again.');
+            } finally {
+                setLoading('register-btn', false);
+            }
+        }
+
+        function handleCodeInput(input, index) {
+            // Only allow digits
+            input.value = input.value.replace(/[^0-9]/g, '');
+
+            // Auto-focus next input
+            if (input.value && index < 6) {
+                document.getElementById(`code-${index + 1}`).focus();
+            }
+
+            // Auto-submit when all filled
+            const code = getVerificationCode();
+            if (code.length === 6) {
+                handleVerify();
+            }
+        }
+
+        function getVerificationCode() {
+            let code = '';
+            for (let i = 1; i <= 6; i++) {
+                code += document.getElementById(`code-${i}`).value;
+            }
+            return code;
+        }
+
+        async function handleVerify() {
+            hideMessages();
+
+            const code = getVerificationCode();
+            if (code.length !== 6) {
+                showError('Please enter 6-digit code');
+                return;
+            }
+
+            setLoading('verify-btn', true);
+
+            try {
+                const res = await fetch(`${API_BASE}/auth/verify`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ email: pendingEmail, code })
+                });
+
+                const data = await res.json();
+
+                if (!res.ok) {
+                    showError(data.error || 'Verification failed');
+                    return;
+                }
+
+                showSuccess('Email verified! You can now login.');
+
+                // Switch to login tab after short delay
+                setTimeout(() => {
+                    showTab('login');
+                    document.getElementById('login-email').value = pendingEmail;
+                }, 1500);
+
+            } catch (err) {
+                showError('Network error. Please try again.');
+            } finally {
+                setLoading('verify-btn', false);
+            }
+        }
+
+        async function resendCode() {
+            if (!pendingEmail) {
+                showError('No email address. Please register again.');
+                return;
+            }
+
+            // Re-register to resend code (simple approach)
+            showSuccess('Sending new code...');
+
+            try {
+                const res = await fetch(`${API_BASE}/auth/register`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        email: pendingEmail,
+                        password: 'placeholder-resend'  // Will fail validation but send new code
+                    })
+                });
+
+                // Even if it fails (user exists), we inform the user
+                showSuccess('If this email exists, a new code was sent');
+
+            } catch (err) {
+                showError('Failed to resend code');
+            }
+        }
+
+        // Check if already logged in
+        window.addEventListener('load', () => {
+            const token = localStorage.getItem('access_token');
+            const expires = parseInt(localStorage.getItem('token_expires') || '0');
+
+            if (token && expires > Date.now()) {
+                // Already logged in - redirect to fleet
+                window.location.href = 'fleet.html';
+            }
+
+            // Check URL params for pre-filled email
+            const params = new URLSearchParams(window.location.search);
+            const email = params.get('email');
+            if (email) {
+                document.getElementById('login-email').value = email;
+            }
+        });
+    </script>
+</body>
+</html>

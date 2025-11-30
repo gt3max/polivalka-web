@@ -531,49 +531,45 @@ function loginSuccess(email) {
 }
 
 function logout() {
-  // Clear tokens
-  localStorage.removeItem('access_token');
-  localStorage.removeItem('refresh_token');
-  localStorage.removeItem('user_email');
-
-  currentUser = null;
-  document.getElementById('auth-section').style.display = 'block';
-  document.getElementById('fleet-view').style.display = 'none';
-
-  // Reset forms
-  document.getElementById('login-email').value = '';
-  document.getElementById('login-password').value = '';
-  showLogin();
-}
-
-// Auto-login if token exists
-function checkExistingSession() {
-  const token = localStorage.getItem('access_token');
-  const email = localStorage.getItem('user_email');
-
-  if (token && email) {
-    // Verify token is still valid
-    fetch(`${AUTH_API}/auth/me`, {
-      headers: {'Authorization': `Bearer ${token}`}
-    })
-    .then(r => r.json())
-    .then(data => {
-      if (data.email) {
-        loginSuccess(data.email);
-      } else {
-        // Token invalid, clear and show login
-        logout();
-      }
-    })
-    .catch(() => {
-      // Network error, try to use cached session anyway
-      loginSuccess(email);
-    });
+  // Use Auth from api-adapter.js
+  if (typeof Auth !== 'undefined') {
+    Auth.logout();
+  } else {
+    // Fallback
+    localStorage.removeItem('access_token');
+    localStorage.removeItem('refresh_token');
+    localStorage.removeItem('user_email');
+    window.location.href = 'login.html';
   }
 }
 
-// Check session on page load
-checkExistingSession();
+// Initialize user display on page load
+function initUserDisplay() {
+  // Get email from Auth (api-adapter.js handles token validation)
+  const email = typeof Auth !== 'undefined' ? Auth.getUserEmail() : localStorage.getItem('user_email');
+
+  if (email) {
+    // Show email in header
+    const usernameEl = document.getElementById('username');
+    if (usernameEl) {
+      usernameEl.textContent = email;
+    }
+
+    const userInfoEl = document.getElementById('user-info');
+    if (userInfoEl) {
+      userInfoEl.textContent = email;
+    }
+
+    // Hide auth section if exists, show fleet view
+    const authSection = document.getElementById('auth-section');
+    const fleetView = document.getElementById('fleet-view');
+    if (authSection) authSection.style.display = 'none';
+    if (fleetView) fleetView.style.display = 'block';
+  }
+}
+
+// Initialize on page load
+initUserDisplay();
 
 async function loadDevices() {
   // Load devices from API
