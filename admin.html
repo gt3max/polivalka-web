@@ -324,8 +324,37 @@ document.querySelectorAll('input[type="number"]').forEach(input => {
   input.addEventListener('input', updateCostEstimate);
 });
 
+// Admin email whitelist
+const ADMIN_EMAILS = ['max@shurygin.ru', 'admin@plantapp.pro'];
+
+// Check admin access
+function checkAdminAccess() {
+  const userEmail = localStorage.getItem('user_email');
+  if (!userEmail) {
+    // Not logged in
+    window.location.href = 'login.html';
+    return false;
+  }
+  if (!ADMIN_EMAILS.includes(userEmail.toLowerCase())) {
+    // Not admin - show access denied
+    document.body.innerHTML = `
+      <div style="display:flex;align-items:center;justify-content:center;height:100vh;background:#1a1a2e">
+        <div style="text-align:center;color:#fff">
+          <h1 style="color:#f44">⛔ Access Denied</h1>
+          <p>This page is for administrators only.</p>
+          <a href="fleet.html" style="color:#4caf50">← Back to Fleet</a>
+        </div>
+      </div>
+    `;
+    return false;
+  }
+  return true;
+}
+
 // Init
-loadDevices();
-updateCostEstimate();
+if (checkAdminAccess()) {
+  loadDevices();
+  updateCostEstimate();
+}
 </script>
 </body></html>
