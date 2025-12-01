@@ -224,7 +224,7 @@
     </div>
     <div class="header-info">
       <div id="header-time" class="mono" style="font-size:11px">Time: --:--</div>
-      <div style="font-size:11px"><a href="admin.html" style="color:#fff;text-decoration:none">⚙️ Admin</a> | <span style="cursor:pointer" onclick="logout()">👤 <span id="username">Admin</span> | Logout</span></div>
+      <div style="font-size:11px"><span id="admin-link"></span><span style="cursor:pointer" onclick="logout()">👤 <span id="username">Admin</span> | Logout</span></div>
     </div>
   </div>
 
@@ -541,6 +541,12 @@ function loginSuccess(email) {
   document.getElementById('fleet-view').style.display = 'block';
   document.getElementById('username').textContent = email;
   document.getElementById('user-info').textContent = email;
+
+  // Show Admin link only for admins (UX only - real security is on backend)
+  const ADMIN_EMAILS = ['mrmaximshurigin@gmail.com', 'admin@plantapp.pro'];
+  if (ADMIN_EMAILS.includes(email.toLowerCase())) {
+    document.getElementById('admin-link').innerHTML = '<a href="admin.html" style="color:#fff;text-decoration:none">⚙️ Admin</a> | ';
+  }
 
   // Load devices
   loadDevices();
