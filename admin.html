@@ -149,14 +149,18 @@
 <script>
 let selectedDeviceId = null;
 
-// Load device list (same as fleet.html)
+// Load device list - call /devices directly (no device prefix!)
 async function loadDevices() {
   console.log('[Admin] Loading devices...');
-  console.log('[Admin] Token:', Auth.getToken() ? 'Present' : 'Missing');
-  console.log('[Admin] Token expired:', Auth.isTokenExpired());
-  console.log('[Admin] API endpoint:', API.getEndpoint('/devices'));
   try {
-    const devices = await API.get('/devices');
+    // Call API directly without device prefix (admin needs ALL devices, not device-specific)
+    const url = `${API.cloudBase}/devices`;
+    const res = await fetch(url, {
+      headers: API.getAuthHeaders(),
+      cache: 'no-store'
+    });
+    if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || res.status);
+    const devices = await res.json();
     console.log('[Admin] Got devices:', devices);
     const select = document.getElementById('device-select');
     select.innerHTML = '<option value="">— Select device —</option>';
