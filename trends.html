@@ -29,8 +29,29 @@
     .event-ERROR{background:#ffebee;border-left:3px solid #c62828}
     .event-CONFIG{background:#fff3e0;border-left:3px solid #f57c00}
   </style>
-</head><body><div class="header"><div><h1 id="device-id-header" style="margin:0;font-size:15px">🌱 Polivalka</h1><div style="font-size:13px">📍 <span id="location-text">—</span> / <span id="room-text">—</span><span id="custom-name-suffix"></span></div></div><div class="header-info"><div id="header-time" class="mono" style="font-size:11px">Time: --:--</div><div style="font-size:11px" id="header-mode">Mode: <span id="mode-badge" class="status-badge status-off">Off</span></div><div style="font-size:11px" id="header-conn">📡 <span id="conn-text">Offline</span></div></div></div></div><div class="nav"><a href="home.html">Home</a><a href="timer.html">Timer</a><a href="sensor.html">Sensor</a><a href="settings.html">Settings</a><a href="calibration.html">Calibration</a><a href="online.html">Online</a><a href="trends.html" class="active">Trends</a><a href="update.html">Update</a><a href="fleet.html">Fleet</a></div><div class="container"><div class="card"><h3>📝 Device Logs</h3><p class="muted">View system events and diagnostics (reboot-persistent)</p><div class="row" style="margin-bottom:16px"><button class="primary" onclick="downloadLogs()">📥 Download logs.txt</button><button onclick="loadLogs()">🔄 Refresh</button></div><div style="background:#f9f9f9;padding:12px;border-radius:8px;margin-bottom:12px"><div><b>Reboot Count:</b> <span id="reboot-count" class="mono">—</span></div></div><div id="logs-container"><div class="muted">Loading logs...</div></div></div></div>
+</head><body><div class="header"><div><h1 id="device-id-header" style="margin:0;font-size:15px">🌱 Polivalka</h1><div style="font-size:13px">📍 <span id="location-text">—</span> / <span id="room-text">—</span><span id="custom-name-suffix"></span></div><div style="font-size:11px;margin-top:4px"><span id="battery-status">🔋 —</span> · <span id="header-state">💤 Standby</span></div></div><div class="header-info"><div id="header-time" class="mono" style="font-size:11px">Time: --:--</div><div style="font-size:11px" id="header-mode">Mode: <span id="mode-badge" class="status-badge status-off">Off</span></div><div style="font-size:11px" id="header-conn">📡 <span id="conn-text">Offline</span></div></div></div></div><div class="nav"><a href="home.html">Home</a><a href="timer.html">Timer</a><a href="sensor.html">Sensor</a><a href="settings.html">Settings</a><a href="calibration.html">Calibration</a><a href="online.html">Online</a><a href="trends.html" class="active">Trends</a><a href="update.html">Update</a><a href="fleet.html">Fleet</a></div><div class="container"><div class="card"><h3>📝 Device Logs</h3><p class="muted">View system events and diagnostics (reboot-persistent)</p><div class="row" style="margin-bottom:16px"><button class="primary" onclick="downloadLogs()">📥 Download logs.txt</button><button onclick="loadLogs()">🔄 Refresh</button></div><div style="background:#f9f9f9;padding:12px;border-radius:8px;margin-bottom:12px"><div><b>Reboot Count:</b> <span id="reboot-count" class="mono">—</span></div></div><div id="logs-container"><div class="muted">Loading logs...</div></div></div></div>
 <script>
+// Map internal controller states to user-friendly display
+function mapStateToDisplay(state, pumpRunning = false) {
+  if (pumpRunning) return { text: 'Watering', emoji: '💧', color: '#1976d2' };
+  const upperState = (state || '').toUpperCase();
+  if (upperState === 'EMERGENCY' || upperState.includes('ERROR')) return { text: 'Emergency', emoji: '⚠️', color: '#c62828' };
+  if (['WATERING', 'PULSE', 'SETTLE', 'CHECK'].includes(upperState)) return { text: 'Watering', emoji: '💧', color: '#1976d2' };
+  return { text: 'Standby', emoji: '💤', color: '#666' };
+}
+
+async function updateBattery(){
+  try {
+    const b = await API.get('/battery/status');
+    const el = document.getElementById('battery-status');
+    if (b.percent !== null && b.percent !== undefined) {
+      el.textContent = `🔋 ${Math.round(b.percent)}%${b.charging ? ' ⚡' : ''}`;
+    } else {
+      el.textContent = '⚡ AC';
+    }
+  } catch(e) { document.getElementById('battery-status').textContent = '⚡ AC'; }
+}
+
 // Minimal header updates only
 async function updateTime(){
   try {
@@ -74,6 +95,12 @@ async function updateMode(){
       connText.textContent = 'Offline';
       connText.style.color = '#999';
     }
+
+    // Header state
+    const rawState = s.system_state?.state || 'OFF';
+    const displayState = mapStateToDisplay(rawState, s.pump_running);
+    const headerStateEl = document.getElementById('header-state');
+    if (headerStateEl) headerStateEl.textContent = `${displayState.emoji} ${displayState.text}`;
   } catch(e) {}
 }
 
@@ -193,6 +220,8 @@ function downloadLogs() {
 // Auto-update intervals
 setInterval(updateTime, 60000);      // Time: every minute
 setInterval(updateMode, 30000);      // Status/Mode: every 30 seconds
+setInterval(updateBattery, 60000);   // Battery: every minute
+updateBattery();
 if (!IS_CLOUD) { setInterval(monitorWiFiMode, 10000);  // WiFi mode: every 10 seconds
 
 // Initial load

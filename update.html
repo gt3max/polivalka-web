@@ -26,7 +26,7 @@
     .status-timer{background:#e3f2fd;color:#1976d2}
     .status-off{background:#fce4ec;color:#c2185b}
 </style>
-</head><body><div class="header"><div><h1 id="device-id-header" style="margin:0;font-size:15px">🌱 Polivalka</h1><div style="font-size:13px">📍 <span id="location-text">—</span> / <span id="room-text">—</span><span id="custom-name-suffix"></span></div></div><div class="header-info"><div id="header-time" class="mono" style="font-size:11px">Time: --:--</div><div style="font-size:11px" id="header-mode">Mode: <span id="mode-badge" class="status-badge status-off">Off</span></div><div style="font-size:11px" id="header-conn">📡 <span id="conn-text">Offline</span></div></div></div></div><div class="nav"><a href="home.html">Home</a><a href="timer.html">Timer</a><a href="sensor.html">Sensor</a><a href="settings.html">Settings</a><a href="calibration.html">Calibration</a><a href="online.html">Online</a><a href="trends.html">Trends</a><a href="update.html" class="active">Update</a><a href="fleet.html">Fleet</a></div><div class="container"><div class="card"><h3>⚙️ Firmware Update (OTA)</h3><p class="muted">Upload new firmware (.bin file) without USB cable</p><div class="warning">⚠️ <b>Warning:</b> Do not power off during update! Device will restart automatically after successful update.</div><div style="margin:16px 0"><div class="mono" style="font-size:12px"><b>Current firmware:</b><br>Compiled: <span id="compile-datetime">--</span></div></div><div style="margin:16px 0"><label style="display:block;margin-bottom:8px"><b>Select firmware file (.bin):</b></label><input type="file" id="firmware-file" accept=".bin" style="padding:8px;border:1px solid #ccc;border-radius:6px;width:100%;max-width:400px"></div><div class="progress-bar" id="progress-bar"><div class="progress-fill" id="progress-fill">0%</div></div><div id="status-message" style="margin:12px 0;padding:10px;border-radius:6px;display:none"></div><div style="margin-top:16px"><button id="upload-btn" class="primary" onclick="uploadFirmware()" disabled>Upload Firmware</button></div></div><div class="card"><h3>How to build firmware:</h3><div class="mono" style="font-size:13px;background:#f5f5f5;padding:12px;border-radius:6px">
+</head><body><div class="header"><div><h1 id="device-id-header" style="margin:0;font-size:15px">🌱 Polivalka</h1><div style="font-size:13px">📍 <span id="location-text">—</span> / <span id="room-text">—</span><span id="custom-name-suffix"></span></div><div style="font-size:11px;margin-top:4px"><span id="battery-status">🔋 —</span> · <span id="header-state">💤 Standby</span></div></div><div class="header-info"><div id="header-time" class="mono" style="font-size:11px">Time: --:--</div><div style="font-size:11px" id="header-mode">Mode: <span id="mode-badge" class="status-badge status-off">Off</span></div><div style="font-size:11px" id="header-conn">📡 <span id="conn-text">Offline</span></div></div></div></div><div class="nav"><a href="home.html">Home</a><a href="timer.html">Timer</a><a href="sensor.html">Sensor</a><a href="settings.html">Settings</a><a href="calibration.html">Calibration</a><a href="online.html">Online</a><a href="trends.html">Trends</a><a href="update.html" class="active">Update</a><a href="fleet.html">Fleet</a></div><div class="container"><div class="card"><h3>⚙️ Firmware Update (OTA)</h3><p class="muted">Upload new firmware (.bin file) without USB cable</p><div class="warning">⚠️ <b>Warning:</b> Do not power off during update! Device will restart automatically after successful update.</div><div style="margin:16px 0"><div class="mono" style="font-size:12px"><b>Current firmware:</b><br>Compiled: <span id="compile-datetime">--</span></div></div><div style="margin:16px 0"><label style="display:block;margin-bottom:8px"><b>Select firmware file (.bin):</b></label><input type="file" id="firmware-file" accept=".bin" style="padding:8px;border:1px solid #ccc;border-radius:6px;width:100%;max-width:400px"></div><div class="progress-bar" id="progress-bar"><div class="progress-fill" id="progress-fill">0%</div></div><div id="status-message" style="margin:12px 0;padding:10px;border-radius:6px;display:none"></div><div style="margin-top:16px"><button id="upload-btn" class="primary" onclick="uploadFirmware()" disabled>Upload Firmware</button></div></div><div class="card"><h3>How to build firmware:</h3><div class="mono" style="font-size:13px;background:#f5f5f5;padding:12px;border-radius:6px">
 cd /path/to/Polivalka<br>
 . ~/esp-idf/export.sh<br>
 idf.py build<br>
@@ -35,6 +35,27 @@ idf.py build<br>
 build/polivalka.bin
 </div></div></div>
 <script>
+// Map internal controller states to user-friendly display
+function mapStateToDisplay(state, pumpRunning = false) {
+  if (pumpRunning) return { text: 'Watering', emoji: '💧', color: '#1976d2' };
+  const upperState = (state || '').toUpperCase();
+  if (upperState === 'EMERGENCY' || upperState.includes('ERROR')) return { text: 'Emergency', emoji: '⚠️', color: '#c62828' };
+  if (['WATERING', 'PULSE', 'SETTLE', 'CHECK'].includes(upperState)) return { text: 'Watering', emoji: '💧', color: '#1976d2' };
+  return { text: 'Standby', emoji: '💤', color: '#666' };
+}
+
+async function updateBattery(){
+  try {
+    const b = await fetch('/api/battery/status',{cache:'no-store'}).then(r=>r.json());
+    const el = document.getElementById('battery-status');
+    if (b.percent !== null && b.percent !== undefined) {
+      el.textContent = `🔋 ${Math.round(b.percent)}%${b.charging ? ' ⚡' : ''}`;
+    } else {
+      el.textContent = '⚡ AC';
+    }
+  } catch(e) { document.getElementById('battery-status').textContent = '⚡ AC'; }
+}
+
 const fileInput = document.getElementById('firmware-file');
 const uploadBtn = document.getElementById('upload-btn');
 const progressBar = document.getElementById('progress-bar');
@@ -187,6 +208,12 @@ async function updateHeader(){
       connText.textContent = 'Offline';
       connText.style.color = '#999';
     }
+
+    // Header state
+    const rawState = s.system_state?.state || 'OFF';
+    const displayState = mapStateToDisplay(rawState, s.pump_running);
+    const headerStateEl = document.getElementById('header-state');
+    if (headerStateEl) headerStateEl.textContent = `${displayState.emoji} ${displayState.text}`;
   } catch(e) {}
 }
 
@@ -256,6 +283,8 @@ async function monitorWiFiMode() {
 // Auto-update intervals
 setInterval(updateTime, 60000);      // Time: every minute
 setInterval(updateHeader, 30000);    // Status: every 30 seconds
+setInterval(updateBattery, 60000);   // Battery: every minute
+updateBattery();
 if (!IS_CLOUD) {
   setInterval(monitorWiFiMode, 3000);  // WiFi mode: every 3 seconds (CRITICAL - OTA can brick device if WiFi drops)
   monitorWiFiMode();  // Initial load - only in local mode
