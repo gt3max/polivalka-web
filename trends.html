@@ -222,10 +222,10 @@ setInterval(updateTime, 60000);      // Time: every minute
 setInterval(updateMode, 30000);      // Status/Mode: every 30 seconds
 setInterval(updateBattery, 60000);   // Battery: every minute
 updateBattery();
-if (!IS_CLOUD) { setInterval(monitorWiFiMode, 10000);  // WiFi mode: every 10 seconds
-
-// Initial load
-monitorWiFiMode();
+if (!IS_CLOUD) {
+  setInterval(monitorWiFiMode, 10000);  // WiFi mode: every 10 seconds
+  monitorWiFiMode();  // Initial load
+}
 loadLogs();
 </script>
 </body></html>
