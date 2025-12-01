@@ -25,12 +25,86 @@ import json
 import boto3
 import time
 import uuid
+import hashlib
+import hmac
+import base64
+import os
 from decimal import Decimal
 from boto3.dynamodb.conditions import Key
 
+# ============ JWT Verification ============
+
+# JWT secret (same as auth_handler.py)
+JWT_SECRET = os.environ.get('JWT_SECRET', 'polivalka-jwt-secret-v1-change-later')
+
+
+def base64url_decode(data):
+    """URL-safe base64 decoding with padding restoration"""
+    padding = 4 - len(data) % 4
+    if padding != 4:
+        data += '=' * padding
+    return base64.urlsafe_b64decode(data)
+
+
+def verify_jwt(token):
+    """Verify JWT token and return payload or None"""
+    try:
+        parts = token.split('.')
+        if len(parts) != 3:
+            return None
+
+        header_b64, payload_b64, signature_b64 = parts
+
+        # Verify signature
+        message = f"{header_b64}.{payload_b64}"
+        expected_sig = hmac.new(
+            JWT_SECRET.encode('utf-8'),
+            message.encode('utf-8'),
+            hashlib.sha256
+        ).digest()
+        actual_sig = base64url_decode(signature_b64)
+
+        if not hmac.compare_digest(expected_sig, actual_sig):
+            return None
+
+        # Decode payload
+        payload = json.loads(base64url_decode(payload_b64))
+
+        # Check expiration
+        if payload.get('exp', 0) < time.time():
+            return None
+
+        return payload
+    except Exception:
+        return None
+
+
+def get_user_from_event(event):
+    """Extract and verify user from JWT token in Authorization header"""
+    headers = event.get('headers', {})
+    # HTTP API v2 uses lowercase headers
+    auth_header = headers.get('Authorization') or headers.get('authorization', '')
+
+    if not auth_header.startswith('Bearer '):
+        return None
+
+    token = auth_header[7:]
+    payload = verify_jwt(token)
+
+    if not payload or payload.get('type') != 'access':
+        return None
+
+    return payload.get('email')
+
+
+# ============ End JWT ============
+
 # ALL resources in eu-central-1 (Frankfurt)
 dynamodb = boto3.resource('dynamodb', region_name='eu-central-1')
-iot_client = boto3.client('iot-data', region_name='eu-central-1')
+# IoT Data client requires explicit endpoint
+iot_client = boto3.client('iot-data',
+                         region_name='eu-central-1',
+                         endpoint_url='https://a3vtuj03g69hnf-ats.iot.eu-central-1.amazonaws.com')
 s3_client = boto3.client('s3',
                         region_name='eu-central-1',
                         config=boto3.session.Config(signature_version='s3v4'))
@@ -80,12 +154,90 @@ def lambda_handler(event, context):
             'body': ''
         }
 
-    # Extract user_id from Cognito authorizer (or API key for now)
-    user_id = event.get('requestContext', {}).get('authorizer', {}).get('claims', {}).get('sub', 'admin')
+    # Extract user_id from JWT token
+    user_id = get_user_from_event(event)
+
+    # For MVP: allow unauthenticated access with fallback to 'admin'
+    # TODO: Remove this fallback when auth is fully deployed
+    if not user_id:
+        # Check if Authorization header is present but invalid
+        headers = event.get('headers', {})
+        auth_header = headers.get('Authorization') or headers.get('authorization', '')
+        if auth_header:
+            # Token was provided but invalid/expired
+            return {
+                'statusCode': 401,
+                'headers': cors_headers(),
+                'body': json.dumps({'error': 'Invalid or expired token'})
+            }
+        # No token provided - allow access for backward compatibility (MVP)
+        # This will be removed once all clients are updated
+        user_id = 'admin'
+        print(f"[WARN] No auth token - using fallback user_id='admin'")
 
     # Route to appropriate handler
     if path == '/devices' and http_method == 'GET':
         return get_devices(user_id)
+
+    # POST /devices/claim - Claim an unclaimed device
+    if path == '/devices/claim' and http_method == 'POST':
+        body = json.loads(event.get('body', '{}'))
+        device_id = body.get('device_id', '').strip()
+
+        if not device_id:
+            return {
+                'statusCode': 400,
+                'headers': cors_headers(),
+                'body': json.dumps({'error': 'device_id is required'})
+            }
+
+        # Normalize device_id (accept both "BB00C1" and "Polivalka-BB00C1")
+        if not device_id.startswith('Polivalka-'):
+            device_id = f'Polivalka-{device_id}'
+
+        success, message = claim_device(device_id, user_id)
+
+        return {
+            'statusCode': 200 if success else 400,
+            'headers': cors_headers(),
+            'body': json.dumps({
+                'success': success,
+                'message': message,
+                'device_id': device_id
+            })
+        }
+
+    # POST /devices/transfer - Transfer device to another user (admin only)
+    if path == '/devices/transfer' and http_method == 'POST':
+        if not is_user_admin(user_id):
+            return {
+                'statusCode': 403,
+                'headers': cors_headers(),
+                'body': json.dumps({'error': 'Admin access required'})
+            }
+
+        body = json.loads(event.get('body', '{}'))
+        device_id = body.get('device_id', '').strip()
+        from_user = body.get('from_user', '').strip()
+        to_user = body.get('to_user', '').strip()
+
+        if not all([device_id, from_user, to_user]):
+            return {
+                'statusCode': 400,
+                'headers': cors_headers(),
+                'body': json.dumps({'error': 'device_id, from_user, to_user required'})
+            }
+
+        if not device_id.startswith('Polivalka-'):
+            device_id = f'Polivalka-{device_id}'
+
+        success, message = transfer_device(device_id, from_user, to_user)
+
+        return {
+            'statusCode': 200 if success else 400,
+            'headers': cors_headers(),
+            'body': json.dumps({'success': success, 'message': message})
+        }
 
     # Parse device_id from path /device/{id}/*
     if path.startswith('/device/'):
@@ -95,6 +247,10 @@ def lambda_handler(event, context):
 
             if len(parts) == 4 and parts[3] == 'status' and http_method == 'GET':
                 return get_device_status(device_id, user_id)
+
+            # GET /device/{id}/telemetry/config - Get telemetry config (admin only)
+            if len(parts) == 5 and parts[3] == 'telemetry' and parts[4] == 'config' and http_method == 'GET':
+                return get_telemetry_config(device_id, user_id)
 
             if len(parts) == 4 and parts[3] == 'command' and http_method == 'POST':
                 body = json.loads(event.get('body', '{}'))
@@ -110,8 +266,284 @@ def lambda_handler(event, context):
             if len(parts) == 5 and parts[3] == 'sensor' and parts[4] == 'history':
                 return get_sensor_history(device_id, user_id)
 
+            # Sensor presets endpoint - GET returns config from devices_table
+            if len(parts) == 5 and parts[3] == 'sensor' and parts[4] == 'preset' and http_method == 'GET':
+                # Get sensor config from devices_table (synced from ESP32)
+                device_info = get_device_info(device_id, user_id)
+                sensor_config = device_info.get('config_sensor', {})
+
+                # Return config matching ESP32 /api/sensor/preset format
+                return {
+                    'statusCode': 200,
+                    'headers': cors_headers(),
+                    'body': json.dumps({
+                        'preset': sensor_config.get('preset', 'Standard'),
+                        'start_pct': sensor_config.get('start_pct', 35),
+                        'stop_pct': sensor_config.get('stop_pct', 55),
+                        'pulse_sec': sensor_config.get('pulse_sec', 5),
+                        'wait_sec': sensor_config.get('wait_sec', 120),
+                        'max_pulses': sensor_config.get('max_pulses', 5),
+                        'cooldown_min': sensor_config.get('cooldown_min', 120),
+                        'max_water_day_ml': sensor_config.get('max_water_day_ml', 400),
+                        'no_rise_check_ml': sensor_config.get('no_rise_check_ml', 60),
+                        'idle_check_interval_min': sensor_config.get('idle_check_interval_min', 60),
+                        'microprime_interval_hours': sensor_config.get('microprime_interval_hours', 48),
+                        'microprime_pulse_sec': sensor_config.get('microprime_pulse_sec', 4),
+                        'microprime_settle_sec': sensor_config.get('microprime_settle_sec', 90),
+                        'baseline_delta_pct_per_ml': sensor_config.get('baseline_delta_pct_per_ml', 0.0)
+                    }, cls=DecimalEncoder)
+                }
+
+            # POST /device/{id}/sensor/preset/set - set preset by name (sends MQTT to ESP32)
+            if len(parts) == 6 and parts[3] == 'sensor' and parts[4] == 'preset' and parts[5] == 'set' and http_method == 'POST':
+                body = json.loads(event.get('body', '{}'))
+                preset_name = body.get('preset')
+                if not preset_name:
+                    # Try query string
+                    query_params = event.get('queryStringParameters', {}) or {}
+                    preset_name = query_params.get('preset')
+                if not preset_name:
+                    return {'statusCode': 400, 'headers': cors_headers(), 'body': json.dumps({'error': 'Missing preset name'})}
+                return send_command_with_params(device_id, user_id, 'sensor_preset_set', {'preset': preset_name}, f'Preset {preset_name} applied')
+
+            # POST /device/{id}/sensor/preset/custom - set custom sensor parameters (sends MQTT to ESP32)
+            if len(parts) == 6 and parts[3] == 'sensor' and parts[4] == 'preset' and parts[5] == 'custom' and http_method == 'POST':
+                # Parse parameters from query string (matching ESP32 API format)
+                query_params = event.get('queryStringParameters', {}) or {}
+                params = {}
+
+                # Parse all sensor parameters
+                param_names = [
+                    'start_moisture_pct', 'stop_moisture_pct', 'pulse_sec', 'wait_sec',
+                    'max_pulses', 'cooldown_min', 'max_water_day_ml', 'no_rise_check_ml',
+                    'idle_check_interval_min', 'microprime_interval_hours',
+                    'microprime_pulse_sec', 'microprime_settle_sec'
+                ]
+                for param in param_names:
+                    if param in query_params:
+                        try:
+                            params[param] = int(query_params[param])
+                        except ValueError:
+                            pass
+
+                if not params:
+                    return {'statusCode': 400, 'headers': cors_headers(), 'body': json.dumps({'error': 'No valid parameters'})}
+
+                return send_command_with_params(device_id, user_id, 'sensor_set', params, 'Sensor settings saved')
+
+            # Enable/disable sensor controller - send MQTT command to ESP32
+            # Uses send_controller_command() which returns {success: true} (AP-compatible format)
+            if len(parts) == 6 and parts[3] == 'sensor' and parts[4] == 'controller' and parts[5] == 'enable' and http_method == 'POST':
+                return send_controller_command(device_id, user_id, 'sensor_controller_enable', 'Sensor controller enabled')
+
+            if len(parts) == 6 and parts[3] == 'sensor' and parts[4] == 'controller' and parts[5] == 'disable' and http_method == 'POST':
+                return send_controller_command(device_id, user_id, 'sensor_controller_disable', 'Sensor controller disabled')
+
+            if len(parts) == 6 and parts[3] == 'sensor' and parts[4] == 'controller' and parts[5] == 'cancel' and http_method == 'POST':
+                return send_controller_command(device_id, user_id, 'sensor_controller_cancel', 'Sensor watering cancelled')
+
+            # Sensor controller status endpoint - returns data from telemetry
+            if len(parts) == 6 and parts[3] == 'sensor' and parts[4] == 'controller' and parts[5] == 'status':
+                # Get latest telemetry to determine controller state
+                latest = get_latest_telemetry(device_id)
+                mode = latest.get('system', {}).get('mode', 'manual')
+                # Get state from system telemetry (ESP32 now sends it)
+                state = latest.get('system', {}).get('state', 'DISABLED')
+                # Get sensor data for moisture display
+                sensor_data = latest.get('sensor', {})
+                moisture_pct = sensor_data.get('percent', 0) or 0
+
+                # arming_countdown: 60 when LAUNCH, 0 otherwise
+                # Frontend will show countdown locally
+                arming_countdown = 60 if state == 'LAUNCH' else 0
+
+                return {
+                    'statusCode': 200,
+                    'headers': cors_headers(),
+                    'body': json.dumps({
+                        'state': state,
+                        'arming_countdown': arming_countdown,
+                        'moisture_pct': moisture_pct,
+                        'daily_water_ml': 0,
+                        'daily_hard_limit_reached': False,
+                        'pulses_delivered': 0,
+                        'total_water_ml': 0,
+                        'cooldown_remaining': 0,
+                        'warning_active': False,
+                        'warning_msg': '',
+                        'watering': state in ['PULSE', 'SETTLE', 'CHECK'],
+                        'start_threshold': 35,
+                        'stop_threshold': 55,
+                        'pulse_duration': 32,
+                        'retry_interval': 600,
+                        'last_check': None,
+                        'last_watering': None,
+                        'timestamp': int(time.time())
+                    })
+                }
+
+            # Timer controller endpoints - send MQTT command to ESP32
+            # Uses send_controller_command() which returns {success: true} (AP-compatible format)
+            if len(parts) == 6 and parts[3] == 'timer' and parts[4] == 'controller' and parts[5] == 'enable' and http_method == 'POST':
+                return send_controller_command(device_id, user_id, 'timer_controller_enable', 'Timer controller enabled')
+
+            if len(parts) == 6 and parts[3] == 'timer' and parts[4] == 'controller' and parts[5] == 'disable' and http_method == 'POST':
+                return send_controller_command(device_id, user_id, 'timer_controller_disable', 'Timer controller disabled')
+
+            if len(parts) == 6 and parts[3] == 'timer' and parts[4] == 'controller' and parts[5] == 'cancel' and http_method == 'POST':
+                return send_controller_command(device_id, user_id, 'timer_controller_cancel', 'Timer watering cancelled')
+
+            # Schedule management endpoints - send MQTT command to ESP32
+            # POST /device/{id}/schedule/set - create/update schedule
+            if len(parts) == 5 and parts[3] == 'schedule' and parts[4] == 'set' and http_method == 'POST':
+                body = json.loads(event.get('body', '{}'))
+                # Convert time "HH:MM" to hour/minute if needed
+                if 'time' in body and ':' in str(body.get('time', '')):
+                    time_parts = body['time'].split(':')
+                    body['hour'] = int(time_parts[0])
+                    body['minute'] = int(time_parts[1])
+                # Convert days array to days_mask if needed
+                if 'days' in body and isinstance(body['days'], list):
+                    mask = 0
+                    for d in body['days']:
+                        mask |= (1 << (d - 1))  # day 1=Mon -> bit 0
+                    body['days_mask'] = mask
+                # Convert unit string to number if needed
+                if 'unit' in body and isinstance(body['unit'], str):
+                    unit_map = {'sec': 0, 'min': 1, 'hr': 2}
+                    body['unit'] = unit_map.get(body['unit'], 0)
+                return send_command_with_params(device_id, user_id, 'schedule_set', body, 'Schedule saved')
+
+            # POST /device/{id}/schedule/delete - delete schedule
+            if len(parts) == 5 and parts[3] == 'schedule' and parts[4] == 'delete' and http_method == 'POST':
+                body = json.loads(event.get('body', '{}'))
+                schedule_id = body.get('id')
+                if schedule_id is None:
+                    return {'statusCode': 400, 'headers': cors_headers(), 'body': json.dumps({'error': 'Missing schedule id'})}
+                return send_command_with_params(device_id, user_id, 'schedule_delete', {'id': schedule_id}, 'Schedule deleted')
+
+            if len(parts) == 6 and parts[3] == 'timer' and parts[4] == 'controller' and parts[5] == 'status' and http_method == 'GET':
+                # Get latest telemetry to determine controller state
+                latest = get_latest_telemetry(device_id)
+                mode = latest.get('system', {}).get('mode', 'manual')
+                # Get state from system telemetry (ESP32 now sends it)
+                state = latest.get('system', {}).get('state', 'DISABLED')
+
+                # arming_countdown_sec: 15 when LAUNCH, 0 otherwise (timer uses 15 sec)
+                arming_countdown_sec = 15 if state == 'LAUNCH' else 0
+
+                return {
+                    'statusCode': 200,
+                    'headers': cors_headers(),
+                    'body': json.dumps({
+                        'state': state,
+                        'arming_countdown_sec': arming_countdown_sec,
+                        'schedule_exists': True,
+                        'next_watering_str': 'Not scheduled',
+                        'current_duration_sec': 0,
+                        'daily_water_ml': 0,
+                        'warning_active': False,
+                        'warning_msg': '',
+                        'morning_enabled': True,
+                        'morning_time': '06:00',
+                        'evening_enabled': False,
+                        'evening_time': '20:00',
+                        'duration': 30,
+                        'timestamp': int(time.time())
+                    })
+                }
+
+            # Time status endpoint - for timer.html and settings.html
+            if len(parts) == 5 and parts[3] == 'time' and parts[4] == 'status' and http_method == 'GET':
+                latest = get_latest_telemetry(device_id)
+                time_set = latest.get('system', {}).get('time_set', False)
+                # Get device's timestamp from system telemetry
+                device_ts = latest.get('system', {}).get('timestamp') or latest.get('timestamp')
+
+                # Get timezone from devices_table (default: CET = UTC+1)
+                device_info = get_device_info(device_id, user_id)
+                tz_string = device_info.get('timezone', 'CET-1CEST,M3.5.0,M10.5.0/3')
+                tz_offset_minutes = parse_timezone_offset(tz_string)
+
+                current_time = None
+                if device_ts:
+                    from datetime import datetime, timezone as dt_timezone, timedelta
+                    # Convert to local time using offset
+                    utc_dt = datetime.fromtimestamp(int(device_ts), tz=dt_timezone.utc)
+                    local_dt = utc_dt + timedelta(minutes=tz_offset_minutes)
+                    current_time = local_dt.strftime('%Y-%m-%dT%H:%M:%S')
+
+                return {
+                    'statusCode': 200,
+                    'headers': cors_headers(),
+                    'body': json.dumps({
+                        'time_set': time_set,
+                        'source': 'ntp' if time_set else 'none',
+                        'timestamp': int(time.time()),
+                        'current_time': current_time,
+                        'timezone': tz_string
+                    })
+                }
+
+            # Timezone GET endpoint - for settings.html
+            if len(parts) == 5 and parts[3] == 'time' and parts[4] == 'timezone' and http_method == 'GET':
+                device_info = get_device_info(device_id, user_id)
+                tz_string = device_info.get('timezone', 'CET-1CEST,M3.5.0,M10.5.0/3')
+                return {
+                    'statusCode': 200,
+                    'headers': cors_headers(),
+                    'body': json.dumps({
+                        'success': True,
+                        'timezone': tz_string
+                    })
+                }
+
+            # Timezone POST endpoint - save to DynamoDB + send MQTT to ESP32
+            if len(parts) == 5 and parts[3] == 'time' and parts[4] == 'timezone' and http_method == 'POST':
+                body = json.loads(event.get('body', '{}'))
+                new_tz = body.get('timezone', '')
+                if not new_tz:
+                    return {'statusCode': 400, 'headers': cors_headers(), 'body': json.dumps({'success': False, 'error': 'Missing timezone'})}
+
+                # Save to devices_table
+                devices_table.update_item(
+                    Key={'user_id': user_id, 'device_id': device_id},
+                    UpdateExpression='SET #tz = :tz',
+                    ExpressionAttributeNames={'#tz': 'timezone'},
+                    ExpressionAttributeValues={':tz': new_tz}
+                )
+
+                # Send MQTT command to ESP32 to update timezone
+                return send_command_with_params(device_id, user_id, 'set_timezone', {'timezone': new_tz}, 'Timezone saved')
+
+            # NOTE: Removed duplicate /schedules endpoint - schedules are returned later in code
+            # Schedules are stored on ESP32, not in DynamoDB
+
             if len(parts) == 5 and parts[3] == 'battery' and parts[4] == 'history':
                 return get_battery_history(device_id, user_id)
+
+            # Battery status (for home.html Cloud mode)
+            if len(parts) == 5 and parts[3] == 'battery' and parts[4] == 'status' and http_method == 'GET':
+                return get_battery_status(device_id, user_id)
+
+            # Pump status (for calibration.html)
+            if len(parts) == 5 and parts[3] == 'pump' and parts[4] == 'status' and http_method == 'GET':
+                # Get pump calibration from device info
+                device_info = get_device_info(device_id, user_id)
+                pump_calib = device_info.get('pump_calibration', {})
+                ml_per_sec = float(pump_calib.get('ml_per_sec', 2.5)) if pump_calib else 2.5
+                calibrated = pump_calib.get('calibrated', False) if pump_calib else False
+
+                return {
+                    'statusCode': 200,
+                    'headers': cors_headers(),
+                    'body': json.dumps({
+                        'running': False,  # Can't know real-time pump state
+                        'remaining_sec': 0,
+                        'ml_per_sec': ml_per_sec,
+                        'calibrated': calibrated
+                    })
+                }
 
             # Pump control shortcuts
             if len(parts) == 4 and parts[3] == 'pump' and http_method == 'POST':
@@ -134,6 +566,55 @@ def lambda_handler(event, context):
                 body_data = json.loads(event.get('body', '{}'))
                 return trigger_ota_update(device_id, user_id, body_data)
 
+            # Schedules endpoint for timer controller
+            # Config is synced from ESP32 to DynamoDB via MQTT
+            if len(parts) == 4 and parts[3] == 'schedules' and http_method == 'GET':
+                # Read config_timer from devices table
+                try:
+                    scan_response = devices_table.scan(
+                        FilterExpression='device_id = :device',
+                        ExpressionAttributeValues={':device': device_id}
+                    )
+                    if scan_response['Items'] and len(scan_response['Items']) > 0:
+                        device = scan_response['Items'][0]
+                        schedules = device.get('config_timer', [])
+                        updated = device.get('config_timer_updated', 0)
+                        return {
+                            'statusCode': 200,
+                            'headers': cors_headers(),
+                            'body': json.dumps({
+                                'schedules': schedules,
+                                'config_updated': updated,
+                                'source': 'cloud_sync'
+                            }, cls=DecimalEncoder)
+                        }
+                    else:
+                        return {
+                            'statusCode': 200,
+                            'headers': cors_headers(),
+                            'body': json.dumps({
+                                'schedules': [],
+                                'message': 'Device not found or no config synced yet'
+                            })
+                        }
+                except Exception as e:
+                    print(f"Error reading config_timer: {e}")
+                    return {
+                        'statusCode': 500,
+                        'headers': cors_headers(),
+                        'body': json.dumps({'error': str(e)})
+                    }
+
+            # Set operating mode (manual, timer, sensor)
+            if len(parts) == 4 and parts[3] == 'mode' and http_method == 'POST':
+                body_data = json.loads(event.get('body', '{}'))
+                return set_device_mode(device_id, user_id, body_data)
+
+            # Update device info (name, location, room) - sends MQTT command to ESP32
+            if len(parts) == 4 and parts[3] == 'info' and http_method == 'POST':
+                body_data = json.loads(event.get('body', '{}'))
+                return update_device_info_mqtt(device_id, user_id, body_data)
+
             # Activity log (commands + telemetry combined)
             if len(parts) == 4 and parts[3] == 'activity' and http_method == 'GET':
                 return get_device_activity(device_id, user_id)
@@ -141,6 +622,11 @@ def lambda_handler(event, context):
             # ESP32 real-time logs from RAM buffer
             if len(parts) == 4 and parts[3] == 'logs' and http_method == 'GET':
                 return get_device_logs(device_id, user_id)
+
+            # Update device info (name, location, room) - from Settings page
+            if len(parts) == 4 and parts[3] == 'info' and http_method == 'POST':
+                body_data = json.loads(event.get('body', '{}'))
+                return update_device_info(device_id, user_id, body_data)
 
     return {
         'statusCode': 404,
@@ -152,10 +638,19 @@ def lambda_handler(event, context):
 def get_devices(user_id):
     """GET /devices - List all user's devices with latest telemetry"""
 
-    # Query devices for this user
-    response = devices_table.query(
-        KeyConditionExpression=Key('user_id').eq(user_id)
-    )
+    print(f"[DEBUG] get_devices called with user_id={user_id}")
+
+    # Check if user is admin - admins see ALL devices
+    if is_user_admin(user_id):
+        # Admin: scan all devices (including under 'admin' user_id)
+        response = devices_table.scan()
+        print(f"[INFO] Admin {user_id} viewing all devices (scan)")
+    else:
+        # Regular user: only their devices
+        print(f"[DEBUG] Regular user {user_id} - querying their devices only")
+        response = devices_table.query(
+            KeyConditionExpression=Key('user_id').eq(user_id)
+        )
 
     devices = []
     for item in response.get('Items', []):
@@ -165,20 +660,45 @@ def get_devices(user_id):
         latest = get_latest_telemetry(device_id)
 
         # Merge device metadata + telemetry
+        # Migration: "off" → "manual" (backward compatibility with old firmware)
+        mode = latest.get('system', {}).get('mode', 'manual')
+        if mode == 'off':
+            mode = 'manual'
+
+        # Controller is enabled based on state from device telemetry
+        # state = DISABLED means controller is OFF
+        # state = LAUNCH/STANDBY/ACTIVE/etc means controller is ON
+        device_state = latest.get('system', {}).get('state', 'DISABLED')
+        controller_enabled = device_state != 'DISABLED'
+
+        # Device info: prefer telemetry (ESP32 source of truth), fallback to DynamoDB
+        system_data = latest.get('system', {})
+        device_name = system_data.get('device_name') or item.get('device_name') or device_id
+        device_location = system_data.get('location') or item.get('location') or '—'
+        device_room = system_data.get('room') or item.get('room') or '—'
+
+        # Battery: distinguish "no data" from "AC power (percent=null)"
+        battery_data = latest.get('battery')
+        battery_pct = battery_data.get('percent') if battery_data else None
+        battery_charging = battery_data.get('charging', False) if battery_data else False
+        battery_no_data = battery_data is None
+
         device_data = {
             'device_id': device_id,
-            'name': item.get('device_name', device_id),  # device_id already contains "Polivalka-"
-            'location': item.get('location', '—'),
-            'room': item.get('room', '—'),
+            'name': device_name,
+            'location': device_location,
+            'room': device_room,
             'moisture_pct': latest.get('sensor', {}).get('moisture_percent'),
             'adc_raw': latest.get('sensor', {}).get('adc_raw'),
-            'battery_pct': latest.get('battery', {}).get('percent'),
-            'battery_charging': latest.get('battery', {}).get('charging', False),
-            'mode': latest.get('system', {}).get('mode', 'off'),
+            'battery_pct': battery_pct,
+            'battery_charging': battery_charging,
+            'battery_no_data': battery_no_data,  # True = no telemetry yet
+            'mode': mode,
+            'controller_enabled': controller_enabled,  # True if state != DISABLED (from telemetry)
             'state': latest.get('system', {}).get('state', 'UNKNOWN'),
             'firmware_version': latest.get('system', {}).get('firmware_version', 'v1.0.0'),
             'reboot_count': latest.get('system', {}).get('reboot_count'),
-            'sta_rssi': latest.get('system', {}).get('sta_rssi'),  # WiFi signal strength
+            'uptime': format_uptime(latest.get('system', {}).get('uptime_ms')),
             'last_watering': item.get('last_watering_timestamp'),
             'last_update': latest.get('last_update'),
             'online': is_device_online(latest.get('last_update')),
@@ -191,6 +711,38 @@ def get_devices(user_id):
         'statusCode': 200,
         'headers': cors_headers(),
         'body': json.dumps(devices, cls=DecimalEncoder)
+    }
+
+
+def get_telemetry_config(device_id, user_id):
+    """GET /device/{id}/telemetry/config - Get telemetry config (admin only)"""
+
+    # Admin only
+    if not is_user_admin(user_id):
+        return {'statusCode': 403, 'headers': cors_headers(),
+                'body': json.dumps({'error': 'Admin privileges required'})}
+
+    # Find device to get config
+    device_record = find_device_by_id(device_id)
+    if not device_record:
+        return {'statusCode': 404, 'headers': cors_headers(),
+                'body': json.dumps({'error': 'Device not found'})}
+
+    # Get stored config or return defaults
+    config = device_record.get('telemetry_config', {})
+
+    return {
+        'statusCode': 200,
+        'headers': cors_headers(),
+        'body': json.dumps({
+            'sensor_interval_min': config.get('sensor_interval_min', 60),
+            'battery_interval_min': config.get('battery_interval_min', 60),
+            'system_interval_min': config.get('system_interval_min', 30),
+            'pump_events': config.get('pump_events', True),
+            'config_events': config.get('config_events', True),
+            'response_events': config.get('response_events', True),
+            'last_updated': device_record.get('telemetry_config_updated')
+        }, cls=DecimalEncoder)
     }
 
 
@@ -211,21 +763,55 @@ def get_device_status(device_id, user_id):
     # Get latest telemetry
     latest = get_latest_telemetry(device_id)
 
+    # Migration: "off" → "manual" (backward compatibility)
+    mode = latest.get('system', {}).get('mode', 'manual')
+    if mode == 'off':
+        mode = 'manual'
+
+    # Determine pump_running from latest pump telemetry
+    # ESP32 publishes pump telemetry with action:"start" when pump starts
+    # and action:"stop" when pump stops. Check if last action was "start"
+    # and if it's recent enough (within expected duration)
+    pump_data = latest.get('pump', {})
+    pump_running = False
+    pump_elapsed_ms = 0
+    pump_remaining_ms = 0
+
+    if pump_data.get('action') == 'start':
+        # Check if pump start was recent (within reasonable time)
+        pump_timestamp = pump_data.get('timestamp', 0)
+        duration_sec = pump_data.get('duration_sec', 0)
+        elapsed_sec = int(time.time()) - pump_timestamp if pump_timestamp else 0
+
+        if elapsed_sec < duration_sec + 5:  # Add 5 sec buffer for timing
+            pump_running = True
+            pump_elapsed_ms = elapsed_sec * 1000
+            pump_remaining_ms = max(0, (duration_sec - elapsed_sec) * 1000)
+
+    # Device info: prefer telemetry (ESP32 source of truth), fallback to DynamoDB
+    system_data = latest.get('system', {})
+    device_name = system_data.get('device_name') or device_meta.get('device_name') or device_id
+    device_location = system_data.get('location') or device_meta.get('location') or '—'
+    device_room = system_data.get('room') or device_meta.get('room') or '—'
+
     # Format response matching ESP32 /api/status structure
     status = {
         'adc': latest.get('sensor', {}).get('adc_raw'),
         'percent': latest.get('sensor', {}).get('moisture_percent'),
         'system_state': {
-            'device_name': device_meta.get('device_name', device_id),
-            'location': device_meta.get('location', '—'),
-            'room': device_meta.get('room', '—'),
-            'mode': latest.get('system', {}).get('mode', 'off'),
+            'device_name': device_name,
+            'location': device_location,
+            'room': device_room,
+            'mode': mode,
             'state': latest.get('system', {}).get('state', 'STANDBY')
         },
         'battery': latest.get('battery', {}),
         'last_watering': latest.get('last_watering'),
-        'pump_running': False,  # TODO: get from telemetry
-        'timestamp': latest.get('last_update')
+        'pump_running': pump_running,
+        'pump_elapsed_ms': pump_elapsed_ms,
+        'pump_remaining_ms': pump_remaining_ms,
+        'timestamp': latest.get('last_update'),
+        'online': is_device_online(latest.get('last_update'))  # Add online status
     }
 
     return {
@@ -250,6 +836,34 @@ def send_device_command(device_id, user_id, body):
     if not command:
         return {'statusCode': 400, 'headers': cors_headers(),
                 'body': json.dumps({'error': 'Missing command'})}
+
+    # Admin-only commands require is_admin check
+    ADMIN_ONLY_COMMANDS = ['set_telemetry_config', 'factory_reset', 'force_ota']
+    if command in ADMIN_ONLY_COMMANDS:
+        if not is_user_admin(user_id):
+            print(f"[SECURITY] Non-admin {user_id} tried to execute admin command: {command}")
+            return {'statusCode': 403, 'headers': cors_headers(),
+                    'body': json.dumps({'error': 'Admin privileges required'})}
+
+    # Save telemetry config to DynamoDB when admin sets it
+    if command == 'set_telemetry_config' and params:
+        try:
+            # Find device owner to update the right record
+            device_record = find_device_by_id(device_id)
+            if device_record:
+                owner_id = device_record.get('user_id', 'admin')
+                devices_table.update_item(
+                    Key={'user_id': owner_id, 'device_id': device_id},
+                    UpdateExpression='SET telemetry_config = :config, telemetry_config_updated = :ts',
+                    ExpressionAttributeValues={
+                        ':config': params,
+                        ':ts': int(time.time())
+                    }
+                )
+                print(f"[INFO] Saved telemetry config for {device_id}: {params}")
+        except Exception as e:
+            print(f"[WARN] Failed to save telemetry config: {e}")
+            # Continue anyway - command will still be sent
 
     # Generate command ID
     command_id = str(uuid.uuid4())
@@ -305,6 +919,276 @@ def send_device_command(device_id, user_id, body):
         }
 
 
+def send_controller_command(device_id, user_id, command, success_message):
+    """Send controller enable/disable/cancel command via MQTT and return AP-compatible response.
+
+    Unlike send_device_command(), this returns {success: true} immediately,
+    matching the response format that AP (ESP32 HTTP API) returns.
+    The ESP32 will process the command and update telemetry.
+    """
+
+    # Verify access
+    if not verify_device_access(device_id, user_id):
+        return {'statusCode': 403, 'headers': cors_headers(),
+                'body': json.dumps({'error': 'Access denied'})}
+
+    # Generate command ID
+    command_id = str(uuid.uuid4())
+
+    # Store command in DynamoDB
+    commands_table.put_item(
+        Item={
+            'device_id': device_id,
+            'command_id': command_id,
+            'command': command,
+            'params': {},
+            'status': 'pending',
+            'created_at': int(time.time()),
+            'ttl': int(time.time()) + 604800  # 7 days TTL
+        }
+    )
+
+    # Publish MQTT command
+    mqtt_payload = {
+        'command_id': command_id,
+        'command': command,
+        'params': {}
+    }
+
+    # Extract MAC address from device_id
+    mac_address = device_id.replace('Polivalka-', '')
+    topic = f'Polivalka/{mac_address}/command'
+
+    try:
+        iot_client.publish(
+            topic=topic,
+            qos=1,
+            payload=json.dumps(mqtt_payload)
+        )
+
+        # Return AP-compatible format: {success: true, message: "..."}
+        return {
+            'statusCode': 200,
+            'headers': cors_headers(),
+            'body': json.dumps({
+                'success': True,
+                'message': success_message
+            })
+        }
+    except Exception as e:
+        return {
+            'statusCode': 500,
+            'headers': cors_headers(),
+            'body': json.dumps({'success': False, 'error': str(e)})
+        }
+
+
+def send_command_with_params(device_id, user_id, command, params, success_message):
+    """Send command with parameters via MQTT and return AP-compatible response.
+
+    Similar to send_controller_command() but accepts params dict.
+    Used for schedule_set, schedule_delete, etc.
+    """
+
+    # Verify access
+    if not verify_device_access(device_id, user_id):
+        return {'statusCode': 403, 'headers': cors_headers(),
+                'body': json.dumps({'error': 'Access denied'})}
+
+    # Generate command ID
+    command_id = str(uuid.uuid4())
+
+    # Store command in DynamoDB
+    commands_table.put_item(
+        Item={
+            'device_id': device_id,
+            'command_id': command_id,
+            'command': command,
+            'params': params,
+            'status': 'pending',
+            'created_at': int(time.time()),
+            'ttl': int(time.time()) + 604800  # 7 days TTL
+        }
+    )
+
+    # Publish MQTT command
+    mqtt_payload = {
+        'command_id': command_id,
+        'command': command,
+        'params': params
+    }
+
+    # Extract MAC address from device_id
+    mac_address = device_id.replace('Polivalka-', '')
+    topic = f'Polivalka/{mac_address}/command'
+
+    try:
+        iot_client.publish(
+            topic=topic,
+            qos=1,
+            payload=json.dumps(mqtt_payload)
+        )
+
+        # Return AP-compatible format: {success: true, message: "..."}
+        return {
+            'statusCode': 200,
+            'headers': cors_headers(),
+            'body': json.dumps({
+                'success': True,
+                'message': success_message
+            })
+        }
+    except Exception as e:
+        return {
+            'statusCode': 500,
+            'headers': cors_headers(),
+            'body': json.dumps({'success': False, 'error': str(e)})
+        }
+
+
+def update_device_info_mqtt(device_id, user_id, body):
+    """POST /device/{id}/info - Update device info (name, location, room) via MQTT command.
+
+    Sends MQTT command to ESP32 which saves to NVS and publishes updated system telemetry.
+    ESP32 is the source of truth - this ensures Cloud and Local settings are synced.
+    """
+
+    # Verify access
+    if not verify_device_access(device_id, user_id):
+        return {'statusCode': 403, 'headers': cors_headers(),
+                'body': json.dumps({'error': 'Access denied'})}
+
+    # Extract device info from body
+    device_name = body.get('name', '').strip()
+    location = body.get('location', '').strip()
+    room = body.get('room', '').strip()
+
+    # Validate - at least one field must be provided
+    if not device_name and not location and not room:
+        return {'statusCode': 400, 'headers': cors_headers(),
+                'body': json.dumps({'error': 'No fields to update'})}
+
+    # Generate command ID
+    command_id = str(uuid.uuid4())
+
+    # Build params - only include non-empty fields
+    params = {}
+    if device_name:
+        params['name'] = device_name
+    if location:
+        params['location'] = location
+    if room:
+        params['room'] = room
+
+    # MQTT command payload
+    mqtt_payload = {
+        'command_id': command_id,
+        'command': 'update_device_info',
+        'params': params
+    }
+
+    # Extract MAC address from device_id
+    mac_address = device_id.replace('Polivalka-', '')
+    topic = f'Polivalka/{mac_address}/command'
+
+    try:
+        iot_client.publish(
+            topic=topic,
+            qos=1,
+            payload=json.dumps(mqtt_payload)
+        )
+
+        # Return AP-compatible format
+        return {
+            'statusCode': 200,
+            'headers': cors_headers(),
+            'body': json.dumps({
+                'success': True,
+                'message': 'Device info update sent',
+                'updated': params
+            })
+        }
+    except Exception as e:
+        return {
+            'statusCode': 500,
+            'headers': cors_headers(),
+            'body': json.dumps({'success': False, 'error': str(e)})
+        }
+
+
+def set_device_mode(device_id, user_id, body):
+    """POST /device/{id}/mode - Set operating mode (manual, timer, sensor)"""
+
+    # Verify access
+    if not verify_device_access(device_id, user_id):
+        return {'statusCode': 403, 'headers': cors_headers(),
+                'body': json.dumps({'error': 'Access denied'})}
+
+    # Extract mode
+    mode = body.get('mode')
+
+    # Validate mode
+    valid_modes = ['manual', 'timer', 'sensor']
+    if not mode:
+        return {'statusCode': 400, 'headers': cors_headers(),
+                'body': json.dumps({'error': 'Missing mode parameter'})}
+
+    if mode not in valid_modes:
+        return {'statusCode': 400, 'headers': cors_headers(),
+                'body': json.dumps({'error': f'Invalid mode: {mode} (expected: manual, timer, sensor)'})}
+
+    # Generate command ID
+    command_id = str(uuid.uuid4())
+
+    # Store command in DynamoDB
+    commands_table.put_item(
+        Item={
+            'device_id': device_id,
+            'command_id': command_id,
+            'command': 'set_mode',
+            'params': {'mode': mode},
+            'status': 'pending',
+            'created_at': int(time.time()),
+            'ttl': int(time.time()) + 604800  # 7 days TTL
+        }
+    )
+
+    # Publish MQTT command
+    mqtt_payload = {
+        'command_id': command_id,
+        'command': 'set_mode',
+        'params': {'mode': mode}
+    }
+
+    # Extract MAC address from device_id
+    mac_address = device_id.replace('Polivalka-', '')
+    topic = f'Polivalka/{mac_address}/command'
+
+    try:
+        iot_client.publish(
+            topic=topic,
+            qos=1,
+            payload=json.dumps(mqtt_payload)
+        )
+
+        return {
+            'statusCode': 200,
+            'headers': cors_headers(),
+            'body': json.dumps({
+                'command_id': command_id,
+                'status': 'sent',
+                'mode': mode,
+                'message': f'Mode changed to {mode}'
+            })
+        }
+    except Exception as e:
+        return {
+            'statusCode': 500,
+            'headers': cors_headers(),
+            'body': json.dumps({'error': str(e)})
+        }
+
+
 def get_sensor_history(device_id, user_id, days=7):
     """GET /device/{id}/sensor/history - Get sensor data history"""
 
@@ -338,6 +1222,51 @@ def get_sensor_history(device_id, user_id, days=7):
         'statusCode': 200,
         'headers': cors_headers(),
         'body': json.dumps(history, cls=DecimalEncoder)
+    }
+
+
+def get_battery_status(device_id, user_id):
+    """GET /device/{id}/battery/status - Get latest battery data
+
+    Returns same format as ESP32 /api/battery/status:
+    - available: true/false (whether battery data exists)
+    - voltage, percent, charging (actual values)
+
+    When no battery telemetry exists, returns available:false
+    to distinguish from "AC power" (which has percent:null)
+    """
+
+    if not verify_device_access(device_id, user_id):
+        return {'statusCode': 403, 'headers': cors_headers(),
+                'body': json.dumps({'error': 'Access denied'})}
+
+    latest = get_latest_telemetry(device_id)
+    battery = latest.get('battery')
+
+    # No battery telemetry at all - return available:false
+    if battery is None:
+        return {
+            'statusCode': 200,
+            'headers': cors_headers(),
+            'body': json.dumps({
+                'available': False,
+                'voltage': None,
+                'percent': None,
+                'charging': False,
+                'no_data': True  # Flag to distinguish from AC power
+            })
+        }
+
+    # Battery telemetry exists - return actual data
+    return {
+        'statusCode': 200,
+        'headers': cors_headers(),
+        'body': json.dumps({
+            'available': battery.get('percent') is not None,
+            'voltage': battery.get('voltage'),
+            'percent': battery.get('percent'),
+            'charging': battery.get('charging', False)
+        }, cls=DecimalEncoder)
     }
 
 
@@ -401,7 +1330,9 @@ def get_latest_telemetry(device_id):
         # Check each data type and keep the latest
         for data_type in ['sensor', 'battery', 'system', 'pump']:
             if data_type in item and data_type not in latest:
-                latest[data_type] = item[data_type]
+                data = dict(item[data_type])  # Copy to avoid mutation
+                data['timestamp'] = timestamp  # Add record timestamp to data
+                latest[data_type] = data
                 if 'last_update' not in latest or timestamp > latest['last_update']:
                     latest['last_update'] = timestamp
 
@@ -409,28 +1340,223 @@ def get_latest_telemetry(device_id):
 
 
 def verify_device_access(device_id, user_id):
-    """Check if user owns this device"""
+    """Check if user owns this device (or is admin)"""
 
+    # Admins can access any device
+    if is_user_admin(user_id):
+        return True
+
+    # Check if user owns this device directly
     response = devices_table.get_item(
         Key={'user_id': user_id, 'device_id': device_id}
     )
+    if 'Item' in response:
+        return True
 
-    return 'Item' in response
+    # For backward compatibility: check if device is under 'admin' user
+    # and current user is admin email
+    return False
+
+
+# ============ Admin & User Management ============
+
+# Users table reference
+USERS_TABLE = os.environ.get('USERS_TABLE', 'polivalka_users')
+users_table = dynamodb.Table(USERS_TABLE)
+
+
+def is_user_admin(user_id):
+    """Check if user has admin privileges"""
+    if not user_id:
+        print(f"[DEBUG] is_user_admin: user_id is empty")
+        return False
+
+    try:
+        response = users_table.get_item(Key={'email': user_id})
+        user = response.get('Item', {})
+        is_admin = user.get('is_admin', False)
+        print(f"[DEBUG] is_user_admin({user_id}): is_admin={is_admin}")
+        return is_admin
+    except Exception as e:
+        print(f"[ERROR] is_user_admin: {e}")
+        return False
+
+
+def find_device_by_id(device_id):
+    """Find device in any user's collection (scan - OK for small tables)"""
+    try:
+        # Scan all devices looking for this device_id
+        response = devices_table.scan(
+            FilterExpression='device_id = :did',
+            ExpressionAttributeValues={':did': device_id}
+        )
+        items = response.get('Items', [])
+        return items[0] if items else None
+    except Exception as e:
+        print(f"[ERROR] find_device_by_id: {e}")
+        return None
+
+
+def claim_device(device_id, new_user_id):
+    """
+    Claim an unclaimed device for a user.
+    Returns: (success, message)
+    """
+    # Find the device
+    device = find_device_by_id(device_id)
+
+    if not device:
+        return False, "Device not found. Make sure the device is powered on and connected."
+
+    current_owner = device.get('user_id')
+
+    # Only allow claiming from 'admin' (unclaimed devices)
+    # In future: also allow 'unclaimed' status
+    if current_owner != 'admin':
+        return False, "This device is already claimed by another user."
+
+    # Transfer device: delete from old user, create under new user
+    try:
+        # Copy all device data
+        new_device = dict(device)
+        new_device['user_id'] = new_user_id
+        new_device['claimed_at'] = int(time.time())
+        new_device['claimed_by'] = new_user_id
+
+        # Delete from old owner
+        devices_table.delete_item(
+            Key={'user_id': current_owner, 'device_id': device_id}
+        )
+
+        # Create under new owner
+        devices_table.put_item(Item=new_device)
+
+        print(f"[INFO] Device {device_id} claimed by {new_user_id}")
+        return True, "Device claimed successfully!"
+
+    except Exception as e:
+        print(f"[ERROR] claim_device: {e}")
+        return False, f"Failed to claim device: {str(e)}"
+
+
+def transfer_device(device_id, from_user_id, to_user_id):
+    """
+    Transfer device from one user to another.
+    Only admin can transfer devices.
+    """
+    # Find the device
+    device = find_device_by_id(device_id)
+
+    if not device:
+        return False, "Device not found"
+
+    current_owner = device.get('user_id')
+
+    # Verify current owner matches
+    if current_owner != from_user_id:
+        return False, f"Device is owned by {current_owner}, not {from_user_id}"
+
+    # Transfer
+    try:
+        new_device = dict(device)
+        new_device['user_id'] = to_user_id
+        new_device['transferred_at'] = int(time.time())
+        new_device['transferred_from'] = from_user_id
+
+        # Track previous owners
+        prev_owners = device.get('previous_owners', [])
+        prev_owners.append({'user_id': from_user_id, 'until': int(time.time())})
+        new_device['previous_owners'] = prev_owners
+
+        devices_table.delete_item(
+            Key={'user_id': from_user_id, 'device_id': device_id}
+        )
+        devices_table.put_item(Item=new_device)
+
+        return True, f"Device transferred to {to_user_id}"
+
+    except Exception as e:
+        print(f"[ERROR] transfer_device: {e}")
+        return False, str(e)
+
+
+def get_device_info(device_id, user_id):
+    """Get device info from devices_table"""
+    response = devices_table.get_item(
+        Key={'user_id': user_id, 'device_id': device_id}
+    )
+    return response.get('Item', {})
+
+
+def parse_timezone_offset(tz_string):
+    """Parse POSIX timezone string and return offset in minutes from UTC.
+
+    Examples:
+    - CET-1CEST,M3.5.0,M10.5.0/3 → 60 (CET = UTC+1)
+    - MSK-3 → 180 (Moscow = UTC+3)
+    - EST5EDT → -300 (Eastern US = UTC-5)
+
+    Note: This is simplified - doesn't handle DST transitions.
+    For full accuracy, would need to check current date against DST rules.
+    """
+    import re
+
+    if not tz_string:
+        return 0
+
+    # Extract first timezone offset: NAME[-+]OFFSET or NAME[+-]OFFSET
+    # POSIX format: CET-1 means CET is UTC+1 (sign is inverted!)
+    match = re.match(r'^[A-Z]+([+-]?\d+)', tz_string)
+    if match:
+        # POSIX inverts the sign: CET-1 means UTC+1
+        offset_hours = -int(match.group(1))
+        return offset_hours * 60
+
+    return 0  # Default to UTC
+
+
+def format_uptime(uptime_ms):
+    """Convert uptime_ms to human-readable format"""
+    if not uptime_ms or uptime_ms < 0:
+        return 'N/A'
+
+    seconds = uptime_ms / 1000
+
+    if seconds < 60:
+        return f"{seconds:.1f}s"
+    elif seconds < 3600:
+        minutes = seconds / 60
+        return f"{minutes:.1f}m"
+    elif seconds < 86400:
+        hours = seconds / 3600
+        return f"{hours:.1f}h"
+    else:
+        days = int(seconds / 86400)
+        hours = int((seconds % 86400) / 3600)
+        if hours > 0:
+            return f"{days}d {hours}h"
+        return f"{days}d"
 
 
 def is_device_online(last_update_timestamp):
     """Check if device is online (updated within last 10 minutes)
 
-    Note: last_update is refreshed by:
-    1. Periodic telemetry (every 30 min for system)
-    2. Command responses (when user clicks Refresh)
-    So 10 min threshold is reasonable - user can always click Refresh.
+    CURRENT telemetry intervals (TESTING MODE in app_main.c):
+    - Sensor: 3 min (180000ms)
+    - Battery: 2 min (120000ms)
+    - System: 2 min (120000ms)
+
+    Online threshold = 10 min (3.3x longest interval) to account for delays
+
+    Production intervals (FUTURE):
+    - Sensor: 60 min | Battery: 60 min | System: 30 min
+    - Threshold should be 90 min for production mode
     """
 
     if not last_update_timestamp:
         return False
 
-    return (int(time.time()) - last_update_timestamp) < 600  # 10 min
+    return (int(time.time()) - last_update_timestamp) < 600  # 10 min for testing mode
 
 
 def generate_warnings(telemetry):
@@ -442,7 +1568,8 @@ def generate_warnings(telemetry):
     sensor = telemetry.get('sensor', {})
 
     # Battery warnings
-    if battery.get('percent', 100) <= 10:
+    battery_pct = battery.get('percent')
+    if battery_pct is not None and battery_pct <= 10:
         warnings.append('Low battery (10%)')
 
     # Moisture warnings
@@ -496,19 +1623,19 @@ def get_command_result(device_id, user_id, command_id):
 
 
 def get_sensor_realtime(device_id, user_id):
-    """GET /device/{id}/sensor - Get real-time sensor reading"""
+    """GET /device/{id}/sensor - Get real-time device status (sensor, mode, battery, pump)"""
 
     if not verify_device_access(device_id, user_id):
         return {'statusCode': 403, 'headers': cors_headers(),
                 'body': json.dumps({'error': 'Access denied'})}
 
-    # Send get_sensor command
+    # Send get_status command (returns sensor + mode + battery + pump)
     command_id = str(uuid.uuid4())
     commands_table.put_item(
         Item={
             'device_id': device_id,
             'command_id': command_id,
-            'command': 'get_sensor',
+            'command': 'get_status',
             'params': {},
             'status': 'pending',
             'created_at': int(time.time()),
@@ -519,7 +1646,7 @@ def get_sensor_realtime(device_id, user_id):
     # Publish MQTT command
     mqtt_payload = {
         'command_id': command_id,
-        'command': 'get_sensor',
+        'command': 'get_status',
         'params': {}
     }
 
@@ -554,7 +1681,7 @@ def get_sensor_realtime(device_id, user_id):
 
             # Check if command completed (success or error)
             if status in ['success', 'error', 'completed']:
-                # Parse result data
+                # Parse result data (get_status returns: sensor, battery, pump, system)
                 result = item.get('result', {})
                 if isinstance(result, str):
                     try:
@@ -562,12 +1689,21 @@ def get_sensor_realtime(device_id, user_id):
                     except:
                         pass
 
+                # Extract nested data structures
+                sensor = result.get('sensor', {})
+                battery = result.get('battery', {})
+                pump = result.get('pump', {})
+                system = result.get('system', {})
+
                 return {
                     'statusCode': 200,
                     'headers': cors_headers(),
                     'body': json.dumps({
-                        'moisture_pct': result.get('moisture'),
-                        'adc_raw': result.get('adc'),
+                        'moisture_pct': sensor.get('moisture'),
+                        'adc_raw': sensor.get('adc'),
+                        'battery': battery,
+                        'pump_running': pump.get('running', False),
+                        'mode': system.get('mode', 'manual'),
                         'timestamp': item.get('completed_at', int(time.time()))
                     }, cls=DecimalEncoder)
                 }
@@ -771,8 +1907,64 @@ def get_device_activity(device_id, user_id):
             # Parse system events
             if 'system' in telem:
                 system_data = telem.get('system', {})
-                mode = system_data.get('mode', 'off')
-                # Note: ESP32 doesn't publish 'state' in system telemetry, only 'mode'
+                # Migration: "off" → "manual" (backward compatibility)
+                mode = system_data.get('mode', 'manual')
+                if mode == 'off':
+                    mode = 'manual'
+                boot_type = system_data.get('boot_type')
+                reset_reason = system_data.get('reset_reason')
+                reboot_count = system_data.get('reboot_count')
+
+                # Check for reboot events (only on FIRST system heartbeat after reboot)
+                if boot_type == 'OTA_BOOT':
+                    # OTA Update reboot
+                    activity_items.append({
+                        'timestamp': ts,
+                        'type': 'OTA',
+                        'level': 'INFO',
+                        'component': 'OTA_UPDATE',
+                        'message': f"🔄 OTA Update completed (reboot #{reboot_count})",
+                        'reset_reason': reset_reason
+                    })
+                    # Don't show normal heartbeat for boot events
+                    continue
+
+                elif boot_type == 'CRASH_BOOT':
+                    # Watchdog/panic crash reboot
+                    activity_items.append({
+                        'timestamp': ts,
+                        'type': 'REBOOT',
+                        'level': 'WARNING',
+                        'component': 'SYSTEM',
+                        'message': f"⚠️ Device crashed: {reset_reason} reset (reboot #{reboot_count})",
+                        'reset_reason': reset_reason
+                    })
+                    # Don't show normal heartbeat for boot events
+                    continue
+
+                elif boot_type == 'SYSTEM_BOOT' and reset_reason:
+                    # Normal reboot (power loss, manual restart, etc)
+                    if reset_reason == 'POWERON':
+                        msg = f"⚡ Power restored (reboot #{reboot_count})"
+                    elif reset_reason == 'SW_RESTART':
+                        msg = f"🔄 Manual restart (reboot #{reboot_count})"
+                    elif reset_reason == 'BROWNOUT':
+                        msg = f"⚠️ Low voltage restart (reboot #{reboot_count})"
+                    else:
+                        msg = f"🔄 Device rebooted: {reset_reason} (reboot #{reboot_count})"
+
+                    activity_items.append({
+                        'timestamp': ts,
+                        'type': 'REBOOT',
+                        'level': 'INFO',
+                        'component': 'SYSTEM',
+                        'message': msg,
+                        'reset_reason': reset_reason
+                    })
+                    # Don't show normal heartbeat for boot events
+                    continue
+
+                # Normal system heartbeat (mode change, etc) - SKIP if boot event was shown
                 activity_items.append({
                     'timestamp': ts,
                     'type': 'SYSTEM',
@@ -979,6 +2171,77 @@ def get_device_logs(device_id, user_id):
             'hint': 'Device may be offline or sleeping'
         })
     }
+
+
+def update_device_info(device_id, user_id, body):
+    """Update device info (name, location, room) in DynamoDB"""
+
+    # Verify user owns this device
+    if not verify_device_access(device_id, user_id):
+        return {
+            'statusCode': 403,
+            'headers': cors_headers(),
+            'body': json.dumps({'error': 'Access denied'})
+        }
+
+    # Extract fields from body
+    device_name = body.get('name', '').strip()
+    location = body.get('location', '').strip()
+    room = body.get('room', '').strip()
+
+    # Validate at least device name is provided
+    if not device_name:
+        return {
+            'statusCode': 400,
+            'headers': cors_headers(),
+            'body': json.dumps({'error': 'Device name is required'})
+        }
+
+    # Default values if empty
+    if not location:
+        location = '—'
+    if not room:
+        room = '—'
+
+    try:
+        # Update device info in DynamoDB
+        devices_table.update_item(
+            Key={
+                'user_id': user_id,
+                'device_id': device_id
+            },
+            UpdateExpression='SET device_name = :name, #loc = :location, room = :room',
+            ExpressionAttributeNames={
+                '#loc': 'location'  # location is a reserved word
+            },
+            ExpressionAttributeValues={
+                ':name': device_name,
+                ':location': location,
+                ':room': room
+            }
+        )
+
+        print(f"[INFO] Updated device info for {device_id}: name={device_name}, location={location}, room={room}")
+
+        return {
+            'statusCode': 200,
+            'headers': cors_headers(),
+            'body': json.dumps({
+                'success': True,
+                'message': 'Device info updated',
+                'device_name': device_name,
+                'location': location,
+                'room': room
+            })
+        }
+
+    except Exception as e:
+        print(f"[ERROR] Failed to update device info: {e}")
+        return {
+            'statusCode': 500,
+            'headers': cors_headers(),
+            'body': json.dumps({'error': str(e)})
+        }
 
 
 class DecimalEncoder(json.JSONEncoder):
