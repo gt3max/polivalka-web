@@ -177,7 +177,10 @@ async function loadDevices() {
     for (const d of devices) {
       const opt = document.createElement('option');
       opt.value = d.device_id;
-      opt.textContent = (d.name || d.device_id) + (d.online ? ' (online)' : ' (offline)');
+      // Admin needs device_id, show custom name in parentheses if different
+      const shortId = d.device_id.replace('Polivalka-', '');
+      const customName = (d.name && d.name !== d.device_id && d.name !== 'Polivalka') ? ` "${d.name}"` : '';
+      opt.textContent = shortId + customName + (d.online ? ' (online)' : ' (offline)');
       select.appendChild(opt);
     }
 
