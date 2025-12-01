@@ -1097,58 +1097,48 @@ async function readSensor(deviceId) {
 
 async function refreshSensor(deviceId) {
   try {
-    // Call real-time status endpoint (returns sensor + mode + battery + pump)
-    const result = await API.get(`/device/${deviceId}/sensor`);
+    // Use cached status endpoint (fast, no MQTT wait)
+    const result = await API.get(`/device/${deviceId}/status`);
 
     // Update device in allDevices array
     const device = allDevices.find(d => d.device_id === deviceId);
     if (device) {
-      device.moisture_pct = result.moisture_pct;
-      device.adc_raw = result.adc_raw;
-      device.mode = result.mode;  // Update mode (manual/timer/sensor)
-      device.battery = result.battery;  // Update battery data
+      device.moisture_pct = result.percent;
+      device.adc_raw = result.adc;
+      device.mode = result.system_state?.mode || 'manual';
+      device.battery = result.battery;
       device.last_update = result.timestamp;
-      device.online = true;  // Device responded → Online
+      device.online = result.online;
 
       // Re-render devices
       renderDevices(allDevices);
       updateStats(allDevices);
 
       // Show success feedback with updated values
-      showToast(`✅ Refreshed: ${result.moisture_pct}% | Mode: ${result.mode}`, 'success');
+      showToast(`✅ Refreshed: ${result.percent}% | Mode: ${device.mode}`, 'success');
     }
 
   } catch(e) {
-    // Device didn't respond → Offline
-    const device = allDevices.find(d => d.device_id === deviceId);
-    if (device) {
-      device.online = false;
-      renderDevices(allDevices);
-      updateStats(allDevices);
-    }
-
     // Show error toast (non-blocking)
-    showToast(e.message.includes('408') ?
-      '⚠️ Device offline or sleeping. Try again later.' :
-      `❌ Error: ${e.message}`, 'error');
+    showToast(`❌ Error: ${e.message}`, 'error');
   }
 }
 
 // Silent version for auto-refresh when expanding Home (no UI feedback)
 async function refreshSensorSilent(deviceId) {
   try {
-    // Call real-time status endpoint (returns sensor + mode + battery + pump)
-    const result = await API.get(`/device/${deviceId}/sensor`);
+    // Use cached status endpoint (fast, no MQTT wait)
+    const result = await API.get(`/device/${deviceId}/status`);
 
     // Update device in allDevices array
     const device = allDevices.find(d => d.device_id === deviceId);
     if (device) {
-      device.moisture_pct = result.moisture_pct;
-      device.adc_raw = result.adc_raw;
-      device.mode = result.mode;  // Update mode (manual/timer/sensor)
-      device.battery = result.battery;  // Update battery data
+      device.moisture_pct = result.percent;
+      device.adc_raw = result.adc;
+      device.mode = result.system_state?.mode || 'manual';
+      device.battery = result.battery;
       device.last_update = result.timestamp;
-      device.online = true;  // Device responded → Online
+      device.online = result.online;
 
       // Re-render devices (will preserve expanded state)
       renderDevices(allDevices);
@@ -1158,7 +1148,8 @@ async function refreshSensorSilent(deviceId) {
     // Silent success - no toasts, no button updates
 
   } catch(e) {
-    // Device didn't respond → Offline
+    // Error - just log, don't update UI
+    console.warn(`refreshSensorSilent failed for ${deviceId}:`, e.message);
     const device = allDevices.find(d => d.device_id === deviceId);
     if (device) {
       device.online = false;
@@ -1343,24 +1334,23 @@ async function bulkAction(action) {
     showToast(`🔄 Refreshing ${allDevices.length} devices...`, 'info');
 
     // PARALLEL requests to all devices (not sequential!)
-    // Max time = 10 seconds (longest timeout), NOT 10 * device_count
+    // Using cached /status endpoint - fast, no MQTT wait
     const promises = allDevices.map(async device => {
       try {
-        // Real-time status check (returns sensor + mode + battery + pump)
-        const result = await API.get(`/device/${device.device_id}/sensor`);
+        // Cached status check (fast, no MQTT wait)
+        const result = await API.get(`/device/${device.device_id}/status`);
 
         // Update device data
-        device.moisture_pct = result.moisture_pct;
-        device.adc_raw = result.adc_raw;
-        device.mode = result.mode;  // Update mode (manual/timer/sensor)
-        device.battery = result.battery;  // Update battery data
+        device.moisture_pct = result.percent;
+        device.adc_raw = result.adc;
+        device.mode = result.system_state?.mode || 'manual';
+        device.battery = result.battery;
         device.last_update = result.timestamp;
-        device.online = true;  // Device responded → Online
+        device.online = result.online;
 
         return {device_id: device.device_id, success: true};
       } catch(e) {
-        // 408 timeout or error → Device offline
-        device.online = false;
+        // Error → keep existing online status
         return {device_id: device.device_id, success: false, error: e.message};
       }
     });
