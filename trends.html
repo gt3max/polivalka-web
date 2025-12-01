@@ -2,6 +2,7 @@
 <link rel="icon" href="favicon.svg" type="image/svg+xml">
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns@3.0.0/dist/chartjs-adapter-date-fns.bundle.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-annotation@3.0.1/dist/chartjs-plugin-annotation.min.js"></script>
 <script src="api-adapter.js"></script>
 <style>
     body{font-family:system-ui,Arial;margin:0;padding:0;max-width:100%;background:#fafafa}
@@ -146,6 +147,7 @@ let currentPeriod = 7; // days
 let sensorData = [];
 let batteryData = [];
 let activityData = [];
+let pumpData = []; // Pump events for chart annotations
 let moistureChart = null;
 let batteryChart = null;
 
@@ -273,6 +275,18 @@ async function loadBatteryHistory() {
   }
 }
 
+// Load pump history (for chart annotations)
+async function loadPumpHistory() {
+  try {
+    const data = await API.get('/pump/history');
+    pumpData = data || [];
+    console.log(`Loaded ${pumpData.length} pump events`);
+  } catch(e) {
+    console.error('Failed to load pump history:', e);
+    pumpData = [];
+  }
+}
+
 // Load activity
 async function loadActivity() {
   const loading = document.getElementById('activity-loading');
@@ -319,6 +333,30 @@ function renderMoistureChart(data) {
   const labels = data.map(d => new Date(d.timestamp * 1000));
   const values = data.map(d => d.moisture_percent);
 
+  // Create pump event annotations (vertical lines)
+  const cutoff = Date.now() - (currentPeriod * 24 * 60 * 60 * 1000);
+  const pumpAnnotations = {};
+
+  pumpData
+    .filter(p => p.timestamp * 1000 > cutoff && p.action === 'start')
+    .forEach((p, i) => {
+      pumpAnnotations['pump' + i] = {
+        type: 'line',
+        xMin: new Date(p.timestamp * 1000),
+        xMax: new Date(p.timestamp * 1000),
+        borderColor: 'rgba(76, 175, 80, 0.7)',
+        borderWidth: 2,
+        borderDash: [5, 5],
+        label: {
+          display: true,
+          content: '💧',
+          position: 'start',
+          backgroundColor: 'transparent',
+          font: { size: 14 }
+        }
+      };
+    });
+
   moistureChart = new Chart(ctx, {
     type: 'line',
     data: {
@@ -344,6 +382,9 @@ function renderMoistureChart(data) {
             title: (items) => new Date(items[0].parsed.x).toLocaleString(),
             label: (item) => `Moisture: ${item.parsed.y}%`
           }
+        },
+        annotation: {
+          annotations: pumpAnnotations
         }
       },
       scales: {
@@ -571,6 +612,10 @@ function exportCSV() {
 
 // Refresh all data
 async function refreshAll() {
+  // Load pump data first (needed for chart annotations)
+  await loadPumpHistory();
+
+  // Then load all other data in parallel
   await Promise.all([
     loadSensorHistory(),
     loadBatteryHistory(),
