@@ -30,9 +30,9 @@ try {
 const s=await API.get('/status');
 if(s.system_state?.location){document.getElementById('location-text').textContent=s.system_state.location;}
 if(s.system_state?.room){document.getElementById('room-text').textContent=s.system_state.room;}
-// Custom name suffix
-const customName=s.system_state?.device_name;const deviceId=IS_CLOUD?DEVICE_ID:customName;
-if(customName&&customName!==deviceId&&customName!=='Polivalka'){document.getElementById('custom-name-suffix').textContent=' / '+customName;}else{document.getElementById('custom-name-suffix').textContent='';}
+// Custom name suffix (always show device name)
+const customName=s.system_state?.device_name||'Polivalka';
+document.getElementById('custom-name-suffix').textContent=' / '+customName;
 const mode=s.system_state?.mode||'off';const modeBadge=document.getElementById('mode-badge');
 const modeText=mode.charAt(0).toUpperCase()+mode.slice(1);
 modeBadge.textContent=modeText;modeBadge.className='status-badge status-'+mode;

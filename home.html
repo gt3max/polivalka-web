@@ -198,14 +198,9 @@ async function updateStatus(){
       document.getElementById('room-text').textContent = s.system_state.room;
     }
 
-    // Custom name suffix (show if user set a custom name different from device_id)
-    const customName = s.system_state?.device_name;
-    const deviceId = IS_CLOUD ? DEVICE_ID : customName;
-    if (customName && customName !== deviceId && customName !== 'Polivalka') {
-      document.getElementById('custom-name-suffix').textContent = ' / ' + customName;
-    } else {
-      document.getElementById('custom-name-suffix').textContent = '';
-    }
+    // Custom name suffix (always show device name)
+    const customName = s.system_state?.device_name || 'Polivalka';
+    document.getElementById('custom-name-suffix').textContent = ' / ' + customName;
 
     // Sensor data
     document.getElementById('sensor-vals').textContent =

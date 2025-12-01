@@ -64,16 +64,16 @@ async function updateStatus(){
   try {
     const s = await API.get('/status');
 
-    // Device Name, Location, Room
-    if (s.system_state?.device_name) {
-      document.getElementById('device-name').textContent = '🌱 ' + s.system_state.device_name;
-    }
+    // Location, Room, Custom Name
     if (s.system_state?.location) {
       document.getElementById('location-text').textContent = s.system_state.location;
     }
     if (s.system_state?.room) {
       document.getElementById('room-text').textContent = s.system_state.room;
     }
+    // Custom name suffix (always show device name)
+    const customName = s.system_state?.device_name || 'Polivalka';
+    document.getElementById('custom-name-suffix').textContent = ' / ' + customName;
 
     // Mode
     const mode = s.system_state?.mode || 'off';
