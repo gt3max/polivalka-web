@@ -541,7 +541,6 @@ function loginSuccess(email) {
   document.getElementById('auth-section').style.display = 'none';
   document.getElementById('fleet-view').style.display = 'block';
   document.getElementById('username').textContent = email;
-  document.getElementById('user-info').textContent = email;
 
   // Show Admin link only for admins (UX only - real security is on backend)
   const ADMIN_EMAILS = ['mrmaximshurigin@gmail.com', 'admin@plantapp.pro'];
@@ -582,10 +581,6 @@ function initUserDisplay() {
       usernameEl.textContent = email;
     }
 
-    const userInfoEl = document.getElementById('user-info');
-    if (userInfoEl) {
-      userInfoEl.textContent = email;
-    }
 
     // Hide auth section if exists, show fleet view
     const authSection = document.getElementById('auth-section');
