@@ -152,6 +152,8 @@ let selectedDeviceId = null;
 // Load device list (same as fleet.html)
 async function loadDevices() {
   console.log('[Admin] Loading devices...');
+  console.log('[Admin] Token:', Auth.getToken() ? 'Present' : 'Missing');
+  console.log('[Admin] Token expired:', Auth.isTokenExpired());
   try {
     const devices = await API.get('/devices');
     console.log('[Admin] Got devices:', devices);
