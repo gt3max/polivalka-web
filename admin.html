@@ -110,35 +110,35 @@
 </div>
 </div>
 
-<!-- Calibration -->
+<!-- Factory Presets -->
 <div class="card">
-<h3>🔧 Calibration</h3>
-<p class="muted">Override device calibration values remotely.</p>
+<h3>📋 Factory Presets</h3>
+<p class="muted">Default values for uncalibrated devices. User's physical calibration (Calibration page) takes priority.</p>
 
-<div class="section-header">Pump Calibration</div>
+<div class="section-header">Pump Preset</div>
 <div class="toggle-row">
-<div><div class="toggle-label">Flow Rate</div><div class="toggle-desc">Pump output in ml per second <span class="mono">(ml_per_sec)</span></div></div>
+<div><div class="toggle-label">Default Flow Rate</div><div class="toggle-desc">Used if pump not calibrated <span class="mono">(ml_per_sec)</span></div></div>
 <div class="row"><input type="number" id="calib-pump-mlsec" min="0.1" max="50" step="0.1" value="2.5" style="width:80px"><span class="muted">ml/sec</span></div>
 </div>
 <div class="row" style="margin-top:8px">
-<button onclick="savePumpCalibration()">Save Pump Calibration</button>
+<button onclick="savePumpPreset()">Set Pump Preset</button>
 </div>
 
-<div class="section-header" style="margin-top:20px">Sensor Calibration (ADC values)</div>
+<div class="section-header" style="margin-top:20px">Sensor Preset (ADC values)</div>
 <div class="toggle-row">
-<div><div class="toggle-label">ADC Water</div><div class="toggle-desc">100% moisture reference <span class="mono">(adc_water)</span></div></div>
+<div><div class="toggle-label">ADC Water</div><div class="toggle-desc">Default 100% moisture <span class="mono">(adc_water)</span></div></div>
 <div class="row"><input type="number" id="calib-adc-water" min="0" max="4095" value="1200" style="width:80px"></div>
 </div>
 <div class="toggle-row">
-<div><div class="toggle-label">ADC Dry Soil</div><div class="toggle-desc">0% moisture reference <span class="mono">(adc_dry_soil)</span></div></div>
+<div><div class="toggle-label">ADC Dry Soil</div><div class="toggle-desc">Default 0% moisture <span class="mono">(adc_dry_soil)</span></div></div>
 <div class="row"><input type="number" id="calib-adc-dry" min="0" max="4095" value="2800" style="width:80px"></div>
 </div>
 <div class="toggle-row">
-<div><div class="toggle-label">ADC Air</div><div class="toggle-desc">Air reference (sensor not in soil) <span class="mono">(adc_air)</span></div></div>
+<div><div class="toggle-label">ADC Air</div><div class="toggle-desc">Default air reference <span class="mono">(adc_air)</span></div></div>
 <div class="row"><input type="number" id="calib-adc-air" min="0" max="4095" value="3200" style="width:80px"></div>
 </div>
 <div class="row" style="margin-top:8px">
-<button onclick="saveSensorCalibration()">Save Sensor Calibration</button>
+<button onclick="saveSensorPreset()">Set Sensor Preset</button>
 </div>
 </div>
 
@@ -333,8 +333,8 @@ async function saveConfig() {
   }
 }
 
-// Save pump calibration
-async function savePumpCalibration() {
+// Save pump preset (factory default)
+async function savePumpPreset() {
   const selectedDeviceId = document.getElementById('device-select').value;
   if (!selectedDeviceId) {
     alert('Please select a device first');
@@ -358,7 +358,7 @@ async function savePumpCalibration() {
     });
 
     if (res.ok) {
-      alert(`✓ Pump calibration set to ${mlPerSec} ml/sec`);
+      alert(`✓ Pump preset set to ${mlPerSec} ml/sec`);
     } else {
       const err = await res.json().catch(() => ({}));
       alert('Failed: ' + (err.error || res.status));
@@ -368,8 +368,8 @@ async function savePumpCalibration() {
   }
 }
 
-// Save sensor calibration
-async function saveSensorCalibration() {
+// Save sensor preset (factory defaults)
+async function saveSensorPreset() {
   const selectedDeviceId = document.getElementById('device-select').value;
   if (!selectedDeviceId) {
     alert('Please select a device first');
@@ -396,7 +396,7 @@ async function saveSensorCalibration() {
     });
 
     if (res.ok) {
-      alert(`✓ Sensor calibration saved: water=${adcWater}, dry=${adcDry}, air=${adcAir}`);
+      alert(`✓ Sensor preset saved: water=${adcWater}, dry=${adcDry}, air=${adcAir}`);
     } else {
       const err = await res.json().catch(() => ({}));
       alert('Failed: ' + (err.error || res.status));
