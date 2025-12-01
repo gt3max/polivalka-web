@@ -151,10 +151,18 @@ let selectedDeviceId = null;
 
 // Load device list (same as fleet.html)
 async function loadDevices() {
+  console.log('[Admin] Loading devices...');
   try {
     const devices = await API.get('/devices');
+    console.log('[Admin] Got devices:', devices);
     const select = document.getElementById('device-select');
     select.innerHTML = '<option value="">— Select device —</option>';
+
+    if (!devices || devices.length === 0) {
+      document.getElementById('aws-status').textContent = 'No devices found';
+      document.getElementById('aws-status-dot').className = 'status-dot offline';
+      return;
+    }
 
     for (const d of devices) {
       const opt = document.createElement('option');
@@ -167,7 +175,7 @@ async function loadDevices() {
     document.getElementById('aws-status').textContent = 'Connected (' + devices.length + ' devices)';
     document.getElementById('aws-status-dot').className = 'status-dot online';
   } catch(e) {
-    console.error('Failed to load devices:', e);
+    console.error('[Admin] Failed to load devices:', e);
     document.getElementById('aws-status').textContent = 'Error: ' + e.message;
     document.getElementById('aws-status-dot').className = 'status-dot offline';
   }
