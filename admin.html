@@ -70,17 +70,17 @@
 <div class="section-header">Intervals (minutes)</div>
 
 <div class="toggle-row">
-<div><div class="toggle-label">Sensor Telemetry</div><div class="toggle-desc">Moisture %, ADC raw value</div></div>
+<div><div class="toggle-label">Sensor Telemetry</div><div class="toggle-desc">Moisture %, ADC raw value <span class="mono">(sensor_interval_min)</span></div></div>
 <div class="row"><input type="number" id="interval-sensor" min="0" max="1440" value="60"><span class="muted">min</span></div>
 </div>
 
 <div class="toggle-row">
-<div><div class="toggle-label">Battery Telemetry</div><div class="toggle-desc">Voltage, SOC %, charging status</div></div>
+<div><div class="toggle-label">Battery Telemetry</div><div class="toggle-desc">Voltage, SOC %, charging status <span class="mono">(battery_interval_min)</span></div></div>
 <div class="row"><input type="number" id="interval-battery" min="0" max="1440" value="60"><span class="muted">min</span></div>
 </div>
 
 <div class="toggle-row">
-<div><div class="toggle-label">System Heartbeat</div><div class="toggle-desc">Mode, state, connectivity, IP</div></div>
+<div><div class="toggle-label">System Heartbeat</div><div class="toggle-desc">Mode, state, connectivity, IP <span class="mono">(system_interval_min)</span></div></div>
 <div class="row"><input type="number" id="interval-system" min="0" max="1440" value="30"><span class="muted">min</span></div>
 </div>
 </div>
@@ -92,17 +92,17 @@
 <div class="section-header">Event Types</div>
 
 <div class="toggle-row">
-<div><div class="toggle-label">Pump Events</div><div class="toggle-desc">Pump start/stop, duration, volume</div></div>
+<div><div class="toggle-label">Pump Events</div><div class="toggle-desc">Pump start/stop, duration, volume <span class="mono">(pump_events)</span></div></div>
 <label class="toggle-switch"><input type="checkbox" id="event-pump" checked><span class="toggle-slider"></span></label>
 </div>
 
 <div class="toggle-row">
-<div><div class="toggle-label">Config Changes</div><div class="toggle-desc">Timer/sensor settings modified</div></div>
+<div><div class="toggle-label">Config Changes</div><div class="toggle-desc">Timer/sensor settings modified <span class="mono">(config_events)</span></div></div>
 <label class="toggle-switch"><input type="checkbox" id="event-config" checked><span class="toggle-slider"></span></label>
 </div>
 
 <div class="toggle-row">
-<div><div class="toggle-label">Command Responses</div><div class="toggle-desc">Acknowledgments to cloud commands</div></div>
+<div><div class="toggle-label">Command Responses</div><div class="toggle-desc">Acknowledgments to cloud commands <span class="mono">(response_events)</span></div></div>
 <label class="toggle-switch"><input type="checkbox" id="event-response" checked><span class="toggle-slider"></span></label>
 </div>
 </div>
