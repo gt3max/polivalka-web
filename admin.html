@@ -110,9 +110,41 @@
 </div>
 </div>
 
+<!-- Calibration -->
+<div class="card">
+<h3>🔧 Calibration</h3>
+<p class="muted">Override device calibration values remotely.</p>
+
+<div class="section-header">Pump Calibration</div>
+<div class="toggle-row">
+<div><div class="toggle-label">Flow Rate</div><div class="toggle-desc">Pump output in ml per second <span class="mono">(ml_per_sec)</span></div></div>
+<div class="row"><input type="number" id="calib-pump-mlsec" min="0.1" max="50" step="0.1" value="2.5" style="width:80px"><span class="muted">ml/sec</span></div>
+</div>
+<div class="row" style="margin-top:8px">
+<button onclick="savePumpCalibration()">Save Pump Calibration</button>
+</div>
+
+<div class="section-header" style="margin-top:20px">Sensor Calibration (ADC values)</div>
+<div class="toggle-row">
+<div><div class="toggle-label">ADC Water</div><div class="toggle-desc">100% moisture reference <span class="mono">(adc_water)</span></div></div>
+<div class="row"><input type="number" id="calib-adc-water" min="0" max="4095" value="1200" style="width:80px"></div>
+</div>
+<div class="toggle-row">
+<div><div class="toggle-label">ADC Dry Soil</div><div class="toggle-desc">0% moisture reference <span class="mono">(adc_dry_soil)</span></div></div>
+<div class="row"><input type="number" id="calib-adc-dry" min="0" max="4095" value="2800" style="width:80px"></div>
+</div>
+<div class="toggle-row">
+<div><div class="toggle-label">ADC Air</div><div class="toggle-desc">Air reference (sensor not in soil) <span class="mono">(adc_air)</span></div></div>
+<div class="row"><input type="number" id="calib-adc-air" min="0" max="4095" value="3200" style="width:80px"></div>
+</div>
+<div class="row" style="margin-top:8px">
+<button onclick="saveSensorCalibration()">Save Sensor Calibration</button>
+</div>
+</div>
+
 <!-- Actions -->
 <div class="card">
-<h3>💾 Apply Changes</h3>
+<h3>💾 Apply Telemetry Config</h3>
 <p class="muted">Changes are sent to device via AWS IoT MQTT command.</p>
 <div class="row">
 <button class="primary" onclick="saveConfig()" id="save-btn" disabled>Save to Device</button>
@@ -298,6 +330,79 @@ async function saveConfig() {
   } catch(e) {
     statusEl.textContent = '✗ Failed: ' + e.message;
     statusEl.style.color = '#f44';
+  }
+}
+
+// Save pump calibration
+async function savePumpCalibration() {
+  const selectedDeviceId = document.getElementById('device-select').value;
+  if (!selectedDeviceId) {
+    alert('Please select a device first');
+    return;
+  }
+
+  const mlPerSec = parseFloat(document.getElementById('calib-pump-mlsec').value);
+  if (isNaN(mlPerSec) || mlPerSec < 0.1 || mlPerSec > 50) {
+    alert('ml/sec must be between 0.1 and 50');
+    return;
+  }
+
+  try {
+    const res = await fetch(`${API.cloudBase}/device/${selectedDeviceId}/command`, {
+      method: 'POST',
+      headers: { ...API.getAuthHeaders(), 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        command: 'set_pump_calibration',
+        params: { ml_per_sec: mlPerSec }
+      })
+    });
+
+    if (res.ok) {
+      alert(`✓ Pump calibration set to ${mlPerSec} ml/sec`);
+    } else {
+      const err = await res.json().catch(() => ({}));
+      alert('Failed: ' + (err.error || res.status));
+    }
+  } catch(e) {
+    alert('Error: ' + e.message);
+  }
+}
+
+// Save sensor calibration
+async function saveSensorCalibration() {
+  const selectedDeviceId = document.getElementById('device-select').value;
+  if (!selectedDeviceId) {
+    alert('Please select a device first');
+    return;
+  }
+
+  const adcWater = parseInt(document.getElementById('calib-adc-water').value);
+  const adcDry = parseInt(document.getElementById('calib-adc-dry').value);
+  const adcAir = parseInt(document.getElementById('calib-adc-air').value);
+
+  if ([adcWater, adcDry, adcAir].some(v => isNaN(v) || v < 0 || v > 4095)) {
+    alert('ADC values must be between 0 and 4095');
+    return;
+  }
+
+  try {
+    const res = await fetch(`${API.cloudBase}/device/${selectedDeviceId}/command`, {
+      method: 'POST',
+      headers: { ...API.getAuthHeaders(), 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        command: 'set_sensor_calibration',
+        params: { adc_water: adcWater, adc_dry_soil: adcDry, adc_air: adcAir }
+      })
+    });
+
+    if (res.ok) {
+      alert(`✓ Sensor calibration saved: water=${adcWater}, dry=${adcDry}, air=${adcAir}`);
+    } else {
+      const err = await res.json().catch(() => ({}));
+      alert('Failed: ' + (err.error || res.status));
+    }
+  } catch(e) {
+    alert('Error: ' + e.message);
   }
 }
 
