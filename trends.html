@@ -1,8 +1,10 @@
 <!doctype html><html><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width, initial-scale=1"><title>PlantApp — Trends</title>
 <link rel="icon" href="favicon.svg" type="image/svg+xml">
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns@3.0.0/dist/chartjs-adapter-date-fns.bundle.min.js"></script>
 <script src="api-adapter.js"></script>
 <style>
-    body{font-family:system-ui,Arial;margin:0;padding:0;max-width:100%}
+    body{font-family:system-ui,Arial;margin:0;padding:0;max-width:100%;background:#fafafa}
     .header{position:sticky;top:0;z-index:1000;background:#2c5f2d;color:#fff;padding:8px 10px;display:flex;justify-content:space-between;align-items:center;gap:8px}
     .header h1{margin:0;font-size:18px}
     .header-info{font-size:12px;text-align:right;line-height:1.3}
@@ -10,12 +12,13 @@
     .nav a{text-decoration:none;color:#333;padding:6px 8px;border-radius:6px;font-size:14px;flex-shrink:0}
     .nav a.active{background:#2c5f2d;color:#fff}
     .nav a:hover{background:#ddd}
-    .container{padding:18px;max-width:760px}
-    .card{border:1px solid #ddd;padding:16px;border-radius:12px;margin:12px 0}
+    .container{padding:12px;max-width:900px;margin:0 auto}
+    .card{border:1px solid #ddd;padding:16px;border-radius:12px;margin:12px 0;background:#fff}
     .row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
     .mono{font-family:ui-monospace,monospace}
     button{padding:8px 12px;border-radius:8px;border:1px solid #888;background:#fafafa;cursor:pointer}
     button.primary{background:#2c5f2d;color:#fff;border-color:#2c5f2d}
+    button.active{background:#2c5f2d;color:#fff}
     .muted{color:#666;font-size:14px}
     .danger{color:#b00}
     .ok{color:#0a0}
@@ -23,14 +26,129 @@
     .status-timer{background:#e3f2fd;color:#1976d2}
     .status-sensor{background:#fff3e0;color:#f57c00}
     .status-off{background:#fce4ec;color:#c2185b}
-    .event-row{padding:8px 12px;margin:4px 0;border-radius:6px;font-size:13px;font-family:ui-monospace,monospace}
-    .event-INFO{background:#f5f5f5;border-left:3px solid #666}
-    .event-WATERING{background:#e3f2fd;border-left:3px solid #1976d2}
-    .event-ERROR{background:#ffebee;border-left:3px solid #c62828}
-    .event-CONFIG{background:#fff3e0;border-left:3px solid #f57c00}
-  </style>
-</head><body><div class="header"><div><h1 id="device-id-header" style="margin:0;font-size:15px">🌱 Polivalka</h1><div style="font-size:13px">📍 <span id="location-text">—</span> / <span id="room-text">—</span><span id="custom-name-suffix"></span></div><div style="font-size:11px;margin-top:4px"><span id="battery-status">🔋 —</span> · <span id="header-state">💤 Standby</span></div></div><div class="header-info"><div id="header-time" class="mono" style="font-size:11px">Time: --:--</div><div style="font-size:11px" id="header-mode">Mode: <span id="mode-badge" class="status-badge status-off">Off</span></div><div style="font-size:11px" id="header-conn">📡 <span id="conn-text">Offline</span></div></div></div></div><div class="nav"><a href="home.html">Home</a><a href="timer.html">Timer</a><a href="sensor.html">Sensor</a><a href="settings.html">Settings</a><a href="calibration.html">Calibration</a><a href="online.html">Online</a><a href="trends.html" class="active">Trends</a><a href="update.html">Update</a><a href="fleet.html">Fleet</a></div><div class="container"><div class="card"><h3>📝 Device Logs</h3><p class="muted">View system events and diagnostics (reboot-persistent)</p><div class="row" style="margin-bottom:16px"><button class="primary" onclick="downloadLogs()">📥 Download logs.txt</button><button onclick="loadLogs()">🔄 Refresh</button></div><div style="background:#f9f9f9;padding:12px;border-radius:8px;margin-bottom:12px"><div><b>Reboot Count:</b> <span id="reboot-count" class="mono">—</span></div></div><div id="logs-container"><div class="muted">Loading logs...</div></div></div></div>
+    .chart-container{position:relative;height:250px;margin:16px 0}
+    .period-selector{display:flex;gap:4px;margin-bottom:12px}
+    .period-selector button{padding:6px 12px;font-size:13px}
+    .stats-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:12px;margin:16px 0}
+    .stat-box{background:#f5f5f5;padding:12px;border-radius:8px;text-align:center}
+    .stat-value{font-size:24px;font-weight:600;color:#2c5f2d}
+    .stat-label{font-size:11px;color:#666;margin-top:4px}
+    .event-row{padding:10px 12px;margin:4px 0;border-radius:6px;font-size:13px;display:flex;justify-content:space-between;align-items:center}
+    .event-pump{background:#e3f2fd;border-left:3px solid #1976d2}
+    .event-sensor{background:#e8f5e9;border-left:3px solid #4caf50}
+    .event-battery{background:#fff3e0;border-left:3px solid #ff9800}
+    .event-system{background:#f5f5f5;border-left:3px solid #9e9e9e}
+    .loading{text-align:center;padding:40px;color:#666}
+    .error-msg{background:#ffebee;color:#c62828;padding:12px;border-radius:8px;margin:12px 0}
+    .tab-buttons{display:flex;gap:4px;margin-bottom:16px;border-bottom:1px solid #ddd;padding-bottom:8px}
+    .tab-buttons button{background:none;border:none;padding:8px 16px;cursor:pointer;border-radius:8px 8px 0 0;color:#666}
+    .tab-buttons button.active{background:#2c5f2d;color:#fff}
+    .tab-content{display:none}
+    .tab-content.active{display:block}
+</style>
+</head><body>
+<div class="header"><div><h1 id="device-id-header" style="margin:0;font-size:15px">🌱 Polivalka</h1><div style="font-size:13px">📍 <span id="location-text">—</span> / <span id="room-text">—</span><span id="custom-name-suffix"></span></div><div style="font-size:11px;margin-top:4px"><span id="battery-status">🔋 —</span> · <span id="header-state">💤 Standby</span></div></div><div class="header-info"><div id="header-time" class="mono" style="font-size:11px">Time: --:--</div><div style="font-size:11px" id="header-mode">Mode: <span id="mode-badge" class="status-badge status-off">Off</span></div><div style="font-size:11px" id="header-conn">📡 <span id="conn-text">Offline</span></div></div></div>
+<div class="nav"><a href="home.html">Home</a><a href="timer.html">Timer</a><a href="sensor.html">Sensor</a><a href="settings.html">Settings</a><a href="calibration.html">Calibration</a><a href="online.html">Online</a><a href="trends.html" class="active">Trends</a><a href="update.html">Update</a><a href="fleet.html">Fleet</a></div>
+
+<div class="container">
+  <!-- Period Selector -->
+  <div class="card">
+    <div class="row" style="justify-content:space-between">
+      <div class="period-selector">
+        <button onclick="setPeriod(1)" id="btn-1d">24h</button>
+        <button onclick="setPeriod(3)" id="btn-3d">3 days</button>
+        <button onclick="setPeriod(7)" id="btn-7d" class="active">7 days</button>
+      </div>
+      <div>
+        <button onclick="exportCSV()" title="Download all data as CSV">📥 Export CSV</button>
+        <button onclick="refreshAll()">🔄 Refresh</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Stats Summary -->
+  <div class="card">
+    <h3 style="margin-top:0">📊 Summary (<span id="period-label">7 days</span>)</h3>
+    <div class="stats-grid">
+      <div class="stat-box">
+        <div class="stat-value" id="stat-waterings">—</div>
+        <div class="stat-label">Waterings</div>
+      </div>
+      <div class="stat-box">
+        <div class="stat-value" id="stat-volume">—</div>
+        <div class="stat-label">Total ml</div>
+      </div>
+      <div class="stat-box">
+        <div class="stat-value" id="stat-avg-moisture">—</div>
+        <div class="stat-label">Avg Moisture</div>
+      </div>
+      <div class="stat-box">
+        <div class="stat-value" id="stat-min-battery">—</div>
+        <div class="stat-label">Min Battery</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Tabs -->
+  <div class="tab-buttons">
+    <button class="active" onclick="showTab('moisture')">💧 Moisture</button>
+    <button onclick="showTab('battery')">🔋 Battery</button>
+    <button onclick="showTab('watering')">🚿 Watering</button>
+    <button onclick="showTab('activity')">📝 Activity</button>
+  </div>
+
+  <!-- Moisture Chart -->
+  <div id="tab-moisture" class="tab-content active">
+    <div class="card">
+      <h3 style="margin-top:0">💧 Moisture Trend</h3>
+      <div class="chart-container">
+        <canvas id="moisture-chart"></canvas>
+      </div>
+      <div id="moisture-loading" class="loading">Loading moisture data...</div>
+      <div id="moisture-error" class="error-msg" style="display:none"></div>
+    </div>
+  </div>
+
+  <!-- Battery Chart -->
+  <div id="tab-battery" class="tab-content">
+    <div class="card">
+      <h3 style="margin-top:0">🔋 Battery Trend</h3>
+      <div class="chart-container">
+        <canvas id="battery-chart"></canvas>
+      </div>
+      <div id="battery-loading" class="loading">Loading battery data...</div>
+      <div id="battery-error" class="error-msg" style="display:none"></div>
+    </div>
+  </div>
+
+  <!-- Watering Events -->
+  <div id="tab-watering" class="tab-content">
+    <div class="card">
+      <h3 style="margin-top:0">🚿 Watering Events</h3>
+      <div id="watering-list"></div>
+      <div id="watering-loading" class="loading">Loading watering events...</div>
+    </div>
+  </div>
+
+  <!-- Activity Log -->
+  <div id="tab-activity" class="tab-content">
+    <div class="card">
+      <h3 style="margin-top:0">📝 Activity Log</h3>
+      <div id="activity-list"></div>
+      <div id="activity-loading" class="loading">Loading activity...</div>
+    </div>
+  </div>
+</div>
+
 <script>
+// State
+let currentPeriod = 7; // days
+let sensorData = [];
+let batteryData = [];
+let activityData = [];
+let moistureChart = null;
+let batteryChart = null;
+
 // Map internal controller states to user-friendly display
 function mapStateToDisplay(state, pumpRunning = false) {
   if (pumpRunning) return { text: 'Watering', emoji: '💧', color: '#1976d2' };
@@ -40,7 +158,30 @@ function mapStateToDisplay(state, pumpRunning = false) {
   return { text: 'Standby', emoji: '💤', color: '#666' };
 }
 
-async function updateBattery(){
+// Header updates
+async function updateHeader() {
+  try {
+    const s = await API.get('/status');
+    if (s.system_state?.location) document.getElementById('location-text').textContent = s.system_state.location;
+    if (s.system_state?.room) document.getElementById('room-text').textContent = s.system_state.room;
+    let customName = s.system_state?.device_name || 'Plant';
+    if (customName === 'Polivalka') customName = 'Plant';
+    document.getElementById('custom-name-suffix').textContent = ' / ' + customName;
+
+    const mode = s.system_state?.mode || 'off';
+    const modeBadge = document.getElementById('mode-badge');
+    modeBadge.textContent = mode.charAt(0).toUpperCase() + mode.slice(1);
+    modeBadge.className = 'status-badge status-' + mode;
+
+    document.getElementById('conn-text').textContent = s.online ? 'Online' : 'Offline';
+    document.getElementById('conn-text').style.color = s.online ? '#0a0' : '#999';
+
+    const displayState = mapStateToDisplay(s.system_state?.state, s.pump_running);
+    document.getElementById('header-state').textContent = `${displayState.emoji} ${displayState.text}`;
+  } catch(e) { console.error('Header update failed:', e); }
+}
+
+async function updateBattery() {
   try {
     const b = await API.get('/battery/status');
     const el = document.getElementById('battery-status');
@@ -52,13 +193,12 @@ async function updateBattery(){
   } catch(e) { document.getElementById('battery-status').textContent = '⚡ AC'; }
 }
 
-// Minimal header updates only
-async function updateTime(){
+async function updateTime() {
   try {
     const t = await API.get('/time/status');
     const timeEl = document.getElementById('header-time');
     if (t.time_set && t.current_time) {
-      timeEl.textContent='Time: '+t.current_time.substring(11,16);
+      timeEl.textContent = 'Time: ' + t.current_time.substring(11,16);
       timeEl.className = 'mono ok';
     } else {
       timeEl.textContent = 'Time: not set';
@@ -67,165 +207,402 @@ async function updateTime(){
   } catch(e) {}
 }
 
-async function updateMode(){
-  try {
-    const s = await API.get('/status');
-    if (s.system_state?.location) {
-      document.getElementById('location-text').textContent = s.system_state.location;
-    }
-    if (s.system_state?.room) {
-      document.getElementById('room-text').textContent = s.system_state.room;
-    }
-    // Custom name suffix (always show device name, default to Plant)
-    let customName = s.system_state?.device_name || 'Plant';
-    if (customName === 'Polivalka') customName = 'Plant';
-    document.getElementById('custom-name-suffix').textContent = ' / ' + customName;
-    const mode = s.system_state?.mode || 'off';
-    const modeBadge = document.getElementById('mode-badge');
-    const modeText = mode.charAt(0).toUpperCase() + mode.slice(1);
-    modeBadge.textContent = modeText;
-    modeBadge.className = 'status-badge status-' + mode;
-
-    // Connection status
-    const connText = document.getElementById('conn-text');
-    if (s.wifi_connected) {
-      connText.textContent = 'Online';
-      connText.style.color = '#0a0';
-    } else {
-      connText.textContent = 'Offline';
-      connText.style.color = '#999';
-    }
-
-    // Header state
-    const rawState = s.system_state?.state || 'OFF';
-    const displayState = mapStateToDisplay(rawState, s.pump_running);
-    const headerStateEl = document.getElementById('header-state');
-    if (headerStateEl) headerStateEl.textContent = `${displayState.emoji} ${displayState.text}`;
-  } catch(e) {}
+// Period selector
+function setPeriod(days) {
+  currentPeriod = days;
+  document.querySelectorAll('.period-selector button').forEach(b => b.classList.remove('active'));
+  document.getElementById('btn-' + days + 'd').classList.add('active');
+  document.getElementById('period-label').textContent = days === 1 ? '24 hours' : days + ' days';
+  refreshAll();
 }
 
-// Cloud mode: показать device ID в header сразу
+// Tab switching
+function showTab(name) {
+  document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.tab-buttons button').forEach(b => b.classList.remove('active'));
+  document.getElementById('tab-' + name).classList.add('active');
+  event.target.classList.add('active');
+}
+
+// Load sensor history
+async function loadSensorHistory() {
+  const loading = document.getElementById('moisture-loading');
+  const error = document.getElementById('moisture-error');
+  loading.style.display = 'block';
+  error.style.display = 'none';
+
+  try {
+    const data = await API.get('/sensor/history');
+    sensorData = data || [];
+
+    // Filter by period
+    const cutoff = Date.now() - (currentPeriod * 24 * 60 * 60 * 1000);
+    const filtered = sensorData.filter(d => d.timestamp * 1000 > cutoff);
+
+    loading.style.display = 'none';
+    renderMoistureChart(filtered);
+    updateStats();
+  } catch(e) {
+    loading.style.display = 'none';
+    error.style.display = 'block';
+    error.textContent = 'Failed to load sensor data: ' + e.message;
+  }
+}
+
+// Load battery history
+async function loadBatteryHistory() {
+  const loading = document.getElementById('battery-loading');
+  const error = document.getElementById('battery-error');
+  loading.style.display = 'block';
+  error.style.display = 'none';
+
+  try {
+    const data = await API.get('/battery/history');
+    batteryData = data || [];
+
+    const cutoff = Date.now() - (currentPeriod * 24 * 60 * 60 * 1000);
+    const filtered = batteryData.filter(d => d.timestamp * 1000 > cutoff);
+
+    loading.style.display = 'none';
+    renderBatteryChart(filtered);
+    updateStats();
+  } catch(e) {
+    loading.style.display = 'none';
+    error.style.display = 'block';
+    error.textContent = 'Failed to load battery data: ' + e.message;
+  }
+}
+
+// Load activity
+async function loadActivity() {
+  const loading = document.getElementById('activity-loading');
+  const wateringLoading = document.getElementById('watering-loading');
+  loading.style.display = 'block';
+  wateringLoading.style.display = 'block';
+
+  try {
+    const data = await API.get('/activity');
+    activityData = data.activity || [];
+
+    const cutoff = Date.now() / 1000 - (currentPeriod * 24 * 60 * 60);
+    const filtered = activityData.filter(a => a.timestamp > cutoff);
+
+    loading.style.display = 'none';
+    wateringLoading.style.display = 'none';
+
+    renderActivityList(filtered);
+    renderWateringList(filtered.filter(a => a.type === 'PUMP'));
+    updateStats();
+  } catch(e) {
+    loading.style.display = 'none';
+    wateringLoading.style.display = 'none';
+    document.getElementById('activity-list').innerHTML = '<div class="error-msg">Failed to load activity</div>';
+  }
+}
+
+// Render moisture chart
+function renderMoistureChart(data) {
+  const ctx = document.getElementById('moisture-chart').getContext('2d');
+
+  if (moistureChart) {
+    moistureChart.destroy();
+  }
+
+  if (data.length === 0) {
+    document.getElementById('moisture-chart').parentElement.innerHTML = '<div class="muted" style="text-align:center;padding:40px">No moisture data for this period</div>';
+    return;
+  }
+
+  // Sort by timestamp ascending
+  data.sort((a, b) => a.timestamp - b.timestamp);
+
+  const labels = data.map(d => new Date(d.timestamp * 1000));
+  const values = data.map(d => d.moisture_percent);
+
+  moistureChart = new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels: labels,
+      datasets: [{
+        label: 'Moisture %',
+        data: values,
+        borderColor: '#1976d2',
+        backgroundColor: 'rgba(25, 118, 210, 0.1)',
+        fill: true,
+        tension: 0.3,
+        pointRadius: 2,
+        pointHoverRadius: 5
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          callbacks: {
+            title: (items) => new Date(items[0].parsed.x).toLocaleString(),
+            label: (item) => `Moisture: ${item.parsed.y}%`
+          }
+        }
+      },
+      scales: {
+        x: {
+          type: 'time',
+          time: {
+            unit: currentPeriod === 1 ? 'hour' : 'day',
+            displayFormats: { hour: 'HH:mm', day: 'MMM d' }
+          },
+          grid: { display: false }
+        },
+        y: {
+          min: 0,
+          max: 100,
+          ticks: { callback: v => v + '%' }
+        }
+      }
+    }
+  });
+}
+
+// Render battery chart
+function renderBatteryChart(data) {
+  const ctx = document.getElementById('battery-chart').getContext('2d');
+
+  if (batteryChart) {
+    batteryChart.destroy();
+  }
+
+  // Filter out null percent (AC power)
+  const withBattery = data.filter(d => d.percent !== null);
+
+  if (withBattery.length === 0) {
+    document.getElementById('battery-chart').parentElement.innerHTML = '<div class="muted" style="text-align:center;padding:40px">No battery data (device on AC power)</div>';
+    return;
+  }
+
+  withBattery.sort((a, b) => a.timestamp - b.timestamp);
+
+  const labels = withBattery.map(d => new Date(d.timestamp * 1000));
+  const percentValues = withBattery.map(d => d.percent);
+  const voltageValues = withBattery.map(d => d.voltage);
+
+  batteryChart = new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels: labels,
+      datasets: [
+        {
+          label: 'Battery %',
+          data: percentValues,
+          borderColor: '#4caf50',
+          backgroundColor: 'rgba(76, 175, 80, 0.1)',
+          fill: true,
+          tension: 0.3,
+          pointRadius: 2,
+          yAxisID: 'y'
+        },
+        {
+          label: 'Voltage V',
+          data: voltageValues,
+          borderColor: '#ff9800',
+          borderDash: [5, 5],
+          fill: false,
+          tension: 0.3,
+          pointRadius: 1,
+          yAxisID: 'y1'
+        }
+      ]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: { position: 'top' },
+        tooltip: {
+          callbacks: {
+            title: (items) => new Date(items[0].parsed.x).toLocaleString()
+          }
+        }
+      },
+      scales: {
+        x: {
+          type: 'time',
+          time: {
+            unit: currentPeriod === 1 ? 'hour' : 'day',
+            displayFormats: { hour: 'HH:mm', day: 'MMM d' }
+          },
+          grid: { display: false }
+        },
+        y: {
+          type: 'linear',
+          position: 'left',
+          min: 0,
+          max: 100,
+          ticks: { callback: v => v + '%' }
+        },
+        y1: {
+          type: 'linear',
+          position: 'right',
+          min: 3.0,
+          max: 4.5,
+          grid: { drawOnChartArea: false },
+          ticks: { callback: v => v.toFixed(1) + 'V' }
+        }
+      }
+    }
+  });
+}
+
+// Render watering list
+function renderWateringList(events) {
+  const container = document.getElementById('watering-list');
+
+  if (events.length === 0) {
+    container.innerHTML = '<div class="muted">No watering events in this period</div>';
+    return;
+  }
+
+  let html = '';
+  for (const e of events) {
+    const time = new Date(e.timestamp * 1000).toLocaleString();
+    const icon = e.message.includes('started') ? '💧' : '🛑';
+    html += `<div class="event-row event-pump">
+      <div>${icon} ${e.message}</div>
+      <div class="muted">${time}</div>
+    </div>`;
+  }
+  container.innerHTML = html;
+}
+
+// Render activity list
+function renderActivityList(events) {
+  const container = document.getElementById('activity-list');
+
+  if (events.length === 0) {
+    container.innerHTML = '<div class="muted">No activity in this period</div>';
+    return;
+  }
+
+  let html = '';
+  // Limit to 50 most recent
+  const recent = events.slice(0, 50);
+
+  for (const e of recent) {
+    const time = new Date(e.timestamp * 1000).toLocaleString();
+    const typeClass = e.type === 'PUMP' ? 'event-pump' :
+                      e.type === 'SENSOR' ? 'event-sensor' :
+                      e.type === 'BATTERY' ? 'event-battery' : 'event-system';
+    html += `<div class="event-row ${typeClass}">
+      <div>${e.message || e.type}</div>
+      <div class="muted">${time}</div>
+    </div>`;
+  }
+  container.innerHTML = html;
+}
+
+// Update summary stats
+function updateStats() {
+  const cutoff = Date.now() / 1000 - (currentPeriod * 24 * 60 * 60);
+
+  // Watering count and volume from activity
+  const pumpEvents = activityData.filter(a => a.type === 'PUMP' && a.timestamp > cutoff && a.message.includes('started'));
+  document.getElementById('stat-waterings').textContent = pumpEvents.length;
+
+  // Estimate volume (parse from message or count * avg)
+  let totalVolume = 0;
+  for (const e of pumpEvents) {
+    const match = e.message.match(/(\d+)ml/);
+    if (match) totalVolume += parseInt(match[1]);
+  }
+  document.getElementById('stat-volume').textContent = totalVolume > 0 ? totalVolume : '—';
+
+  // Average moisture
+  const moistureFiltered = sensorData.filter(d => d.timestamp > cutoff && d.moisture_percent != null);
+  if (moistureFiltered.length > 0) {
+    const avg = moistureFiltered.reduce((sum, d) => sum + d.moisture_percent, 0) / moistureFiltered.length;
+    document.getElementById('stat-avg-moisture').textContent = Math.round(avg) + '%';
+  } else {
+    document.getElementById('stat-avg-moisture').textContent = '—';
+  }
+
+  // Min battery
+  const batteryFiltered = batteryData.filter(d => d.timestamp > cutoff && d.percent != null);
+  if (batteryFiltered.length > 0) {
+    const min = Math.min(...batteryFiltered.map(d => d.percent));
+    document.getElementById('stat-min-battery').textContent = Math.round(min) + '%';
+  } else {
+    document.getElementById('stat-min-battery').textContent = '—';
+  }
+}
+
+// Export CSV
+function exportCSV() {
+  let csv = 'timestamp,type,moisture_percent,adc_raw,battery_percent,battery_voltage,charging,message\n';
+
+  // Add sensor data
+  for (const d of sensorData) {
+    const time = new Date(d.timestamp * 1000).toISOString();
+    csv += `${time},sensor,${d.moisture_percent || ''},${d.adc_raw || ''},,,,\n`;
+  }
+
+  // Add battery data
+  for (const d of batteryData) {
+    const time = new Date(d.timestamp * 1000).toISOString();
+    csv += `${time},battery,,,,${d.percent || ''},${d.voltage || ''},${d.charging || ''}\n`;
+  }
+
+  // Add activity
+  for (const a of activityData) {
+    const time = new Date(a.timestamp * 1000).toISOString();
+    const msg = (a.message || '').replace(/,/g, ';').replace(/\n/g, ' ');
+    csv += `${time},${a.type},,,,,,${msg}\n`;
+  }
+
+  // Download
+  const blob = new Blob([csv], { type: 'text/csv' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `polivalka-${DEVICE_ID}-${new Date().toISOString().split('T')[0]}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+// Refresh all data
+async function refreshAll() {
+  await Promise.all([
+    loadSensorHistory(),
+    loadBatteryHistory(),
+    loadActivity()
+  ]);
+}
+
+// Init
 if (IS_CLOUD && DEVICE_ID) {
   document.getElementById('device-id-header').textContent = '🌱 ' + DEVICE_ID;
   document.title = `${DEVICE_ID} — Trends`;
+
+  // Load data
+  refreshAll();
+  updateHeader();
+  updateBattery();
+  updateTime();
+
+  // Auto-refresh every 5 minutes
+  setInterval(refreshAll, 300000);
+  setInterval(updateHeader, 30000);
+  setInterval(updateBattery, 60000);
+  setInterval(updateTime, 60000);
+} else {
+  // AP mode - show message
+  document.querySelector('.container').innerHTML = `
+    <div class="card">
+      <h3>📊 Trends</h3>
+      <p class="muted">Historical trends are only available in Cloud mode.</p>
+      <p>Connect your device to WiFi and access via <a href="https://gt3max.github.io/polivalka-web/trends.html?device=${location.hostname.includes('polivalka') ? location.hostname.split('.')[0].replace('polivalka-','').toUpperCase() : 'YOUR_DEVICE'}">Cloud Dashboard</a></p>
+    </div>
+  `;
 }
-
-updateTime();
-updateMode();
-
-// Track WiFi mode to detect disconnection
-var lastWiFiMode = null;
-var lastStaIp = null;
-
-async function monitorWiFiMode() {
-  try {
-    const response = await fetch('/api/wifi/status', {
-      method: 'POST',
-      cache: 'no-store'
-    });
-    const result = await response.json();
-    const currentMode = result.mode;
-    const currentStaIp = result.sta_ip || null;
-
-    // Initialize on first call
-    if (lastWiFiMode === null) {
-      lastWiFiMode = currentMode;
-      lastStaIp = currentStaIp;
-      return;
-    }
-
-    // Detect NEW connection to router (sta_ip appeared) - redirect immediately!
-    if (!lastStaIp && currentStaIp) {
-      console.log('Connected to router, redirecting to ' + currentStaIp);
-      window.location.href = 'http://' + currentStaIp + window.location.pathname;
-      return;
-    }
-
-    if (lastWiFiMode && (lastWiFiMode === 'sta' || lastWiFiMode === 'apsta') && currentMode === 'ap') {
-      console.log('WiFi disconnected, redirecting to AP mode...');
-      window.location.href = 'http://192.168.4.1' + window.location.pathname;
-      return;
-    }
-
-    lastWiFiMode = currentMode;
-    lastStaIp = currentStaIp;
-  } catch(e) {
-    // Connection lost - try AP fallback
-    console.log('Connection lost, trying AP fallback...');
-    try {
-      await fetch('http://192.168.4.1/api/wifi/status', {
-        method: 'POST',
-        cache: 'no-store'
-      });
-      // AP is accessible - redirect
-      console.log('AP accessible, redirecting...');
-      window.location.href = 'http://192.168.4.1' + window.location.pathname;
-    } catch(e2) {
-      // AP not accessible yet, will retry on next poll
-    }
-  }
-}
-
-async function loadLogs() {
-  try {
-    const data = await fetch('/logs', {cache: 'no-store'}).then(r => r.json());
-
-    // Update reboot count
-    document.getElementById('reboot-count').textContent = data.reboot_count || 0;
-
-    const container = document.getElementById('logs-container');
-    let html = '';
-
-    // Critical logs (NVS - persistent)
-    if (data.critical && data.critical.length > 0) {
-      html += '<h4 style="margin-top:0">Critical Events (NVS - Persistent)</h4>';
-      for (const entry of data.critical) {
-        const timeStr = entry.time > 0 ? new Date(entry.time * 1000).toLocaleString() : 'time not set';
-        const eventClass = entry.event.includes('ERROR') ? 'event-ERROR' :
-                          entry.event.includes('PUMP') || entry.event.includes('WATERING') ? 'event-WATERING' :
-                          entry.event.includes('CALIBRAT') || entry.event.includes('CONFIG') ? 'event-CONFIG' : 'event-INFO';
-        html += `<div class="event-row ${eventClass}">[${timeStr}] ${entry.event}</div>`;
-      }
-    } else {
-      html += '<div class="muted">No critical events yet</div>';
-    }
-
-    // RAM logs
-    if (data.ram && data.ram.length > 0) {
-      html += '<h4 style="margin-top:20px">RAM Logs (Last 100, lost on reboot)</h4>';
-      for (const entry of data.ram) {
-        const sec = Math.floor(entry.ms / 1000);
-        const ms = entry.ms % 1000;
-        const timeStr = `+${sec}.${ms.toString().padStart(3,'0')}s`;
-        const eventClass = entry.event.includes('ERROR') ? 'event-ERROR' :
-                          entry.event.includes('PUMP') || entry.event.includes('WATERING') ? 'event-WATERING' :
-                          entry.event.includes('CALIBRAT') || entry.event.includes('CONFIG') ? 'event-CONFIG' : 'event-INFO';
-        html += `<div class="event-row ${eventClass}">[${timeStr}] ${entry.event}</div>`;
-      }
-    } else {
-      html += '<div class="muted">No RAM logs yet</div>';
-    }
-
-    container.innerHTML = html;
-  } catch (e) {
-    console.error('Failed to load logs:', e);
-    document.getElementById('logs-container').innerHTML = '<div class="danger">Failed to load logs</div>';
-  }
-}
-
-function downloadLogs() {
-  window.location.href = '/api/logs/download';
-}
-
-// Auto-update intervals
-setInterval(updateTime, 60000);      // Time: every minute
-setInterval(updateMode, 30000);      // Status/Mode: every 30 seconds
-setInterval(updateBattery, 60000);   // Battery: every minute
-updateBattery();
-if (!IS_CLOUD) {
-  setInterval(monitorWiFiMode, 10000);  // WiFi mode: every 10 seconds
-  monitorWiFiMode();  // Initial load
-}
-loadLogs();
 </script>
 </body></html>
