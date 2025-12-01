@@ -46,7 +46,7 @@
 <div class="warning-banner">ADMIN PANEL — NOT FOR USERS</div>
 <div class="header">
 <div style="display:flex;align-items:center;gap:12px">
-  <a href="fleet.html" style="color:#fff;text-decoration:none;font-size:14px">← Fleet</a>
+  <a id="back-link" href="fleet.html" style="color:#fff;text-decoration:none;font-size:14px">← Fleet</a>
   <div><h1 style="margin:0">🔧 Admin Panel</h1><div style="font-size:11px;opacity:0.8">AWS IoT Configuration</div></div>
 </div>
 <div class="header-info"><div class="mono" style="font-size:11px"><span class="status-dot" id="aws-status-dot"></span><span id="aws-status">Checking...</span></div></div>
@@ -177,7 +177,7 @@ async function loadDevices() {
     for (const d of devices) {
       const opt = document.createElement('option');
       opt.value = d.device_id;
-      opt.textContent = (d.device_name || d.device_id) + (d.online ? ' (online)' : ' (offline)');
+      opt.textContent = (d.name || d.device_id) + (d.online ? ' (online)' : ' (offline)');
       select.appendChild(opt);
     }
 
@@ -377,6 +377,13 @@ function checkAdminAccess() {
 
 // Get device from URL if present
 const urlDeviceId = new URLSearchParams(window.location.search).get('device');
+
+// Update back link - if came from device page, go back there
+if (urlDeviceId) {
+  const backLink = document.getElementById('back-link');
+  backLink.href = `home.html?device=${urlDeviceId}`;
+  backLink.textContent = '← Device';
+}
 
 // Init
 if (checkAdminAccess()) {
