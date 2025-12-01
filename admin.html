@@ -192,7 +192,7 @@ async function loadDevices() {
 }
 
 // Load config for selected device
-async function loadDeviceConfig() {
+function loadDeviceConfig() {
   const deviceId = document.getElementById('device-select').value;
   if (!deviceId) {
     document.getElementById('device-info').style.display = 'none';
@@ -205,41 +205,17 @@ async function loadDeviceConfig() {
   document.getElementById('device-info').style.display = 'block';
   document.getElementById('save-btn').disabled = false;
 
-  try {
-    // Load telemetry config from device via cloud API
-    // Endpoint: GET /device/{deviceId}/telemetry/config
-    const res = await fetch(`${API.cloudBase}/device/${deviceId}/telemetry/config`, {
-      headers: API.getAuthHeaders(),
-      cache: 'no-store'
-    });
+  // MVP: Use default values (config is stored on device NVS, not in cloud)
+  // Production TODO: Store config in DynamoDB when device reports it
+  document.getElementById('interval-sensor').value = 60;
+  document.getElementById('interval-battery').value = 60;
+  document.getElementById('interval-system').value = 30;
+  document.getElementById('event-pump').checked = true;
+  document.getElementById('event-config').checked = true;
+  document.getElementById('event-response').checked = true;
 
-    if (res.ok) {
-      const config = await res.json();
-
-      // Periodic intervals
-      document.getElementById('interval-sensor').value = config.sensor_interval_min || 60;
-      document.getElementById('interval-battery').value = config.battery_interval_min || 60;
-      document.getElementById('interval-system').value = config.system_interval_min || 30;
-
-      // Event toggles
-      document.getElementById('event-pump').checked = config.pump_events !== false;
-      document.getElementById('event-config').checked = config.config_events !== false;
-      document.getElementById('event-response').checked = config.response_events !== false;
-
-      document.getElementById('selected-device-lastseen').textContent = 'Config loaded';
-    } else {
-      // Endpoint not implemented yet - use defaults
-      console.log('Telemetry config endpoint not available, using defaults');
-      document.getElementById('selected-device-lastseen').textContent = 'Using defaults (endpoint TODO)';
-    }
-
-    updateCostEstimate();
-  } catch(e) {
-    console.error('Failed to load device config:', e);
-    document.getElementById('selected-device-lastseen').textContent = 'Error loading config';
-    // Use defaults
-    updateCostEstimate();
-  }
+  document.getElementById('selected-device-lastseen').textContent = 'Defaults loaded (config stored on device)';
+  updateCostEstimate();
 }
 
 // Save config to device
