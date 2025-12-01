@@ -369,9 +369,21 @@ function checkAdminAccess() {
   return true;
 }
 
+// Get device from URL if present
+const urlDeviceId = new URLSearchParams(window.location.search).get('device');
+
 // Init
 if (checkAdminAccess()) {
-  loadDevices();
+  loadDevices().then(() => {
+    // Auto-select device if came from device page
+    if (urlDeviceId) {
+      const select = document.getElementById('device-select');
+      select.value = urlDeviceId;
+      if (select.value === urlDeviceId) {
+        loadDeviceConfig();  // Load config for pre-selected device
+      }
+    }
+  });
   updateCostEstimate();
 }
 </script>
