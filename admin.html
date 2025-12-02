@@ -87,6 +87,11 @@
 <div><div class="toggle-label">System Heartbeat</div><div class="toggle-desc">Mode, state, connectivity, IP <span class="mono">(system_interval_min)</span></div></div>
 <div class="row"><input type="number" id="interval-system" min="0" max="1440" value="30"><span class="muted">min</span></div>
 </div>
+<div class="row" style="margin-top:16px;gap:8px">
+<button class="primary" onclick="saveConfig()" id="save-btn-top">💾 Save All Telemetry</button>
+<button onclick="setAllIntervals(60)">All 60m</button>
+<button onclick="setAllIntervals(5)">Test 5m</button>
+</div>
 </div>
 
 <!-- Event Telemetry -->
