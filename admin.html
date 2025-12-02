@@ -250,10 +250,17 @@ async function loadDeviceConfig() {
         document.getElementById('calib-pump-mlsec').value = pumpCalib;
         console.log('[Admin] Loaded pump_calibration:', pumpCalib);
 
+        // Populate sensor calibration (from DynamoDB)
+        const sensorCalib = device.sensor_calibration || {};
+        document.getElementById('calib-adc-water').value = sensorCalib.water || 1200;
+        document.getElementById('calib-adc-dry').value = sensorCalib.dry_soil || 2400;
+        document.getElementById('calib-adc-air').value = sensorCalib.air || 2800;
+        console.log('[Admin] Loaded sensor_calibration:', sensorCalib);
+
         // Show last seen info
-        if (device.last_seen) {
-          const lastSeen = new Date(device.last_seen * 1000);
-          document.getElementById('selected-device-lastseen').textContent = 'Last seen: ' + lastSeen.toLocaleString();
+        if (device.last_update) {
+          const lastSeen = new Date(device.last_update * 1000);
+          document.getElementById('selected-device-lastseen').textContent = 'Last update: ' + lastSeen.toLocaleString();
         } else {
           document.getElementById('selected-device-lastseen').textContent = 'Ready for preset changes';
         }
