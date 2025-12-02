@@ -1107,7 +1107,11 @@ async function refreshSensor(deviceId) {
       device.moisture_pct = result.moisture_pct;
       device.adc_raw = result.adc_raw;
       device.mode = result.mode || 'manual';
-      device.battery = result.battery;
+      // Battery: extract from object {voltage, percent, charging}
+      if (result.battery) {
+        device.battery_pct = result.battery.percent;
+        device.battery_charging = result.battery.charging;
+      }
       device.last_update = result.timestamp;
       device.online = true;  // Device responded = online
 
@@ -1137,7 +1141,11 @@ async function refreshSensorSilent(deviceId) {
       device.moisture_pct = result.moisture_pct;
       device.adc_raw = result.adc_raw;
       device.mode = result.mode || 'manual';
-      device.battery = result.battery;
+      // Battery: extract from object {voltage, percent, charging}
+      if (result.battery) {
+        device.battery_pct = result.battery.percent;
+        device.battery_charging = result.battery.charging;
+      }
       device.last_update = result.timestamp;
       device.online = true;  // Device responded = online
 
@@ -1345,7 +1353,11 @@ async function bulkAction(action) {
         device.moisture_pct = result.moisture_pct;
         device.adc_raw = result.adc_raw;
         device.mode = result.mode || 'manual';
-        device.battery = result.battery;
+        // Battery: extract from object {voltage, percent, charging}
+        if (result.battery) {
+          device.battery_pct = result.battery.percent;
+          device.battery_charging = result.battery.charging;
+        }
         device.last_update = result.timestamp;
         device.online = true;  // Device responded = definitely online!
 
