@@ -176,68 +176,9 @@ def lambda_handler(event, context):
         print(f"[WARN] No auth token - using fallback user_id='admin'")
 
     # Route to appropriate handler
+    print(f"[DEBUG] path={path}, user_id={user_id}")
     if path == '/devices' and http_method == 'GET':
         return get_devices(user_id)
-
-    # POST /devices/claim - Claim an unclaimed device
-    if path == '/devices/claim' and http_method == 'POST':
-        body = json.loads(event.get('body', '{}'))
-        device_id = body.get('device_id', '').strip()
-
-        if not device_id:
-            return {
-                'statusCode': 400,
-                'headers': cors_headers(),
-                'body': json.dumps({'error': 'device_id is required'})
-            }
-
-        # Normalize device_id (accept both "BB00C1" and "Polivalka-BB00C1")
-        if not device_id.startswith('Polivalka-'):
-            device_id = f'Polivalka-{device_id}'
-
-        success, message = claim_device(device_id, user_id)
-
-        return {
-            'statusCode': 200 if success else 400,
-            'headers': cors_headers(),
-            'body': json.dumps({
-                'success': success,
-                'message': message,
-                'device_id': device_id
-            })
-        }
-
-    # POST /devices/transfer - Transfer device to another user (admin only)
-    if path == '/devices/transfer' and http_method == 'POST':
-        if not is_user_admin(user_id):
-            return {
-                'statusCode': 403,
-                'headers': cors_headers(),
-                'body': json.dumps({'error': 'Admin access required'})
-            }
-
-        body = json.loads(event.get('body', '{}'))
-        device_id = body.get('device_id', '').strip()
-        from_user = body.get('from_user', '').strip()
-        to_user = body.get('to_user', '').strip()
-
-        if not all([device_id, from_user, to_user]):
-            return {
-                'statusCode': 400,
-                'headers': cors_headers(),
-                'body': json.dumps({'error': 'device_id, from_user, to_user required'})
-            }
-
-        if not device_id.startswith('Polivalka-'):
-            device_id = f'Polivalka-{device_id}'
-
-        success, message = transfer_device(device_id, from_user, to_user)
-
-        return {
-            'statusCode': 200 if success else 400,
-            'headers': cors_headers(),
-            'body': json.dumps({'success': success, 'message': message})
-        }
 
     # Parse device_id from path /device/{id}/*
     if path.startswith('/device/'):
@@ -247,10 +188,6 @@ def lambda_handler(event, context):
 
             if len(parts) == 4 and parts[3] == 'status' and http_method == 'GET':
                 return get_device_status(device_id, user_id)
-
-            # GET /device/{id}/telemetry/config - Get telemetry config (admin only)
-            if len(parts) == 5 and parts[3] == 'telemetry' and parts[4] == 'config' and http_method == 'GET':
-                return get_telemetry_config(device_id, user_id)
 
             if len(parts) == 4 and parts[3] == 'command' and http_method == 'POST':
                 body = json.loads(event.get('body', '{}'))
@@ -505,9 +442,15 @@ def lambda_handler(event, context):
                 if not new_tz:
                     return {'statusCode': 400, 'headers': cors_headers(), 'body': json.dumps({'success': False, 'error': 'Missing timezone'})}
 
-                # Save to devices_table
+                # Save to devices_table (admin-aware: find actual user_id from device record)
+                device_info = get_device_info(device_id, user_id)
+                if not device_info:
+                    return {'statusCode': 404, 'headers': cors_headers(), 'body': json.dumps({'error': 'Device not found'})}
+
+                # Use the actual user_id from DynamoDB (may differ from JWT user_id for admin)
+                actual_user_id = device_info.get('user_id', user_id)
                 devices_table.update_item(
-                    Key={'user_id': user_id, 'device_id': device_id},
+                    Key={'user_id': actual_user_id, 'device_id': device_id},
                     UpdateExpression='SET #tz = :tz',
                     ExpressionAttributeNames={'#tz': 'timezone'},
                     ExpressionAttributeValues={':tz': new_tz}
@@ -628,6 +571,10 @@ def lambda_handler(event, context):
                 body_data = json.loads(event.get('body', '{}'))
                 return update_device_info(device_id, user_id, body_data)
 
+            # GET /device/{id}/telemetry/config - Get telemetry config (admin only)
+            if len(parts) == 5 and parts[3] == 'telemetry' and parts[4] == 'config' and http_method == 'GET':
+                return get_telemetry_config(device_id, user_id)
+
     return {
         'statusCode': 404,
         'headers': cors_headers(),
@@ -638,16 +585,14 @@ def lambda_handler(event, context):
 def get_devices(user_id):
     """GET /devices - List all user's devices with latest telemetry"""
 
-    print(f"[DEBUG] get_devices called with user_id={user_id}")
+    # Admin users see ALL devices (for fleet management)
+    ADMIN_EMAILS = ['mrmaximshurigin@gmail.com', 'admin']
 
-    # Check if user is admin - admins see ALL devices
-    if is_user_admin(user_id):
-        # Admin: scan all devices (including under 'admin' user_id)
+    if user_id in ADMIN_EMAILS:
+        # Admin: scan ALL devices
         response = devices_table.scan()
-        print(f"[INFO] Admin {user_id} viewing all devices (scan)")
     else:
         # Regular user: only their devices
-        print(f"[DEBUG] Regular user {user_id} - querying their devices only")
         response = devices_table.query(
             KeyConditionExpression=Key('user_id').eq(user_id)
         )
@@ -714,38 +659,6 @@ def get_devices(user_id):
     }
 
 
-def get_telemetry_config(device_id, user_id):
-    """GET /device/{id}/telemetry/config - Get telemetry config (admin only)"""
-
-    # Admin only
-    if not is_user_admin(user_id):
-        return {'statusCode': 403, 'headers': cors_headers(),
-                'body': json.dumps({'error': 'Admin privileges required'})}
-
-    # Find device to get config
-    device_record = find_device_by_id(device_id)
-    if not device_record:
-        return {'statusCode': 404, 'headers': cors_headers(),
-                'body': json.dumps({'error': 'Device not found'})}
-
-    # Get stored config or return defaults
-    config = device_record.get('telemetry_config', {})
-
-    return {
-        'statusCode': 200,
-        'headers': cors_headers(),
-        'body': json.dumps({
-            'sensor_interval_min': config.get('sensor_interval_min', 60),
-            'battery_interval_min': config.get('battery_interval_min', 60),
-            'system_interval_min': config.get('system_interval_min', 30),
-            'pump_events': config.get('pump_events', True),
-            'config_events': config.get('config_events', True),
-            'response_events': config.get('response_events', True),
-            'last_updated': device_record.get('telemetry_config_updated')
-        }, cls=DecimalEncoder)
-    }
-
-
 def get_device_status(device_id, user_id):
     """GET /device/{id}/status - Get full device status"""
 
@@ -754,11 +667,8 @@ def get_device_status(device_id, user_id):
         return {'statusCode': 403, 'headers': cors_headers(),
                 'body': json.dumps({'error': 'Access denied'})}
 
-    # Get device metadata
-    device_response = devices_table.get_item(
-        Key={'user_id': user_id, 'device_id': device_id}
-    )
-    device_meta = device_response.get('Item', {})
+    # Get device metadata (uses admin-aware get_device_info)
+    device_meta = get_device_info(device_id, user_id)
 
     # Get latest telemetry
     latest = get_latest_telemetry(device_id)
@@ -837,49 +747,39 @@ def send_device_command(device_id, user_id, body):
         return {'statusCode': 400, 'headers': cors_headers(),
                 'body': json.dumps({'error': 'Missing command'})}
 
-    # Admin-only commands require is_admin check
-    ADMIN_ONLY_COMMANDS = ['set_telemetry_config', 'factory_reset', 'force_ota']
-    if command in ADMIN_ONLY_COMMANDS:
-        if not is_user_admin(user_id):
-            print(f"[SECURITY] Non-admin {user_id} tried to execute admin command: {command}")
-            return {'statusCode': 403, 'headers': cors_headers(),
-                    'body': json.dumps({'error': 'Admin privileges required'})}
-
-    # Save telemetry config to DynamoDB when admin sets it
-    if command == 'set_telemetry_config' and params:
-        try:
-            # Find device owner to update the right record
-            device_record = find_device_by_id(device_id)
-            if device_record:
-                owner_id = device_record.get('user_id', 'admin')
-                devices_table.update_item(
-                    Key={'user_id': owner_id, 'device_id': device_id},
-                    UpdateExpression='SET telemetry_config = :config, telemetry_config_updated = :ts',
-                    ExpressionAttributeValues={
-                        ':config': params,
-                        ':ts': int(time.time())
-                    }
-                )
-                print(f"[INFO] Saved telemetry config for {device_id}: {params}")
-        except Exception as e:
-            print(f"[WARN] Failed to save telemetry config: {e}")
-            # Continue anyway - command will still be sent
-
     # Generate command ID
     command_id = str(uuid.uuid4())
 
+    # Sanitize params for DynamoDB (convert floats to Decimal)
+    def sanitize_for_dynamodb(obj):
+        if isinstance(obj, float):
+            return Decimal(str(obj))
+        elif isinstance(obj, dict):
+            return {k: sanitize_for_dynamodb(v) for k, v in obj.items()}
+        elif isinstance(obj, list):
+            return [sanitize_for_dynamodb(v) for v in obj]
+        return obj
+
+    safe_params = sanitize_for_dynamodb(params)
+
     # Store command in DynamoDB
-    commands_table.put_item(
-        Item={
-            'device_id': device_id,
-            'command_id': command_id,
-            'command': command,
-            'params': params,
-            'status': 'pending',
-            'created_at': int(time.time()),
-            'ttl': int(time.time()) + 604800  # 7 days TTL
-        }
-    )
+    try:
+        commands_table.put_item(
+            Item={
+                'device_id': device_id,
+                'command_id': command_id,
+                'command': command,
+                'params': safe_params,
+                'status': 'pending',
+                'created_at': int(time.time()),
+                'ttl': int(time.time()) + 604800  # 7 days TTL
+            }
+        )
+    except Exception as e:
+        print(f"[ERROR] DynamoDB put_item failed: {e}")
+        return {'statusCode': 500, 'headers': cors_headers(),
+                'body': json.dumps({'error': f'Database error: {str(e)}'})}
+
 
     # Publish MQTT command
     mqtt_payload = {
@@ -1340,152 +1240,43 @@ def get_latest_telemetry(device_id):
 
 
 def verify_device_access(device_id, user_id):
-    """Check if user owns this device (or is admin)"""
+    """Check if user owns this device (admins have access to all devices)"""
 
-    # Admins can access any device
-    if is_user_admin(user_id):
+    # Admin has access to ALL devices
+    ADMIN_EMAILS = ['mrmaximshurigin@gmail.com', 'admin']
+    if user_id in ADMIN_EMAILS:
         return True
 
-    # Check if user owns this device directly
+    # Regular user: check ownership
     response = devices_table.get_item(
         Key={'user_id': user_id, 'device_id': device_id}
     )
-    if 'Item' in response:
-        return True
 
-    # For backward compatibility: check if device is under 'admin' user
-    # and current user is admin email
-    return False
-
-
-# ============ Admin & User Management ============
-
-# Users table reference
-USERS_TABLE = os.environ.get('USERS_TABLE', 'polivalka_users')
-users_table = dynamodb.Table(USERS_TABLE)
-
-
-def is_user_admin(user_id):
-    """Check if user has admin privileges"""
-    if not user_id:
-        print(f"[DEBUG] is_user_admin: user_id is empty")
-        return False
-
-    try:
-        response = users_table.get_item(Key={'email': user_id})
-        user = response.get('Item', {})
-        is_admin = user.get('is_admin', False)
-        print(f"[DEBUG] is_user_admin({user_id}): is_admin={is_admin}")
-        return is_admin
-    except Exception as e:
-        print(f"[ERROR] is_user_admin: {e}")
-        return False
-
-
-def find_device_by_id(device_id):
-    """Find device in any user's collection (scan - OK for small tables)"""
-    try:
-        # Scan all devices looking for this device_id
-        response = devices_table.scan(
-            FilterExpression='device_id = :did',
-            ExpressionAttributeValues={':did': device_id}
-        )
-        items = response.get('Items', [])
-        return items[0] if items else None
-    except Exception as e:
-        print(f"[ERROR] find_device_by_id: {e}")
-        return None
-
-
-def claim_device(device_id, new_user_id):
-    """
-    Claim an unclaimed device for a user.
-    Returns: (success, message)
-    """
-    # Find the device
-    device = find_device_by_id(device_id)
-
-    if not device:
-        return False, "Device not found. Make sure the device is powered on and connected."
-
-    current_owner = device.get('user_id')
-
-    # Only allow claiming from 'admin' (unclaimed devices)
-    # In future: also allow 'unclaimed' status
-    if current_owner != 'admin':
-        return False, "This device is already claimed by another user."
-
-    # Transfer device: delete from old user, create under new user
-    try:
-        # Copy all device data
-        new_device = dict(device)
-        new_device['user_id'] = new_user_id
-        new_device['claimed_at'] = int(time.time())
-        new_device['claimed_by'] = new_user_id
-
-        # Delete from old owner
-        devices_table.delete_item(
-            Key={'user_id': current_owner, 'device_id': device_id}
-        )
-
-        # Create under new owner
-        devices_table.put_item(Item=new_device)
-
-        print(f"[INFO] Device {device_id} claimed by {new_user_id}")
-        return True, "Device claimed successfully!"
-
-    except Exception as e:
-        print(f"[ERROR] claim_device: {e}")
-        return False, f"Failed to claim device: {str(e)}"
-
-
-def transfer_device(device_id, from_user_id, to_user_id):
-    """
-    Transfer device from one user to another.
-    Only admin can transfer devices.
-    """
-    # Find the device
-    device = find_device_by_id(device_id)
-
-    if not device:
-        return False, "Device not found"
-
-    current_owner = device.get('user_id')
-
-    # Verify current owner matches
-    if current_owner != from_user_id:
-        return False, f"Device is owned by {current_owner}, not {from_user_id}"
-
-    # Transfer
-    try:
-        new_device = dict(device)
-        new_device['user_id'] = to_user_id
-        new_device['transferred_at'] = int(time.time())
-        new_device['transferred_from'] = from_user_id
-
-        # Track previous owners
-        prev_owners = device.get('previous_owners', [])
-        prev_owners.append({'user_id': from_user_id, 'until': int(time.time())})
-        new_device['previous_owners'] = prev_owners
-
-        devices_table.delete_item(
-            Key={'user_id': from_user_id, 'device_id': device_id}
-        )
-        devices_table.put_item(Item=new_device)
-
-        return True, f"Device transferred to {to_user_id}"
-
-    except Exception as e:
-        print(f"[ERROR] transfer_device: {e}")
-        return False, str(e)
+    return 'Item' in response
 
 
 def get_device_info(device_id, user_id):
-    """Get device info from devices_table"""
-    response = devices_table.get_item(
-        Key={'user_id': user_id, 'device_id': device_id}
-    )
-    return response.get('Item', {})
+    """Get device info from devices_table.
+
+    For admin users: scans by device_id only (admin sees all devices)
+    For regular users: queries by user_id + device_id (only own devices)
+    """
+    ADMIN_EMAILS = ['mrmaximshurigin@gmail.com', 'admin']
+
+    if user_id in ADMIN_EMAILS:
+        # Admin: scan by device_id only (device may have any user_id in DB)
+        response = devices_table.scan(
+            FilterExpression='device_id = :device',
+            ExpressionAttributeValues={':device': device_id}
+        )
+        items = response.get('Items', [])
+        return items[0] if items else {}
+    else:
+        # Regular user: query by user_id + device_id
+        response = devices_table.get_item(
+            Key={'user_id': user_id, 'device_id': device_id}
+        )
+        return response.get('Item', {})
 
 
 def parse_timezone_offset(tz_string):
@@ -1539,24 +1330,20 @@ def format_uptime(uptime_ms):
 
 
 def is_device_online(last_update_timestamp):
-    """Check if device is online (updated within last 10 minutes)
+    """Check if device is online (updated within last 45 minutes)
 
-    CURRENT telemetry intervals (TESTING MODE in app_main.c):
-    - Sensor: 3 min (180000ms)
-    - Battery: 2 min (120000ms)
-    - System: 2 min (120000ms)
+    PRODUCTION telemetry intervals (app_main.c):
+    - Sensor: 60 min (3600000ms)
+    - Battery: 60 min (3600000ms)
+    - System: 30 min (1800000ms) - heartbeat
 
-    Online threshold = 10 min (3.3x longest interval) to account for delays
-
-    Production intervals (FUTURE):
-    - Sensor: 60 min | Battery: 60 min | System: 30 min
-    - Threshold should be 90 min for production mode
+    Online threshold = 45 min (1.5x system heartbeat) to account for delays
     """
 
     if not last_update_timestamp:
         return False
 
-    return (int(time.time()) - last_update_timestamp) < 600  # 10 min for testing mode
+    return (int(time.time()) - last_update_timestamp) < 2700  # 45 min (1.5x 30 min heartbeat)
 
 
 def generate_warnings(telemetry):
@@ -2184,6 +1971,18 @@ def update_device_info(device_id, user_id, body):
             'body': json.dumps({'error': 'Access denied'})
         }
 
+    # Get device info (admin-aware: finds device regardless of stored user_id)
+    device_info = get_device_info(device_id, user_id)
+    if not device_info:
+        return {
+            'statusCode': 404,
+            'headers': cors_headers(),
+            'body': json.dumps({'error': 'Device not found'})
+        }
+
+    # Use the actual user_id from DynamoDB (may differ from JWT user_id for admin)
+    actual_user_id = device_info.get('user_id', user_id)
+
     # Extract fields from body
     device_name = body.get('name', '').strip()
     location = body.get('location', '').strip()
@@ -2204,10 +2003,10 @@ def update_device_info(device_id, user_id, body):
         room = '—'
 
     try:
-        # Update device info in DynamoDB
+        # Update device info in DynamoDB (use actual_user_id from DB)
         devices_table.update_item(
             Key={
-                'user_id': user_id,
+                'user_id': actual_user_id,
                 'device_id': device_id
             },
             UpdateExpression='SET device_name = :name, #loc = :location, room = :room',
@@ -2250,3 +2049,65 @@ class DecimalEncoder(json.JSONEncoder):
         if isinstance(obj, Decimal):
             return float(obj)
         return super(DecimalEncoder, self).default(obj)
+
+
+# ============ Admin Functions ============
+
+def is_user_admin(user_id):
+    """Check if user has admin privileges"""
+    ADMIN_EMAILS = ['mrmaximshurigin@gmail.com', 'admin']
+    return user_id in ADMIN_EMAILS
+
+
+def find_device_by_id(device_id):
+    """Find device in any user's collection (scan - OK for small tables)"""
+    try:
+        response = devices_table.scan(
+            FilterExpression='device_id = :did',
+            ExpressionAttributeValues={':did': device_id}
+        )
+        items = response.get('Items', [])
+        return items[0] if items else None
+    except Exception as e:
+        print(f"[ERROR] find_device_by_id: {e}")
+        return None
+
+
+def get_telemetry_config(device_id, user_id):
+    """GET /device/{id}/telemetry/config - Get telemetry config (admin only)
+
+    Returns flat structure expected by admin.html:
+    - sensor_interval_min, battery_interval_min, system_interval_min
+    - pump_events, config_events, response_events
+    - last_updated (timestamp when config was saved)
+    """
+
+    # Admin only
+    if not is_user_admin(user_id):
+        return {'statusCode': 403, 'headers': cors_headers(),
+                'body': json.dumps({'error': 'Admin privileges required'})}
+
+    # Find device to get config
+    device_record = find_device_by_id(device_id)
+    if not device_record:
+        return {'statusCode': 404, 'headers': cors_headers(),
+                'body': json.dumps({'error': 'Device not found'})}
+
+    # Get stored config or empty dict
+    stored = device_record.get('telemetry_config', {})
+
+    # Return flat structure with defaults for missing values
+    return {
+        'statusCode': 200,
+        'headers': cors_headers(),
+        'body': json.dumps({
+            'device_id': device_id,
+            'sensor_interval_min': stored.get('sensor_interval_min', 60),
+            'battery_interval_min': stored.get('battery_interval_min', 60),
+            'system_interval_min': stored.get('system_interval_min', 30),
+            'pump_events': stored.get('pump_events', True),
+            'config_events': stored.get('config_events', True),
+            'response_events': stored.get('response_events', True),
+            'last_updated': stored.get('last_updated')
+        }, cls=DecimalEncoder)
+    }
