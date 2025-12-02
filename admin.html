@@ -42,6 +42,13 @@
 
     /* Device selector */
     select{padding:8px 12px;border:1px solid #555;border-radius:8px;background:#1a1a2e;color:#fff;font-size:14px;width:100%;max-width:300px}
+
+    /* Info list (read-only) */
+    .info-list{margin-top:12px}
+    .info-row{display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid #333}
+    .info-row:last-child{border-bottom:none}
+    .info-label{color:#ccc}
+    .info-value{color:#4caf50;font-family:ui-monospace,monospace}
 </style>
 </head><body>
 <div class="warning-banner">ADMIN PANEL — NOT FOR USERS</div>
@@ -67,48 +74,25 @@
 </div>
 </div>
 
-<!-- Periodic Telemetry -->
+<!-- Periodic Telemetry (Info only - hardcoded in firmware) -->
 <div class="card">
 <h3>📊 Periodic Telemetry</h3>
-<p class="muted">Set intervals in minutes. 0 = disabled.</p>
-<div class="section-header">Intervals (minutes)</div>
-
-<div class="toggle-row">
-<div><div class="toggle-label">Sensor Telemetry</div><div class="toggle-desc">Moisture %, ADC raw value <span class="mono">(sensor_interval_min)</span></div></div>
-<div class="row"><input type="number" id="interval-sensor" min="0" max="1440" value="60"><span class="muted">min</span></div>
+<p class="muted">Intervals are hardcoded in firmware (app_main.c). To change, reflash device.</p>
+<div class="info-list">
+<div class="info-row"><span class="info-label">Sensor Telemetry</span><span class="info-value">60 min</span></div>
+<div class="info-row"><span class="info-label">Battery Telemetry</span><span class="info-value">60 min</span></div>
+<div class="info-row"><span class="info-label">System Heartbeat</span><span class="info-value">30 min</span></div>
+</div>
 </div>
 
-<div class="toggle-row">
-<div><div class="toggle-label">Battery Telemetry</div><div class="toggle-desc">Voltage, SOC %, charging status <span class="mono">(battery_interval_min)</span></div></div>
-<div class="row"><input type="number" id="interval-battery" min="0" max="1440" value="60"><span class="muted">min</span></div>
-</div>
-
-<div class="toggle-row">
-<div><div class="toggle-label">System Heartbeat</div><div class="toggle-desc">Mode, state, connectivity, IP <span class="mono">(system_interval_min)</span></div></div>
-<div class="row"><input type="number" id="interval-system" min="0" max="1440" value="30"><span class="muted">min</span></div>
-</div>
-<p class="muted" style="margin-top:16px;color:#ff9800">⚠️ Telemetry intervals are hardcoded in firmware. To change, reflash device.</p>
-</div>
-
-<!-- Event Telemetry -->
+<!-- Event Telemetry (Info only - always enabled) -->
 <div class="card">
 <h3>⚡ Event Telemetry</h3>
-<p class="muted">Toggle which events are published to AWS IoT.</p>
-<div class="section-header">Event Types</div>
-
-<div class="toggle-row">
-<div><div class="toggle-label">Pump Events</div><div class="toggle-desc">Pump start/stop, duration, volume <span class="mono">(pump_events)</span></div></div>
-<label class="toggle-switch"><input type="checkbox" id="event-pump" checked><span class="toggle-slider"></span></label>
-</div>
-
-<div class="toggle-row">
-<div><div class="toggle-label">Config Changes</div><div class="toggle-desc">Timer/sensor settings modified <span class="mono">(config_events)</span></div></div>
-<label class="toggle-switch"><input type="checkbox" id="event-config" checked><span class="toggle-slider"></span></label>
-</div>
-
-<div class="toggle-row">
-<div><div class="toggle-label">Command Responses</div><div class="toggle-desc">Acknowledgments to cloud commands <span class="mono">(response_events)</span></div></div>
-<label class="toggle-switch"><input type="checkbox" id="event-response" checked><span class="toggle-slider"></span></label>
+<p class="muted">Events are always published to AWS IoT (not configurable).</p>
+<div class="info-list">
+<div class="info-row"><span class="info-label">Pump Events</span><span class="info-value">✓ Always</span></div>
+<div class="info-row"><span class="info-label">Config Changes</span><span class="info-value">✓ Always</span></div>
+<div class="info-row"><span class="info-label">Command Responses</span><span class="info-value">✓ Always</span></div>
 </div>
 </div>
 
