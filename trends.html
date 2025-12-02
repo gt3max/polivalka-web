@@ -294,15 +294,10 @@ async function loadBatteryHistory() {
 }
 
 // Load pump history (for chart annotations)
+// NOTE: Endpoint not implemented yet - silently skip
 async function loadPumpHistory() {
-  try {
-    const data = await API.get('/pump/history');
-    pumpData = data || [];
-    console.log(`Loaded ${pumpData.length} pump events`);
-  } catch(e) {
-    console.error('Failed to load pump history:', e);
-    pumpData = [];
-  }
+  // TODO: Implement /pump/history endpoint when needed
+  pumpData = [];
 }
 
 // Load activity

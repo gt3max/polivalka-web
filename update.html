@@ -101,19 +101,22 @@ fileInput.addEventListener('change', function() {
 
 // Load current firmware info (local mode only)
 async function loadFirmwareInfo() {
-  // In cloud mode, skip - this endpoint only exists on ESP32
-  if (API.mode === 'cloud') {
-    document.getElementById('compile-datetime').textContent = '(available in local mode)';
+  const el = document.getElementById('compile-datetime');
+  if (!el) return;  // Element doesn't exist
+
+  // In cloud mode (GitHub Pages or plantapp.pro), skip - endpoint only exists on ESP32
+  const isCloud = window.location.hostname.includes('github.io') ||
+                  window.location.hostname.includes('plantapp.pro');
+  if (isCloud) {
+    el.textContent = '(available in local mode)';
     return;
   }
 
   try {
     const data = await fetch('/ota/status').then(r => r.json());
-    document.getElementById('compile-datetime').textContent =
-      data.compile_date + ' ' + data.compile_time;
+    el.textContent = data.compile_date + ' ' + data.compile_time;
   } catch(e) {
-    console.error('Failed to load firmware info:', e);
-    document.getElementById('compile-datetime').textContent = 'N/A';
+    el.textContent = 'N/A';
   }
 }
 
