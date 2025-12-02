@@ -652,7 +652,9 @@ function createExpandableRow(device, isOnline, hasWarnings, isCritical) {
   div.setAttribute('data-device-id', device.device_id);
 
   // Moisture & battery colors (как на home.html)
-  let moistureColor = device.moisture_pct < 20 ? '#b00' : device.moisture_pct < 40 ? '#f57c00' : '#0a0';
+  // Handle null moisture (no sensor telemetry yet)
+  const moisturePct = device.moisture_pct !== null && device.moisture_pct !== undefined ? device.moisture_pct : null;
+  let moistureColor = moisturePct === null ? '#666' : (moisturePct < 20 ? '#b00' : moisturePct < 40 ? '#f57c00' : '#0a0');
   let batteryColor = device.battery_pct === null ? '#0a0' : device.battery_pct < 10 ? '#b00' : device.battery_pct < 30 ? '#f57c00' : '#0a0';
 
   // Charging icon (⚡ если на розетке, как на home.html)
@@ -730,7 +732,7 @@ function createExpandableRow(device, isOnline, hasWarnings, isCritical) {
       <span class="device-name">🌱 ${device.device_id}</span>
       <div class="device-quick-info">
         ${plantName ? `<span style="font-weight:600">${plantName}</span>` : ''}
-        <span style="color:${moistureColor}">💧${device.moisture_pct}%</span>
+        <span style="color:${moistureColor}">💧${moisturePct !== null ? moisturePct + '%' : '—'}</span>
         <span style="color:${batteryColor}">${batteryDisplay}</span>
         ${modeBadgeCompact}
         ${automationControl}
@@ -752,7 +754,7 @@ function createExpandableRow(device, isOnline, hasWarnings, isCritical) {
       </div>
 
       <div class="detail-row" style="margin-top:8px">
-        <span class="detail-item" style="color:${moistureColor}">💧 Moisture: ${device.moisture_pct}% (ADC: ${device.adc_raw || 'N/A'})</span>
+        <span class="detail-item" style="color:${moistureColor}">💧 Moisture: ${moisturePct !== null ? moisturePct + '%' : '—'} (ADC: ${device.adc_raw || 'N/A'})</span>
         <span class="detail-item" style="color:${batteryColor}">${batteryDisplayLong}</span>
         <span class="detail-item">Water: ≈${((device.watering_duration || maxWateringTime) * (device.pump_calibration || pumpCalibration)).toFixed(0)}ml / ${device.watering_duration || maxWateringTime}s</span>
       </div>
@@ -824,7 +826,7 @@ function switchView(view) {
 
     const lastUpdateMs = device.last_update < 10000000000 ? device.last_update * 1000 : device.last_update;
     const isOnline = (Date.now() - lastUpdateMs) < 2 * 60 * 60 * 1000;
-    const hasWarnings = device.warnings.length > 0 || (device.battery_pct !== null && device.battery_pct < 10) || device.moisture_pct < 15;
+    const hasWarnings = device.warnings.length > 0 || (device.battery_pct !== null && device.battery_pct < 10) || (device.moisture_pct !== null && device.moisture_pct < 15);
     if (status === 'online' && !isOnline) return false;
     if (status === 'offline' && isOnline) return false;
     if (status === 'warning' && !hasWarnings) return false;
@@ -842,7 +844,7 @@ function createDeviceCard(device) {
   const isOnline = device.online !== undefined ? device.online :
                    ((Date.now() - (device.last_update < 10000000000 ? device.last_update * 1000 : device.last_update)) < 10 * 60 * 1000);
   const hasWarnings = device.warnings.length > 0;
-  const isCritical = (device.battery_pct !== null && device.battery_pct < 10) || device.moisture_pct < 15;
+  const isCritical = (device.battery_pct !== null && device.battery_pct < 10) || (device.moisture_pct !== null && device.moisture_pct < 15);
 
   let cardClass = 'device-card';
   if (!isOnline) cardClass += ' offline';
@@ -859,10 +861,13 @@ function createDeviceCard(device) {
 
   // Cards mode: full card (original)
 
-  // Moisture color
+  // Moisture color (handle null)
+  const cardMoisturePct = device.moisture_pct !== null && device.moisture_pct !== undefined ? device.moisture_pct : null;
   let moistureClass = 'good';
-  if (device.moisture_pct < 20) moistureClass = 'low';
-  else if (device.moisture_pct < 40) moistureClass = 'medium';
+  if (cardMoisturePct !== null) {
+    if (cardMoisturePct < 20) moistureClass = 'low';
+    else if (cardMoisturePct < 40) moistureClass = 'medium';
+  }
 
   // Battery color (safe null check)
   let batteryClass = 'good';
@@ -933,7 +938,7 @@ function createDeviceCard(device) {
     <div class="device-metrics">
       <div class="metric">
         <div class="metric-label">💧 Moisture</div>
-        <div class="metric-value ${moistureClass}">${device.moisture_pct}% <span style="font-size:11px;color:#666">(ADC: ${device.adc_raw || 'N/A'})</span></div>
+        <div class="metric-value ${moistureClass}">${cardMoisturePct !== null ? cardMoisturePct + '%' : '—'} <span style="font-size:11px;color:#666">(ADC: ${device.adc_raw || 'N/A'})</span></div>
       </div>
       <div class="metric">
         <div class="metric-label">🔋 Battery</div>
@@ -972,7 +977,7 @@ function updateStats(devices) {
     const lastUpdateMs = d.last_update < 10000000000 ? d.last_update * 1000 : d.last_update;
     return (Date.now() - lastUpdateMs) < 2 * 60 * 60 * 1000;
   }).length;
-  const warnings = devices.filter(d => d.warnings.length > 0 || (d.battery_pct !== null && d.battery_pct < 10) || d.moisture_pct < 15).length;
+  const warnings = devices.filter(d => d.warnings.length > 0 || (d.battery_pct !== null && d.battery_pct < 10) || (d.moisture_pct !== null && d.moisture_pct < 15)).length;
   const watering = devices.filter(d => d.state === 'PULSE' || d.state === 'WATERING').length;
 
   document.getElementById('stat-total').textContent = total;
@@ -997,7 +1002,7 @@ function filterDevices() {
     // Status filter
     const lastUpdateMs = device.last_update < 10000000000 ? device.last_update * 1000 : device.last_update;
     const isOnline = (Date.now() - lastUpdateMs) < 2 * 60 * 60 * 1000;
-    const hasWarnings = device.warnings.length > 0 || (device.battery_pct !== null && device.battery_pct < 10) || device.moisture_pct < 15;
+    const hasWarnings = device.warnings.length > 0 || (device.battery_pct !== null && device.battery_pct < 10) || (device.moisture_pct !== null && device.moisture_pct < 15);
     if (status === 'online' && !isOnline) return false;
     if (status === 'offline' && isOnline) return false;
     if (status === 'warning' && !hasWarnings) return false;
