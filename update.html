@@ -35,6 +35,37 @@ idf.py build<br>
 build/polivalka.bin
 </div></div></div>
 <script>
+// Cloud mode detection
+const IS_CLOUD_MODE = window.location.hostname === 'gt3max.github.io' ||
+                      window.location.hostname === 'plantapp.pro' ||
+                      window.location.hostname === 'www.plantapp.pro';
+
+// In Cloud mode, show message that remote OTA is coming soon
+if (IS_CLOUD_MODE) {
+  document.addEventListener('DOMContentLoaded', function() {
+    const container = document.querySelector('.container');
+    if (container) {
+      container.innerHTML = `
+        <div class="card" style="text-align:center;padding:40px">
+          <h3>Firmware Update</h3>
+          <p style="font-size:48px;margin:20px 0">📦</p>
+          <p class="muted" style="font-size:16px">
+            Remote OTA update is coming soon!
+          </p>
+          <p class="muted" style="margin-top:16px">
+            For now, connect directly to your device's WiFi network (Polivalka-XXXXXX)
+            <br>and access <b>http://192.168.4.1/update.html</b> for firmware updates.
+          </p>
+          <p style="margin-top:24px">
+            <a href="fleet.html" style="color:#2c5f2d;font-weight:600">Back to Fleet Manager</a>
+          </p>
+        </div>
+      `;
+    }
+    document.querySelector('.header').style.display = 'none';
+  });
+}
+
 // Map internal controller states to user-friendly display
 function mapStateToDisplay(state, pumpRunning = false) {
   if (pumpRunning) return { text: 'Watering', emoji: '💧', color: '#1976d2' };
@@ -45,6 +76,7 @@ function mapStateToDisplay(state, pumpRunning = false) {
 }
 
 async function updateBattery(){
+  if (IS_CLOUD_MODE) return;
   try {
     const b = await fetch('/api/battery/status',{cache:'no-store'}).then(r=>r.json());
     const el = document.getElementById('battery-status');
