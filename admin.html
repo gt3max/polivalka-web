@@ -280,9 +280,12 @@ async function loadDeviceConfig() {
     });
     if (statusRes.ok) {
       const statusData = await statusRes.json();
-      if (statusData.wifi && statusData.wifi.scan_interval_hours) {
-        document.getElementById('wifi-scan-interval').value = statusData.wifi.scan_interval_hours;
-        console.log('[Admin] Loaded wifi_scan_interval:', statusData.wifi.scan_interval_hours);
+      console.log('[Admin] get_status response:', statusData);
+      // Response structure: { response: { data: { wifi: { scan_interval_hours: N } } } }
+      const wifiData = statusData?.response?.data?.wifi;
+      if (wifiData && wifiData.scan_interval_hours) {
+        document.getElementById('wifi-scan-interval').value = wifiData.scan_interval_hours;
+        console.log('[Admin] Loaded wifi_scan_interval:', wifiData.scan_interval_hours);
       }
     }
   } catch(e) {
