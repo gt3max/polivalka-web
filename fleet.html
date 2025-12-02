@@ -1093,25 +1093,25 @@ async function readSensor(deviceId) {
 
 async function refreshSensor(deviceId) {
   try {
-    // Use cached status endpoint (fast, no MQTT wait)
-    const result = await API.get(`/device/${deviceId}/status`);
+    // Use real-time sensor endpoint (sends MQTT command, waits for device response)
+    const result = await API.get(`/device/${deviceId}/sensor`);
 
     // Update device in allDevices array
     const device = allDevices.find(d => d.device_id === deviceId);
     if (device) {
-      device.moisture_pct = result.percent;
-      device.adc_raw = result.adc;
-      device.mode = result.system_state?.mode || 'manual';
+      device.moisture_pct = result.moisture_pct;
+      device.adc_raw = result.adc_raw;
+      device.mode = result.mode || 'manual';
       device.battery = result.battery;
       device.last_update = result.timestamp;
-      device.online = result.online;
+      device.online = true;  // Device responded = online
 
       // Re-render devices
       renderDevices(allDevices);
       updateStats(allDevices);
 
       // Show success feedback with updated values
-      showToast(`✅ Refreshed: ${result.percent}% | Mode: ${device.mode}`, 'success');
+      showToast(`✅ Refreshed: ${result.moisture_pct}% | Mode: ${device.mode}`, 'success');
     }
 
   } catch(e) {
@@ -1123,18 +1123,18 @@ async function refreshSensor(deviceId) {
 // Silent version for auto-refresh when expanding Home (no UI feedback)
 async function refreshSensorSilent(deviceId) {
   try {
-    // Use cached status endpoint (fast, no MQTT wait)
-    const result = await API.get(`/device/${deviceId}/status`);
+    // Use real-time sensor endpoint (sends MQTT command, waits for device response)
+    const result = await API.get(`/device/${deviceId}/sensor`);
 
     // Update device in allDevices array
     const device = allDevices.find(d => d.device_id === deviceId);
     if (device) {
-      device.moisture_pct = result.percent;
-      device.adc_raw = result.adc;
-      device.mode = result.system_state?.mode || 'manual';
+      device.moisture_pct = result.moisture_pct;
+      device.adc_raw = result.adc_raw;
+      device.mode = result.mode || 'manual';
       device.battery = result.battery;
       device.last_update = result.timestamp;
-      device.online = result.online;
+      device.online = true;  // Device responded = online
 
       // Re-render devices (will preserve expanded state)
       renderDevices(allDevices);
