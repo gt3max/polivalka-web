@@ -125,19 +125,24 @@ if(s.calibrated){pumpBadge.textContent='✓ Calibrated';pumpBadge.style.backgrou
 else{pumpBadge.textContent='⚠️ Defaults';pumpBadge.style.background='#fff3e0';pumpBadge.style.color='#f57c00';}}catch(e){}}
 async function pumpTest(duration){
 const btn=document.getElementById('test-'+duration+'s');if(!btn)return;
-btn.disabled=true;btn.textContent='⏳';
+btn.disabled=true;btn.style.background='#1976d2';btn.style.color='#fff';
 try{
   if (IS_CLOUD) {
-    // Cloud: use pump endpoint with duration
     await API.post('/pump?sec='+duration);
-    await new Promise(r=>setTimeout(r,2000)); // Wait for MQTT
   } else {
-    // Local: direct ESP32 API
     await fetch('/api/pump/test?sec='+duration,{cache:'no-store'});
   }
-  btn.textContent='✓';
-  setTimeout(()=>{btn.textContent='Run '+duration+'s';btn.disabled=false;},2000);
-} catch(e){btn.textContent='❌';setTimeout(()=>{btn.textContent='Run '+duration+'s';btn.disabled=false;},2000);}}
+  // Countdown timer showing pump running
+  let remaining=duration;
+  btn.textContent='💧 '+remaining+'s';
+  const timer=setInterval(()=>{
+    remaining--;
+    if(remaining>0){btn.textContent='💧 '+remaining+'s';}
+    else{clearInterval(timer);btn.textContent='✓ Done';btn.style.background='#4caf50';
+      setTimeout(()=>{btn.textContent='Run '+duration+'s';btn.disabled=false;btn.style.background='';btn.style.color='';},1500);}
+  },1000);
+} catch(e){btn.textContent='❌ Error';btn.style.background='#c62828';
+  setTimeout(()=>{btn.textContent='Run '+duration+'s';btn.disabled=false;btn.style.background='';btn.style.color='';},2000);}}
 async function stopPump(){
 const btn=document.getElementById('btn-stop-pump');
 btn.disabled=true;btn.textContent='⏳';
