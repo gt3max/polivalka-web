@@ -195,17 +195,10 @@ async function setTime(){
     const [year, month, day] = dateInput.split('-').map(Number);
     const [hour, minute] = timeInput.split(':').map(Number);
 
-    // Send POST request with JSON
-    const response = await API.post('/time/set', {
-      method: 'POST',
-      headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({year, month, day, hour, minute, second: 0}),
-      cache: 'no-store'
-    });
+    // Send POST request with JSON (API.post handles stringify)
+    const data = await API.post('/time/set', {year, month, day, hour, minute, second: 0});
 
-    const data = await response.json();
-
-    if (data.success) {
+    if (data.success || data.command_id) {
       alert('Date & Time set successfully!');
       updateTime();
     } else {
