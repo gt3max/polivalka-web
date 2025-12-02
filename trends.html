@@ -48,7 +48,7 @@
     .tab-content.active{display:block}
 </style>
 </head><body>
-<div class="header"><div><h1 id="device-id-header" style="margin:0;font-size:15px">🌱 Polivalka</h1><div style="font-size:13px">📍 <span id="location-text">—</span> / <span id="room-text">—</span><span id="custom-name-suffix"></span></div><div style="font-size:11px;margin-top:4px"><span id="battery-status">🔋 —</span> · <span id="header-state">💤 Standby</span></div></div><div class="header-info"><div id="header-time" class="mono" style="font-size:11px">Time: --:--</div><div style="font-size:11px" id="header-mode">Mode: <span id="mode-badge" class="status-badge status-off">Off</span></div><div style="font-size:11px" id="header-conn">📡 <span id="conn-text">Offline</span></div></div></div>
+<div class="header"><div><h1 id="device-id-header" style="margin:0;font-size:15px">🌱 Polivalka</h1><div style="font-size:13px">📍 <span id="location-text">—</span> / <span id="room-text">—</span><span id="custom-name-suffix"></span></div><div style="font-size:11px;margin-top:4px"><span id="battery-status">🔋 —</span> · <span id="header-state">💤 Standby</span></div></div><div class="header-info"><div id="header-time" class="mono" style="font-size:11px">--:--</div><div style="font-size:11px" id="header-mode">Mode: <span id="mode-badge" class="status-badge status-off">Off</span></div><div style="font-size:11px" id="header-conn">📡 <span id="conn-text">Offline</span></div></div></div>
 <div class="nav"><a href="fleet.html">Fleet</a><a href="home.html">Home</a><a href="timer.html">Timer</a><a href="sensor.html">Sensor</a><a href="settings.html">Settings</a><a href="calibration.html">Calibration</a><a href="online.html">Online</a><a href="trends.html" class="active">Trends</a><a href="update.html">Update</a><a href="admin.html" id="admin-nav-link" style="display:none">Admin</a></div>
 
 <div class="container">
@@ -205,10 +205,10 @@ async function updateTime() {
     const t = await API.get('/time/status');
     const timeEl = document.getElementById('header-time');
     if (t.time_set && t.current_time) {
-      timeEl.textContent = 'Time: ' + t.current_time.substring(11,16);
+      timeEl.textContent = ' + t.current_time.substring(11,16);
       timeEl.className = 'mono ok';
     } else {
-      timeEl.textContent = 'Time: not set';
+      timeEl.textContent = '--:--';
       timeEl.className = 'mono danger';
     }
   } catch(e) {}

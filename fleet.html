@@ -224,7 +224,7 @@
       <div style="font-size:11px;opacity:0.8" id="user-info">Admin Dashboard</div>
     </div>
     <div class="header-info">
-      <div id="header-time" class="mono" style="font-size:11px">Time: --:--</div>
+      <div id="header-time" class="mono" style="font-size:11px">--:--</div>
       <div style="font-size:11px"><span id="admin-link"></span><span style="cursor:pointer" onclick="logout()">👤 <span id="username">Admin</span> | Logout</span></div>
     </div>
   </div>
@@ -1036,7 +1036,7 @@ function timeAgo(timestamp) {
 function updateTime() {
   const now = new Date();
   const timeStr = now.toTimeString().substring(0, 5);
-  document.getElementById('header-time').textContent = 'Time: ' + timeStr;
+  document.getElementById('header-time').textContent = timeStr;
 }
 
 function showToast(message, type = 'info') {
