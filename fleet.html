@@ -1372,8 +1372,8 @@ async function bulkAction(action) {
     const failed = results.filter(r => !r.success).length;
     showToast(`✅ Refresh complete! ${successful} online, ${failed} offline`, failed > 0 ? 'warning' : 'success');
 
-    // Also refresh from backend to ensure sync (after 1 sec delay)
-    setTimeout(() => loadDevices(), 1000);
+    // NOTE: Don't auto-reload from backend - it would overwrite our fresh online status
+    // with old telemetry-based calculation. User can manually reload if needed.
 
   } else if (action === 'ota') {
     massOTAUpdate();
