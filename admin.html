@@ -85,14 +85,14 @@
 </div>
 </div>
 
-<!-- Event Telemetry (Info only - always enabled) -->
+<!-- Event Telemetry (Info only) -->
 <div class="card">
 <h3>⚡ Event Telemetry</h3>
-<p class="muted">Events are always published to AWS IoT (not configurable).</p>
+<p class="muted">Events published to AWS IoT when triggered (not configurable).</p>
 <div class="info-list">
-<div class="info-row"><span class="info-label">Pump Events</span><span class="info-value">✓ Always</span></div>
-<div class="info-row"><span class="info-label">Config Changes</span><span class="info-value">✓ Always</span></div>
-<div class="info-row"><span class="info-label">Command Responses</span><span class="info-value">✓ Always</span></div>
+<div class="info-row"><span class="info-label">Pump Events</span><span class="info-value">On start/stop</span></div>
+<div class="info-row"><span class="info-label">Config Changes</span><span class="info-value">On save</span></div>
+<div class="info-row"><span class="info-label">Command Responses</span><span class="info-value">On command</span></div>
 </div>
 </div>
 
@@ -265,56 +265,6 @@ async function loadDeviceConfig() {
   updateCostEstimate();
 }
 
-// Save config to device
-async function saveConfig() {
-  if (!selectedDeviceId) {
-    alert('Please select a device');
-    return;
-  }
-
-  const config = {
-    command: 'set_telemetry_config',
-    params: {
-      sensor_interval_min: parseInt(document.getElementById('interval-sensor').value) || 0,
-      battery_interval_min: parseInt(document.getElementById('interval-battery').value) || 0,
-      system_interval_min: parseInt(document.getElementById('interval-system').value) || 0,
-      pump_events: document.getElementById('event-pump').checked,
-      config_events: document.getElementById('event-config').checked,
-      response_events: document.getElementById('event-response').checked
-    }
-  };
-
-  const statusEl = document.getElementById('save-status');
-  statusEl.style.display = 'block';
-  statusEl.textContent = 'Sending command to device...';
-  statusEl.style.color = '#ff9800';
-
-  try {
-    // Send command via cloud API
-    // Endpoint: POST /device/{deviceId}/command
-    const res = await fetch(`${API.cloudBase}/device/${selectedDeviceId}/command`, {
-      method: 'POST',
-      headers: {
-        ...API.getAuthHeaders(),
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify(config)
-    });
-
-    if (res.ok) {
-      statusEl.textContent = '✓ Command sent! Device will apply settings.';
-      statusEl.style.color = '#4caf50';
-    } else {
-      const err = await res.json().catch(() => ({}));
-      statusEl.textContent = '✗ Failed: ' + (err.error || res.status);
-      statusEl.style.color = '#f44';
-    }
-  } catch(e) {
-    statusEl.textContent = '✗ Failed: ' + e.message;
-    statusEl.style.color = '#f44';
-  }
-}
-
 // Save pump preset (factory default)
 async function savePumpPreset() {
   const selectedDeviceId = document.getElementById('device-select').value;
@@ -423,36 +373,16 @@ async function saveWifiSettings() {
   }
 }
 
-// Quick actions
-function setAllIntervals(minutes) {
-  document.getElementById('interval-sensor').value = minutes;
-  document.getElementById('interval-battery').value = minutes;
-  document.getElementById('interval-system').value = minutes;
-  updateCostEstimate();
-}
 
-function enableAllEvents() {
-  document.getElementById('event-pump').checked = true;
-  document.getElementById('event-config').checked = true;
-  document.getElementById('event-response').checked = true;
-}
-
-function disableAllEvents() {
-  document.getElementById('event-pump').checked = false;
-  document.getElementById('event-config').checked = false;
-  document.getElementById('event-response').checked = false;
-}
-
-// Cost estimate
+// Cost estimate (using hardcoded firmware intervals)
 function updateCostEstimate() {
-  const sensorMin = parseInt(document.getElementById('interval-sensor').value) || 0;
-  const batteryMin = parseInt(document.getElementById('interval-battery').value) || 0;
-  const systemMin = parseInt(document.getElementById('interval-system').value) || 0;
+  // Hardcoded in firmware: sensor=60min, battery=60min, system=30min
+  const sensorMin = 60;
+  const batteryMin = 60;
+  const systemMin = 30;
 
   // Messages per month (30 days)
-  const msgsPerDay = (sensorMin > 0 ? 1440/sensorMin : 0) +
-                     (batteryMin > 0 ? 1440/batteryMin : 0) +
-                     (systemMin > 0 ? 1440/systemMin : 0);
+  const msgsPerDay = (1440/sensorMin) + (1440/batteryMin) + (1440/systemMin);
   const msgsPerMonth = Math.round(msgsPerDay * 30);
 
   // Free tier: 250,000 messages/month (first 12 months), then 0
@@ -467,11 +397,6 @@ function updateCostEstimate() {
   document.getElementById('est-cost').textContent = '$' + cost + '/month';
   document.getElementById('est-cost').className = 'mono ' + (cost == 0 ? 'ok' : 'danger');
 }
-
-// Update cost on input change
-document.querySelectorAll('input[type="number"]').forEach(input => {
-  input.addEventListener('input', updateCostEstimate);
-});
 
 // Admin email whitelist
 const ADMIN_EMAILS = ['mrmaximshurigin@gmail.com', 'admin@plantapp.pro'];
