@@ -1107,6 +1107,8 @@ async function refreshSensor(deviceId) {
       device.moisture_pct = result.moisture_pct;
       device.adc_raw = result.adc_raw;
       device.mode = result.mode || 'manual';
+      device.state = result.state || 'DISABLED';
+      device.pump_running = result.pump_running || false;
       // Battery: extract from object {voltage, percent, charging}
       if (result.battery) {
         device.battery_pct = result.battery.percent;
@@ -1120,7 +1122,7 @@ async function refreshSensor(deviceId) {
       updateStats(allDevices);
 
       // Show success feedback with updated values
-      showToast(`✅ Refreshed: ${result.moisture_pct}% | Mode: ${device.mode}`, 'success');
+      showToast(`✅ Refreshed: ${result.moisture_pct}% | ${device.state}`, 'success');
     }
 
   } catch(e) {
@@ -1141,6 +1143,8 @@ async function refreshSensorSilent(deviceId) {
       device.moisture_pct = result.moisture_pct;
       device.adc_raw = result.adc_raw;
       device.mode = result.mode || 'manual';
+      device.state = result.state || 'DISABLED';
+      device.pump_running = result.pump_running || false;
       // Battery: extract from object {voltage, percent, charging}
       if (result.battery) {
         device.battery_pct = result.battery.percent;
@@ -1353,6 +1357,8 @@ async function bulkAction(action) {
         device.moisture_pct = result.moisture_pct;
         device.adc_raw = result.adc_raw;
         device.mode = result.mode || 'manual';
+        device.state = result.state || 'DISABLED';
+        device.pump_running = result.pump_running || false;
         // Battery: extract from object {voltage, percent, charging}
         if (result.battery) {
           device.battery_pct = result.battery.percent;
