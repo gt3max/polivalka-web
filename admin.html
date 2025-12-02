@@ -87,11 +87,7 @@
 <div><div class="toggle-label">System Heartbeat</div><div class="toggle-desc">Mode, state, connectivity, IP <span class="mono">(system_interval_min)</span></div></div>
 <div class="row"><input type="number" id="interval-system" min="0" max="1440" value="30"><span class="muted">min</span></div>
 </div>
-<div class="row" style="margin-top:16px;gap:8px">
-<button class="primary" onclick="saveConfig()" id="save-btn-top">💾 Save All Telemetry</button>
-<button onclick="setAllIntervals(60)">All 60m</button>
-<button onclick="setAllIntervals(5)">Test 5m</button>
-</div>
+<p class="muted" style="margin-top:16px;color:#ff9800">⚠️ Telemetry intervals are hardcoded in firmware. To change, reflash device.</p>
 </div>
 
 <!-- Event Telemetry -->
@@ -167,31 +163,6 @@
 </div>
 </div>
 
-<!-- Actions -->
-<div class="card">
-<h3>💾 Apply Telemetry Config</h3>
-<p class="muted">Changes are sent to device via AWS IoT MQTT command.</p>
-<div class="row">
-<button class="primary" onclick="saveConfig()" id="save-btn" disabled>Save to Device</button>
-<button onclick="loadDeviceConfig()">Reload</button>
-</div>
-<div id="save-status" style="margin-top:12px;display:none" class="muted"></div>
-</div>
-
-<!-- Quick Actions -->
-<div class="card">
-<h3>🚀 Quick Actions</h3>
-<div class="row" style="margin-bottom:12px">
-<button onclick="setAllIntervals(60)">All to 60 min</button>
-<button onclick="setAllIntervals(30)">All to 30 min</button>
-<button onclick="setAllIntervals(5)">Testing (5 min)</button>
-<button class="danger" onclick="setAllIntervals(0)">Disable All</button>
-</div>
-<div class="row">
-<button onclick="enableAllEvents()">Enable All Events</button>
-<button class="danger" onclick="disableAllEvents()">Disable All Events</button>
-</div>
-</div>
 
 <!-- Costs Estimate -->
 <div class="card">
