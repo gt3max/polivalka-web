@@ -278,6 +278,10 @@ async function updateStatus(){
     const stopBtn = document.getElementById('btn-stop');
     const manualBtn = document.getElementById('btn-manual');
 
+    // Cloud mode: Don't override pump UI if local countdown is active (optimistic update)
+    // The local countdown provides instant feedback while we wait for telemetry update
+    const localCountdownActive = IS_CLOUD && window.pumpCountdownInterval;
+
     if (s.pump_running) {
       pumpIndicator.style.display = 'block';
       stopBtn.disabled = false;
@@ -287,17 +291,22 @@ async function updateStatus(){
       manualBtn.style.background = '#ccc';
       manualBtn.style.borderColor = '#aaa';
 
-      const elapsedSec = Math.floor(s.pump_elapsed_ms / 1000);
-      const totalSec = s.pump_remaining_ms > 0 ? Math.floor((s.pump_elapsed_ms + s.pump_remaining_ms) / 1000) : elapsedSec;
-      const remainingSec = s.pump_remaining_ms > 0 ? Math.floor(s.pump_remaining_ms / 1000) : 0;
+      // Only update from server data if no local countdown (prevents flicker)
+      if (!localCountdownActive) {
+        const elapsedSec = Math.floor(s.pump_elapsed_ms / 1000);
+        const totalSec = s.pump_remaining_ms > 0 ? Math.floor((s.pump_elapsed_ms + s.pump_remaining_ms) / 1000) : elapsedSec;
+        const remainingSec = s.pump_remaining_ms > 0 ? Math.floor(s.pump_remaining_ms / 1000) : 0;
 
-      // Show elapsed timer as button text
-      manualBtn.textContent = `Watering ${elapsedSec}s`;
+        // Show elapsed timer as button text
+        manualBtn.textContent = `Watering ${elapsedSec}s`;
 
-      document.getElementById('pump-elapsed').textContent = elapsedSec + 's';
-      document.getElementById('pump-total').textContent = totalSec + 's';
-      document.getElementById('pump-remaining').textContent = s.pump_remaining_ms > 0 ? `(${remainingSec}s left)` : '(manual mode)';
-    } else {
+        document.getElementById('pump-elapsed').textContent = elapsedSec + 's';
+        document.getElementById('pump-total').textContent = totalSec + 's';
+        document.getElementById('pump-remaining').textContent = s.pump_remaining_ms > 0 ? `(${remainingSec}s left)` : '(manual mode)';
+      }
+    } else if (!localCountdownActive) {
+      // Only reset UI if no local countdown is active
+      // This prevents server data (which may be stale) from hiding the local countdown
       pumpIndicator.style.display = 'none';
       stopBtn.disabled = true;
 
@@ -424,13 +433,56 @@ async function manualWater(){
   const sec = unit === 'min' ? duration * 60 : duration;
 
   const btn = document.getElementById('btn-manual');
+  const stopBtn = document.getElementById('btn-stop');
+  const pumpIndicator = document.getElementById('pump-running');
+
   btn.disabled = true;
   btn.textContent = 'Starting...';
   btn.style.background = '#ccc';
 
   try {
     await API.post('/pump?sec=' + sec);
-    updateStatus();  // Сразу обновляем статус (покажет pump running)
+
+    // Cloud mode: Optimistic UI update (MQTT command sent, show pump running immediately)
+    // ESP32 will execute the command, but telemetry update takes 2-3 min
+    if (IS_CLOUD) {
+      // Show pump running indicator immediately
+      pumpIndicator.style.display = 'block';
+      stopBtn.disabled = false;
+      btn.textContent = `Watering ${sec}s`;
+
+      // Set up local countdown display
+      document.getElementById('pump-elapsed').textContent = '0s';
+      document.getElementById('pump-total').textContent = sec + 's';
+      document.getElementById('pump-remaining').textContent = `(${sec}s left)`;
+
+      // Start local countdown timer for Cloud mode
+      let elapsed = 0;
+      const countdownInterval = setInterval(() => {
+        elapsed++;
+        const remaining = Math.max(0, sec - elapsed);
+        document.getElementById('pump-elapsed').textContent = elapsed + 's';
+        document.getElementById('pump-remaining').textContent = `(${remaining}s left)`;
+        btn.textContent = `Watering ${elapsed}s`;
+
+        if (elapsed >= sec) {
+          clearInterval(countdownInterval);
+          // Pump finished - reset UI
+          pumpIndicator.style.display = 'none';
+          stopBtn.disabled = true;
+          btn.disabled = false;
+          btn.textContent = 'Water Now';
+          btn.style.background = '';
+          btn.style.borderColor = '';
+        }
+      }, 1000);
+
+      // Store interval ID so STOP can clear it
+      window.pumpCountdownInterval = countdownInterval;
+    } else {
+      // Local mode: ESP32 responds immediately
+      updateStatus();
+    }
   } catch(e) {
     alert('Error: ' + e.message);
     btn.disabled = false;
@@ -498,11 +550,41 @@ async function toggleSensorAuto(checked){
 }
 
 async function stopPump(){
+  const btn = document.getElementById('btn-manual');
+  const stopBtn = document.getElementById('btn-stop');
+  const pumpIndicator = document.getElementById('pump-running');
+
+  stopBtn.disabled = true;
+  stopBtn.textContent = 'Stopping...';
+
   try {
     await API.post('/pump/stop');
-    updateStatus();
+
+    // Cloud mode: Optimistic UI update
+    if (IS_CLOUD) {
+      // Clear the countdown timer if running
+      if (window.pumpCountdownInterval) {
+        clearInterval(window.pumpCountdownInterval);
+        window.pumpCountdownInterval = null;
+      }
+
+      // Reset UI immediately
+      pumpIndicator.style.display = 'none';
+      btn.disabled = false;
+      btn.textContent = 'Water Now';
+      btn.style.background = '';
+      btn.style.borderColor = '';
+    } else {
+      // Local mode: ESP32 responds immediately
+      updateStatus();
+    }
+
+    // Reset STOP button
+    stopBtn.textContent = 'STOP';
   } catch(e) {
     alert('Error: ' + e.message);
+    stopBtn.disabled = false;
+    stopBtn.textContent = 'STOP';
   }
 }
 
