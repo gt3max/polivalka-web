@@ -14,26 +14,11 @@
     button{padding:8px 12px;border-radius:8px;border:1px solid #888;background:#fafafa;cursor:pointer}
     button.primary{background:#2c5f2d;color:#fff;border-color:#2c5f2d}
     button.danger{background:#b00;color:#fff;border-color:#900}
-    input[type="number"]{padding:8px 10px;border:1px solid #555;border-radius:8px;background:#1a1a2e;color:#fff;width:80px;font-size:16px}
     .muted{color:#999;font-size:14px}
     .danger{color:#f44}
     .ok{color:#4f4}
     .warning-banner{background:#ff9800;color:#000;padding:12px;text-align:center;font-weight:600}
-
-    /* Toggle switch */
-    .toggle-row{display:flex;justify-content:space-between;align-items:center;padding:12px 0;border-bottom:1px solid #333}
-    .toggle-row:last-child{border-bottom:none}
-    .toggle-label{color:#fff}
-    .toggle-desc{color:#999;font-size:12px;margin-top:2px}
-    .toggle-switch{position:relative;display:inline-block;width:51px;height:31px;flex-shrink:0}
-    .toggle-switch input{opacity:0;width:0;height:0}
-    .toggle-slider{position:absolute;cursor:pointer;top:0;left:0;right:0;bottom:0;background:#555;border-radius:31px;transition:0.3s}
-    .toggle-slider:before{position:absolute;content:"";height:27px;width:27px;left:2px;bottom:2px;background:#fff;border-radius:50%;transition:0.3s}
-    input:checked+.toggle-slider{background:#4caf50}
-    input:checked+.toggle-slider:before{transform:translateX(20px)}
-
-    /* Section headers */
-    .section-header{color:#ff9800;font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:1px;margin-bottom:12px;padding-bottom:8px;border-bottom:1px solid #333}
+    .info-banner{background:#2196f3;color:#fff;padding:12px;text-align:center;font-size:13px}
 
     /* Status indicator */
     .status-dot{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:6px}
@@ -42,13 +27,20 @@
 
     /* Device selector */
     select{padding:8px 12px;border:1px solid #555;border-radius:8px;background:#1a1a2e;color:#fff;font-size:14px;width:100%;max-width:300px}
+
+    /* Info table */
+    .info-table{width:100%;border-collapse:collapse}
+    .info-table td{padding:8px 0;border-bottom:1px solid #333;color:#fff}
+    .info-table td:first-child{color:#999;width:40%}
+    .info-table tr:last-child td{border-bottom:none}
 </style>
 </head><body>
 <div class="warning-banner">ADMIN PANEL — NOT FOR USERS</div>
+<div class="info-banner">This page is READ-ONLY. Device configuration is done via AP web interface (192.168.4.1)</div>
 <div class="header">
 <div style="display:flex;align-items:center;gap:12px">
   <a id="back-link" href="fleet.html" style="color:#fff;text-decoration:none;font-size:14px">← Fleet</a>
-  <div><h1 style="margin:0">🔧 Admin Panel</h1><div style="font-size:11px;opacity:0.8">AWS IoT Configuration</div></div>
+  <div><h1 style="margin:0">🔧 Admin Panel</h1><div style="font-size:11px;opacity:0.8">Device Information</div></div>
 </div>
 <div class="header-info"><div class="mono" style="font-size:11px"><span class="status-dot" id="aws-status-dot"></span><span id="aws-status">Checking...</span></div></div>
 </div>
@@ -58,463 +50,57 @@
 <!-- Device Selector -->
 <div class="card">
 <h3>📱 Select Device</h3>
-<select id="device-select" onchange="loadDeviceConfig()">
+<select id="device-select" onchange="loadDeviceInfo()">
 <option value="">— Select device —</option>
 </select>
-<div id="device-info" style="margin-top:12px;display:none">
-<div class="muted">Device ID: <span id="selected-device-id" class="mono">—</span></div>
-<div class="muted">Last seen: <span id="selected-device-lastseen" class="mono">—</span></div>
+</div>
+
+<!-- Device Info (read-only) -->
+<div id="device-info-card" class="card" style="display:none">
+<h3>📊 Device Information</h3>
+<table class="info-table">
+<tr><td>Device ID</td><td id="info-device-id" class="mono">—</td></tr>
+<tr><td>Custom Name</td><td id="info-name">—</td></tr>
+<tr><td>Status</td><td id="info-status">—</td></tr>
+<tr><td>Firmware</td><td id="info-firmware" class="mono">—</td></tr>
+<tr><td>Reboot Count</td><td id="info-reboots" class="mono">—</td></tr>
+<tr><td>Mode</td><td id="info-mode">—</td></tr>
+<tr><td>Controller State</td><td id="info-state">—</td></tr>
+<tr><td>Moisture</td><td id="info-moisture">—</td></tr>
+<tr><td>Battery</td><td id="info-battery">—</td></tr>
+<tr><td>Last Update</td><td id="info-last-update">—</td></tr>
+<tr><td>Owner</td><td id="info-owner">—</td></tr>
+</table>
+<div class="row" style="margin-top:16px">
+<button onclick="refreshDevice()">🔄 Refresh</button>
+<button onclick="viewDevicePage()">🏠 Open Device Page</button>
 </div>
 </div>
 
-<!-- Periodic Telemetry -->
-<div class="card">
-<h3>📊 Periodic Telemetry</h3>
-<p class="muted">Set intervals in minutes. 0 = disabled.</p>
-<div class="section-header">Intervals (minutes)</div>
-
-<div class="toggle-row">
-<div><div class="toggle-label">Sensor Telemetry</div><div class="toggle-desc">Moisture %, ADC raw value <span class="mono">(sensor_interval_min)</span></div></div>
-<div class="row"><input type="number" id="interval-sensor" min="0" max="1440" value="60"><span class="muted">min</span></div>
-</div>
-
-<div class="toggle-row">
-<div><div class="toggle-label">Battery Telemetry</div><div class="toggle-desc">Voltage, SOC %, charging status <span class="mono">(battery_interval_min)</span></div></div>
-<div class="row"><input type="number" id="interval-battery" min="0" max="1440" value="60"><span class="muted">min</span></div>
-</div>
-
-<div class="toggle-row">
-<div><div class="toggle-label">System Heartbeat</div><div class="toggle-desc">Mode, state, connectivity, IP <span class="mono">(system_interval_min)</span></div></div>
-<div class="row"><input type="number" id="interval-system" min="0" max="1440" value="30"><span class="muted">min</span></div>
-</div>
-<div class="row" style="margin-top:16px;gap:8px">
-<button class="primary" onclick="saveConfig()" id="save-btn-top">💾 Save All Telemetry</button>
-<button onclick="setAllIntervals(60)">All 60m</button>
-<button onclick="setAllIntervals(5)">Test 5m</button>
-</div>
-</div>
-
-<!-- Event Telemetry -->
-<div class="card">
-<h3>⚡ Event Telemetry</h3>
-<p class="muted">Toggle which events are published to AWS IoT.</p>
-<div class="section-header">Event Types</div>
-
-<div class="toggle-row">
-<div><div class="toggle-label">Pump Events</div><div class="toggle-desc">Pump start/stop, duration, volume <span class="mono">(pump_events)</span></div></div>
-<label class="toggle-switch"><input type="checkbox" id="event-pump" checked><span class="toggle-slider"></span></label>
-</div>
-
-<div class="toggle-row">
-<div><div class="toggle-label">Config Changes</div><div class="toggle-desc">Timer/sensor settings modified <span class="mono">(config_events)</span></div></div>
-<label class="toggle-switch"><input type="checkbox" id="event-config" checked><span class="toggle-slider"></span></label>
-</div>
-
-<div class="toggle-row">
-<div><div class="toggle-label">Command Responses</div><div class="toggle-desc">Acknowledgments to cloud commands <span class="mono">(response_events)</span></div></div>
-<label class="toggle-switch"><input type="checkbox" id="event-response" checked><span class="toggle-slider"></span></label>
-</div>
-</div>
-
-<!-- Factory Presets -->
-<div class="card">
-<h3>📋 Factory Presets</h3>
-<p class="muted">Default values for uncalibrated devices. User's physical calibration (Calibration page) takes priority.</p>
-
-<div class="section-header">Pump Preset</div>
-<div class="toggle-row">
-<div><div class="toggle-label">Default Flow Rate</div><div class="toggle-desc">Used if pump not calibrated <span class="mono">(ml_per_sec)</span></div></div>
-<div class="row"><input type="number" id="calib-pump-mlsec" min="0.1" max="50" step="0.1" value="2.5" style="width:80px"><span class="muted">ml/sec</span></div>
-</div>
-<div class="row" style="margin-top:8px">
-<button onclick="savePumpPreset()">Set Pump Preset</button>
-</div>
-
-<div class="section-header" style="margin-top:20px">Sensor Preset (ADC values)</div>
-<div class="toggle-row">
-<div><div class="toggle-label">ADC Water</div><div class="toggle-desc">Default 100% moisture <span class="mono">(adc_water)</span></div></div>
-<div class="row"><input type="number" id="calib-adc-water" min="0" max="4095" value="1200" style="width:80px"></div>
-</div>
-<div class="toggle-row">
-<div><div class="toggle-label">ADC Dry Soil</div><div class="toggle-desc">Default 0% moisture <span class="mono">(adc_dry_soil)</span></div></div>
-<div class="row"><input type="number" id="calib-adc-dry" min="0" max="4095" value="2800" style="width:80px"></div>
-</div>
-<div class="toggle-row">
-<div><div class="toggle-label">ADC Air</div><div class="toggle-desc">Default air reference <span class="mono">(adc_air)</span></div></div>
-<div class="row"><input type="number" id="calib-adc-air" min="0" max="4095" value="3200" style="width:80px"></div>
-</div>
-<div class="row" style="margin-top:8px">
-<button onclick="saveSensorPreset()">Set Sensor Preset</button>
-</div>
-</div>
-
-<!-- WiFi Settings -->
-<div class="card">
-<h3>📶 WiFi Settings</h3>
-<p class="muted">WiFi reconnect behavior when connection is lost.</p>
-
-<div class="section-header">Phase 2: Periodic Scan</div>
-<div class="toggle-row">
-<div><div class="toggle-label">Scan Interval</div><div class="toggle-desc">How often to scan for saved WiFi when disconnected <span class="mono">(wifi_scan_interval_hours)</span></div></div>
-<div class="row"><input type="number" id="wifi-scan-interval" min="1" max="168" value="24" style="width:80px"><span class="muted">hours</span></div>
-</div>
-<div class="row" style="margin-top:8px">
-<button onclick="saveWifiSettings()">Set WiFi Settings</button>
-</div>
-<div class="muted" style="margin-top:12px;font-size:12px">
-💡 Phase 1 (immediate): 5 reconnect attempts × 30 sec<br>
-💡 Phase 2 (long-term): Scan every N hours until WiFi returns
-</div>
-</div>
-
-<!-- Actions -->
-<div class="card">
-<h3>💾 Apply Telemetry Config</h3>
-<p class="muted">Changes are sent to device via AWS IoT MQTT command.</p>
-<div class="row">
-<button class="primary" onclick="saveConfig()" id="save-btn" disabled>Save to Device</button>
-<button onclick="loadDeviceConfig()">Reload</button>
-</div>
-<div id="save-status" style="margin-top:12px;display:none" class="muted"></div>
+<!-- Telemetry Info -->
+<div id="telemetry-card" class="card" style="display:none">
+<h3>📈 Telemetry Intervals (firmware defaults)</h3>
+<p class="muted">These are compiled into firmware. To change, update app_main.c and reflash.</p>
+<table class="info-table">
+<tr><td>Sensor Telemetry</td><td class="mono">60 min</td></tr>
+<tr><td>Battery Telemetry</td><td class="mono">60 min</td></tr>
+<tr><td>System Heartbeat</td><td class="mono">30 min</td></tr>
+</table>
 </div>
 
 <!-- Quick Actions -->
 <div class="card">
 <h3>🚀 Quick Actions</h3>
-<div class="row" style="margin-bottom:12px">
-<button onclick="setAllIntervals(60)">All to 60 min</button>
-<button onclick="setAllIntervals(30)">All to 30 min</button>
-<button onclick="setAllIntervals(5)">Testing (5 min)</button>
-<button class="danger" onclick="setAllIntervals(0)">Disable All</button>
-</div>
 <div class="row">
-<button onclick="enableAllEvents()">Enable All Events</button>
-<button class="danger" onclick="disableAllEvents()">Disable All Events</button>
-</div>
-</div>
-
-<!-- Costs Estimate -->
-<div class="card">
-<h3>💰 AWS Cost Estimate</h3>
-<p class="muted">Based on current settings</p>
-<div id="cost-estimate" style="color:#fff;font-size:14px">
-<div>Messages/month: <span id="est-messages" class="mono ok">—</span></div>
-<div>Within Free Tier: <span id="est-free-tier" class="mono">—</span></div>
-<div>Estimated cost: <span id="est-cost" class="mono">—</span></div>
+<button onclick="window.location.href='fleet.html'">📋 Fleet View</button>
+<button onclick="window.location.href='ota.html'">📦 OTA Update</button>
 </div>
 </div>
 
 </div>
 
 <script>
-let selectedDeviceId = null;
-
-// Load device list - call /devices directly (no device prefix!)
-async function loadDevices() {
-  console.log('[Admin] Loading devices...');
-  try {
-    // Call API directly without device prefix (admin needs ALL devices, not device-specific)
-    const url = `${API.cloudBase}/devices`;
-    const res = await fetch(url, {
-      headers: API.getAuthHeaders(),
-      cache: 'no-store'
-    });
-    if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || res.status);
-    const devices = await res.json();
-    console.log('[Admin] Got devices:', devices);
-    const select = document.getElementById('device-select');
-    select.innerHTML = '<option value="">— Select device —</option>';
-
-    if (!devices || devices.length === 0) {
-      document.getElementById('aws-status').textContent = 'No devices found';
-      document.getElementById('aws-status-dot').className = 'status-dot offline';
-      return;
-    }
-
-    for (const d of devices) {
-      const opt = document.createElement('option');
-      opt.value = d.device_id;
-      // Admin needs device_id, show custom name in parentheses if different
-      const shortId = d.device_id.replace('Polivalka-', '');
-      const customName = (d.name && d.name !== d.device_id && d.name !== 'Polivalka') ? ` "${d.name}"` : '';
-      opt.textContent = shortId + customName + (d.online ? ' (online)' : ' (offline)');
-      select.appendChild(opt);
-    }
-
-    // Check AWS connection
-    document.getElementById('aws-status').textContent = 'Connected (' + devices.length + ' devices)';
-    document.getElementById('aws-status-dot').className = 'status-dot online';
-  } catch(e) {
-    console.error('[Admin] Failed to load devices:', e);
-    document.getElementById('aws-status').textContent = 'Error: ' + e.message;
-    document.getElementById('aws-status-dot').className = 'status-dot offline';
-  }
-}
-
-// Load config for selected device
-async function loadDeviceConfig() {
-  const deviceId = document.getElementById('device-select').value;
-  if (!deviceId) {
-    document.getElementById('device-info').style.display = 'none';
-    document.getElementById('save-btn').disabled = true;
-    return;
-  }
-
-  selectedDeviceId = deviceId;
-  document.getElementById('selected-device-id').textContent = deviceId;
-  document.getElementById('device-info').style.display = 'block';
-  document.getElementById('save-btn').disabled = false;
-
-  // Fetch actual config from cloud (stored when admin saves)
-  try {
-    const url = `${API.cloudBase}/device/${deviceId}/telemetry/config`;
-    const res = await fetch(url, {
-      headers: API.getAuthHeaders(),
-      cache: 'no-store'
-    });
-
-    if (res.ok) {
-      const config = await res.json();
-      console.log('[Admin] Loaded config:', config);
-
-      // Periodic intervals
-      document.getElementById('interval-sensor').value = config.sensor_interval_min || 60;
-      document.getElementById('interval-battery').value = config.battery_interval_min || 60;
-      document.getElementById('interval-system').value = config.system_interval_min || 30;
-
-      // Event toggles
-      document.getElementById('event-pump').checked = config.pump_events !== false;
-      document.getElementById('event-config').checked = config.config_events !== false;
-      document.getElementById('event-response').checked = config.response_events !== false;
-
-      // Show last updated time
-      if (config.last_updated) {
-        const date = new Date(config.last_updated * 1000);
-        document.getElementById('selected-device-lastseen').textContent = 'Config saved: ' + date.toLocaleString();
-      } else {
-        document.getElementById('selected-device-lastseen').textContent = 'Using defaults (never configured)';
-      }
-    } else {
-      // API error - show defaults
-      const err = await res.json().catch(() => ({}));
-      console.warn('[Admin] Config API error:', err.error || res.status);
-      document.getElementById('selected-device-lastseen').textContent = 'Error: ' + (err.error || res.status);
-    }
-  } catch(e) {
-    console.error('[Admin] Failed to load config:', e);
-    document.getElementById('selected-device-lastseen').textContent = 'Network error';
-  }
-
-  updateCostEstimate();
-}
-
-// Save config to device
-async function saveConfig() {
-  if (!selectedDeviceId) {
-    alert('Please select a device');
-    return;
-  }
-
-  const config = {
-    command: 'set_telemetry_config',
-    params: {
-      sensor_interval_min: parseInt(document.getElementById('interval-sensor').value) || 0,
-      battery_interval_min: parseInt(document.getElementById('interval-battery').value) || 0,
-      system_interval_min: parseInt(document.getElementById('interval-system').value) || 0,
-      pump_events: document.getElementById('event-pump').checked,
-      config_events: document.getElementById('event-config').checked,
-      response_events: document.getElementById('event-response').checked
-    }
-  };
-
-  const statusEl = document.getElementById('save-status');
-  statusEl.style.display = 'block';
-  statusEl.textContent = 'Sending command to device...';
-  statusEl.style.color = '#ff9800';
-
-  try {
-    // Send command via cloud API
-    // Endpoint: POST /device/{deviceId}/command
-    const res = await fetch(`${API.cloudBase}/device/${selectedDeviceId}/command`, {
-      method: 'POST',
-      headers: {
-        ...API.getAuthHeaders(),
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify(config)
-    });
-
-    if (res.ok) {
-      statusEl.textContent = '✓ Command sent! Device will apply settings.';
-      statusEl.style.color = '#4caf50';
-    } else {
-      const err = await res.json().catch(() => ({}));
-      statusEl.textContent = '✗ Failed: ' + (err.error || res.status);
-      statusEl.style.color = '#f44';
-    }
-  } catch(e) {
-    statusEl.textContent = '✗ Failed: ' + e.message;
-    statusEl.style.color = '#f44';
-  }
-}
-
-// Save pump preset (factory default)
-async function savePumpPreset() {
-  const selectedDeviceId = document.getElementById('device-select').value;
-  if (!selectedDeviceId) {
-    alert('Please select a device first');
-    return;
-  }
-
-  const mlPerSec = parseFloat(document.getElementById('calib-pump-mlsec').value);
-  if (isNaN(mlPerSec) || mlPerSec < 0.1 || mlPerSec > 50) {
-    alert('ml/sec must be between 0.1 and 50');
-    return;
-  }
-
-  try {
-    const res = await fetch(`${API.cloudBase}/device/${selectedDeviceId}/command`, {
-      method: 'POST',
-      headers: { ...API.getAuthHeaders(), 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        command: 'set_pump_calibration',
-        params: { ml_per_sec: mlPerSec }
-      })
-    });
-
-    if (res.ok) {
-      alert(`✓ Pump preset set to ${mlPerSec} ml/sec`);
-    } else {
-      const err = await res.json().catch(() => ({}));
-      alert('Failed: ' + (err.error || res.status));
-    }
-  } catch(e) {
-    alert('Error: ' + e.message);
-  }
-}
-
-// Save sensor preset (factory defaults)
-async function saveSensorPreset() {
-  const selectedDeviceId = document.getElementById('device-select').value;
-  if (!selectedDeviceId) {
-    alert('Please select a device first');
-    return;
-  }
-
-  const adcWater = parseInt(document.getElementById('calib-adc-water').value);
-  const adcDry = parseInt(document.getElementById('calib-adc-dry').value);
-  const adcAir = parseInt(document.getElementById('calib-adc-air').value);
-
-  if ([adcWater, adcDry, adcAir].some(v => isNaN(v) || v < 0 || v > 4095)) {
-    alert('ADC values must be between 0 and 4095');
-    return;
-  }
-
-  try {
-    const res = await fetch(`${API.cloudBase}/device/${selectedDeviceId}/command`, {
-      method: 'POST',
-      headers: { ...API.getAuthHeaders(), 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        command: 'set_sensor_calibration',
-        params: { adc_water: adcWater, adc_dry_soil: adcDry, adc_air: adcAir }
-      })
-    });
-
-    if (res.ok) {
-      alert(`✓ Sensor preset saved: water=${adcWater}, dry=${adcDry}, air=${adcAir}`);
-    } else {
-      const err = await res.json().catch(() => ({}));
-      alert('Failed: ' + (err.error || res.status));
-    }
-  } catch(e) {
-    alert('Error: ' + e.message);
-  }
-}
-
-// WiFi settings
-async function saveWifiSettings() {
-  if (!selectedDeviceId) {
-    alert('Select a device first');
-    return;
-  }
-
-  const scanInterval = parseInt(document.getElementById('wifi-scan-interval').value);
-
-  if (isNaN(scanInterval) || scanInterval < 1 || scanInterval > 168) {
-    alert('Scan interval must be between 1 and 168 hours');
-    return;
-  }
-
-  try {
-    const res = await fetch(`${API.cloudBase}/device/${selectedDeviceId}/command`, {
-      method: 'POST',
-      headers: { ...API.getAuthHeaders(), 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        command: 'set_wifi_config',
-        params: { wifi_scan_interval_hours: scanInterval }
-      })
-    });
-
-    if (res.ok) {
-      alert(`✓ WiFi settings saved: scan every ${scanInterval} hours`);
-    } else {
-      const err = await res.json().catch(() => ({}));
-      alert('Failed: ' + (err.error || res.status));
-    }
-  } catch(e) {
-    alert('Error: ' + e.message);
-  }
-}
-
-// Quick actions
-function setAllIntervals(minutes) {
-  document.getElementById('interval-sensor').value = minutes;
-  document.getElementById('interval-battery').value = minutes;
-  document.getElementById('interval-system').value = minutes;
-  updateCostEstimate();
-}
-
-function enableAllEvents() {
-  document.getElementById('event-pump').checked = true;
-  document.getElementById('event-config').checked = true;
-  document.getElementById('event-response').checked = true;
-}
-
-function disableAllEvents() {
-  document.getElementById('event-pump').checked = false;
-  document.getElementById('event-config').checked = false;
-  document.getElementById('event-response').checked = false;
-}
-
-// Cost estimate
-function updateCostEstimate() {
-  const sensorMin = parseInt(document.getElementById('interval-sensor').value) || 0;
-  const batteryMin = parseInt(document.getElementById('interval-battery').value) || 0;
-  const systemMin = parseInt(document.getElementById('interval-system').value) || 0;
-
-  // Messages per month (30 days)
-  const msgsPerDay = (sensorMin > 0 ? 1440/sensorMin : 0) +
-                     (batteryMin > 0 ? 1440/batteryMin : 0) +
-                     (systemMin > 0 ? 1440/systemMin : 0);
-  const msgsPerMonth = Math.round(msgsPerDay * 30);
-
-  // Free tier: 250,000 messages/month (first 12 months), then 0
-  // Cost: $1 per million messages after free tier
-  const freeTierLimit = 250000;
-  const withinFreeTier = msgsPerMonth < freeTierLimit;
-  const cost = withinFreeTier ? 0 : ((msgsPerMonth - freeTierLimit) / 1000000).toFixed(4);
-
-  document.getElementById('est-messages').textContent = msgsPerMonth.toLocaleString();
-  document.getElementById('est-free-tier').textContent = withinFreeTier ? '✓ Yes' : '✗ No';
-  document.getElementById('est-free-tier').className = 'mono ' + (withinFreeTier ? 'ok' : 'danger');
-  document.getElementById('est-cost').textContent = '$' + cost + '/month';
-  document.getElementById('est-cost').className = 'mono ' + (cost == 0 ? 'ok' : 'danger');
-}
-
-// Update cost on input change
-document.querySelectorAll('input[type="number"]').forEach(input => {
-  input.addEventListener('input', updateCostEstimate);
-});
+let selectedDevice = null;
 
 // Admin email whitelist
 const ADMIN_EMAILS = ['mrmaximshurigin@gmail.com', 'admin@plantapp.pro'];
@@ -523,12 +109,10 @@ const ADMIN_EMAILS = ['mrmaximshurigin@gmail.com', 'admin@plantapp.pro'];
 function checkAdminAccess() {
   const userEmail = localStorage.getItem('user_email');
   if (!userEmail) {
-    // Not logged in
     window.location.href = 'login.html';
     return false;
   }
   if (!ADMIN_EMAILS.includes(userEmail.toLowerCase())) {
-    // Not admin - show access denied
     document.body.innerHTML = `
       <div style="display:flex;align-items:center;justify-content:center;height:100vh;background:#1a1a2e">
         <div style="text-align:center;color:#fff">
@@ -543,10 +127,133 @@ function checkAdminAccess() {
   return true;
 }
 
+// Load device list
+async function loadDevices() {
+  try {
+    const url = `${API.cloudBase}/devices`;
+    const res = await fetch(url, {
+      headers: API.getAuthHeaders(),
+      cache: 'no-store'
+    });
+    if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || res.status);
+    const devices = await res.json();
+
+    const select = document.getElementById('device-select');
+    select.innerHTML = '<option value="">— Select device —</option>';
+
+    if (!devices || devices.length === 0) {
+      document.getElementById('aws-status').textContent = 'No devices found';
+      document.getElementById('aws-status-dot').className = 'status-dot offline';
+      return;
+    }
+
+    for (const d of devices) {
+      const opt = document.createElement('option');
+      opt.value = d.device_id;
+      const shortId = d.device_id.replace('Polivalka-', '');
+      const customName = (d.name && d.name !== d.device_id && d.name !== 'Polivalka') ? ` "${d.name}"` : '';
+      opt.textContent = shortId + customName + (d.online ? ' (online)' : ' (offline)');
+      select.appendChild(opt);
+    }
+
+    document.getElementById('aws-status').textContent = 'Connected (' + devices.length + ' devices)';
+    document.getElementById('aws-status-dot').className = 'status-dot online';
+  } catch(e) {
+    document.getElementById('aws-status').textContent = 'Error: ' + e.message;
+    document.getElementById('aws-status-dot').className = 'status-dot offline';
+  }
+}
+
+// Load device info
+async function loadDeviceInfo() {
+  const deviceId = document.getElementById('device-select').value;
+  if (!deviceId) {
+    document.getElementById('device-info-card').style.display = 'none';
+    document.getElementById('telemetry-card').style.display = 'none';
+    return;
+  }
+
+  try {
+    // Get device from /devices list
+    const url = `${API.cloudBase}/devices`;
+    const res = await fetch(url, { headers: API.getAuthHeaders() });
+    const devices = await res.json();
+    selectedDevice = devices.find(d => d.device_id === deviceId);
+
+    if (!selectedDevice) {
+      alert('Device not found');
+      return;
+    }
+
+    // Fill info
+    document.getElementById('info-device-id').textContent = selectedDevice.device_id;
+    document.getElementById('info-name').textContent = selectedDevice.name || '—';
+    document.getElementById('info-status').innerHTML = selectedDevice.online ?
+      '<span style="color:#4f4">● Online</span>' : '<span style="color:#f44">○ Offline</span>';
+    document.getElementById('info-firmware').textContent = selectedDevice.firmware_version || '—';
+    document.getElementById('info-reboots').textContent = selectedDevice.reboot_count ?? '—';
+    document.getElementById('info-mode').textContent = selectedDevice.mode || '—';
+    document.getElementById('info-state').textContent = selectedDevice.state || '—';
+    document.getElementById('info-moisture').textContent = selectedDevice.moisture_pct !== null ?
+      selectedDevice.moisture_pct + '%' : '—';
+
+    // Battery
+    if (selectedDevice.battery_pct !== null) {
+      const charging = selectedDevice.battery_charging ? ' ⚡' : '';
+      document.getElementById('info-battery').textContent = selectedDevice.battery_pct + '%' + charging;
+    } else {
+      document.getElementById('info-battery').textContent = '⚡ AC Power';
+    }
+
+    // Last update
+    if (selectedDevice.last_update) {
+      const ts = selectedDevice.last_update < 10000000000 ? selectedDevice.last_update * 1000 : selectedDevice.last_update;
+      document.getElementById('info-last-update').textContent = new Date(ts).toLocaleString();
+    } else {
+      document.getElementById('info-last-update').textContent = '—';
+    }
+
+    document.getElementById('info-owner').textContent = selectedDevice.owner_email || '—';
+
+    document.getElementById('device-info-card').style.display = 'block';
+    document.getElementById('telemetry-card').style.display = 'block';
+
+  } catch(e) {
+    alert('Error loading device: ' + e.message);
+  }
+}
+
+// Refresh device via MQTT
+async function refreshDevice() {
+  if (!selectedDevice) return;
+
+  try {
+    const res = await fetch(`${API.cloudBase}/device/${selectedDevice.device_id}/sensor`, {
+      headers: API.getAuthHeaders()
+    });
+
+    if (res.ok) {
+      alert('✓ Device refreshed');
+      loadDeviceInfo();
+    } else {
+      const err = await res.json().catch(() => ({}));
+      alert('Failed: ' + (err.error || err.hint || res.status));
+    }
+  } catch(e) {
+    alert('Error: ' + e.message);
+  }
+}
+
+// Open device page
+function viewDevicePage() {
+  if (!selectedDevice) return;
+  window.location.href = `home.html?device=${selectedDevice.device_id}`;
+}
+
 // Get device from URL if present
 const urlDeviceId = new URLSearchParams(window.location.search).get('device');
 
-// Update back link - if came from device page, go back there
+// Update back link
 if (urlDeviceId) {
   const backLink = document.getElementById('back-link');
   backLink.href = `home.html?device=${urlDeviceId}`;
@@ -556,16 +263,14 @@ if (urlDeviceId) {
 // Init
 if (checkAdminAccess()) {
   loadDevices().then(() => {
-    // Auto-select device if came from device page
     if (urlDeviceId) {
       const select = document.getElementById('device-select');
       select.value = urlDeviceId;
       if (select.value === urlDeviceId) {
-        loadDeviceConfig();  // Load config for pre-selected device
+        loadDeviceInfo();
       }
     }
   });
-  updateCostEstimate();
 }
 </script>
 </body></html>
