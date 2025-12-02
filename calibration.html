@@ -123,29 +123,43 @@ const ml=s.ml_per_sec||10.0;document.getElementById('current-ml-per-sec').textCo
 const pumpBadge=document.getElementById('pump-cal-badge');
 if(s.calibrated){pumpBadge.textContent='✓ Calibrated';pumpBadge.style.background='#e8f5e9';pumpBadge.style.color='#2e7d32';}
 else{pumpBadge.textContent='⚠️ Defaults';pumpBadge.style.background='#fff3e0';pumpBadge.style.color='#f57c00';}}catch(e){}}
+let activePumpTimer=null;
+let activePumpBtn=null;
+let activePumpDuration=null;
+
 async function pumpTest(duration){
 const btn=document.getElementById('test-'+duration+'s');if(!btn)return;
 btn.disabled=true;btn.style.background='#1976d2';btn.style.color='#fff';
+activePumpBtn=btn;activePumpDuration=duration;
 try{
   if (IS_CLOUD) {
     await API.post('/pump?sec='+duration);
   } else {
     await fetch('/api/pump/test?sec='+duration,{cache:'no-store'});
   }
-  // Countdown timer showing pump running
   let remaining=duration;
   btn.textContent='💧 '+remaining+'s';
-  const timer=setInterval(()=>{
+  activePumpTimer=setInterval(()=>{
     remaining--;
     if(remaining>0){btn.textContent='💧 '+remaining+'s';}
-    else{clearInterval(timer);btn.textContent='✓ Done';btn.style.background='#4caf50';
+    else{clearPumpTimer();btn.textContent='✓ Done';btn.style.background='#4caf50';
       setTimeout(()=>{btn.textContent='Run '+duration+'s';btn.disabled=false;btn.style.background='';btn.style.color='';},1500);}
   },1000);
 } catch(e){btn.textContent='❌ Error';btn.style.background='#c62828';
   setTimeout(()=>{btn.textContent='Run '+duration+'s';btn.disabled=false;btn.style.background='';btn.style.color='';},2000);}}
+
+function clearPumpTimer(){
+  if(activePumpTimer){clearInterval(activePumpTimer);activePumpTimer=null;}
+}
+
 async function stopPump(){
 const btn=document.getElementById('btn-stop-pump');
 btn.disabled=true;btn.textContent='⏳';
+clearPumpTimer();
+if(activePumpBtn){
+  activePumpBtn.textContent='⏹ Stopped';activePumpBtn.style.background='#ff9800';
+  setTimeout(()=>{activePumpBtn.textContent='Run '+activePumpDuration+'s';activePumpBtn.disabled=false;activePumpBtn.style.background='';activePumpBtn.style.color='';activePumpBtn=null;},1500);
+}
 try{
   if (IS_CLOUD) {
     await API.post('/pump/stop');

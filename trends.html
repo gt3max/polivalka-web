@@ -205,7 +205,7 @@ async function updateTime() {
     const t = await API.get('/time/status');
     const timeEl = document.getElementById('header-time');
     if (t.time_set && t.current_time) {
-      timeEl.textContent = ' + t.current_time.substring(11,16);
+      timeEl.textContent = t.current_time.substring(11,16);
       timeEl.className = 'mono ok';
     } else {
       timeEl.textContent = '--:--';

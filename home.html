@@ -161,7 +161,7 @@ async function updateStatus(){
       if (s.timestamp) {
         const date = new Date(s.timestamp * 1000);
         const timeStr = date.toLocaleTimeString('en-US', {hour: '2-digit', minute: '2-digit', hour12: false});
-        timeEl.textContent = ' + timeStr;
+        timeEl.textContent = timeStr;
         timeEl.className = 'mono ok';
       } else {
         timeEl.textContent = '--:--';

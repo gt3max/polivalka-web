@@ -57,7 +57,7 @@ async function updateBattery(){
 
 async function updateTime(){
   try {
-    const t = await fetch('/api/time/status',{cache:'no-store'}).then(r=>r.json());
+    const t = IS_CLOUD ? await API.get('/time/status') : await fetch('/api/time/status',{cache:'no-store'}).then(r=>r.json());
     const timeEl = document.getElementById('header-time');
     if (t.time_set && t.current_time) {
       timeEl.textContent=t.current_time.substring(11,16);
