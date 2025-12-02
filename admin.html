@@ -233,11 +233,36 @@ async function loadDeviceConfig() {
   selectedDeviceId = deviceId;
   document.getElementById('selected-device-id').textContent = deviceId;
   document.getElementById('device-info').style.display = 'block';
+  document.getElementById('selected-device-lastseen').textContent = 'Loading...';
 
-  // Note: Telemetry intervals are hardcoded in firmware
-  // Pump/Sensor presets are set via individual buttons
-  document.getElementById('selected-device-lastseen').textContent = 'Ready for preset changes';
-  console.log('[Admin] Device selected:', deviceId);
+  // Fetch current device data to populate fields
+  try {
+    const res = await fetch(`${API.cloudBase}/devices`, {
+      headers: API.getAuthHeaders(),
+      cache: 'no-store'
+    });
+    if (res.ok) {
+      const devices = await res.json();
+      const device = devices.find(d => d.device_id === deviceId);
+      if (device) {
+        // Populate pump calibration (from DynamoDB)
+        const pumpCalib = device.pump_calibration || 2.5;
+        document.getElementById('calib-pump-mlsec').value = pumpCalib;
+        console.log('[Admin] Loaded pump_calibration:', pumpCalib);
+
+        // Show last seen info
+        if (device.last_seen) {
+          const lastSeen = new Date(device.last_seen * 1000);
+          document.getElementById('selected-device-lastseen').textContent = 'Last seen: ' + lastSeen.toLocaleString();
+        } else {
+          document.getElementById('selected-device-lastseen').textContent = 'Ready for preset changes';
+        }
+      }
+    }
+  } catch(e) {
+    console.warn('[Admin] Failed to load device data:', e);
+    document.getElementById('selected-device-lastseen').textContent = 'Ready for preset changes';
+  }
 
   updateCostEstimate();
 }
