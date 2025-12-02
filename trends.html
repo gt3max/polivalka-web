@@ -54,15 +54,19 @@
 <div class="container">
   <!-- Period Selector -->
   <div class="card">
-    <div class="row" style="justify-content:space-between">
+    <div class="row" style="justify-content:space-between;flex-wrap:wrap;gap:8px">
       <div class="period-selector">
         <button onclick="setPeriod(1)" id="btn-1d">24h</button>
         <button onclick="setPeriod(3)" id="btn-3d">3 days</button>
         <button onclick="setPeriod(7)" id="btn-7d" class="active">7 days</button>
       </div>
-      <div>
-        <button onclick="exportCSV()" title="Download all data as CSV">📥 Export CSV</button>
-        <button onclick="refreshAll()">🔄 Refresh</button>
+      <div class="row" style="gap:4px">
+        <div class="chart-type-selector" style="display:flex;gap:2px;border:1px solid #ddd;border-radius:8px;overflow:hidden">
+          <button onclick="setChartType('line')" id="btn-line" class="active" style="border:none;border-radius:0" title="Line chart (connected)">📈</button>
+          <button onclick="setChartType('scatter')" id="btn-scatter" style="border:none;border-radius:0" title="Scatter chart (points)">⚫</button>
+        </div>
+        <button onclick="exportCSV()" title="Download all data as CSV">📥</button>
+        <button onclick="refreshAll()">🔄</button>
       </div>
     </div>
   </div>
@@ -144,6 +148,7 @@
 <script>
 // State
 let currentPeriod = 7; // days
+let chartType = 'line'; // 'line' (connected) or 'scatter' (points only)
 let sensorData = [];
 let batteryData = [];
 let activityData = [];
@@ -216,6 +221,19 @@ function setPeriod(days) {
   document.getElementById('btn-' + days + 'd').classList.add('active');
   document.getElementById('period-label').textContent = days === 1 ? '24 hours' : days + ' days';
   refreshAll();
+}
+
+// Chart type selector (line = connected, scatter = points only)
+function setChartType(type) {
+  chartType = type;
+  document.getElementById('btn-line').classList.toggle('active', type === 'line');
+  document.getElementById('btn-scatter').classList.toggle('active', type === 'scatter');
+  // Re-render charts with new type
+  const cutoff = Date.now() - (currentPeriod * 24 * 60 * 60 * 1000);
+  const filteredSensor = sensorData.filter(d => d.timestamp * 1000 > cutoff);
+  const filteredBattery = batteryData.filter(d => d.timestamp * 1000 > cutoff);
+  renderMoistureChart(filteredSensor);
+  renderBatteryChart(filteredBattery);
 }
 
 // Tab switching
@@ -357,19 +375,23 @@ function renderMoistureChart(data) {
       };
     });
 
+  // Chart type settings
+  const isScatter = chartType === 'scatter';
+
   moistureChart = new Chart(ctx, {
-    type: 'line',
+    type: isScatter ? 'scatter' : 'line',
     data: {
       labels: labels,
       datasets: [{
         label: 'Moisture %',
-        data: values,
+        data: isScatter ? data.map(d => ({ x: new Date(d.timestamp * 1000), y: d.moisture_percent })) : values,
         borderColor: '#1976d2',
-        backgroundColor: 'rgba(25, 118, 210, 0.1)',
-        fill: true,
-        tension: 0.3,
-        pointRadius: 2,
-        pointHoverRadius: 5
+        backgroundColor: isScatter ? '#1976d2' : 'rgba(25, 118, 210, 0.1)',
+        fill: !isScatter,
+        tension: isScatter ? 0 : 0.3,
+        pointRadius: isScatter ? 4 : 2,
+        pointHoverRadius: 6,
+        showLine: !isScatter
       }]
     },
     options: {
@@ -428,29 +450,34 @@ function renderBatteryChart(data) {
   const percentValues = withBattery.map(d => d.percent);
   const voltageValues = withBattery.map(d => d.voltage);
 
+  // Chart type settings
+  const isScatter = chartType === 'scatter';
+
   batteryChart = new Chart(ctx, {
-    type: 'line',
+    type: isScatter ? 'scatter' : 'line',
     data: {
       labels: labels,
       datasets: [
         {
           label: 'Battery %',
-          data: percentValues,
+          data: isScatter ? withBattery.map(d => ({ x: new Date(d.timestamp * 1000), y: d.percent })) : percentValues,
           borderColor: '#4caf50',
-          backgroundColor: 'rgba(76, 175, 80, 0.1)',
-          fill: true,
-          tension: 0.3,
-          pointRadius: 2,
+          backgroundColor: isScatter ? '#4caf50' : 'rgba(76, 175, 80, 0.1)',
+          fill: !isScatter,
+          tension: isScatter ? 0 : 0.3,
+          pointRadius: isScatter ? 4 : 2,
+          showLine: !isScatter,
           yAxisID: 'y'
         },
         {
           label: 'Voltage V',
-          data: voltageValues,
+          data: isScatter ? withBattery.map(d => ({ x: new Date(d.timestamp * 1000), y: d.voltage })) : voltageValues,
           borderColor: '#ff9800',
-          borderDash: [5, 5],
+          borderDash: isScatter ? [] : [5, 5],
           fill: false,
-          tension: 0.3,
-          pointRadius: 1,
+          tension: isScatter ? 0 : 0.3,
+          pointRadius: isScatter ? 3 : 1,
+          showLine: !isScatter,
           yAxisID: 'y1'
         }
       ]
