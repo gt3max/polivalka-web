@@ -1335,23 +1335,24 @@ async function bulkAction(action) {
     showToast(`🔄 Refreshing ${allDevices.length} devices...`, 'info');
 
     // PARALLEL requests to all devices (not sequential!)
-    // Using cached /status endpoint - fast, no MQTT wait
+    // Using REAL-TIME /sensor endpoint - sends MQTT command, waits for response
     const promises = allDevices.map(async device => {
       try {
-        // Cached status check (fast, no MQTT wait)
-        const result = await API.get(`/device/${device.device_id}/status`);
+        // Real-time sensor request (MQTT command → device response)
+        const result = await API.get(`/device/${device.device_id}/sensor`);
 
-        // Update device data
-        device.moisture_pct = result.percent;
-        device.adc_raw = result.adc;
-        device.mode = result.system_state?.mode || 'manual';
+        // Update device data from real-time response
+        device.moisture_pct = result.moisture_pct;
+        device.adc_raw = result.adc_raw;
+        device.mode = result.mode || 'manual';
         device.battery = result.battery;
         device.last_update = result.timestamp;
-        device.online = result.online;
+        device.online = true;  // Device responded = definitely online!
 
         return {device_id: device.device_id, success: true};
       } catch(e) {
-        // Error → keep existing online status
+        // Error (timeout/offline) → mark as offline
+        device.online = false;
         return {device_id: device.device_id, success: false, error: e.message};
       }
     });
