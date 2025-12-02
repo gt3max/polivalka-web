@@ -227,54 +227,17 @@ async function loadDeviceConfig() {
   const deviceId = document.getElementById('device-select').value;
   if (!deviceId) {
     document.getElementById('device-info').style.display = 'none';
-    document.getElementById('save-btn').disabled = true;
     return;
   }
 
   selectedDeviceId = deviceId;
   document.getElementById('selected-device-id').textContent = deviceId;
   document.getElementById('device-info').style.display = 'block';
-  document.getElementById('save-btn').disabled = false;
 
-  // Fetch actual config from cloud (stored when admin saves)
-  try {
-    const url = `${API.cloudBase}/device/${deviceId}/telemetry/config`;
-    const res = await fetch(url, {
-      headers: API.getAuthHeaders(),
-      cache: 'no-store'
-    });
-
-    if (res.ok) {
-      const config = await res.json();
-      console.log('[Admin] Loaded config:', config);
-
-      // Periodic intervals
-      document.getElementById('interval-sensor').value = config.sensor_interval_min || 60;
-      document.getElementById('interval-battery').value = config.battery_interval_min || 60;
-      document.getElementById('interval-system').value = config.system_interval_min || 30;
-
-      // Event toggles
-      document.getElementById('event-pump').checked = config.pump_events !== false;
-      document.getElementById('event-config').checked = config.config_events !== false;
-      document.getElementById('event-response').checked = config.response_events !== false;
-
-      // Show last updated time
-      if (config.last_updated) {
-        const date = new Date(config.last_updated * 1000);
-        document.getElementById('selected-device-lastseen').textContent = 'Config saved: ' + date.toLocaleString();
-      } else {
-        document.getElementById('selected-device-lastseen').textContent = 'Using defaults (never configured)';
-      }
-    } else {
-      // API error - show defaults
-      const err = await res.json().catch(() => ({}));
-      console.warn('[Admin] Config API error:', err.error || res.status);
-      document.getElementById('selected-device-lastseen').textContent = 'Error: ' + (err.error || res.status);
-    }
-  } catch(e) {
-    console.error('[Admin] Failed to load config:', e);
-    document.getElementById('selected-device-lastseen').textContent = 'Network error';
-  }
+  // Note: Telemetry intervals are hardcoded in firmware
+  // Pump/Sensor presets are set via individual buttons
+  document.getElementById('selected-device-lastseen').textContent = 'Ready for preset changes';
+  console.log('[Admin] Device selected:', deviceId);
 
   updateCostEstimate();
 }
