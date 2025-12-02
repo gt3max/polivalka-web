@@ -143,6 +143,25 @@
 </div>
 </div>
 
+<!-- WiFi Settings -->
+<div class="card">
+<h3>📶 WiFi Settings</h3>
+<p class="muted">WiFi reconnect behavior when connection is lost.</p>
+
+<div class="section-header">Phase 2: Periodic Scan</div>
+<div class="toggle-row">
+<div><div class="toggle-label">Scan Interval</div><div class="toggle-desc">How often to scan for saved WiFi when disconnected <span class="mono">(wifi_scan_interval_hours)</span></div></div>
+<div class="row"><input type="number" id="wifi-scan-interval" min="1" max="168" value="24" style="width:80px"><span class="muted">hours</span></div>
+</div>
+<div class="row" style="margin-top:8px">
+<button onclick="saveWifiSettings()">Set WiFi Settings</button>
+</div>
+<div class="muted" style="margin-top:12px;font-size:12px">
+💡 Phase 1 (immediate): 5 reconnect attempts × 30 sec<br>
+💡 Phase 2 (long-term): Scan every N hours until WiFi returns
+</div>
+</div>
+
 <!-- Actions -->
 <div class="card">
 <h3>💾 Apply Telemetry Config</h3>
@@ -398,6 +417,41 @@ async function saveSensorPreset() {
 
     if (res.ok) {
       alert(`✓ Sensor preset saved: water=${adcWater}, dry=${adcDry}, air=${adcAir}`);
+    } else {
+      const err = await res.json().catch(() => ({}));
+      alert('Failed: ' + (err.error || res.status));
+    }
+  } catch(e) {
+    alert('Error: ' + e.message);
+  }
+}
+
+// WiFi settings
+async function saveWifiSettings() {
+  if (!selectedDeviceId) {
+    alert('Select a device first');
+    return;
+  }
+
+  const scanInterval = parseInt(document.getElementById('wifi-scan-interval').value);
+
+  if (isNaN(scanInterval) || scanInterval < 1 || scanInterval > 168) {
+    alert('Scan interval must be between 1 and 168 hours');
+    return;
+  }
+
+  try {
+    const res = await fetch(`${API.cloudBase}/device/${selectedDeviceId}/command`, {
+      method: 'POST',
+      headers: { ...API.getAuthHeaders(), 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        command: 'set_wifi_config',
+        params: { wifi_scan_interval_hours: scanInterval }
+      })
+    });
+
+    if (res.ok) {
+      alert(`✓ WiFi settings saved: scan every ${scanInterval} hours`);
     } else {
       const err = await res.json().catch(() => ({}));
       alert('Failed: ' + (err.error || res.status));
