@@ -264,32 +264,18 @@ async function loadDeviceConfig() {
         } else {
           document.getElementById('selected-device-lastseen').textContent = 'Ready for preset changes';
         }
+
+        // Load WiFi scan interval from device data (from system telemetry)
+        const wifiScanInterval = device.wifi_scan_interval_hours || device.system?.wifi_scan_interval_hours;
+        if (wifiScanInterval) {
+          document.getElementById('wifi-scan-interval').value = wifiScanInterval;
+          console.log('[Admin] Loaded wifi_scan_interval:', wifiScanInterval);
+        }
       }
     }
   } catch(e) {
     console.warn('[Admin] Failed to load device data:', e);
     document.getElementById('selected-device-lastseen').textContent = 'Ready for preset changes';
-  }
-
-  // Fetch current WiFi config from device via get_status command
-  try {
-    const statusRes = await fetch(`${API.cloudBase}/device/${deviceId}/command`, {
-      method: 'POST',
-      headers: { ...API.getAuthHeaders(), 'Content-Type': 'application/json' },
-      body: JSON.stringify({ command: 'get_status', params: {} })
-    });
-    if (statusRes.ok) {
-      const statusData = await statusRes.json();
-      console.log('[Admin] get_status response:', statusData);
-      // Response structure: { response: { data: { wifi: { scan_interval_hours: N } } } }
-      const wifiData = statusData?.response?.data?.wifi;
-      if (wifiData && wifiData.scan_interval_hours) {
-        document.getElementById('wifi-scan-interval').value = wifiData.scan_interval_hours;
-        console.log('[Admin] Loaded wifi_scan_interval:', wifiData.scan_interval_hours);
-      }
-    }
-  } catch(e) {
-    console.warn('[Admin] Failed to fetch device status:', e);
   }
 
   updateCostEstimate();
