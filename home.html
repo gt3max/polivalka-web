@@ -259,9 +259,15 @@ async function updateStatus(){
         document.getElementById('pump-total').textContent = totalSec + 's';
         document.getElementById('pump-remaining').textContent = s.pump_remaining_ms > 0 ? `(${remainingSec}s left)` : '(manual mode)';
       }
-    } else if (!localCountdownActive) {
-      // Only reset UI if no local countdown is active
-      // This prevents server data (which may be stale) from hiding the local countdown
+    } else {
+      // Pump NOT running according to server - always trust server state
+      // Clear local countdown if still running (pump stopped on ESP32 side)
+      if (localCountdownActive) {
+        clearInterval(window.pumpCountdownInterval);
+        window.pumpCountdownInterval = null;
+      }
+
+      // Reset UI
       pumpIndicator.style.display = 'none';
       stopBtn.disabled = true;
 

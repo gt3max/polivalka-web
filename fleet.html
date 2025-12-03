@@ -1283,6 +1283,12 @@ function deviceUpdate(deviceId) {
 // Admin actions
 async function bulkAction(action) {
   if (action === 'refresh') {
+    // If allDevices is empty, load them first
+    if (allDevices.length === 0) {
+      showToast('📥 Loading devices...', 'info');
+      await loadDevices();
+    }
+
     // Show non-blocking toast instead of confirm dialog
     showToast(`🔄 Refreshing ${allDevices.length} devices...`, 'info');
 
