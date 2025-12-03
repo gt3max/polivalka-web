@@ -527,8 +527,8 @@ function loginSuccess(email) {
   document.getElementById('username').textContent = email;
 
   // Show Admin link only for admins (UX only - real security is on backend)
-  const ADMIN_EMAILS = ['mrmaximshurigin@gmail.com', 'admin@plantapp.pro'];
-  if (ADMIN_EMAILS.includes(email.toLowerCase())) {
+  // Uses isAdmin() from common.js
+  if (isAdmin()) {
     document.getElementById('admin-link').innerHTML = '<a href="admin.html" style="color:#fff;text-decoration:none">⚙️ Admin</a> | ';
   }
 
