@@ -740,7 +740,7 @@ function createExpandableRow(device, isOnline, hasWarnings, isCritical) {
       <div class="detail-row" style="margin-top:8px">
         <span class="detail-item" style="color:${moistureColor}">💧 Moisture: ${moisturePct !== null ? moisturePct + '%' : '—'} (ADC: ${device.adc_raw || 'N/A'})</span>
         <span class="detail-item" style="color:${batteryColor}">${batteryDisplayLong}</span>
-        <span class="detail-item">Water: ≈${((device.watering_duration || maxWateringTime) * (device.pump_calibration || pumpCalibration)).toFixed(0)}ml / ${device.watering_duration || maxWateringTime}s</span>
+        <span class="detail-item">Water: ≈${((device.watering_duration || maxWateringTime) * (device.pump_calibration || pumpCalibration) * (device.pump_speed || 100) / 100).toFixed(0)}ml / ${device.watering_duration || maxWateringTime}s${device.pump_speed && device.pump_speed !== 100 ? ' @' + device.pump_speed + '%' : ''}</span>
       </div>
 
       <div class="detail-row" style="margin-top:8px">
@@ -931,7 +931,7 @@ function createDeviceCard(device) {
     </div>
 
     <div class="muted" style="font-size:12px;margin:8px 0">
-      Water: ≈${((device.watering_duration || 60) * (device.pump_calibration || 2.5)).toFixed(0)}ml / ${device.watering_duration || 60}s<br>
+      Water: ≈${((device.watering_duration || 60) * (device.pump_calibration || 2.5) * (device.pump_speed || 100) / 100).toFixed(0)}ml / ${device.watering_duration || 60}s${device.pump_speed && device.pump_speed !== 100 ? ' @' + device.pump_speed + '%' : ''}<br>
       Last watering: ${lastWateringAgo} | Last update: ${lastUpdateAgo}<br>
       🔧 ${device.firmware_version || 'v1.0.0'} | 🔄 Reboots: ${device.reboot_count || 'N/A'}${device.sta_rssi ? ` | <span style="color:${getRssiDisplay(device.sta_rssi).color}">📶 ${device.sta_rssi} dBm</span>` : ''}
     </div>

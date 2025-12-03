@@ -200,6 +200,10 @@ def lambda_handler(event, context):
             if len(parts) == 4 and parts[3] == 'sensor' and http_method == 'GET':
                 return get_sensor_realtime(device_id, user_id)
 
+            # Moisture endpoint (alias for sensor - used by calibration.html)
+            if len(parts) == 4 and parts[3] == 'moisture' and http_method == 'GET':
+                return get_sensor_realtime(device_id, user_id)
+
             if len(parts) == 5 and parts[3] == 'sensor' and parts[4] == 'history':
                 return get_sensor_history(device_id, user_id)
 
@@ -394,21 +398,15 @@ def lambda_handler(event, context):
             if len(parts) == 5 and parts[3] == 'time' and parts[4] == 'status' and http_method == 'GET':
                 latest = get_latest_telemetry(device_id)
                 time_set = latest.get('system', {}).get('time_set', False)
-                # Get device's timestamp from system telemetry
-                device_ts = latest.get('system', {}).get('timestamp') or latest.get('timestamp')
 
-                # Get timezone from devices_table (default: CET = UTC+1)
+                # Get timezone from devices_table (default: Europe/Warsaw for Poland)
                 device_info = get_device_info(device_id, user_id)
-                tz_string = device_info.get('timezone', 'CET-1CEST,M3.5.0,M10.5.0/3')
-                tz_offset_minutes = parse_timezone_offset(tz_string)
+                tz_string = device_info.get('timezone', 'Europe/Warsaw')
 
-                current_time = None
-                if device_ts:
-                    from datetime import datetime, timezone as dt_timezone, timedelta
-                    # Convert to local time using offset
-                    utc_dt = datetime.fromtimestamp(int(device_ts), tz=dt_timezone.utc)
-                    local_dt = utc_dt + timedelta(minutes=tz_offset_minutes)
-                    current_time = local_dt.strftime('%Y-%m-%dT%H:%M:%S')
+                # Use zoneinfo for proper DST handling
+                current_time, tz_offset_minutes, tz_used = get_local_time_for_timezone(tz_string)
+
+                print(f"DEBUG /time/status: stored={tz_string}, used={tz_used}, offset={tz_offset_minutes}min, local={current_time}")
 
                 return {
                     'statusCode': 200,
@@ -418,14 +416,15 @@ def lambda_handler(event, context):
                         'source': 'ntp' if time_set else 'none',
                         'timestamp': int(time.time()),
                         'current_time': current_time,
-                        'timezone': tz_string
+                        'timezone': tz_string,
+                        'tz_offset_minutes': tz_offset_minutes
                     })
                 }
 
             # Timezone GET endpoint - for settings.html
             if len(parts) == 5 and parts[3] == 'time' and parts[4] == 'timezone' and http_method == 'GET':
                 device_info = get_device_info(device_id, user_id)
-                tz_string = device_info.get('timezone', 'CET-1CEST,M3.5.0,M10.5.0/3')
+                tz_string = device_info.get('timezone', 'Europe/Warsaw')
                 return {
                     'statusCode': 200,
                     'headers': cors_headers(),
@@ -459,6 +458,31 @@ def lambda_handler(event, context):
                 # Send MQTT command to ESP32 to update timezone
                 return send_command_with_params(device_id, user_id, 'set_timezone', {'timezone': new_tz}, 'Timezone saved')
 
+            # Time set endpoint - manual time setting (for settings.html)
+            if len(parts) == 5 and parts[3] == 'time' and parts[4] == 'set' and http_method == 'POST':
+                body = json.loads(event.get('body', '{}'))
+
+                # Accept both formats: {timestamp} or {year, month, day, hour, minute}
+                timestamp = body.get('timestamp')
+                if not timestamp:
+                    # Convert year/month/day/hour/minute to timestamp
+                    year = body.get('year')
+                    month = body.get('month')
+                    day = body.get('day')
+                    hour = body.get('hour', 0)
+                    minute = body.get('minute', 0)
+                    second = body.get('second', 0)
+
+                    if year and month and day:
+                        from datetime import datetime, timezone as dt_timezone
+                        dt = datetime(year, month, day, hour, minute, second, tzinfo=dt_timezone.utc)
+                        timestamp = int(dt.timestamp())
+                    else:
+                        return {'statusCode': 400, 'headers': cors_headers(), 'body': json.dumps({'error': 'Missing timestamp or date components'})}
+
+                # Send MQTT command to ESP32 to set time
+                return send_command_with_params(device_id, user_id, 'set_time', {'timestamp': int(timestamp)}, 'Time set')
+
             # NOTE: Removed duplicate /schedules endpoint - schedules are returned later in code
             # Schedules are stored on ESP32, not in DynamoDB
 
@@ -473,9 +497,17 @@ def lambda_handler(event, context):
             if len(parts) == 5 and parts[3] == 'pump' and parts[4] == 'status' and http_method == 'GET':
                 # Get pump calibration from device info
                 device_info = get_device_info(device_id, user_id)
-                pump_calib = device_info.get('pump_calibration', {})
-                ml_per_sec = float(pump_calib.get('ml_per_sec', 2.5)) if pump_calib else 2.5
-                calibrated = pump_calib.get('calibrated', False) if pump_calib else False
+                pump_calib = device_info.get('pump_calibration')
+                # Handle both number (from iot_rule_response) and dict formats
+                if isinstance(pump_calib, dict):
+                    ml_per_sec = float(pump_calib.get('ml_per_sec', 2.5))
+                    calibrated = pump_calib.get('calibrated', False)
+                elif pump_calib is not None:
+                    ml_per_sec = float(pump_calib)
+                    calibrated = abs(ml_per_sec - 2.5) > 0.01  # Calibrated if not default
+                else:
+                    ml_per_sec = 2.5
+                    calibrated = False
 
                 return {
                     'statusCode': 200,
@@ -628,6 +660,20 @@ def get_devices(user_id):
         battery_charging = battery_data.get('charging', False) if battery_data else False
         battery_no_data = battery_data is None
 
+        # Pump calibration and speed from device record (set via admin panel or telemetry)
+        pump_calib = item.get('pump_calibration', 2.5)
+        pump_calib_float = float(pump_calib) if pump_calib else 2.5
+        pump_speed = item.get('pump_speed', 100)
+        pump_speed_int = int(pump_speed) if pump_speed else 100
+
+        # Sensor calibration from device record (set via admin panel)
+        sensor_calib = item.get('sensor_calibration', {})
+        sensor_calib_dict = {
+            'water': int(sensor_calib.get('water', 1200)) if sensor_calib else 1200,
+            'dry_soil': int(sensor_calib.get('dry_soil', 2400)) if sensor_calib else 2400,
+            'air': int(sensor_calib.get('air', 2800)) if sensor_calib else 2800
+        }
+
         device_data = {
             'device_id': device_id,
             'name': device_name,
@@ -647,7 +693,10 @@ def get_devices(user_id):
             'last_watering': item.get('last_watering_timestamp'),
             'last_update': latest.get('last_update'),
             'online': is_device_online(latest.get('last_update')),
-            'warnings': generate_warnings(latest)
+            'warnings': generate_warnings(latest),
+            'pump_calibration': pump_calib_float,
+            'pump_speed': pump_speed_int,
+            'sensor_calibration': sensor_calib_dict
         }
 
         devices.append(device_data)
@@ -704,10 +753,26 @@ def get_device_status(device_id, user_id):
     device_location = system_data.get('location') or device_meta.get('location') or '—'
     device_room = system_data.get('room') or device_meta.get('room') or '—'
 
+    # Sensor calibration from devices table
+    sensor_calib = device_meta.get('sensor_calibration', {})
+    calib = {
+        'adc_air': sensor_calib.get('air', 2800) if sensor_calib else 2800,
+        'adc_water': sensor_calib.get('water', 1200) if sensor_calib else 1200,
+        'adc_dry_soil': sensor_calib.get('dry_soil', 2400) if sensor_calib else 2400
+    }
+    # Check if calibrated (any value differs from default)
+    sensor_calibrated = bool(sensor_calib) and (
+        calib['adc_air'] != 2800 or
+        calib['adc_water'] != 1200 or
+        calib['adc_dry_soil'] != 2400
+    )
+
     # Format response matching ESP32 /api/status structure
     status = {
         'adc': latest.get('sensor', {}).get('adc_raw'),
         'percent': latest.get('sensor', {}).get('moisture_percent'),
+        'calib': calib,
+        'sensor_calibrated': sensor_calibrated,
         'system_state': {
             'device_name': device_name,
             'location': device_location,
@@ -1212,6 +1277,22 @@ def get_latest_telemetry(device_id):
 
     latest = {}
 
+    # First, get the "latest" record (timestamp=0) which has last_update from command responses
+    try:
+        latest_record = telemetry_table.get_item(
+            Key={'device_id': device_id, 'timestamp': 0}
+        )
+        if 'Item' in latest_record:
+            item = latest_record['Item']
+            # Use last_update from this record (updated by iot_rule_response.py)
+            if 'last_update' in item:
+                latest['last_update'] = int(item['last_update'])
+            # Also get sensor data if present (from get_status command response)
+            if 'sensor' in item:
+                latest['sensor'] = dict(item['sensor'])
+    except Exception as e:
+        print(f"Error getting latest record: {e}")
+
     # Query recent records (schema: device_id + timestamp)
     # Data types stored as top-level Maps: system, pump, sensor, battery
     cutoff = int(time.time()) - 86400  # Last 24 hours
@@ -1233,6 +1314,7 @@ def get_latest_telemetry(device_id):
                 data = dict(item[data_type])  # Copy to avoid mutation
                 data['timestamp'] = timestamp  # Add record timestamp to data
                 latest[data_type] = data
+                # Update last_update if this record is newer
                 if 'last_update' not in latest or timestamp > latest['last_update']:
                     latest['last_update'] = timestamp
 
@@ -1279,31 +1361,96 @@ def get_device_info(device_id, user_id):
         return response.get('Item', {})
 
 
-def parse_timezone_offset(tz_string):
-    """Parse POSIX timezone string and return offset in minutes from UTC.
+def get_local_time_for_timezone(tz_name):
+    """Get current local time for a named timezone.
 
-    Examples:
-    - CET-1CEST,M3.5.0,M10.5.0/3 → 60 (CET = UTC+1)
-    - MSK-3 → 180 (Moscow = UTC+3)
-    - EST5EDT → -300 (Eastern US = UTC-5)
+    Uses Python's zoneinfo (standard library, Python 3.9+).
+    Handles both IANA (Europe/Warsaw) and POSIX (CET-1CEST) formats.
 
-    Note: This is simplified - doesn't handle DST transitions.
-    For full accuracy, would need to check current date against DST rules.
+    Args:
+        tz_name: IANA timezone like 'Europe/Warsaw' or POSIX like 'CET-1CEST...'
+
+    Returns:
+        tuple: (datetime_str, offset_minutes, tz_used)
     """
+    from datetime import datetime, timezone as dt_timezone, timedelta
     import re
 
-    if not tz_string:
-        return 0
+    # Complete mapping: POSIX prefix → IANA timezone
+    # Covers all timezones from settings.html dropdown
+    posix_to_iana = {
+        # Europe
+        'GMT': 'Europe/London',
+        'WET': 'Europe/Lisbon',
+        'CET': 'Europe/Warsaw',       # Central European (Poland, Germany, etc)
+        'EET': 'Europe/Kiev',         # Eastern European
+        'MSK': 'Europe/Moscow',
+        'TRT': 'Europe/Istanbul',
+        # North America
+        'AKST': 'America/Anchorage',
+        'PST': 'America/Los_Angeles',
+        'MST': 'America/Denver',
+        'CST': 'America/Chicago',
+        'EST': 'America/New_York',
+        'AST': 'America/Puerto_Rico',
+        'NST': 'America/St_Johns',
+        'HST': 'Pacific/Honolulu',
+        # Asia
+        'JST': 'Asia/Tokyo',
+        'KST': 'Asia/Seoul',
+        'IST': 'Asia/Kolkata',        # India (also Israel, but different offset)
+        # Australia/Oceania
+        'AEST': 'Australia/Sydney',
+        'ACST': 'Australia/Adelaide',
+        'AWST': 'Australia/Perth',
+        'NZST': 'Pacific/Auckland',
+        # Africa
+        'CAT': 'Africa/Johannesburg',
+        'EAT': 'Africa/Nairobi',
+        'WAT': 'Africa/Lagos',
+    }
 
-    # Extract first timezone offset: NAME[-+]OFFSET or NAME[+-]OFFSET
-    # POSIX format: CET-1 means CET is UTC+1 (sign is inverted!)
-    match = re.match(r'^[A-Z]+([+-]?\d+)', tz_string)
+    iana_tz = None
+
+    # Check if it's already IANA format (contains '/')
+    if '/' in tz_name:
+        iana_tz = tz_name
+    else:
+        # Extract POSIX prefix and map to IANA
+        # Handle formats: CET-1CEST, GMT0BST, <TRT>-3, etc.
+        prefix_match = re.match(r'^<?([A-Z]+)>?', tz_name)
+        if prefix_match:
+            prefix = prefix_match.group(1)
+            iana_tz = posix_to_iana.get(prefix)
+
+    # Try to use zoneinfo (Python 3.9+, built into AWS Lambda)
+    try:
+        from zoneinfo import ZoneInfo
+        if iana_tz:
+            tz = ZoneInfo(iana_tz)
+            local_now = datetime.now(tz)
+            offset = local_now.utcoffset()
+            offset_minutes = int(offset.total_seconds() / 60) if offset else 0
+            return (local_now.strftime('%Y-%m-%dT%H:%M:%S'), offset_minutes, iana_tz)
+    except Exception as e:
+        print(f"zoneinfo failed for {iana_tz}: {e}")
+
+    # Fallback: parse POSIX offset manually (no DST - winter time only)
+    offset_minutes = 0
+    # Match: CET-1, MSK-3, EST5, <+07>-7, etc.
+    match = re.search(r'([+-]?\d+(?::\d+)?)', tz_name)
     if match:
-        # POSIX inverts the sign: CET-1 means UTC+1
-        offset_hours = -int(match.group(1))
-        return offset_hours * 60
+        offset_str = match.group(1)
+        if ':' in offset_str:
+            hours, mins = map(int, offset_str.split(':'))
+            offset_minutes = -hours * 60 - (mins if hours >= 0 else -mins)
+        else:
+            # POSIX inverts sign: CET-1 means UTC+1
+            offset_minutes = -int(offset_str) * 60
 
-    return 0  # Default to UTC
+    utc_now = datetime.now(dt_timezone.utc)
+    local_dt = utc_now + timedelta(minutes=offset_minutes)
+    return (local_dt.strftime('%Y-%m-%dT%H:%M:%S'), offset_minutes, f'fallback:{tz_name}')
 
 
 def format_uptime(uptime_ms):
@@ -1482,6 +1629,10 @@ def get_sensor_realtime(device_id, user_id):
                 pump = result.get('pump', {})
                 system = result.get('system', {})
 
+                # Convert battery percent -1 to null (indicates AC power, no battery)
+                if battery.get('percent') == -1 or battery.get('percent') == -1.0:
+                    battery = {**battery, 'percent': None}
+
                 return {
                     'statusCode': 200,
                     'headers': cors_headers(),
@@ -1491,6 +1642,9 @@ def get_sensor_realtime(device_id, user_id):
                         'battery': battery,
                         'pump_running': pump.get('running', False),
                         'mode': system.get('mode', 'manual'),
+                        'state': system.get('state', 'DISABLED'),
+                        'firmware_version': system.get('firmware'),
+                        'reboot_count': system.get('reboot_count'),
                         'timestamp': item.get('completed_at', int(time.time()))
                     }, cls=DecimalEncoder)
                 }

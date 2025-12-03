@@ -27,8 +27,10 @@ from decimal import Decimal
 dynamodb = boto3.resource('dynamodb', region_name='eu-central-1')
 COMMANDS_TABLE = os.environ.get('COMMANDS_TABLE', 'polivalka_commands')
 TELEMETRY_TABLE = os.environ.get('TELEMETRY_TABLE', 'polivalka_telemetry')
+DEVICES_TABLE = os.environ.get('DEVICES_TABLE', 'polivalka_devices')
 commands_table = dynamodb.Table(COMMANDS_TABLE)
 telemetry_table = dynamodb.Table(TELEMETRY_TABLE)
+devices_table = dynamodb.Table(DEVICES_TABLE)
 
 def convert_floats(obj):
     """Convert all float values to Decimal recursively"""
@@ -99,22 +101,100 @@ def lambda_handler(event, context):
 
         print(f"Updated command {command_id} for device {device_id}: {status}")
 
-        # Insert heartbeat record to telemetry table (proves device is online)
-        # api_handler.py uses max(timestamp) as last_update, so inserting new record updates it
+        # Update telemetry table (proves device is online + fresh sensor data)
         try:
             current_time = int(time.time())
-            telemetry_table.put_item(
-                Item={
-                    'device_id': device_id,
-                    'timestamp': current_time,
-                    'type': 'heartbeat',
-                    'command_id': command_id,
-                    'ttl': current_time + 604800  # 7 days TTL
+            update_expr = 'SET last_update = :ts'
+            expr_values = {':ts': current_time}
+
+            # If result has sensor data (from get_status), update telemetry
+            if isinstance(result, dict) and 'sensor' in result:
+                sensor = result.get('sensor', {})
+                update_expr += ', sensor = :sensor'
+                expr_values[':sensor'] = {
+                    'adc_raw': sensor.get('adc'),
+                    'moisture_percent': sensor.get('moisture')
                 }
+                print(f"Updating sensor telemetry: adc={sensor.get('adc')}, moisture={sensor.get('moisture')}")
+
+            telemetry_table.update_item(
+                Key={'device_id': device_id, 'timestamp': 0},  # timestamp=0 is "latest" record
+                UpdateExpression=update_expr,
+                ExpressionAttributeValues=expr_values
             )
-            print(f"Inserted heartbeat for {device_id}: {current_time}")
+            print(f"Updated telemetry for {device_id}: last_update={current_time}")
         except Exception as e:
-            print(f"Failed to insert heartbeat: {e}")  # Non-fatal, continue
+            print(f"Failed to update telemetry: {e}")  # Non-fatal, continue
+
+        # Extract calibration data from get_status response and update devices table
+        if isinstance(result, dict):
+            try:
+                # Find user_id for this device (once for all updates)
+                scan_response = devices_table.scan(
+                    FilterExpression='device_id = :device',
+                    ExpressionAttributeValues={':device': device_id}
+                )
+                if scan_response.get('Items'):
+                    user_id = scan_response['Items'][0]['user_id']
+
+                    # Pump calibration and speed
+                    pump_data = result.get('pump', {})
+                    pump_calibration = pump_data.get('calibration')
+                    pump_speed = pump_data.get('speed')
+
+                    if pump_calibration is not None or pump_speed is not None:
+                        update_expr_parts = []
+                        expr_values = {}
+
+                        if pump_calibration is not None:
+                            update_expr_parts.append('pump_calibration = :calib')
+                            expr_values[':calib'] = Decimal(str(pump_calibration))
+
+                        if pump_speed is not None:
+                            update_expr_parts.append('pump_speed = :speed')
+                            expr_values[':speed'] = int(pump_speed)
+
+                        if update_expr_parts:
+                            devices_table.update_item(
+                                Key={'user_id': user_id, 'device_id': device_id},
+                                UpdateExpression='SET ' + ', '.join(update_expr_parts),
+                                ExpressionAttributeValues=expr_values
+                            )
+                            print(f"Updated pump for {device_id}: calibration={pump_calibration}, speed={pump_speed}")
+
+                    # Sensor calibration (water, dry_soil, air)
+                    # Format 1: from get_status - nested sensor.calibration
+                    sensor_data = result.get('sensor', {})
+                    sensor_calib = sensor_data.get('calibration', {})
+                    if sensor_calib:
+                        sensor_calib_decimal = {
+                            'water': int(sensor_calib.get('water', 1200)),
+                            'dry_soil': int(sensor_calib.get('dry_soil', 2400)),
+                            'air': int(sensor_calib.get('air', 2800))
+                        }
+                        devices_table.update_item(
+                            Key={'user_id': user_id, 'device_id': device_id},
+                            UpdateExpression='SET sensor_calibration = :calib',
+                            ExpressionAttributeValues={':calib': sensor_calib_decimal}
+                        )
+                        print(f"Updated sensor_calibration for {device_id}: {sensor_calib_decimal}")
+
+                    # Format 2: from set_sensor_calibration - flat adc_water, adc_dry_soil, adc_air
+                    if 'adc_water' in result or 'adc_dry_soil' in result or 'adc_air' in result:
+                        sensor_calib_decimal = {
+                            'water': int(result.get('adc_water', 1200)),
+                            'dry_soil': int(result.get('adc_dry_soil', 2400)),
+                            'air': int(result.get('adc_air', 2800))
+                        }
+                        devices_table.update_item(
+                            Key={'user_id': user_id, 'device_id': device_id},
+                            UpdateExpression='SET sensor_calibration = :calib',
+                            ExpressionAttributeValues={':calib': sensor_calib_decimal}
+                        )
+                        print(f"Updated sensor_calibration (flat format) for {device_id}: {sensor_calib_decimal}")
+
+            except Exception as e:
+                print(f"Failed to update calibration: {e}")  # Non-fatal
 
         return {'statusCode': 200, 'body': 'Updated'}
 
