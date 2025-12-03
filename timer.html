@@ -1,6 +1,7 @@
 <!doctype html><html><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width, initial-scale=1"><title>PlantApp — Schedule</title>
 <link rel="icon" href="favicon.svg" type="image/svg+xml">
 <script src="api-adapter.js"></script>
+<script src="common.js"></script>
 <style>
     body{font-family:system-ui,Arial;margin:0;padding:0;max-width:100%}
     .header{position:sticky;top:0;z-index:1000;background:#2c5f2d;color:#fff;padding:8px 10px;display:flex;justify-content:space-between;align-items:center;gap:8px}
@@ -40,15 +41,7 @@
 Enabled
 </label></div><div class="row" style="margin-top:16px"><button class="primary" onclick="saveSchedule()">Save</button><button onclick="closeModal()">Cancel</button></div></div></div>
 <script>
-// Show Admin nav link only for admins
-(function() {
-  const ADMIN_EMAILS = ['mrmaximshurigin@gmail.com', 'admin@plantapp.pro'];
-  const userEmail = localStorage.getItem('user_email') || '';
-  if (ADMIN_EMAILS.includes(userEmail.toLowerCase())) {
-    const adminLink = document.getElementById('admin-nav-link');
-    if (adminLink) adminLink.style.display = '';
-  }
-})();
+// Admin nav link handled by common.js showAdminNavLink()
 
 let editingId = null;
 
@@ -391,14 +384,7 @@ async function updateTime(){
   } catch(e) {}
 }
 
-// Map internal controller states to user-friendly display
-function mapStateToDisplay(state, pumpRunning = false) {
-  if (pumpRunning) return { text: 'Watering', emoji: '💧', color: '#1976d2' };
-  const upperState = (state || '').toUpperCase();
-  if (upperState === 'EMERGENCY' || upperState.includes('ERROR')) return { text: 'Emergency', emoji: '⚠️', color: '#c62828' };
-  if (['WATERING', 'PULSE', 'SETTLE', 'CHECK'].includes(upperState)) return { text: 'Watering', emoji: '💧', color: '#1976d2' };
-  return { text: 'Standby', emoji: '💤', color: '#666' };
-}
+// mapStateToDisplay() - moved to common.js
 
 async function updateBattery(){
   try {
@@ -453,60 +439,7 @@ async function updateMode(){
   } catch(e) {}
 }
 
-// Track WiFi mode to detect disconnection
-var lastWiFiMode = null;
-var lastStaIp = null;
-
-async function monitorWiFiMode() {
-  try {
-    const response = await fetch('/api/wifi/status', {
-      method: 'POST',
-      cache: 'no-store'
-    });
-    const result = await response.json();
-    const currentMode = result.mode; // "ap", "sta", "apsta"
-    const currentStaIp = result.sta_ip || null;
-
-    // Initialize on first call
-    if (lastWiFiMode === null) {
-      lastWiFiMode = currentMode;
-      lastStaIp = currentStaIp;
-      return;
-    }
-
-    // Detect NEW connection to router (sta_ip appeared) - redirect immediately!
-    if (!lastStaIp && currentStaIp) {
-      console.log('Connected to router, redirecting to ' + currentStaIp);
-      window.location.href = 'http://' + currentStaIp + window.location.pathname;
-      return;
-    }
-
-    // Detect transition from online (sta/apsta) to offline (ap)
-    if ((lastWiFiMode === 'sta' || lastWiFiMode === 'apsta') && currentMode === 'ap') {
-      // WiFi disconnected - redirect to AP IP
-      console.log('WiFi disconnected, redirecting to AP mode...');
-      window.location.href = 'http://192.168.4.1' + window.location.pathname;
-      return;
-    }
-
-    lastWiFiMode = currentMode;
-    lastStaIp = currentStaIp;
-  } catch(e) {
-    // Connection lost - try AP fallback
-    console.log('Connection lost, trying AP fallback...');
-    try {
-      await fetch('http://192.168.4.1/api/wifi/status', {
-        method: 'POST',
-        cache: 'no-store'
-      });
-      // AP is accessible - redirect
-      console.log('AP accessible, redirecting...');
-      window.location.href = 'http://192.168.4.1' + window.location.pathname;
-    } catch(e2) {
-      // AP not accessible yet, will retry on next poll
-    }
-  }
-}
+// monitorWiFiMode() - moved to common.js
 
 // Cloud mode: показать device ID в header сразу
 if (IS_CLOUD && DEVICE_ID) {

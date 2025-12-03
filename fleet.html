@@ -2,6 +2,7 @@
 <html>
 <head>
 <script src="api-adapter.js"></script>
+<script src="common.js"></script>
 <meta charset="utf-8"/>
 <link rel="icon" href="favicon.svg" type="image/svg+xml">
 <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -315,24 +316,7 @@
 </div>
 
 <script>
-// Map RSSI to signal strength icon and color
-function getRssiDisplay(rssi) {
-  if (!rssi || rssi === 0) return { icon: '', color: '#999', text: '' };
-  if (rssi >= -50) return { icon: '📶', color: '#0a0', text: rssi + ' dBm' };       // Excellent
-  if (rssi >= -60) return { icon: '📶', color: '#2e7d32', text: rssi + ' dBm' };    // Good
-  if (rssi >= -70) return { icon: '📶', color: '#f57c00', text: rssi + ' dBm' };    // Fair
-  return { icon: '📶', color: '#c62828', text: rssi + ' dBm' };                       // Weak
-}
-
-// Map internal controller states to user-friendly display
-// Standby 💤, Watering 💧, Emergency ⚠️
-function mapStateToDisplay(state, pumpRunning) {
-  if (pumpRunning) return { text: 'Watering', emoji: '💧', color: '#1976d2', bg: '#e3f2fd' };
-  const s = (state || '').toUpperCase();
-  if (s === 'EMERGENCY' || s.includes('ERROR')) return { text: 'Emergency', emoji: '⚠️', color: '#c62828', bg: '#ffebee' };
-  if (['WATERING', 'PULSE', 'SETTLE', 'CHECK'].includes(s)) return { text: 'Watering', emoji: '💧', color: '#1976d2', bg: '#e3f2fd' };
-  return { text: 'Standby', emoji: '💤', color: '#666', bg: '#f5f5f5' };
-}
+// getRssiDisplay, mapStateToDisplay, timeAgo, showToast - moved to common.js
 
 // Mock data (will be replaced by Lambda API)
 // Используем РЕАЛЬНЫЕ устройства: BB00C1 и BC67E8
@@ -1016,22 +1000,7 @@ function filterDevices() {
   renderDevices(filtered);
 }
 
-function timeAgo(timestamp) {
-  if (!timestamp) return 'never';
-
-  // Lambda returns seconds, convert to milliseconds
-  const timestampMs = timestamp < 10000000000 ? timestamp * 1000 : timestamp;
-
-  const seconds = Math.floor((Date.now() - timestampMs) / 1000);
-  if (seconds < 0) return 'just now';
-  if (seconds < 60) return `${seconds}s ago`;
-  const minutes = Math.floor(seconds / 60);
-  if (minutes < 60) return `${minutes}m ago`;
-  const hours = Math.floor(minutes / 60);
-  if (hours < 24) return `${hours}h ago`;
-  const days = Math.floor(hours / 24);
-  return `${days}d ago`;
-}
+// timeAgo() - moved to common.js
 
 function updateTime() {
   const now = new Date();
@@ -1039,42 +1008,7 @@ function updateTime() {
   document.getElementById('header-time').textContent = timeStr;
 }
 
-function showToast(message, type = 'info') {
-  // Create toast element
-  const toast = document.createElement('div');
-  toast.className = `toast toast-${type}`;
-  toast.textContent = message;
-
-  // Style the toast
-  Object.assign(toast.style, {
-    position: 'fixed',
-    top: '20px',
-    right: '20px',
-    padding: '12px 20px',
-    borderRadius: '8px',
-    backgroundColor: type === 'error' ? '#dc3545' : '#28a745',
-    color: 'white',
-    fontSize: '14px',
-    fontWeight: '500',
-    boxShadow: '0 4px 12px rgba(0,0,0,0.3)',
-    zIndex: 10000,
-    opacity: 0,
-    transition: 'opacity 0.3s ease',
-    maxWidth: '400px'
-  });
-
-  // Add to page
-  document.body.appendChild(toast);
-
-  // Fade in
-  setTimeout(() => toast.style.opacity = 1, 10);
-
-  // Remove after 4 seconds
-  setTimeout(() => {
-    toast.style.opacity = 0;
-    setTimeout(() => toast.remove(), 300);
-  }, 4000);
-}
+// showToast() - moved to common.js
 
 // Device actions
 // Device control commands (send MQTT via Lambda)

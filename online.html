@@ -1,6 +1,7 @@
 <!doctype html><html><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width, initial-scale=1"><title>PlantApp — Online</title>
 <link rel="icon" href="favicon.svg" type="image/svg+xml">
 <script src="api-adapter.js"></script>
+<script src="common.js"></script>
 <style>
     body{font-family:system-ui,Arial;margin:0;padding:0;max-width:100%}
     .header{position:sticky;top:0;z-index:1000;background:#2c5f2d;color:#fff;padding:8px 10px;display:flex;justify-content:space-between;align-items:center;gap:8px}
@@ -33,14 +34,7 @@ const IS_CLOUD_MODE = window.location.hostname === 'gt3max.github.io' ||
 // Cloud mode is handled below in the IS_CLOUD block (line ~738)
 // Header will be shown and updated with Cloud API data
 
-// Map internal controller states to user-friendly display
-function mapStateToDisplay(state, pumpRunning = false) {
-  if (pumpRunning) return { text: 'Watering', emoji: '💧', color: '#1976d2' };
-  const upperState = (state || '').toUpperCase();
-  if (upperState === 'EMERGENCY' || upperState.includes('ERROR')) return { text: 'Emergency', emoji: '⚠️', color: '#c62828' };
-  if (['WATERING', 'PULSE', 'SETTLE', 'CHECK'].includes(upperState)) return { text: 'Watering', emoji: '💧', color: '#1976d2' };
-  return { text: 'Standby', emoji: '💤', color: '#666' };
-}
+// mapStateToDisplay() - moved to common.js
 
 async function updateBattery(){
   if (IS_CLOUD_MODE) return; // Skip in cloud mode
@@ -713,15 +707,7 @@ window.addEventListener('load', function() {
   }
 });
 
-// Show Admin nav link only for admins
-(function() {
-  const ADMIN_EMAILS = ['mrmaximshurigin@gmail.com', 'admin@plantapp.pro'];
-  const userEmail = localStorage.getItem('user_email') || '';
-  if (ADMIN_EMAILS.includes(userEmail.toLowerCase())) {
-    const adminLink = document.getElementById('admin-nav-link');
-    if (adminLink) adminLink.style.display = '';
-  }
-})();
+// Admin nav link - moved to common.js
 
 // ========== CLOUD MODE ==========
 if (IS_CLOUD) {

@@ -4,6 +4,7 @@
 <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns@3.0.0/dist/chartjs-adapter-date-fns.bundle.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-annotation@3.0.1/dist/chartjs-plugin-annotation.min.js"></script>
 <script src="api-adapter.js"></script>
+<script src="common.js"></script>
 <style>
     body{font-family:system-ui,Arial;margin:0;padding:0;max-width:100%;background:#fafafa}
     .header{position:sticky;top:0;z-index:1000;background:#2c5f2d;color:#fff;padding:8px 10px;display:flex;justify-content:space-between;align-items:center;gap:8px}
@@ -156,14 +157,7 @@ let pumpData = []; // Pump events for chart annotations
 let moistureChart = null;
 let batteryChart = null;
 
-// Map internal controller states to user-friendly display
-function mapStateToDisplay(state, pumpRunning = false) {
-  if (pumpRunning) return { text: 'Watering', emoji: '💧', color: '#1976d2' };
-  const upperState = (state || '').toUpperCase();
-  if (upperState === 'EMERGENCY' || upperState.includes('ERROR')) return { text: 'Emergency', emoji: '⚠️', color: '#c62828' };
-  if (['WATERING', 'PULSE', 'SETTLE', 'CHECK'].includes(upperState)) return { text: 'Watering', emoji: '💧', color: '#1976d2' };
-  return { text: 'Standby', emoji: '💤', color: '#666' };
-}
+// mapStateToDisplay() - moved to common.js
 
 // Header updates
 async function updateHeader() {
@@ -645,15 +639,7 @@ async function refreshAll() {
   ]);
 }
 
-// Show Admin nav link only for admins
-(function() {
-  const ADMIN_EMAILS = ['mrmaximshurigin@gmail.com', 'admin@plantapp.pro'];
-  const userEmail = localStorage.getItem('user_email') || '';
-  if (ADMIN_EMAILS.includes(userEmail.toLowerCase())) {
-    const adminLink = document.getElementById('admin-nav-link');
-    if (adminLink) adminLink.style.display = '';
-  }
-})();
+// Admin nav link - moved to common.js
 
 // Init
 if (IS_CLOUD && DEVICE_ID) {
