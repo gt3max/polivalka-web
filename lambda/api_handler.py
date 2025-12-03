@@ -493,11 +493,13 @@ def lambda_handler(event, context):
             if len(parts) == 5 and parts[3] == 'battery' and parts[4] == 'status' and http_method == 'GET':
                 return get_battery_status(device_id, user_id)
 
-            # Pump status (for calibration.html)
+            # Pump status (for calibration.html and home.html speed slider)
             if len(parts) == 5 and parts[3] == 'pump' and parts[4] == 'status' and http_method == 'GET':
-                # Get pump calibration from device info
+                # Get pump calibration and speed from device info
                 device_info = get_device_info(device_id, user_id)
                 pump_calib = device_info.get('pump_calibration')
+                pump_speed = device_info.get('pump_speed', 100)
+
                 # Handle both number (from iot_rule_response) and dict formats
                 if isinstance(pump_calib, dict):
                     ml_per_sec = float(pump_calib.get('ml_per_sec', 2.5))
@@ -516,7 +518,8 @@ def lambda_handler(event, context):
                         'running': False,  # Can't know real-time pump state
                         'remaining_sec': 0,
                         'ml_per_sec': ml_per_sec,
-                        'calibrated': calibrated
+                        'calibrated': calibrated,
+                        'speed': int(pump_speed) if pump_speed else 100
                     })
                 }
 
@@ -531,6 +534,22 @@ def lambda_handler(event, context):
             if len(parts) == 5 and parts[3] == 'pump' and parts[4] == 'stop' and http_method == 'POST':
                 body = {'command': 'stop_pump', 'params': {}}
                 return send_device_command(device_id, user_id, body)
+
+            # Pump speed control (for home.html speed slider)
+            if len(parts) == 5 and parts[3] == 'pump' and parts[4] == 'speed' and http_method == 'POST':
+                query_params = event.get('queryStringParameters', {}) or {}
+                speed_value = query_params.get('value', '100')
+                try:
+                    speed = int(speed_value)
+                    if speed < 0:
+                        speed = 0
+                    if speed > 100:
+                        speed = 100
+                except:
+                    speed = 100
+
+                # Send MQTT command to ESP32 to set pump speed
+                return send_command_with_params(device_id, user_id, 'set_pump_speed', {'speed': speed}, f'Pump speed set to {speed}%')
 
             # OTA Update - get presigned upload URL
             if len(parts) == 5 and parts[3] == 'ota' and parts[4] == 'upload-url' and http_method == 'GET':
