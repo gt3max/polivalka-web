@@ -399,8 +399,7 @@ function updateCostEstimate() {
   document.getElementById('est-cost').className = 'mono ' + (cost == 0 ? 'ok' : 'danger');
 }
 
-// Admin email whitelist
-const ADMIN_EMAILS = ['mrmaximshurigin@gmail.com', 'admin@plantapp.pro'];
+// Admin email whitelist - uses ADMIN_EMAILS from common.js
 
 // Check admin access
 function checkAdminAccess() {
@@ -410,7 +409,7 @@ function checkAdminAccess() {
     window.location.href = 'login.html';
     return false;
   }
-  if (!ADMIN_EMAILS.includes(userEmail.toLowerCase())) {
+  if (!isAdmin()) {
     // Not admin - show access denied
     document.body.innerHTML = `
       <div style="display:flex;align-items:center;justify-content:center;height:100vh;background:#1a1a2e">
