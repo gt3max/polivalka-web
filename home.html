@@ -918,9 +918,7 @@ async function setSpeed(val){
 }
 async function loadPumpSpeed(){
   try{
-    const deviceId = getDeviceId();
-    if (!deviceId) return;
-    const s=await API.get('/pump/status?device='+deviceId);
+    const s=await API.get('/pump/status');
     const speed=s.speed!==undefined?s.speed:100;
     document.getElementById('speed-slider').value=speed;
     document.getElementById('speed-display').textContent=speed+'%';
