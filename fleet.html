@@ -268,10 +268,11 @@
     <!-- Admin Controls (only for admin) -->
     <div id="admin-controls" class="admin-controls">
       <h3>🔧 Admin Controls</h3>
-      <div class="row">
+      <div class="row" style="align-items:center">
         <button onclick="bulkAction('refresh')">🔄 Refresh All</button>
         <button onclick="bulkAction('ota')">📦 Mass OTA Update</button>
         <button onclick="exportData()">📥 Export All Data</button>
+        <span id="last-refresh-time" class="muted" style="margin-left:auto;font-size:12px"></span>
       </div>
     </div>
 
@@ -740,7 +741,7 @@ function createExpandableRow(device, isOnline, hasWarnings, isCritical) {
       <div class="detail-row" style="margin-top:8px">
         <span class="detail-item" style="color:${moistureColor}">💧 Moisture: ${moisturePct !== null ? moisturePct + '%' : '—'} (ADC: ${device.adc_raw || 'N/A'})</span>
         <span class="detail-item" style="color:${batteryColor}">${batteryDisplayLong}</span>
-        <span class="detail-item">Water: ≈${((device.watering_duration || maxWateringTime) * (device.pump_calibration || pumpCalibration) * (device.pump_speed || 100) / 100).toFixed(0)}ml / ${device.watering_duration || maxWateringTime}s${device.pump_speed && device.pump_speed !== 100 ? ' @' + device.pump_speed + '%' : ''}</span>
+        <span class="detail-item">Water: ≈${((device.watering_duration || maxWateringTime) * (device.pump_calibration || pumpCalibration) * (device.pump_speed || 100) / 100).toFixed(0)}ml / ${device.watering_duration || maxWateringTime}s</span>
       </div>
 
       <div class="detail-row" style="margin-top:8px">
@@ -785,8 +786,9 @@ function toggleDeviceExpand(rowElement, deviceId) {
     rowElement.classList.add('expanded');
     expandedDevices.add(deviceId);
 
-    // Auto-refresh sensor data when expanding (to show fresh data in Home)
-    refreshSensorSilent(deviceId);
+    // NOTE: No auto-refresh on expand - use cached data from loadDevices()
+    // User can click "Refresh" button if they need fresh real-time data
+    // This scales better for 100+ devices
   }
 }
 
@@ -931,7 +933,7 @@ function createDeviceCard(device) {
     </div>
 
     <div class="muted" style="font-size:12px;margin:8px 0">
-      Water: ≈${((device.watering_duration || 60) * (device.pump_calibration || 2.5) * (device.pump_speed || 100) / 100).toFixed(0)}ml / ${device.watering_duration || 60}s${device.pump_speed && device.pump_speed !== 100 ? ' @' + device.pump_speed + '%' : ''}<br>
+      Water: ≈${((device.watering_duration || 60) * (device.pump_calibration || 2.5) * (device.pump_speed || 100) / 100).toFixed(0)}ml / ${device.watering_duration || 60}s<br>
       Last watering: ${lastWateringAgo} | Last update: ${lastUpdateAgo}<br>
       🔧 ${device.firmware_version || 'v1.0.0'} | 🔄 Reboots: ${device.reboot_count || 'N/A'}${device.sta_rssi ? ` | <span style="color:${getRssiDisplay(device.sta_rssi).color}">📶 ${device.sta_rssi} dBm</span>` : ''}
     </div>
@@ -1338,6 +1340,11 @@ async function bulkAction(action) {
     const successful = results.filter(r => r.success).length;
     const failed = results.filter(r => !r.success).length;
     showToast(`✅ Refresh complete! ${successful} online, ${failed} offline`, failed > 0 ? 'warning' : 'success');
+
+    // Update last refresh timestamp
+    const now = new Date();
+    const timeStr = now.toLocaleTimeString('en-US', {hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false});
+    document.getElementById('last-refresh-time').textContent = `Last refresh: ${timeStr}`;
 
     // NOTE: Don't auto-reload from backend - it would overwrite our fresh online status
     // with old telemetry-based calculation. User can manually reload if needed.
