@@ -269,7 +269,8 @@
     <div id="admin-controls" class="admin-controls">
       <h3>🔧 Admin Controls</h3>
       <div class="row" style="align-items:center">
-        <button onclick="bulkAction('refresh')">🔄 Refresh All</button>
+        <button onclick="bulkAction('refresh')">🔄 Refresh</button>
+        <button onclick="bulkAction('ping')" title="Real-time ping (slow)">📡 Ping All</button>
         <button onclick="bulkAction('ota')">📦 Mass OTA Update</button>
         <button onclick="exportData()">📥 Export All Data</button>
         <span id="last-refresh-time" class="muted" style="margin-left:auto;font-size:12px"></span>
@@ -1285,20 +1286,34 @@ function deviceUpdate(deviceId) {
 // Admin actions
 async function bulkAction(action) {
   if (action === 'refresh') {
-    // If allDevices is empty, load them first
+    // Simple refresh: reload cached data from DynamoDB (fast, reliable)
+    showToast('🔄 Refreshing device list...', 'info');
+
+    try {
+      await loadDevices();
+
+      // Update last refresh timestamp
+      const now = new Date();
+      const timeStr = now.toLocaleTimeString('en-US', {hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false});
+      document.getElementById('last-refresh-time').textContent = `Last refresh: ${timeStr}`;
+
+      showToast(`✅ Refreshed ${allDevices.length} devices from cache`, 'success');
+    } catch(e) {
+      showToast(`❌ Failed to refresh: ${e.message}`, 'error');
+    }
+
+  } else if (action === 'ping') {
+    // Real-time ping: send MQTT command to each device (slow, may timeout)
     if (allDevices.length === 0) {
-      showToast('📥 Loading devices...', 'info');
+      showToast('📥 Loading devices first...', 'info');
       await loadDevices();
     }
 
-    // Show non-blocking toast instead of confirm dialog
-    showToast(`🔄 Refreshing ${allDevices.length} devices...`, 'info');
+    showToast(`📡 Pinging ${allDevices.length} devices (this may take a while)...`, 'info');
 
-    // PARALLEL requests to all devices (not sequential!)
-    // Using REAL-TIME /sensor endpoint - sends MQTT command, waits for response
+    // PARALLEL requests to all devices
     const promises = allDevices.map(async device => {
       try {
-        // Real-time sensor request (MQTT command → device response)
         const result = await API.get(`/device/${device.device_id}/sensor`);
 
         // Update device data from real-time response
@@ -1307,47 +1322,34 @@ async function bulkAction(action) {
         device.mode = result.mode || 'manual';
         device.state = result.state || 'DISABLED';
         device.pump_running = result.pump_running || false;
-        // Battery: extract from object {voltage, percent, charging}
         if (result.battery) {
           device.battery_pct = result.battery.percent;
           device.battery_charging = result.battery.charging;
         }
-        // Firmware and reboot count
         if (result.firmware_version) device.firmware_version = result.firmware_version;
         if (result.reboot_count !== undefined) device.reboot_count = result.reboot_count;
         device.last_update = result.timestamp;
-        device.online = true;  // Device responded = definitely online!
+        device.online = true;
 
         return {device_id: device.device_id, success: true};
       } catch(e) {
-        // Error (timeout/offline) → mark as offline
         device.online = false;
         return {device_id: device.device_id, success: false, error: e.message};
       }
     });
 
-    // Wait for all requests (parallel, max 10 sec total)
     const results = await Promise.all(promises);
 
-    console.log('Refresh results:', results);
-    console.log('Devices after refresh:', allDevices.map(d => ({id: d.device_id, online: d.online})));
-
-    // Re-render with updated online/offline status
     renderDevices(allDevices);
     updateStats(allDevices);
 
-    // Show non-blocking toast instead of alert
     const successful = results.filter(r => r.success).length;
     const failed = results.filter(r => !r.success).length;
-    showToast(`✅ Refresh complete! ${successful} online, ${failed} offline`, failed > 0 ? 'warning' : 'success');
+    showToast(`✅ Ping complete! ${successful} online, ${failed} offline`, failed > 0 ? 'warning' : 'success');
 
-    // Update last refresh timestamp
     const now = new Date();
     const timeStr = now.toLocaleTimeString('en-US', {hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false});
-    document.getElementById('last-refresh-time').textContent = `Last refresh: ${timeStr}`;
-
-    // NOTE: Don't auto-reload from backend - it would overwrite our fresh online status
-    // with old telemetry-based calculation. User can manually reload if needed.
+    document.getElementById('last-refresh-time').textContent = `Last ping: ${timeStr}`;
 
   } else if (action === 'ota') {
     massOTAUpdate();
