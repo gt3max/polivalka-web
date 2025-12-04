@@ -918,9 +918,14 @@ setTimeout(updateControllerStatus, 1000); // initial load after 1 sec
 
 // Pump speed control
 function speedPreview(val){document.getElementById('speed-display').textContent=val+'%';}
+let speedDebounceTimer=null;
 async function setSpeed(val){
-  try{await API.post('/pump/speed?value='+val);}
-  catch(e){alert('Speed set failed');}
+  // Debounce to avoid multiple rapid calls on touch devices
+  if(speedDebounceTimer) clearTimeout(speedDebounceTimer);
+  speedDebounceTimer=setTimeout(async()=>{
+    try{await API.post('/pump/speed?value='+val);}
+    catch(e){alert('Speed set failed');}
+  },300);
 }
 async function loadPumpSpeed(){
   try{
