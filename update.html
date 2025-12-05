@@ -108,7 +108,7 @@ async function loadFirmwareInfo() {
   }
 
   try {
-    const data = await fetch('/ota/status').then(r => r.json());
+    const data = await fetch('/api/ota/status').then(r => r.json());
     el.textContent = data.compile_date + ' ' + data.compile_time;
   } catch(e) {
     el.textContent = 'N/A';
