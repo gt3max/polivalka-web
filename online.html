@@ -849,12 +849,18 @@ if (IS_CLOUD) {
         </div>
       `;
 
-      // Update time in header (Cloud mode - use current_time from API)
+      // Update time in header (Cloud mode - fetch from /time/status)
       const timeEl = document.getElementById('header-time');
-      if (status.current_time) {
-        timeEl.textContent = status.current_time.substring(11, 16);
-        timeEl.className = 'mono ok';
-      } else {
+      try {
+        const timeData = await API.get('/time/status');
+        if (timeData.time_set && timeData.current_time) {
+          timeEl.textContent = timeData.current_time.substring(11, 16);
+          timeEl.className = 'mono ok';
+        } else {
+          timeEl.textContent = '--:--';
+          timeEl.className = 'mono danger';
+        }
+      } catch (e) {
         timeEl.textContent = '--:--';
         timeEl.className = 'mono muted';
       }
