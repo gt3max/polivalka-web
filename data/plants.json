@@ -1,0 +1,532 @@
+{
+  "version": "1.0",
+  "updated": "2025-12-05",
+  "categories": {
+    "succulents": {
+      "name": "Succulents & Cacti",
+      "preset": "Succulents",
+      "start_pct": 15,
+      "stop_pct": 25
+    },
+    "standard": {
+      "name": "Standard Houseplants",
+      "preset": "Standard",
+      "start_pct": 35,
+      "stop_pct": 55
+    },
+    "tropical": {
+      "name": "Tropical / Moisture-loving",
+      "preset": "Tropical",
+      "start_pct": 55,
+      "stop_pct": 75
+    },
+    "herbs": {
+      "name": "Herbs & Seedlings",
+      "preset": "Herbs",
+      "start_pct": 30,
+      "stop_pct": 45
+    }
+  },
+  "plants": [
+    {
+      "id": "schefflera",
+      "scientific": "Schefflera arboricola",
+      "names": {
+        "en": "Umbrella tree",
+        "de": "Strahlenaralie",
+        "ru": "Шеффлера"
+      },
+      "category": "standard",
+      "care": {
+        "preset": "Standard",
+        "start_pct": 30,
+        "stop_pct": 50,
+        "watering_days": "7",
+        "sunlight": "part_shade",
+        "temp_min": 15,
+        "temp_max": 25
+      },
+      "tips": [
+        "Better to underwater than overwater",
+        "Water should not stagnate",
+        "Prefers bright indirect light",
+        "Yellow leaves may indicate overwatering"
+      ]
+    },
+    {
+      "id": "sansevieria",
+      "scientific": "Sansevieria trifasciata",
+      "names": {
+        "en": "Snake plant",
+        "de": "Bogenhanf",
+        "ru": "Сансевиерия"
+      },
+      "category": "succulents",
+      "care": {
+        "preset": "Succulents",
+        "start_pct": 15,
+        "stop_pct": 25,
+        "watering_days": "10-14",
+        "sunlight": "full_sun_to_part_shade",
+        "temp_min": 15,
+        "temp_max": 27
+      },
+      "tips": [
+        "Very drought tolerant",
+        "Do not allow water to stagnate",
+        "Reduce watering in winter",
+        "Perfect for beginners"
+      ]
+    },
+    {
+      "id": "aloe_vera",
+      "scientific": "Aloe vera",
+      "names": {
+        "en": "Aloe vera",
+        "de": "Echte Aloe",
+        "ru": "Алоэ вера"
+      },
+      "category": "succulents",
+      "care": {
+        "preset": "Succulents",
+        "start_pct": 15,
+        "stop_pct": 25,
+        "watering_days": "14-21",
+        "sunlight": "full_sun",
+        "temp_min": 10,
+        "temp_max": 30
+      },
+      "tips": [
+        "Let soil dry completely between waterings",
+        "Needs bright light",
+        "Can sunburn if moved suddenly to direct sun",
+        "Medicinal gel inside leaves"
+      ]
+    },
+    {
+      "id": "monstera",
+      "scientific": "Monstera deliciosa",
+      "names": {
+        "en": "Swiss cheese plant",
+        "de": "Fensterblatt",
+        "ru": "Монстера"
+      },
+      "category": "tropical",
+      "care": {
+        "preset": "Tropical",
+        "start_pct": 50,
+        "stop_pct": 70,
+        "watering_days": "7-10",
+        "sunlight": "part_shade",
+        "temp_min": 18,
+        "temp_max": 27
+      },
+      "tips": [
+        "Likes humidity",
+        "Iconic split leaves appear with age",
+        "Support with moss pole for climbing",
+        "Wipe leaves to remove dust"
+      ]
+    },
+    {
+      "id": "ficus_elastica",
+      "scientific": "Ficus elastica",
+      "names": {
+        "en": "Rubber plant",
+        "de": "Gummibaum",
+        "ru": "Фикус каучуконосный"
+      },
+      "category": "standard",
+      "care": {
+        "preset": "Standard",
+        "start_pct": 35,
+        "stop_pct": 55,
+        "watering_days": "7-10",
+        "sunlight": "part_shade",
+        "temp_min": 15,
+        "temp_max": 25
+      },
+      "tips": [
+        "Wipe large leaves regularly",
+        "Yellow leaves indicate overwatering",
+        "Tolerates some neglect",
+        "Milky sap can irritate skin"
+      ]
+    },
+    {
+      "id": "pothos",
+      "scientific": "Epipremnum aureum",
+      "names": {
+        "en": "Pothos",
+        "de": "Efeutute",
+        "ru": "Эпипремнум"
+      },
+      "category": "standard",
+      "care": {
+        "preset": "Standard",
+        "start_pct": 30,
+        "stop_pct": 50,
+        "watering_days": "7-10",
+        "sunlight": "part_shade",
+        "temp_min": 15,
+        "temp_max": 30
+      },
+      "tips": [
+        "Very easy to grow",
+        "Trails beautifully from shelves",
+        "Tolerates low light",
+        "Easy to propagate in water"
+      ]
+    },
+    {
+      "id": "spathiphyllum",
+      "scientific": "Spathiphyllum wallisii",
+      "names": {
+        "en": "Peace lily",
+        "de": "Einblatt",
+        "ru": "Спатифиллум"
+      },
+      "category": "tropical",
+      "care": {
+        "preset": "Tropical",
+        "start_pct": 55,
+        "stop_pct": 75,
+        "watering_days": "5-7",
+        "sunlight": "shade",
+        "temp_min": 18,
+        "temp_max": 26
+      },
+      "tips": [
+        "Droops dramatically when thirsty",
+        "Prefers filtered water",
+        "White flowers need more light",
+        "Good air purifier"
+      ]
+    },
+    {
+      "id": "calathea",
+      "scientific": "Calathea ornata",
+      "names": {
+        "en": "Calathea",
+        "de": "Korbmarante",
+        "ru": "Калатея"
+      },
+      "category": "tropical",
+      "care": {
+        "preset": "Tropical",
+        "start_pct": 55,
+        "stop_pct": 75,
+        "watering_days": "5-7",
+        "sunlight": "shade",
+        "temp_min": 18,
+        "temp_max": 24
+      },
+      "tips": [
+        "Use filtered or distilled water",
+        "Brown leaf edges indicate low humidity",
+        "Leaves move up at night",
+        "Very sensitive to cold drafts"
+      ]
+    },
+    {
+      "id": "dracaena",
+      "scientific": "Dracaena marginata",
+      "names": {
+        "en": "Dragon tree",
+        "de": "Drachenbaum",
+        "ru": "Драцена"
+      },
+      "category": "standard",
+      "care": {
+        "preset": "Standard",
+        "start_pct": 30,
+        "stop_pct": 50,
+        "watering_days": "10-14",
+        "sunlight": "part_shade",
+        "temp_min": 15,
+        "temp_max": 25
+      },
+      "tips": [
+        "Tolerates some drought",
+        "Sensitive to fluoride in tap water",
+        "Lower leaves naturally yellow and drop",
+        "Easy to grow tall"
+      ]
+    },
+    {
+      "id": "crassula",
+      "scientific": "Crassula ovata",
+      "names": {
+        "en": "Jade plant",
+        "de": "Geldbaum",
+        "ru": "Денежное дерево"
+      },
+      "category": "succulents",
+      "care": {
+        "preset": "Succulents",
+        "start_pct": 15,
+        "stop_pct": 25,
+        "watering_days": "14-21",
+        "sunlight": "full_sun",
+        "temp_min": 10,
+        "temp_max": 25
+      },
+      "tips": [
+        "Let soil dry completely",
+        "Thick leaves store water",
+        "Can become tree-like with age",
+        "Easy to propagate from leaves"
+      ]
+    },
+    {
+      "id": "chlorophytum",
+      "scientific": "Chlorophytum comosum",
+      "names": {
+        "en": "Spider plant",
+        "de": "Gruenlilie",
+        "ru": "Хлорофитум"
+      },
+      "category": "standard",
+      "care": {
+        "preset": "Standard",
+        "start_pct": 35,
+        "stop_pct": 55,
+        "watering_days": "7",
+        "sunlight": "part_shade",
+        "temp_min": 10,
+        "temp_max": 25
+      },
+      "tips": [
+        "Very easy and forgiving",
+        "Produces baby plants on runners",
+        "Brown tips from fluoride in water",
+        "Great air purifier"
+      ]
+    },
+    {
+      "id": "basil",
+      "scientific": "Ocimum basilicum",
+      "names": {
+        "en": "Basil",
+        "de": "Basilikum",
+        "ru": "Базилик"
+      },
+      "category": "herbs",
+      "care": {
+        "preset": "Herbs",
+        "start_pct": 30,
+        "stop_pct": 45,
+        "watering_days": "2-3",
+        "sunlight": "full_sun",
+        "temp_min": 18,
+        "temp_max": 30
+      },
+      "tips": [
+        "Needs lots of sun",
+        "Pinch flower buds for bushier growth",
+        "Keep soil consistently moist",
+        "Harvest from the top"
+      ]
+    },
+    {
+      "id": "mint",
+      "scientific": "Mentha spicata",
+      "names": {
+        "en": "Mint",
+        "de": "Minze",
+        "ru": "Мята"
+      },
+      "category": "herbs",
+      "care": {
+        "preset": "Herbs",
+        "start_pct": 35,
+        "stop_pct": 50,
+        "watering_days": "2-3",
+        "sunlight": "part_shade",
+        "temp_min": 15,
+        "temp_max": 25
+      },
+      "tips": [
+        "Very invasive - keep in container",
+        "Prefers moist soil",
+        "Cut back regularly for fresh growth",
+        "Many varieties available"
+      ]
+    },
+    {
+      "id": "orchid",
+      "scientific": "Phalaenopsis",
+      "names": {
+        "en": "Orchid",
+        "de": "Orchidee",
+        "ru": "Орхидея"
+      },
+      "category": "tropical",
+      "care": {
+        "preset": "Tropical",
+        "start_pct": 40,
+        "stop_pct": 60,
+        "watering_days": "7-10",
+        "sunlight": "part_shade",
+        "temp_min": 18,
+        "temp_max": 27
+      },
+      "tips": [
+        "Water when roots turn silver",
+        "Never let sit in water",
+        "Needs special orchid bark, not soil",
+        "Blooms can last months"
+      ]
+    },
+    {
+      "id": "zz_plant",
+      "scientific": "Zamioculcas zamiifolia",
+      "names": {
+        "en": "ZZ plant",
+        "de": "Gluecksfeder",
+        "ru": "Замиокулькас"
+      },
+      "category": "succulents",
+      "care": {
+        "preset": "Succulents",
+        "start_pct": 15,
+        "stop_pct": 30,
+        "watering_days": "14-21",
+        "sunlight": "shade",
+        "temp_min": 15,
+        "temp_max": 28
+      },
+      "tips": [
+        "Extremely drought tolerant",
+        "Tolerates very low light",
+        "Rhizomes store water",
+        "Nearly indestructible"
+      ]
+    },
+    {
+      "id": "philodendron",
+      "scientific": "Philodendron hederaceum",
+      "names": {
+        "en": "Heartleaf philodendron",
+        "de": "Baumfreund",
+        "ru": "Филодендрон"
+      },
+      "category": "standard",
+      "care": {
+        "preset": "Standard",
+        "start_pct": 35,
+        "stop_pct": 55,
+        "watering_days": "7",
+        "sunlight": "part_shade",
+        "temp_min": 15,
+        "temp_max": 27
+      },
+      "tips": [
+        "Very easy to grow",
+        "Trails or climbs",
+        "Yellow leaves mean overwatering",
+        "Propagates easily in water"
+      ]
+    },
+    {
+      "id": "anthurium",
+      "scientific": "Anthurium andraeanum",
+      "names": {
+        "en": "Anthurium",
+        "de": "Flamingoblume",
+        "ru": "Антуриум"
+      },
+      "category": "tropical",
+      "care": {
+        "preset": "Tropical",
+        "start_pct": 50,
+        "stop_pct": 70,
+        "watering_days": "5-7",
+        "sunlight": "part_shade",
+        "temp_min": 18,
+        "temp_max": 27
+      },
+      "tips": [
+        "Needs high humidity",
+        "Red 'flowers' are actually leaves",
+        "Avoid direct sun",
+        "Good in bathrooms"
+      ]
+    },
+    {
+      "id": "fern",
+      "scientific": "Nephrolepis exaltata",
+      "names": {
+        "en": "Boston fern",
+        "de": "Schwertfarn",
+        "ru": "Нефролепис"
+      },
+      "category": "tropical",
+      "care": {
+        "preset": "Tropical",
+        "start_pct": 55,
+        "stop_pct": 75,
+        "watering_days": "3-5",
+        "sunlight": "shade",
+        "temp_min": 15,
+        "temp_max": 24
+      },
+      "tips": [
+        "Never let dry out completely",
+        "Loves humidity - mist regularly",
+        "Shed leaves are normal",
+        "Keep away from heating vents"
+      ]
+    },
+    {
+      "id": "cactus",
+      "scientific": "Cactaceae",
+      "names": {
+        "en": "Cactus",
+        "de": "Kaktus",
+        "ru": "Кактус"
+      },
+      "category": "succulents",
+      "care": {
+        "preset": "Succulents",
+        "start_pct": 10,
+        "stop_pct": 20,
+        "watering_days": "21-30",
+        "sunlight": "full_sun",
+        "temp_min": 10,
+        "temp_max": 35
+      },
+      "tips": [
+        "Let soil dry completely between waterings",
+        "Needs very well-draining soil",
+        "More water in summer, almost none in winter",
+        "Handle with care - spines!"
+      ]
+    },
+    {
+      "id": "haworthia",
+      "scientific": "Haworthia fasciata",
+      "names": {
+        "en": "Zebra plant",
+        "de": "Haworthie",
+        "ru": "Хавортия"
+      },
+      "category": "succulents",
+      "care": {
+        "preset": "Succulents",
+        "start_pct": 15,
+        "stop_pct": 25,
+        "watering_days": "14-21",
+        "sunlight": "part_shade",
+        "temp_min": 10,
+        "temp_max": 27
+      },
+      "tips": [
+        "Compact and slow growing",
+        "Prefers indirect light",
+        "Perfect for windowsills",
+        "Produces offsets easily"
+      ]
+    }
+  ]
+}

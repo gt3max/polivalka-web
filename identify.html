@@ -1,0 +1,787 @@
+<!doctype html>
+<html>
+<head>
+<script src="api-adapter.js"></script>
+<script src="common.js"></script>
+<meta charset="utf-8"/>
+<link rel="icon" href="favicon.svg" type="image/svg+xml">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Plant Identification</title>
+<style>
+  body{font-family:system-ui,Arial;margin:0;padding:0;max-width:100%;background:#fafafa}
+  .header{position:sticky;top:0;z-index:1000;background:#2c5f2d;color:#fff;padding:8px 10px;display:flex;justify-content:space-between;align-items:center;gap:8px}
+  .header h1{margin:0;font-size:18px}
+  .header-info{font-size:12px;text-align:right}
+  .container{padding:18px;max-width:600px;margin:0 auto}
+  .card{border:1px solid #ddd;padding:16px;border-radius:12px;margin:12px 0;background:#fff}
+  button{padding:10px 16px;border-radius:8px;border:1px solid #888;background:#fafafa;cursor:pointer;font-size:14px}
+  button.primary{background:#2c5f2d;color:#fff;border-color:#2c5f2d}
+  button.secondary{background:#f5f5f5;border-color:#ccc}
+  button:hover{opacity:0.9}
+  button:disabled{opacity:0.5;cursor:not-allowed}
+  .muted{color:#666;font-size:14px}
+
+  /* Upload Section */
+  .upload-area{border:2px dashed #ccc;border-radius:12px;padding:40px 20px;text-align:center;cursor:pointer;transition:all 0.3s}
+  .upload-area:hover{border-color:#2c5f2d;background:#f0f8f0}
+  .upload-area.dragover{border-color:#2c5f2d;background:#e8f5e9}
+  .upload-icon{font-size:48px;margin-bottom:12px}
+  .upload-text{color:#666;margin-bottom:8px}
+  .upload-hint{font-size:12px;color:#999}
+  .upload-buttons{display:flex;gap:12px;justify-content:center;margin-top:16px}
+
+  /* Preview */
+  .preview-area{display:flex;gap:8px;flex-wrap:wrap;margin:16px 0}
+  .preview-item{position:relative;width:80px;height:80px;border-radius:8px;overflow:hidden}
+  .preview-item img{width:100%;height:100%;object-fit:cover}
+  .preview-item .remove-btn{position:absolute;top:2px;right:2px;background:#fff;border-radius:50%;width:20px;height:20px;font-size:12px;cursor:pointer;border:none;box-shadow:0 1px 3px rgba(0,0,0,0.2)}
+
+  /* Results */
+  .results-section{display:none}
+  .result-item{border:1px solid #ddd;border-radius:10px;padding:12px;margin:10px 0;cursor:pointer;transition:all 0.2s}
+  .result-item:hover{border-color:#2c5f2d;background:#f9fff9}
+  .result-item.selected{border-color:#2c5f2d;background:#e8f5e9;border-width:2px}
+  .result-header{display:flex;gap:12px;align-items:start}
+  .result-radio{margin-top:4px}
+  .result-info{flex:1}
+  .result-name{font-weight:600;color:#2c5f2d;font-size:16px}
+  .result-common{font-size:13px;color:#666}
+  .result-score{font-size:12px;color:#999;margin-top:4px}
+  .result-images{display:flex;gap:4px;margin-top:8px;overflow-x:auto}
+  .result-images img{width:60px;height:60px;border-radius:6px;object-fit:cover}
+
+  /* Plant Card */
+  .plant-card{display:none}
+  .plant-card.visible{display:block}
+  .plant-card-header{display:flex;gap:16px;align-items:start;margin-bottom:16px}
+  .plant-card-photo{width:100px;height:100px;border-radius:12px;object-fit:cover;background:#f0f0f0}
+  .plant-card-info{flex:1}
+  .plant-card-name{font-size:20px;font-weight:600;color:#2c5f2d}
+  .plant-card-scientific{font-size:14px;color:#666;font-style:italic}
+  .plant-card-names{font-size:12px;color:#999;margin-top:4px}
+  .care-section{margin:16px 0}
+  .care-section h4{margin:0 0 8px 0;font-size:14px;color:#666}
+  .care-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+  .care-item{background:#f5f5f5;padding:10px;border-radius:8px;font-size:13px}
+  .care-label{font-size:11px;color:#999;display:block}
+  .care-value{font-weight:600;color:#333}
+  .tips-list{margin:0;padding-left:20px;font-size:13px;color:#666}
+  .tips-list li{margin:4px 0}
+
+  /* Actions */
+  .actions{display:flex;gap:12px;flex-wrap:wrap;margin-top:20px}
+  .actions button{flex:1;min-width:140px}
+
+  /* GDPR */
+  .gdpr-checkbox{display:flex;gap:8px;align-items:start;margin:16px 0;padding:12px;background:#f9f9f9;border-radius:8px;font-size:12px;color:#666}
+  .gdpr-checkbox input{margin-top:2px}
+
+  /* Loading */
+  .loading{text-align:center;padding:40px}
+  .spinner{width:40px;height:40px;border:3px solid #f0f0f0;border-top-color:#2c5f2d;border-radius:50%;animation:spin 1s linear infinite;margin:0 auto 16px}
+  @keyframes spin{to{transform:rotate(360deg)}}
+
+  /* Error */
+  .error-message{background:#ffebee;border:1px solid #ffcdd2;color:#c62828;padding:12px;border-radius:8px;margin:16px 0;font-size:14px}
+
+  /* Manual search */
+  .manual-search{margin-top:20px;padding-top:16px;border-top:1px solid #eee}
+  .manual-search input{width:100%;padding:10px 12px;border:1px solid #ccc;border-radius:8px;font-size:14px;margin-bottom:12px;box-sizing:border-box}
+
+  /* Catalog fallback */
+  .catalog-section{display:none}
+  .category-tabs{display:flex;gap:4px;flex-wrap:wrap;margin-bottom:16px}
+  .category-tab{padding:8px 16px;border:1px solid #ddd;border-radius:20px;background:#fff;cursor:pointer;font-size:13px}
+  .category-tab.active{background:#2c5f2d;color:#fff;border-color:#2c5f2d}
+  .plant-list{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:12px}
+  .plant-list-item{border:1px solid #ddd;border-radius:10px;padding:10px;text-align:center;cursor:pointer;transition:all 0.2s}
+  .plant-list-item:hover{border-color:#2c5f2d;background:#f9fff9}
+  .plant-list-item img{width:60px;height:60px;border-radius:8px;object-fit:cover;margin-bottom:6px}
+  .plant-list-item .name{font-size:13px;font-weight:500}
+
+  /* Navigation */
+  .nav-back{display:inline-flex;align-items:center;gap:6px;color:#666;text-decoration:none;font-size:14px;margin-bottom:16px}
+  .nav-back:hover{color:#2c5f2d}
+
+  /* Mock mode banner */
+  .mock-banner{background:#fff3cd;border:1px solid #ffc107;color:#856404;padding:10px 16px;border-radius:8px;margin-bottom:16px;font-size:13px}
+</style>
+</head>
+<body>
+<div class="header">
+  <h1>Plant Identification</h1>
+  <div class="header-info">
+    <a href="fleet.html" style="color:#fff;text-decoration:none">Back to Fleet</a>
+  </div>
+</div>
+
+<div class="container">
+  <!-- Mock Mode Banner -->
+  <div class="mock-banner" id="mock-banner">
+    <strong>Demo Mode:</strong> API keys not configured. Using sample data for testing.
+  </div>
+
+  <!-- Step 1: Upload -->
+  <div id="step-upload" class="card">
+    <h2 style="margin-top:0">Identify Your Plant</h2>
+
+    <div class="upload-area" id="upload-area">
+      <div class="upload-icon">📷</div>
+      <div class="upload-text">Drag & drop a photo or click to upload</div>
+      <div class="upload-hint">Supports JPG, PNG (max 5MB)</div>
+      <div class="upload-buttons">
+        <button type="button" class="primary" onclick="document.getElementById('file-input').click()">
+          📁 Choose File
+        </button>
+        <button type="button" class="secondary" id="camera-btn" onclick="openCamera()">
+          📷 Take Photo
+        </button>
+      </div>
+    </div>
+
+    <input type="file" id="file-input" accept="image/*" style="display:none" multiple>
+    <input type="file" id="camera-input" accept="image/*" capture="environment" style="display:none">
+
+    <div class="preview-area" id="preview-area"></div>
+
+    <div class="gdpr-checkbox" id="gdpr-section" style="display:none">
+      <input type="checkbox" id="gdpr-consent">
+      <label for="gdpr-consent">
+        I agree that my photo may be stored to improve plant recognition (GDPR).
+        Your photo will only be used if you confirm the plant identification.
+      </label>
+    </div>
+
+    <button class="primary" id="identify-btn" onclick="identifyPlant()" disabled style="width:100%;margin-top:16px">
+      Identify Plant
+    </button>
+  </div>
+
+  <!-- Loading -->
+  <div id="loading" class="card loading" style="display:none">
+    <div class="spinner"></div>
+    <div>Analyzing your plant...</div>
+  </div>
+
+  <!-- Error -->
+  <div id="error" class="error-message" style="display:none"></div>
+
+  <!-- Step 2: Results -->
+  <div id="step-results" class="card results-section">
+    <a href="#" class="nav-back" onclick="goBack();return false">← Back</a>
+    <h2 style="margin-top:0">Similar Plants</h2>
+    <p class="muted">Select the plant that matches yours:</p>
+
+    <div id="results-list"></div>
+
+    <div class="manual-search">
+      <p class="muted">Not found? Search by name:</p>
+      <input type="text" id="manual-search-input" placeholder="Enter plant name...">
+      <button class="secondary" onclick="searchByName()">Search</button>
+    </div>
+  </div>
+
+  <!-- Step 3: Plant Card -->
+  <div id="step-card" class="card plant-card">
+    <a href="#" class="nav-back" onclick="goBackToResults();return false">← Back to results</a>
+
+    <div class="plant-card-header">
+      <img class="plant-card-photo" id="card-photo" src="" alt="">
+      <div class="plant-card-info">
+        <div class="plant-card-name" id="card-name">-</div>
+        <div class="plant-card-scientific" id="card-scientific">-</div>
+        <div class="plant-card-names" id="card-names">-</div>
+      </div>
+    </div>
+
+    <div class="care-section">
+      <h4>Care Recommendations</h4>
+      <div class="care-grid">
+        <div class="care-item">
+          <span class="care-label">Watering</span>
+          <span class="care-value" id="care-watering">-</span>
+        </div>
+        <div class="care-item">
+          <span class="care-label">Moisture Range</span>
+          <span class="care-value" id="care-moisture">-</span>
+        </div>
+        <div class="care-item">
+          <span class="care-label">Light</span>
+          <span class="care-value" id="care-light">-</span>
+        </div>
+        <div class="care-item">
+          <span class="care-label">Temperature</span>
+          <span class="care-value" id="care-temp">-</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="care-section">
+      <h4>Tips</h4>
+      <ul class="tips-list" id="care-tips"></ul>
+    </div>
+
+    <div class="actions">
+      <button class="primary" onclick="applyToDevice()">
+        Apply to Device
+      </button>
+      <button class="secondary" onclick="saveToProfile()">
+        Save to Profile
+      </button>
+      <button class="secondary" onclick="goToManualSettings()">
+        Configure Manually
+      </button>
+    </div>
+  </div>
+
+  <!-- Catalog Fallback -->
+  <div id="step-catalog" class="card catalog-section">
+    <a href="#" class="nav-back" onclick="goBack();return false">← Back</a>
+    <h2 style="margin-top:0">Browse Plant Catalog</h2>
+
+    <div class="category-tabs" id="category-tabs"></div>
+    <div class="plant-list" id="plant-list"></div>
+  </div>
+</div>
+
+<script>
+// ============ Configuration ============
+const CONFIG = {
+  // Set to true when API keys are configured
+  mockMode: true,
+
+  // API Keys (set these when ready)
+  plantnetApiKey: '',
+  perenualApiKey: '',
+
+  // API URLs
+  plantnetUrl: 'https://my-api.plantnet.org/v2/identify/all',
+  perenualUrl: 'https://perenual.com/api/v2/species-list'
+};
+
+// ============ State ============
+let selectedFiles = [];
+let identificationResults = [];
+let selectedPlant = null;
+
+// ============ Mock Data ============
+const MOCK_RESULTS = [
+  {
+    id: 'schefflera',
+    scientific: 'Schefflera arboricola',
+    commonNames: ['Umbrella tree', 'Dwarf umbrella tree'],
+    score: 94.2,
+    images: ['https://upload.wikimedia.org/wikipedia/commons/thumb/f/f9/Schefflera_arboricola_3.jpg/220px-Schefflera_arboricola_3.jpg']
+  },
+  {
+    id: 'ficus_benjamina',
+    scientific: 'Ficus benjamina',
+    commonNames: ['Weeping fig', 'Benjamin fig'],
+    score: 3.8,
+    images: ['https://upload.wikimedia.org/wikipedia/commons/thumb/6/68/Ficus_benjamina2.jpg/220px-Ficus_benjamina2.jpg']
+  },
+  {
+    id: 'dracaena',
+    scientific: 'Dracaena marginata',
+    commonNames: ['Dragon tree'],
+    score: 1.2,
+    images: ['https://upload.wikimedia.org/wikipedia/commons/thumb/2/2d/Dracaena_marginata.jpg/220px-Dracaena_marginata.jpg']
+  }
+];
+
+const PLANTS_DATABASE = {
+  schefflera: {
+    id: 'schefflera',
+    scientific: 'Schefflera arboricola',
+    names: { en: 'Umbrella tree', de: 'Strahlenaralie', ru: 'Шеффлера' },
+    category: 'standard',
+    care: {
+      preset: 'Standard',
+      start_pct: 30,
+      stop_pct: 50,
+      watering_days: '7',
+      sunlight: 'part_shade',
+      temp_min: 15,
+      temp_max: 25
+    },
+    tips: [
+      'Better to underwater than overwater',
+      'Water should not stagnate',
+      'Prefers bright indirect light'
+    ],
+    photos: ['https://upload.wikimedia.org/wikipedia/commons/thumb/f/f9/Schefflera_arboricola_3.jpg/220px-Schefflera_arboricola_3.jpg']
+  },
+  sansevieria: {
+    id: 'sansevieria',
+    scientific: 'Sansevieria trifasciata',
+    names: { en: 'Snake plant', de: 'Bogenhanf', ru: 'Сансевиерия' },
+    category: 'succulents',
+    care: {
+      preset: 'Succulents',
+      start_pct: 15,
+      stop_pct: 25,
+      watering_days: '10-14',
+      sunlight: 'full_sun_to_part_shade',
+      temp_min: 15,
+      temp_max: 27
+    },
+    tips: [
+      'Better to underwater than overwater',
+      'Do not allow water to stagnate',
+      'Reduce watering in winter'
+    ],
+    photos: ['https://upload.wikimedia.org/wikipedia/commons/thumb/7/7f/Snake_Plant_%28Sansevieria_trifasciata_%27Laurentii%27%29.jpg/220px-Snake_Plant_%28Sansevieria_trifasciata_%27Laurentii%27%29.jpg']
+  }
+};
+
+const CATEGORIES = {
+  succulents: { name: 'Succulents', preset: 'Succulents', start_pct: 15, stop_pct: 25 },
+  standard: { name: 'Standard', preset: 'Standard', start_pct: 35, stop_pct: 55 },
+  tropical: { name: 'Tropical', preset: 'Tropical', start_pct: 55, stop_pct: 75 },
+  herbs: { name: 'Herbs', preset: 'Herbs', start_pct: 30, stop_pct: 45 }
+};
+
+// ============ Init ============
+document.addEventListener('DOMContentLoaded', function() {
+  // Hide mock banner if API keys configured
+  if (!CONFIG.mockMode) {
+    document.getElementById('mock-banner').style.display = 'none';
+  }
+
+  // Setup file input
+  const fileInput = document.getElementById('file-input');
+  fileInput.addEventListener('change', handleFileSelect);
+
+  // Setup camera input
+  const cameraInput = document.getElementById('camera-input');
+  cameraInput.addEventListener('change', handleFileSelect);
+
+  // Setup drag & drop
+  const uploadArea = document.getElementById('upload-area');
+  uploadArea.addEventListener('dragover', handleDragOver);
+  uploadArea.addEventListener('dragleave', handleDragLeave);
+  uploadArea.addEventListener('drop', handleDrop);
+
+  // Check camera availability
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+    document.getElementById('camera-btn').style.display = 'none';
+  }
+
+  console.log('[Identify] Page initialized, mockMode:', CONFIG.mockMode);
+});
+
+// ============ File Handling ============
+function handleDragOver(e) {
+  e.preventDefault();
+  e.currentTarget.classList.add('dragover');
+}
+
+function handleDragLeave(e) {
+  e.currentTarget.classList.remove('dragover');
+}
+
+function handleDrop(e) {
+  e.preventDefault();
+  e.currentTarget.classList.remove('dragover');
+
+  const files = Array.from(e.dataTransfer.files).filter(f => f.type.startsWith('image/'));
+  addFiles(files);
+}
+
+function handleFileSelect(e) {
+  const files = Array.from(e.target.files);
+  addFiles(files);
+  e.target.value = ''; // Reset for re-selection
+}
+
+function addFiles(files) {
+  // Max 5 files
+  const remaining = 5 - selectedFiles.length;
+  const toAdd = files.slice(0, remaining);
+
+  toAdd.forEach(file => {
+    if (file.size > 5 * 1024 * 1024) {
+      showToast('File too large (max 5MB)', 'warning');
+      return;
+    }
+    selectedFiles.push(file);
+  });
+
+  updatePreview();
+  updateIdentifyButton();
+}
+
+function removeFile(index) {
+  selectedFiles.splice(index, 1);
+  updatePreview();
+  updateIdentifyButton();
+}
+
+function updatePreview() {
+  const container = document.getElementById('preview-area');
+  container.innerHTML = '';
+
+  selectedFiles.forEach((file, index) => {
+    const div = document.createElement('div');
+    div.className = 'preview-item';
+
+    const img = document.createElement('img');
+    img.src = URL.createObjectURL(file);
+
+    const btn = document.createElement('button');
+    btn.className = 'remove-btn';
+    btn.textContent = '×';
+    btn.onclick = () => removeFile(index);
+
+    div.appendChild(img);
+    div.appendChild(btn);
+    container.appendChild(div);
+  });
+
+  // Show GDPR checkbox if files selected
+  document.getElementById('gdpr-section').style.display = selectedFiles.length > 0 ? 'flex' : 'none';
+}
+
+function updateIdentifyButton() {
+  const btn = document.getElementById('identify-btn');
+  btn.disabled = selectedFiles.length === 0;
+}
+
+function openCamera() {
+  document.getElementById('camera-input').click();
+}
+
+// ============ Plant Identification ============
+async function identifyPlant() {
+  if (selectedFiles.length === 0) return;
+
+  showStep('loading');
+  hideError();
+
+  try {
+    let results;
+
+    if (CONFIG.mockMode) {
+      // Mock delay
+      await new Promise(r => setTimeout(r, 1500));
+      results = MOCK_RESULTS;
+    } else {
+      results = await callPlantNetAPI(selectedFiles[0]);
+    }
+
+    if (!results || results.length === 0) {
+      showError('Could not identify the plant. Try a different photo.');
+      showStep('upload');
+      return;
+    }
+
+    // Filter low confidence results
+    results = results.filter(r => r.score >= 1);
+
+    if (results.length === 0) {
+      showError('No confident matches found. Try a clearer photo of the leaves.');
+      showStep('upload');
+      return;
+    }
+
+    identificationResults = results;
+    renderResults(results);
+    showStep('results');
+
+  } catch (err) {
+    console.error('Identification error:', err);
+    showError('Error identifying plant: ' + err.message);
+    showStep('upload');
+  }
+}
+
+async function callPlantNetAPI(imageFile) {
+  const formData = new FormData();
+  formData.append('images', imageFile);
+  formData.append('organs', 'auto');
+
+  const params = new URLSearchParams({
+    'api-key': CONFIG.plantnetApiKey,
+    'include-related-images': 'true',
+    'lang': 'en'
+  });
+
+  const response = await fetch(`${CONFIG.plantnetUrl}?${params}`, {
+    method: 'POST',
+    body: formData
+  });
+
+  if (!response.ok) {
+    throw new Error('PlantNet API error: ' + response.status);
+  }
+
+  const data = await response.json();
+
+  return data.results.map(r => ({
+    id: r.species.scientificNameWithoutAuthor.toLowerCase().replace(/\s+/g, '_'),
+    scientific: r.species.scientificNameWithoutAuthor,
+    commonNames: r.species.commonNames || [],
+    score: (r.score * 100).toFixed(1),
+    images: r.images?.slice(0, 3).map(img => img.url?.s || img.url?.m) || []
+  }));
+}
+
+// ============ Results Rendering ============
+function renderResults(results) {
+  const container = document.getElementById('results-list');
+  container.innerHTML = '';
+
+  results.forEach((result, index) => {
+    const div = document.createElement('div');
+    div.className = 'result-item';
+    div.onclick = () => selectResult(index);
+
+    let imagesHtml = '';
+    if (result.images && result.images.length > 0) {
+      imagesHtml = '<div class="result-images">' +
+        result.images.map(url => `<img src="${url}" alt="" onerror="this.style.display='none'">`).join('') +
+        '</div>';
+    }
+
+    div.innerHTML = `
+      <div class="result-header">
+        <input type="radio" name="result" class="result-radio" ${index === 0 ? 'checked' : ''}>
+        <div class="result-info">
+          <div class="result-name">${result.scientific}</div>
+          <div class="result-common">${result.commonNames.slice(0, 2).join(', ') || 'No common name'}</div>
+          <div class="result-score">${result.score}% match</div>
+        </div>
+      </div>
+      ${imagesHtml}
+    `;
+
+    container.appendChild(div);
+  });
+}
+
+function selectResult(index) {
+  // Update UI
+  document.querySelectorAll('.result-item').forEach((el, i) => {
+    el.classList.toggle('selected', i === index);
+    el.querySelector('.result-radio').checked = (i === index);
+  });
+
+  const result = identificationResults[index];
+  showPlantCard(result);
+}
+
+// ============ Plant Card ============
+function showPlantCard(result) {
+  // Try to find in local database first
+  let plantData = PLANTS_DATABASE[result.id];
+
+  if (!plantData) {
+    // Create from result with default category
+    plantData = {
+      id: result.id,
+      scientific: result.scientific,
+      names: { en: result.commonNames[0] || result.scientific },
+      category: 'standard',
+      care: CATEGORIES.standard,
+      tips: ['Research specific care needs for this plant'],
+      photos: result.images
+    };
+  }
+
+  selectedPlant = plantData;
+
+  // Populate card
+  document.getElementById('card-photo').src = plantData.photos[0] || '';
+  document.getElementById('card-name').textContent = plantData.names.en || plantData.scientific;
+  document.getElementById('card-scientific').textContent = plantData.scientific;
+
+  const allNames = [plantData.names.en, plantData.names.de, plantData.names.ru].filter(Boolean);
+  document.getElementById('card-names').textContent = allNames.join(' / ');
+
+  // Care info
+  const care = plantData.care;
+  document.getElementById('care-watering').textContent = care.watering_days ? `Every ${care.watering_days} days` : 'Varies';
+  document.getElementById('care-moisture').textContent = `${care.start_pct}% - ${care.stop_pct}%`;
+  document.getElementById('care-light').textContent = formatSunlight(care.sunlight);
+  document.getElementById('care-temp').textContent = care.temp_min && care.temp_max ? `${care.temp_min}-${care.temp_max}°C` : 'Room temp';
+
+  // Tips
+  const tipsList = document.getElementById('care-tips');
+  tipsList.innerHTML = plantData.tips.map(tip => `<li>${tip}</li>`).join('');
+
+  showStep('card');
+}
+
+function formatSunlight(sunlight) {
+  const map = {
+    'full_sun': 'Full sun',
+    'part_shade': 'Partial shade',
+    'full_sun_to_part_shade': 'Sun to partial shade',
+    'shade': 'Shade'
+  };
+  return map[sunlight] || sunlight || 'Moderate';
+}
+
+// ============ Actions ============
+async function applyToDevice() {
+  if (!selectedPlant) return;
+
+  const deviceId = getDeviceId();
+  if (!deviceId) {
+    showToast('No device selected. Go to Fleet and select a device first.', 'warning');
+    return;
+  }
+
+  const care = selectedPlant.care;
+
+  try {
+    // Send command to device via existing API
+    await apiCall('command', {
+      device_id: deviceId,
+      command: 'set_sensor_preset',
+      params: {
+        preset: care.preset,
+        start_pct: care.start_pct,
+        stop_pct: care.stop_pct
+      }
+    });
+
+    showToast(`Applied ${care.preset} preset (${care.start_pct}%-${care.stop_pct}%)`, 'success');
+
+    // Also save plant to device profile
+    await saveToProfile();
+
+  } catch (err) {
+    console.error('Apply error:', err);
+    showToast('Error applying settings: ' + err.message, 'error');
+  }
+}
+
+async function saveToProfile() {
+  if (!selectedPlant) return;
+
+  const deviceId = getDeviceId();
+  if (!deviceId) {
+    // Save locally only
+    localStorage.setItem('selected_plant', JSON.stringify(selectedPlant));
+    showToast('Plant saved locally', 'success');
+    return;
+  }
+
+  try {
+    await apiCall('device/plant', {
+      device_id: deviceId,
+      plant: {
+        id: selectedPlant.id,
+        name: selectedPlant.names.en,
+        scientific: selectedPlant.scientific,
+        preset: selectedPlant.care.preset
+      }
+    });
+
+    showToast('Plant saved to device profile', 'success');
+
+  } catch (err) {
+    console.error('Save error:', err);
+    // Fallback to local storage
+    localStorage.setItem('selected_plant', JSON.stringify(selectedPlant));
+    showToast('Plant saved locally', 'info');
+  }
+}
+
+function goToManualSettings() {
+  const deviceId = getDeviceId();
+  if (deviceId) {
+    window.location.href = `sensor.html?device=${deviceId}`;
+  } else {
+    showToast('No device selected', 'warning');
+  }
+}
+
+// ============ Navigation ============
+function showStep(step) {
+  document.getElementById('step-upload').style.display = step === 'upload' ? 'block' : 'none';
+  document.getElementById('loading').style.display = step === 'loading' ? 'block' : 'none';
+  document.getElementById('step-results').style.display = step === 'results' ? 'block' : 'none';
+  document.getElementById('step-card').style.display = step === 'card' ? 'block' : 'none';
+  document.getElementById('step-catalog').style.display = step === 'catalog' ? 'block' : 'none';
+
+  if (step === 'results') {
+    document.getElementById('step-results').classList.add('results-section');
+    document.getElementById('step-results').style.display = 'block';
+  }
+
+  if (step === 'card') {
+    document.getElementById('step-card').classList.add('visible');
+  }
+}
+
+function goBack() {
+  selectedFiles = [];
+  updatePreview();
+  updateIdentifyButton();
+  identificationResults = [];
+  selectedPlant = null;
+  showStep('upload');
+}
+
+function goBackToResults() {
+  showStep('results');
+}
+
+function showError(message) {
+  const el = document.getElementById('error');
+  el.textContent = message;
+  el.style.display = 'block';
+}
+
+function hideError() {
+  document.getElementById('error').style.display = 'none';
+}
+
+// ============ Helpers ============
+function getDeviceId() {
+  // Get from URL or localStorage
+  const params = new URLSearchParams(window.location.search);
+  return params.get('device') || localStorage.getItem('selected_device_id');
+}
+
+async function apiCall(endpoint, data) {
+  // Use existing api-adapter.js if available
+  if (typeof callCloudAPI === 'function') {
+    return await callCloudAPI(endpoint, data);
+  }
+
+  // Fallback for mock mode
+  console.log('[API Mock]', endpoint, data);
+  return { success: true };
+}
+
+function searchByName() {
+  const query = document.getElementById('manual-search-input').value.trim().toLowerCase();
+  if (!query) return;
+
+  // Search in local database
+  const matches = Object.values(PLANTS_DATABASE).filter(p =>
+    p.scientific.toLowerCase().includes(query) ||
+    Object.values(p.names).some(n => n && n.toLowerCase().includes(query))
+  );
+
+  if (matches.length > 0) {
+    identificationResults = matches.map(p => ({
+      id: p.id,
+      scientific: p.scientific,
+      commonNames: Object.values(p.names).filter(Boolean),
+      score: 100,
+      images: p.photos
+    }));
+    renderResults(identificationResults);
+  } else {
+    showToast('No plants found. Try different keywords.', 'info');
+  }
+}
+
+console.log('[Identify] Script loaded');
+</script>
+</body>
+</html>
