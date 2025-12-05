@@ -368,31 +368,53 @@ function renderMoistureChart(data) {
   // Chart type settings
   const isScatter = chartType === 'scatter';
 
+  // ADC values for second axis
+  const adcValues = data.map(d => d.adc_raw);
+  const hasAdc = adcValues.some(v => v != null);
+
   moistureChart = new Chart(ctx, {
     type: isScatter ? 'scatter' : 'line',
     data: {
       labels: labels,
-      datasets: [{
-        label: 'Moisture %',
-        data: isScatter ? data.map(d => ({ x: new Date(d.timestamp * 1000), y: d.moisture_percent })) : values,
-        borderColor: '#1976d2',
-        backgroundColor: isScatter ? '#1976d2' : 'rgba(25, 118, 210, 0.1)',
-        fill: !isScatter,
-        tension: isScatter ? 0 : 0.3,
-        pointRadius: isScatter ? 4 : 2,
-        pointHoverRadius: 6,
-        showLine: !isScatter
-      }]
+      datasets: [
+        {
+          label: 'Moisture %',
+          data: isScatter ? data.map(d => ({ x: new Date(d.timestamp * 1000), y: d.moisture_percent })) : values,
+          borderColor: '#1976d2',
+          backgroundColor: isScatter ? '#1976d2' : 'rgba(25, 118, 210, 0.1)',
+          fill: !isScatter,
+          tension: isScatter ? 0 : 0.3,
+          pointRadius: isScatter ? 4 : 2,
+          pointHoverRadius: 6,
+          showLine: !isScatter,
+          yAxisID: 'y'
+        },
+        {
+          label: 'ADC Raw',
+          data: isScatter ? data.map(d => ({ x: new Date(d.timestamp * 1000), y: d.adc_raw })) : adcValues,
+          borderColor: '#ff9800',
+          borderDash: isScatter ? [] : [5, 5],
+          fill: false,
+          tension: isScatter ? 0 : 0.3,
+          pointRadius: isScatter ? 3 : 1,
+          showLine: !isScatter,
+          yAxisID: 'y1',
+          hidden: !hasAdc
+        }
+      ]
     },
     options: {
       responsive: true,
       maintainAspectRatio: false,
       plugins: {
-        legend: { display: false },
+        legend: { position: 'top' },
         tooltip: {
           callbacks: {
             title: (items) => new Date(items[0].parsed.x).toLocaleString(),
-            label: (item) => `Moisture: ${item.parsed.y}%`
+            label: (item) => {
+              if (item.dataset.label === 'Moisture %') return `Moisture: ${item.parsed.y}%`;
+              return `ADC: ${item.parsed.y}`;
+            }
           }
         },
         annotation: {
@@ -409,9 +431,19 @@ function renderMoistureChart(data) {
           grid: { display: false }
         },
         y: {
+          type: 'linear',
+          position: 'left',
           min: 0,
           max: 100,
           ticks: { callback: v => v + '%' }
+        },
+        y1: {
+          type: 'linear',
+          position: 'right',
+          min: 0,
+          max: 4095,
+          grid: { drawOnChartArea: false },
+          ticks: { callback: v => v }
         }
       }
     }

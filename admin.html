@@ -285,7 +285,7 @@ async function savePumpPreset() {
       method: 'POST',
       headers: { ...API.getAuthHeaders(), 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        command: 'set_pump_calibration',
+        command: 'set_pump_preset',
         params: { ml_per_sec: mlPerSec }
       })
     });
@@ -323,7 +323,7 @@ async function saveSensorPreset() {
       method: 'POST',
       headers: { ...API.getAuthHeaders(), 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        command: 'set_sensor_calibration',
+        command: 'set_sensor_preset',
         params: { adc_water: adcWater, adc_dry_soil: adcDry, adc_air: adcAir }
       })
     });
