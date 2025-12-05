@@ -384,8 +384,10 @@ function renderMoistureChart(data) {
           backgroundColor: isScatter ? '#1976d2' : 'rgba(25, 118, 210, 0.1)',
           fill: !isScatter,
           tension: isScatter ? 0 : 0.3,
-          pointRadius: isScatter ? 4 : 2,
-          pointHoverRadius: 6,
+          pointRadius: isScatter ? 6 : 5,
+          pointHoverRadius: 10,
+          pointBorderWidth: 2,
+          pointBackgroundColor: '#1976d2',
           showLine: !isScatter,
           yAxisID: 'y'
         },
@@ -396,7 +398,10 @@ function renderMoistureChart(data) {
           borderDash: isScatter ? [] : [5, 5],
           fill: false,
           tension: isScatter ? 0 : 0.3,
-          pointRadius: isScatter ? 3 : 1,
+          pointRadius: isScatter ? 5 : 4,
+          pointHoverRadius: 9,
+          pointBorderWidth: 2,
+          pointBackgroundColor: '#ff9800',
           showLine: !isScatter,
           yAxisID: 'y1',
           hidden: !hasAdc
@@ -406,9 +411,16 @@ function renderMoistureChart(data) {
     options: {
       responsive: true,
       maintainAspectRatio: false,
+      interaction: {
+        mode: 'nearest',
+        axis: 'x',
+        intersect: false
+      },
       plugins: {
         legend: { position: 'top' },
         tooltip: {
+          enabled: true,
+          position: 'nearest',
           callbacks: {
             title: (items) => new Date(items[0].parsed.x).toLocaleString(),
             label: (item) => {
