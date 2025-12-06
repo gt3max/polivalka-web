@@ -422,6 +422,7 @@ setInterval(updateStatus, 5000);
 let selectedFiles = [];
 let identificationResults = [];
 let selectedPlant = null;
+let selectedResult = null;  // Full API result with details
 
 // ============ Mock Data ============
 const MOCK_RESULTS = [
@@ -748,6 +749,7 @@ function showPlantCard(result) {
   };
 
   selectedPlant = plantData;
+  selectedResult = result;  // Store full result for saveToProfile
 
   // Populate card
   document.getElementById('card-photo').src = plantData.photos[0] || '';
@@ -949,34 +951,65 @@ async function applyToDevice() {
 }
 
 async function saveToProfile() {
-  if (!selectedPlant) return;
+  if (!selectedPlant || !selectedResult) return;
 
   const deviceId = getDeviceId();
   if (!deviceId) {
-    // Save locally only
-    localStorage.setItem('selected_plant', JSON.stringify(selectedPlant));
-    showToast('Plant saved locally', 'success');
+    showToast('Select a device first', 'warning');
     return;
   }
 
+  const details = selectedResult.details || {};
+  const care = selectedResult.care || {};
+
+  // Build plant data for API
+  const plantData = {
+    scientific: selectedPlant.scientific,
+    common_name: selectedPlant.names?.en || selectedPlant.scientific,
+    family: selectedPlant.family,
+    preset: care.preset || 'standard',
+    start_pct: care.start_pct || 35,
+    stop_pct: care.stop_pct || 55,
+    // Safety info from Perenual
+    poisonous_to_humans: details.poisonous_to_humans,
+    poisonous_to_pets: details.poisonous_to_pets,
+    // Additional details
+    hardiness_zone: details.hardiness_min && details.hardiness_max
+      ? `${details.hardiness_min}-${details.hardiness_max}`
+      : '',
+    dimension: details.dimension || '',
+    care_level: details.care_level || '',
+    indoor: details.indoor,
+    // Image URL (external, not blob)
+    image_url: selectedPlant.photos?.[0] || ''
+  };
+
   try {
-    await apiCall('device/plant', {
+    const response = await API.post('/plants/save', {
       device_id: deviceId,
-      plant: {
-        id: selectedPlant.id,
-        name: selectedPlant.names.en,
-        scientific: selectedPlant.scientific,
-        preset: selectedPlant.care.preset
-      }
+      plant: plantData
     });
 
-    showToast('Plant saved to device profile', 'success');
+    if (response.success) {
+      showToast('Plant saved to profile!', 'success');
+    } else {
+      throw new Error(response.error || 'Save failed');
+    }
 
   } catch (err) {
     console.error('Save error:', err);
-    // Fallback to local storage
-    localStorage.setItem('selected_plant', JSON.stringify(selectedPlant));
-    showToast('Plant saved locally', 'info');
+    const errorMsg = err.message || 'Failed to save';
+
+    // Handle specific errors
+    if (errorMsg.includes('already saved')) {
+      showToast('This plant is already saved', 'warning');
+    } else if (errorMsg.includes('limit reached')) {
+      showToast('Plant limit reached (20). Delete some plants.', 'warning');
+    } else if (errorMsg.includes('Rate limit')) {
+      showToast('Too many saves. Wait a bit.', 'warning');
+    } else {
+      showToast(errorMsg, 'error');
+    }
   }
 }
 

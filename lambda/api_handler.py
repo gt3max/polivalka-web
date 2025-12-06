@@ -443,6 +443,375 @@ def identify_plant_handler(event, origin):
         }
 
 
+# ============ Plant Card CRUD (DynamoDB storage) ============
+
+MAX_PLANTS_PER_DEVICE = 20  # Reasonable limit for houseplants
+MAX_SAVES_PER_HOUR = 10     # Rate limit: prevent garden walk spam
+
+def save_plant_handler(event, origin):
+    """
+    POST /plants/save
+    Save a plant card to DynamoDB.
+    Protections:
+    - Max 20 plants per device
+    - Max 10 saves per hour (rate limit)
+    - No duplicate scientific names (same plant can't be saved twice)
+    """
+    try:
+        body = json.loads(event.get('body', '{}'))
+        device_id = body.get('device_id')
+        plant_data = body.get('plant', {})
+
+        if not device_id or not plant_data:
+            return {
+                'statusCode': 400,
+                'headers': cors_headers(origin),
+                'body': json.dumps({'error': 'Missing device_id or plant data'})
+            }
+
+        scientific = plant_data.get('scientific', 'unknown')
+        plants_pk = f"plants#{device_id}"
+
+        # Get ALL plants for this device (for all checks)
+        existing = telemetry_table.query(
+            KeyConditionExpression=Key('device_id').eq(plants_pk)
+        )
+        plants = existing.get('Items', [])
+        current_count = len(plants)
+
+        # Check 1: Plant limit (max 20)
+        if current_count >= MAX_PLANTS_PER_DEVICE:
+            return {
+                'statusCode': 429,
+                'headers': cors_headers(origin),
+                'body': json.dumps({
+                    'error': f'Plant limit reached ({MAX_PLANTS_PER_DEVICE} per device). Archive or delete some plants.',
+                    'current_count': current_count,
+                    'limit': MAX_PLANTS_PER_DEVICE
+                })
+            }
+
+        # Check 2: Duplicate scientific name (no same plant twice)
+        for p in plants:
+            if p.get('scientific', '').lower() == scientific.lower() and p.get('status') == 'active':
+                return {
+                    'statusCode': 409,
+                    'headers': cors_headers(origin),
+                    'body': json.dumps({
+                        'error': f'This plant ({scientific}) is already saved. Archive it first if you want to re-add.',
+                        'existing_plant_id': p.get('plant_id')
+                    })
+                }
+
+        # Check 3: Rate limit (max 10 per hour)
+        one_hour_ago = int(time.time()) - 3600
+        recent_saves = len([p for p in plants if p.get('timestamp', 0) > one_hour_ago])
+        if recent_saves >= MAX_SAVES_PER_HOUR:
+            return {
+                'statusCode': 429,
+                'headers': cors_headers(origin),
+                'body': json.dumps({
+                    'error': f'Rate limit: max {MAX_SAVES_PER_HOUR} saves per hour. Please wait.',
+                    'recent_saves': recent_saves,
+                    'limit': MAX_SAVES_PER_HOUR
+                })
+            }
+
+        # Generate plant_id (timestamp-based for SK compatibility)
+        timestamp = int(time.time())
+        plant_id = f"{scientific.lower().replace(' ', '_')}_{timestamp}"
+
+        # Build compact plant record (~500 bytes)
+        # PK: "plants#{device_id}", SK: timestamp (for query compatibility)
+        plant_record = {
+            'device_id': plants_pk,       # PK: "plants#Polivalka-BB00C1"
+            'timestamp': timestamp,        # SK: for DynamoDB sort key
+            'plant_id': plant_id,          # Human-readable ID
+            'real_device_id': device_id,   # Original device ID for lookups
+            'scientific': scientific,
+            'common_name': plant_data.get('common_name', ''),
+            'family': plant_data.get('family', ''),
+            'preset': plant_data.get('preset', 'standard'),
+            'start_pct': int(plant_data.get('start_pct', 35)),
+            'stop_pct': int(plant_data.get('stop_pct', 55)),
+            'poisonous_to_humans': plant_data.get('poisonous_to_humans'),
+            'poisonous_to_pets': plant_data.get('poisonous_to_pets'),
+            'hardiness_zone': plant_data.get('hardiness_zone', ''),
+            'dimension': plant_data.get('dimension', ''),
+            'care_level': plant_data.get('care_level', ''),
+            'indoor': plant_data.get('indoor'),
+            'image_url': plant_data.get('image_url', ''),  # External URL, not stored blob
+            'status': 'active',
+            'archived_at': None,
+            'deleted_at': None
+        }
+
+        # Remove None values to save space
+        plant_record = {k: v for k, v in plant_record.items() if v is not None}
+
+        # Save to telemetry table with plant# prefix in SK
+        telemetry_table.put_item(Item=plant_record)
+
+        print(f"[Plants] Saved plant {plant_id} for device {device_id}")
+
+        return {
+            'statusCode': 200,
+            'headers': cors_headers(origin),
+            'body': json.dumps({
+                'success': True,
+                'plant_id': plant_id,
+                'message': 'Plant saved successfully'
+            })
+        }
+    except Exception as e:
+        print(f"[Plants] Save error: {e}")
+        return {
+            'statusCode': 500,
+            'headers': cors_headers(origin),
+            'body': json.dumps({'error': str(e)})
+        }
+
+
+def list_plants_handler(event, origin):
+    """
+    GET /plants/list?device_id=xxx
+    List all plants for a device (active + archived, not deleted).
+    """
+    try:
+        query_params = event.get('queryStringParameters', {}) or {}
+        device_id = query_params.get('device_id')
+        include_deleted = query_params.get('include_deleted', 'false') == 'true'
+
+        if not device_id:
+            return {
+                'statusCode': 400,
+                'headers': cors_headers(origin),
+                'body': json.dumps({'error': 'Missing device_id parameter'})
+            }
+
+        # Query plants for this device (PK: "plants#{device_id}")
+        plants_pk = f"plants#{device_id}"
+        response = telemetry_table.query(
+            KeyConditionExpression=Key('device_id').eq(plants_pk)
+        )
+
+        plants = response.get('Items', [])
+
+        # Filter out deleted unless admin requests them
+        if not include_deleted:
+            plants = [p for p in plants if p.get('status') != 'deleted']
+
+        # Sort by timestamp descending (newest first)
+        plants.sort(key=lambda x: x.get('timestamp', 0), reverse=True)
+
+        return {
+            'statusCode': 200,
+            'headers': cors_headers(origin),
+            'body': json.dumps({
+                'success': True,
+                'plants': plants,
+                'count': len(plants)
+            }, default=str)
+        }
+    except Exception as e:
+        print(f"[Plants] List error: {e}")
+        return {
+            'statusCode': 500,
+            'headers': cors_headers(origin),
+            'body': json.dumps({'error': str(e)})
+        }
+
+
+def archive_plant_handler(event, origin):
+    """
+    POST /plants/archive
+    Archive a plant (user can still see it, can restore).
+    Body: {device_id, timestamp} - timestamp is the plant's SK
+    """
+    try:
+        body = json.loads(event.get('body', '{}'))
+        device_id = body.get('device_id')
+        timestamp = body.get('timestamp')  # Use timestamp as SK
+
+        if not device_id or not timestamp:
+            return {
+                'statusCode': 400,
+                'headers': cors_headers(origin),
+                'body': json.dumps({'error': 'Missing device_id or timestamp'})
+            }
+
+        plants_pk = f"plants#{device_id}"
+
+        # Update status to archived
+        telemetry_table.update_item(
+            Key={'device_id': plants_pk, 'timestamp': int(timestamp)},
+            UpdateExpression='SET #status = :status, archived_at = :archived_at',
+            ExpressionAttributeNames={'#status': 'status'},
+            ExpressionAttributeValues={
+                ':status': 'archived',
+                ':archived_at': int(time.time())
+            }
+        )
+
+        print(f"[Plants] Archived plant (ts:{timestamp}) for device {device_id}")
+
+        return {
+            'statusCode': 200,
+            'headers': cors_headers(origin),
+            'body': json.dumps({'success': True, 'message': 'Plant archived'})
+        }
+    except Exception as e:
+        print(f"[Plants] Archive error: {e}")
+        return {
+            'statusCode': 500,
+            'headers': cors_headers(origin),
+            'body': json.dumps({'error': str(e)})
+        }
+
+
+def restore_plant_handler(event, origin):
+    """
+    POST /plants/restore
+    Restore a plant from archive or deleted state.
+    Body: {device_id, timestamp}
+    """
+    try:
+        body = json.loads(event.get('body', '{}'))
+        device_id = body.get('device_id')
+        timestamp = body.get('timestamp')
+
+        if not device_id or not timestamp:
+            return {
+                'statusCode': 400,
+                'headers': cors_headers(origin),
+                'body': json.dumps({'error': 'Missing device_id or timestamp'})
+            }
+
+        plants_pk = f"plants#{device_id}"
+
+        # Update status back to active, remove TTL
+        telemetry_table.update_item(
+            Key={'device_id': plants_pk, 'timestamp': int(timestamp)},
+            UpdateExpression='SET #status = :status REMOVE archived_at, deleted_at, #ttl',
+            ExpressionAttributeNames={'#status': 'status', '#ttl': 'ttl'},
+            ExpressionAttributeValues={':status': 'active'}
+        )
+
+        print(f"[Plants] Restored plant (ts:{timestamp}) for device {device_id}")
+
+        return {
+            'statusCode': 200,
+            'headers': cors_headers(origin),
+            'body': json.dumps({'success': True, 'message': 'Plant restored'})
+        }
+    except Exception as e:
+        print(f"[Plants] Restore error: {e}")
+        return {
+            'statusCode': 500,
+            'headers': cors_headers(origin),
+            'body': json.dumps({'error': str(e)})
+        }
+
+
+def delete_plant_handler(event, origin):
+    """
+    POST /plants/delete
+    Soft delete a plant (TTL = 30 days, then auto-purge).
+    Admin can still see it.
+    Body: {device_id, timestamp}
+    """
+    try:
+        body = json.loads(event.get('body', '{}'))
+        device_id = body.get('device_id')
+        timestamp = body.get('timestamp')
+
+        if not device_id or not timestamp:
+            return {
+                'statusCode': 400,
+                'headers': cors_headers(origin),
+                'body': json.dumps({'error': 'Missing device_id or timestamp'})
+            }
+
+        plants_pk = f"plants#{device_id}"
+
+        # Calculate TTL (30 days from now)
+        ttl_timestamp = int(time.time()) + (30 * 24 * 60 * 60)
+
+        # Update status to deleted with TTL
+        telemetry_table.update_item(
+            Key={'device_id': plants_pk, 'timestamp': int(timestamp)},
+            UpdateExpression='SET #status = :status, deleted_at = :deleted_at, #ttl = :ttl',
+            ExpressionAttributeNames={'#status': 'status', '#ttl': 'ttl'},
+            ExpressionAttributeValues={
+                ':status': 'deleted',
+                ':deleted_at': int(time.time()),
+                ':ttl': ttl_timestamp
+            }
+        )
+
+        print(f"[Plants] Soft-deleted plant (ts:{timestamp}) for device {device_id}, TTL: 30 days")
+
+        return {
+            'statusCode': 200,
+            'headers': cors_headers(origin),
+            'body': json.dumps({'success': True, 'message': 'Plant deleted (recoverable for 30 days)'})
+        }
+    except Exception as e:
+        print(f"[Plants] Delete error: {e}")
+        return {
+            'statusCode': 500,
+            'headers': cors_headers(origin),
+            'body': json.dumps({'error': str(e)})
+        }
+
+
+def get_plants_stats_handler(event, origin):
+    """
+    GET /plants/stats (admin only)
+    Get plant statistics for admin dashboard.
+    """
+    try:
+        # Scan all plant records (PK starts with "plants#")
+        response = telemetry_table.scan(
+            FilterExpression='begins_with(device_id, :prefix)',
+            ExpressionAttributeValues={':prefix': 'plants#'}
+        )
+
+        plants = response.get('Items', [])
+
+        # Calculate stats
+        stats = {
+            'total': len(plants),
+            'active': len([p for p in plants if p.get('status') == 'active']),
+            'archived': len([p for p in plants if p.get('status') == 'archived']),
+            'deleted': len([p for p in plants if p.get('status') == 'deleted']),
+            'by_device': {},
+            'estimated_size_kb': round(len(plants) * 0.5, 1),  # ~500 bytes per plant
+            'limit_per_device': MAX_PLANTS_PER_DEVICE
+        }
+
+        # Count by real device (extract from "plants#{device_id}")
+        for p in plants:
+            real_dev = p.get('real_device_id', p.get('device_id', 'unknown').replace('plants#', ''))
+            stats['by_device'][real_dev] = stats['by_device'].get(real_dev, 0) + 1
+
+        return {
+            'statusCode': 200,
+            'headers': cors_headers(origin),
+            'body': json.dumps({
+                'success': True,
+                'stats': stats
+            }, default=str)
+        }
+    except Exception as e:
+        print(f"[Plants] Stats error: {e}")
+        return {
+            'statusCode': 500,
+            'headers': cors_headers(origin),
+            'body': json.dumps({'error': str(e)})
+        }
+
+
 # Family to preset mapping for houseplants
 FAMILY_PRESETS = {
     # Tropical - high humidity, frequent watering
@@ -1166,6 +1535,38 @@ def lambda_handler(event, context):
     # GET /plants/care?name=xxx - Get plant care info
     if path == '/plants/care' and http_method == 'GET':
         return get_plant_care_handler(event, origin)
+
+    # ============ Plant Card Storage Routes ============
+    # POST /plants/save - Save plant to profile
+    if path == '/plants/save' and http_method == 'POST':
+        return save_plant_handler(event, origin)
+
+    # GET /plants/list?device_id=xxx - List plants for device
+    if path == '/plants/list' and http_method == 'GET':
+        return list_plants_handler(event, origin)
+
+    # POST /plants/archive - Archive a plant
+    if path == '/plants/archive' and http_method == 'POST':
+        return archive_plant_handler(event, origin)
+
+    # POST /plants/restore - Restore archived/deleted plant
+    if path == '/plants/restore' and http_method == 'POST':
+        return restore_plant_handler(event, origin)
+
+    # POST /plants/delete - Soft delete plant (30 day TTL)
+    if path == '/plants/delete' and http_method == 'POST':
+        return delete_plant_handler(event, origin)
+
+    # GET /plants/stats - Admin: plant statistics
+    if path == '/plants/stats' and http_method == 'GET':
+        # Admin only
+        if user_id not in ADMIN_EMAILS:
+            return {
+                'statusCode': 403,
+                'headers': cors_headers(origin),
+                'body': json.dumps({'error': 'Admin access required'})
+            }
+        return get_plants_stats_handler(event, origin)
 
     # ============ Admin Device Management Routes (added 2025-12-06) ============
     # These endpoints are admin-only for device lifecycle management
