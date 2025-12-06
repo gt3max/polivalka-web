@@ -221,6 +221,17 @@ async function updateTime(){
 async function updateHeader(){
   try {
     const s = await API.get('/status');
+
+    // Battery (Cloud mode)
+    const batteryStatus = document.getElementById('battery-status');
+    if (s.battery && s.battery.percent !== null && s.battery.percent !== undefined) {
+      const percent = Math.round(s.battery.percent);
+      const charging = s.battery.charging ? ' ⚡' : '';
+      batteryStatus.textContent = `🔋 ${percent}%${charging}`;
+    } else {
+      batteryStatus.textContent = '⚡ AC';
+    }
+
     if (s.system_state?.location) {
       document.getElementById('location-text').textContent = s.system_state.location;
     }
@@ -229,7 +240,9 @@ async function updateHeader(){
     }
     // Custom name suffix (always show device name, default to Plant)
     let customName = s.system_state?.device_name || 'Plant';
-    if (customName === 'Polivalka') customName = 'Plant';
+    if (customName === 'Polivalka' || customName.toLowerCase().startsWith('polivalka-')) {
+      customName = 'Plant';
+    }
     document.getElementById('custom-name-suffix').textContent = ' / ' + customName;
     const mode = s.system_state?.mode || 'off';
     const modeBadge = document.getElementById('mode-badge');
