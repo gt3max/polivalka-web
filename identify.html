@@ -116,9 +116,9 @@
 </div>
 
 <div class="container">
-  <!-- Mock Mode Banner -->
-  <div class="mock-banner" id="mock-banner">
-    <strong>Demo Mode:</strong> API keys not configured. Using sample data for testing.
+  <!-- API Status Banner (hidden when working) -->
+  <div class="mock-banner" id="mock-banner" style="display:none">
+    <strong>Demo Mode:</strong> API not available. Using sample data.
   </div>
 
   <!-- Step 1: Upload -->
@@ -247,16 +247,11 @@
 <script>
 // ============ Configuration ============
 const CONFIG = {
-  // Set to true when API keys are configured
-  mockMode: true,
+  // API is now proxied through our Lambda (keys are server-side)
+  mockMode: false,
 
-  // API Keys (set these when ready)
-  plantnetApiKey: '',
-  perenualApiKey: '',
-
-  // API URLs
-  plantnetUrl: 'https://my-api.plantnet.org/v2/identify/all',
-  perenualUrl: 'https://perenual.com/api/v2/species-list'
+  // Our API endpoint (Lambda handles PlantNet/Perenual keys securely)
+  apiUrl: 'https://p0833p2v29.execute-api.eu-central-1.amazonaws.com'
 };
 
 // ============ State ============
@@ -459,17 +454,28 @@ async function identifyPlant() {
   hideError();
 
   try {
-    let results;
+    // Convert image to base64
+    const imageFile = selectedFiles[0];
+    const base64Image = await fileToBase64(imageFile);
 
-    if (CONFIG.mockMode) {
-      // Mock delay
-      await new Promise(r => setTimeout(r, 1500));
-      results = MOCK_RESULTS;
-    } else {
-      results = await callPlantNetAPI(selectedFiles[0]);
+    // Call our secure API (keys are server-side)
+    const response = await fetch(`${CONFIG.apiUrl}/plants/identify`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ image: base64Image })
+    });
+
+    const data = await response.json();
+
+    if (!response.ok || !data.success) {
+      throw new Error(data.error || 'Identification failed');
     }
 
-    if (!results || results.length === 0) {
+    let results = data.results || [];
+
+    if (results.length === 0) {
       showError('Could not identify the plant. Try a different photo.');
       showStep('upload');
       return;
@@ -495,35 +501,14 @@ async function identifyPlant() {
   }
 }
 
-async function callPlantNetAPI(imageFile) {
-  const formData = new FormData();
-  formData.append('images', imageFile);
-  formData.append('organs', 'auto');
-
-  const params = new URLSearchParams({
-    'api-key': CONFIG.plantnetApiKey,
-    'include-related-images': 'true',
-    'lang': 'en'
+// Convert file to base64 string
+function fileToBase64(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
   });
-
-  const response = await fetch(`${CONFIG.plantnetUrl}?${params}`, {
-    method: 'POST',
-    body: formData
-  });
-
-  if (!response.ok) {
-    throw new Error('PlantNet API error: ' + response.status);
-  }
-
-  const data = await response.json();
-
-  return data.results.map(r => ({
-    id: r.species.scientificNameWithoutAuthor.toLowerCase().replace(/\s+/g, '_'),
-    scientific: r.species.scientificNameWithoutAuthor,
-    commonNames: r.species.commonNames || [],
-    score: (r.score * 100).toFixed(1),
-    images: r.images?.slice(0, 3).map(img => img.url?.s || img.url?.m) || []
-  }));
 }
 
 // ============ Results Rendering ============
