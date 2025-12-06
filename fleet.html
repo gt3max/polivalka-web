@@ -590,15 +590,26 @@ initUserDisplay();
 
 async function loadDevices() {
   // Load devices from API
+  console.log('[Fleet] loadDevices() called');
   try {
+    console.log('[Fleet] Calling API.get(/devices)...');
     allDevices = await API.get('/devices');
-    console.log('✅ API Response:', JSON.stringify(allDevices, null, 2));
+    console.log('[Fleet] ✅ API returned', allDevices.length, 'devices');
+    console.log('[Fleet] Devices:', allDevices.map(d => d.device_id).join(', '));
+
+    // Validate that we got an array
+    if (!Array.isArray(allDevices)) {
+      console.error('[Fleet] ❌ API returned non-array:', typeof allDevices);
+      throw new Error('API returned non-array: ' + typeof allDevices);
+    }
   } catch (e) {
-    console.error('❌ Failed to load devices:', e);
+    console.error('[Fleet] ❌ Failed to load devices:', e.message);
+    console.error('[Fleet] Error details:', e);
     allDevices = MOCK_DEVICES; // Fallback to mock data
-    console.log('⚠️ Using MOCK_DEVICES:', JSON.stringify(MOCK_DEVICES, null, 2));
+    console.log('[Fleet] ⚠️ Using MOCK_DEVICES (', MOCK_DEVICES.length, 'devices)');
   }
 
+  console.log('[Fleet] Rendering', allDevices.length, 'devices...');
   renderDevices(allDevices);
   updateStats(allDevices);
 }
