@@ -255,6 +255,75 @@ def get_perenual_details(scientific_name):
         return None
 
 
+# ============ Global Plant Cache (shared knowledge base) ============
+
+def normalize_scientific_name(name):
+    """Normalize scientific name for cache key."""
+    return name.lower().strip().replace(' ', '_')
+
+
+def get_cached_plant(scientific_name):
+    """
+    Get plant data from global cache.
+    PK: "plantcache", SK: normalized_scientific_name
+    """
+    try:
+        cache_key = normalize_scientific_name(scientific_name)
+        response = telemetry_table.get_item(
+            Key={'device_id': 'plantcache', 'timestamp': hash(cache_key) % (10**10)}
+        )
+        item = response.get('Item')
+        if item and item.get('scientific_key') == cache_key:
+            print(f"[Cache] HIT for {scientific_name}")
+            return item
+        return None
+    except Exception as e:
+        print(f"[Cache] Error getting {scientific_name}: {e}")
+        return None
+
+
+def save_to_plant_cache(scientific_name, plant_data):
+    """
+    Save plant data to global cache for future use.
+    """
+    try:
+        cache_key = normalize_scientific_name(scientific_name)
+        cache_record = {
+            'device_id': 'plantcache',  # Special PK for cache
+            'timestamp': hash(cache_key) % (10**10),  # Deterministic SK from name
+            'scientific_key': cache_key,
+            'scientific': scientific_name,
+            'updated_at': int(time.time()),
+            **plant_data
+        }
+        # Remove None values
+        cache_record = {k: v for k, v in cache_record.items() if v is not None}
+        telemetry_table.put_item(Item=cache_record)
+        print(f"[Cache] Saved {scientific_name}")
+        return True
+    except Exception as e:
+        print(f"[Cache] Error saving {scientific_name}: {e}")
+        return False
+
+
+def merge_plant_data(cached, new_data):
+    """
+    Merge cached data with new data. New data fills gaps, doesn't overwrite existing.
+    """
+    if not cached:
+        return new_data
+    if not new_data:
+        return cached
+
+    merged = dict(cached)
+    for key, value in new_data.items():
+        # Only fill if cached value is empty/None
+        if key not in merged or merged.get(key) in [None, '', [], {}]:
+            merged[key] = value
+
+    return merged
+
+
 def identify_plant_handler(event, origin):
     """
     POST /plants/identify
@@ -355,12 +424,34 @@ def identify_plant_handler(event, origin):
             preset_key = FAMILY_PRESETS.get(family_name, 'standard')
             preset = PRESET_DETAILS.get(preset_key, PRESET_DETAILS['standard'])
 
-            # Get detailed data from Perenual for top 2 results only (performance)
+            # === SMART CACHE: Check our database first, then external APIs ===
+            cached_data = None
             perenual_data = None
-            if idx < 2 and scientific_name:
-                perenual_data = get_perenual_details(scientific_name)
-                if perenual_data:
-                    print(f"[Perenual] Got details for {scientific_name}")
+            final_details = None
+
+            if idx < 2 and scientific_name:  # Only for top 2 results
+                # Step 1: Check our cache
+                cached_data = get_cached_plant(scientific_name)
+
+                # Step 2: If no cache or missing critical fields, try Perenual
+                needs_perenual = not cached_data or cached_data.get('poisonous_to_pets') is None
+
+                if needs_perenual:
+                    perenual_data = get_perenual_details(scientific_name)
+                    if perenual_data:
+                        print(f"[Perenual] Got NEW details for {scientific_name}")
+
+                # Step 3: Merge data (cached + new from Perenual)
+                if cached_data or perenual_data:
+                    final_details = merge_plant_data(cached_data, perenual_data or {})
+
+                    # Step 4: Save to cache if we got new data
+                    if perenual_data and final_details:
+                        save_to_plant_cache(scientific_name, {
+                            'common_name': species.get('commonNames', [''])[0],
+                            'family': family_name,
+                            **final_details
+                        })
 
             # Build result object
             result = {
@@ -383,36 +474,37 @@ def identify_plant_handler(event, origin):
                 }
             }
 
-            # Enrich with Perenual data if available
-            if perenual_data:
+            # Enrich with details (from cache or Perenual)
+            if final_details:
                 result['details'] = {
                     # Safety info (CRITICAL)
-                    'poisonous_to_humans': perenual_data.get('poisonous_to_humans'),
-                    'poisonous_to_pets': perenual_data.get('poisonous_to_pets'),
+                    'poisonous_to_humans': final_details.get('poisonous_to_humans'),
+                    'poisonous_to_pets': final_details.get('poisonous_to_pets'),
                     # Size & Growth
-                    'dimension': perenual_data.get('dimension', ''),
-                    'growth_rate': perenual_data.get('growth_rate', ''),
-                    'cycle': perenual_data.get('cycle', ''),
+                    'dimension': final_details.get('dimension', ''),
+                    'growth_rate': final_details.get('growth_rate', ''),
+                    'cycle': final_details.get('cycle', ''),
                     # Care info
-                    'care_level': perenual_data.get('care_level', ''),
-                    'maintenance': perenual_data.get('maintenance', ''),
-                    'indoor': perenual_data.get('indoor', False),
-                    'drought_tolerant': perenual_data.get('drought_tolerant', False),
+                    'care_level': final_details.get('care_level', ''),
+                    'maintenance': final_details.get('maintenance', ''),
+                    'indoor': final_details.get('indoor', False),
+                    'drought_tolerant': final_details.get('drought_tolerant', False),
                     # Hardiness
-                    'hardiness_min': perenual_data.get('hardiness_min', ''),
-                    'hardiness_max': perenual_data.get('hardiness_max', ''),
+                    'hardiness_min': final_details.get('hardiness_min', ''),
+                    'hardiness_max': final_details.get('hardiness_max', ''),
                     # Propagation & Maintenance
-                    'propagation': perenual_data.get('propagation', []),
-                    'pruning_month': perenual_data.get('pruning_month', []),
-                    'soil': perenual_data.get('soil', []),
+                    'propagation': final_details.get('propagation', []),
+                    'pruning_month': final_details.get('pruning_month', []),
+                    'soil': final_details.get('soil', []),
                     # Other
-                    'pest_susceptibility': perenual_data.get('pest_susceptibility', ''),
-                    'flowering_season': perenual_data.get('flowering_season', ''),
-                    'edible_fruit': perenual_data.get('edible_fruit', False),
-                    'medicinal': perenual_data.get('medicinal', False),
-                    'invasive': perenual_data.get('invasive', False),
-                    'rare': perenual_data.get('rare', False)
+                    'pest_susceptibility': final_details.get('pest_susceptibility', ''),
+                    'flowering_season': final_details.get('flowering_season', ''),
+                    'edible_fruit': final_details.get('edible_fruit', False),
+                    'medicinal': final_details.get('medicinal', False),
+                    'invasive': final_details.get('invasive', False),
+                    'rare': final_details.get('rare', False)
                 }
+                result['cache_source'] = 'cache' if cached_data else 'perenual'
 
             results.append(result)
 
@@ -551,6 +643,21 @@ def save_plant_handler(event, origin):
 
         # Save to telemetry table with plant# prefix in SK
         telemetry_table.put_item(Item=plant_record)
+
+        # Also update global cache (so other users benefit from this data)
+        cache_data = {
+            'common_name': plant_data.get('common_name', ''),
+            'family': plant_data.get('family', ''),
+            'poisonous_to_humans': plant_data.get('poisonous_to_humans'),
+            'poisonous_to_pets': plant_data.get('poisonous_to_pets'),
+            'hardiness_zone': plant_data.get('hardiness_zone', ''),
+            'dimension': plant_data.get('dimension', ''),
+            'care_level': plant_data.get('care_level', ''),
+            'indoor': plant_data.get('indoor'),
+        }
+        # Only save to cache if we have meaningful data
+        if any(v for v in cache_data.values() if v not in [None, '', False]):
+            save_to_plant_cache(scientific, cache_data)
 
         print(f"[Plants] Saved plant {plant_id} for device {device_id}")
 
