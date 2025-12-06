@@ -217,6 +217,52 @@
       </div>
     </div>
 
+    <!-- Safety Warning (CRITICAL - show first!) -->
+    <div id="safety-section" class="care-section" style="display:none">
+      <h4 style="color:#c62828">Safety Warning</h4>
+      <div class="care-grid">
+        <div class="care-item" id="toxic-humans-item" style="display:none;background:#ffebee">
+          <span class="care-label">Humans</span>
+          <span class="care-value" id="toxic-humans" style="color:#c62828">-</span>
+        </div>
+        <div class="care-item" id="toxic-pets-item" style="display:none;background:#ffebee">
+          <span class="care-label">Pets</span>
+          <span class="care-value" id="toxic-pets" style="color:#c62828">-</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Plant Info -->
+    <div id="info-section" class="care-section" style="display:none">
+      <h4>Plant Info</h4>
+      <div class="care-grid">
+        <div class="care-item" id="size-item" style="display:none">
+          <span class="care-label">Mature Size</span>
+          <span class="care-value" id="plant-size">-</span>
+        </div>
+        <div class="care-item" id="growth-item" style="display:none">
+          <span class="care-label">Growth Rate</span>
+          <span class="care-value" id="growth-rate">-</span>
+        </div>
+        <div class="care-item" id="cycle-item" style="display:none">
+          <span class="care-label">Life Cycle</span>
+          <span class="care-value" id="life-cycle">-</span>
+        </div>
+        <div class="care-item" id="difficulty-item" style="display:none">
+          <span class="care-label">Difficulty</span>
+          <span class="care-value" id="care-difficulty">-</span>
+        </div>
+        <div class="care-item" id="hardiness-item" style="display:none">
+          <span class="care-label">Hardiness Zone</span>
+          <span class="care-value" id="hardiness-zone">-</span>
+        </div>
+        <div class="care-item" id="indoor-item" style="display:none">
+          <span class="care-label">Indoor</span>
+          <span class="care-value" id="indoor-suitable">-</span>
+        </div>
+      </div>
+    </div>
+
     <div class="care-section">
       <h4>Care Recommendations</h4>
       <div class="care-grid">
@@ -239,6 +285,29 @@
         <div class="care-item">
           <span class="care-label">Humidity</span>
           <span class="care-value" id="care-humidity">-</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Propagation & Maintenance -->
+    <div id="propagation-section" class="care-section" style="display:none">
+      <h4>Propagation & Maintenance</h4>
+      <div class="care-grid">
+        <div class="care-item" id="propagation-item" style="display:none">
+          <span class="care-label">Propagation</span>
+          <span class="care-value" id="propagation-methods">-</span>
+        </div>
+        <div class="care-item" id="pruning-item" style="display:none">
+          <span class="care-label">Pruning</span>
+          <span class="care-value" id="pruning-months">-</span>
+        </div>
+        <div class="care-item" id="soil-item" style="display:none">
+          <span class="care-label">Soil</span>
+          <span class="care-value" id="soil-type">-</span>
+        </div>
+        <div class="care-item" id="pests-item" style="display:none">
+          <span class="care-label">Pests</span>
+          <span class="care-value" id="pest-info">-</span>
         </div>
       </div>
     </div>
@@ -701,7 +770,111 @@ function showPlantCard(result) {
   const tipsList = document.getElementById('care-tips');
   tipsList.innerHTML = `<li>${care.tips || 'Water when top inch of soil is dry.'}</li>`;
 
+  // Detailed info from Perenual (if available)
+  const details = result.details || {};
+
+  // Safety section - CRITICAL
+  const safetySection = document.getElementById('safety-section');
+  const toxicHumansItem = document.getElementById('toxic-humans-item');
+  const toxicPetsItem = document.getElementById('toxic-pets-item');
+  let showSafety = false;
+
+  if (details.poisonous_to_humans === true) {
+    toxicHumansItem.style.display = '';
+    document.getElementById('toxic-humans').textContent = '⚠️ TOXIC';
+    showSafety = true;
+  } else if (details.poisonous_to_humans === false) {
+    toxicHumansItem.style.display = '';
+    toxicHumansItem.style.background = '#e8f5e9';
+    document.getElementById('toxic-humans').textContent = '✓ Safe';
+    document.getElementById('toxic-humans').style.color = '#2e7d32';
+    showSafety = true;
+  }
+
+  if (details.poisonous_to_pets === true) {
+    toxicPetsItem.style.display = '';
+    document.getElementById('toxic-pets').textContent = '⚠️ TOXIC';
+    showSafety = true;
+  } else if (details.poisonous_to_pets === false) {
+    toxicPetsItem.style.display = '';
+    toxicPetsItem.style.background = '#e8f5e9';
+    document.getElementById('toxic-pets').textContent = '✓ Safe';
+    document.getElementById('toxic-pets').style.color = '#2e7d32';
+    showSafety = true;
+  }
+  safetySection.style.display = showSafety ? '' : 'none';
+
+  // Plant info section
+  const infoSection = document.getElementById('info-section');
+  let showInfo = false;
+
+  if (details.dimension) {
+    document.getElementById('size-item').style.display = '';
+    document.getElementById('plant-size').textContent = details.dimension;
+    showInfo = true;
+  }
+  if (details.growth_rate) {
+    document.getElementById('growth-item').style.display = '';
+    document.getElementById('growth-rate').textContent = capitalize(details.growth_rate);
+    showInfo = true;
+  }
+  if (details.cycle) {
+    document.getElementById('cycle-item').style.display = '';
+    document.getElementById('life-cycle').textContent = capitalize(details.cycle);
+    showInfo = true;
+  }
+  if (details.care_level) {
+    document.getElementById('difficulty-item').style.display = '';
+    document.getElementById('care-difficulty').textContent = capitalize(details.care_level);
+    showInfo = true;
+  }
+  if (details.hardiness_min || details.hardiness_max) {
+    document.getElementById('hardiness-item').style.display = '';
+    const zone = details.hardiness_min === details.hardiness_max
+      ? `Zone ${details.hardiness_min}`
+      : `Zone ${details.hardiness_min}-${details.hardiness_max}`;
+    document.getElementById('hardiness-zone').textContent = zone;
+    showInfo = true;
+  }
+  if (details.indoor !== undefined) {
+    document.getElementById('indoor-item').style.display = '';
+    document.getElementById('indoor-suitable').textContent = details.indoor ? '✓ Yes' : 'Outdoor only';
+    showInfo = true;
+  }
+  infoSection.style.display = showInfo ? '' : 'none';
+
+  // Propagation section
+  const propSection = document.getElementById('propagation-section');
+  let showProp = false;
+
+  if (details.propagation && details.propagation.length > 0) {
+    document.getElementById('propagation-item').style.display = '';
+    document.getElementById('propagation-methods').textContent = details.propagation.slice(0,3).join(', ');
+    showProp = true;
+  }
+  if (details.pruning_month && details.pruning_month.length > 0) {
+    document.getElementById('pruning-item').style.display = '';
+    document.getElementById('pruning-months').textContent = details.pruning_month.slice(0,3).join(', ');
+    showProp = true;
+  }
+  if (details.soil && details.soil.length > 0) {
+    document.getElementById('soil-item').style.display = '';
+    document.getElementById('soil-type').textContent = Array.isArray(details.soil) ? details.soil.join(', ') : details.soil;
+    showProp = true;
+  }
+  if (details.pest_susceptibility) {
+    document.getElementById('pests-item').style.display = '';
+    document.getElementById('pest-info').textContent = details.pest_susceptibility;
+    showProp = true;
+  }
+  propSection.style.display = showProp ? '' : 'none';
+
   showStep('card');
+}
+
+function capitalize(str) {
+  if (!str) return '';
+  return str.charAt(0).toUpperCase() + str.slice(1).toLowerCase();
 }
 
 function getPresetTips(preset) {

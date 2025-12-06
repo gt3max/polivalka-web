@@ -188,6 +188,71 @@ PLANTNET_API_KEY = os.environ.get('PLANTNET_API_KEY', '')
 PERENUAL_API_KEY = os.environ.get('PERENUAL_API_KEY', '')
 PLANTNET_URL = 'https://my-api.plantnet.org/v2/identify/all'
 PERENUAL_URL = 'https://perenual.com/api/species-list'
+PERENUAL_DETAILS_URL = 'https://perenual.com/api/species/details'
+
+
+def get_perenual_details(scientific_name):
+    """
+    Get detailed plant data from Perenual API by scientific name.
+    Returns toxicity, hardiness, size, care level, propagation, etc.
+    """
+    if not PERENUAL_API_KEY:
+        return None
+
+    try:
+        # Search by scientific name
+        search_params = urllib.parse.urlencode({
+            'key': PERENUAL_API_KEY,
+            'q': scientific_name
+        })
+        search_url = f'{PERENUAL_URL}?{search_params}'
+
+        req = urllib.request.Request(search_url, headers={'Accept': 'application/json'})
+        with urllib.request.urlopen(req, timeout=10) as response:
+            search_data = json.loads(response.read().decode('utf-8'))
+
+        # Get first matching result
+        plants = search_data.get('data', [])
+        if not plants:
+            return None
+
+        plant_id = plants[0].get('id')
+        if not plant_id:
+            return None
+
+        # Get detailed info
+        details_url = f'{PERENUAL_DETAILS_URL}/{plant_id}?key={PERENUAL_API_KEY}'
+        req = urllib.request.Request(details_url, headers={'Accept': 'application/json'})
+        with urllib.request.urlopen(req, timeout=10) as response:
+            details = json.loads(response.read().decode('utf-8'))
+
+        # Extract relevant fields
+        return {
+            'poisonous_to_humans': details.get('poisonous_to_humans', None),
+            'poisonous_to_pets': details.get('poisonous_to_pets', None),
+            'hardiness': details.get('hardiness', {}),
+            'hardiness_min': details.get('hardiness', {}).get('min', ''),
+            'hardiness_max': details.get('hardiness', {}).get('max', ''),
+            'dimension': details.get('dimension', ''),
+            'growth_rate': details.get('growth_rate', ''),
+            'care_level': details.get('care_level', ''),
+            'maintenance': details.get('maintenance', ''),
+            'propagation': details.get('propagation', []),
+            'pruning_month': details.get('pruning_month', []),
+            'pest_susceptibility': details.get('pest_susceptibility', ''),
+            'flowering_season': details.get('flowering_season', ''),
+            'soil': details.get('soil', []),
+            'drought_tolerant': details.get('drought_tolerant', False),
+            'indoor': details.get('indoor', False),
+            'cycle': details.get('cycle', ''),
+            'edible_fruit': details.get('edible_fruit', False),
+            'medicinal': details.get('medicinal', False),
+            'invasive': details.get('invasive', False),
+            'rare': details.get('rare', False)
+        }
+    except Exception as e:
+        print(f"[Perenual] Error getting details for {scientific_name}: {e}")
+        return None
 
 
 def identify_plant_handler(event, origin):
@@ -277,19 +342,30 @@ def identify_plant_handler(event, origin):
 
         # Transform PlantNet response to our format
         results = []
-        for r in plantnet_data.get('results', [])[:5]:  # Top 5 results
+        plantnet_results = plantnet_data.get('results', [])[:5]  # Top 5 results
+
+        for idx, r in enumerate(plantnet_results):
             species = r.get('species', {})
             family_info = species.get('family', {})
             genus_info = species.get('genus', {})
+            scientific_name = species.get('scientificNameWithoutAuthor', '')
 
             # Get preset based on family
             family_name = family_info.get('scientificNameWithoutAuthor', '')
             preset_key = FAMILY_PRESETS.get(family_name, 'standard')
             preset = PRESET_DETAILS.get(preset_key, PRESET_DETAILS['standard'])
 
-            results.append({
-                'id': species.get('scientificNameWithoutAuthor', '').lower().replace(' ', '_'),
-                'scientific': species.get('scientificNameWithoutAuthor', ''),
+            # Get detailed data from Perenual for top 2 results only (performance)
+            perenual_data = None
+            if idx < 2 and scientific_name:
+                perenual_data = get_perenual_details(scientific_name)
+                if perenual_data:
+                    print(f"[Perenual] Got details for {scientific_name}")
+
+            # Build result object
+            result = {
+                'id': scientific_name.lower().replace(' ', '_'),
+                'scientific': scientific_name,
                 'commonNames': species.get('commonNames', [])[:3],
                 'family': family_name,
                 'genus': genus_info.get('scientificNameWithoutAuthor', ''),
@@ -305,7 +381,40 @@ def identify_plant_handler(event, origin):
                     'humidity': preset['humidity'],
                     'tips': preset['tips']
                 }
-            })
+            }
+
+            # Enrich with Perenual data if available
+            if perenual_data:
+                result['details'] = {
+                    # Safety info (CRITICAL)
+                    'poisonous_to_humans': perenual_data.get('poisonous_to_humans'),
+                    'poisonous_to_pets': perenual_data.get('poisonous_to_pets'),
+                    # Size & Growth
+                    'dimension': perenual_data.get('dimension', ''),
+                    'growth_rate': perenual_data.get('growth_rate', ''),
+                    'cycle': perenual_data.get('cycle', ''),
+                    # Care info
+                    'care_level': perenual_data.get('care_level', ''),
+                    'maintenance': perenual_data.get('maintenance', ''),
+                    'indoor': perenual_data.get('indoor', False),
+                    'drought_tolerant': perenual_data.get('drought_tolerant', False),
+                    # Hardiness
+                    'hardiness_min': perenual_data.get('hardiness_min', ''),
+                    'hardiness_max': perenual_data.get('hardiness_max', ''),
+                    # Propagation & Maintenance
+                    'propagation': perenual_data.get('propagation', []),
+                    'pruning_month': perenual_data.get('pruning_month', []),
+                    'soil': perenual_data.get('soil', []),
+                    # Other
+                    'pest_susceptibility': perenual_data.get('pest_susceptibility', ''),
+                    'flowering_season': perenual_data.get('flowering_season', ''),
+                    'edible_fruit': perenual_data.get('edible_fruit', False),
+                    'medicinal': perenual_data.get('medicinal', False),
+                    'invasive': perenual_data.get('invasive', False),
+                    'rare': perenual_data.get('rare', False)
+                }
+
+            results.append(result)
 
         return {
             'statusCode': 200,
