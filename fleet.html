@@ -320,40 +320,59 @@
 <script>
 // getRssiDisplay, mapStateToDisplay, timeAgo, showToast - moved to common.js
 
-// Mock data (will be replaced by Lambda API)
-// Используем РЕАЛЬНЫЕ устройства: BB00C1 и BC67E8
+// Mock data (fallback when API fails)
+// ВАЖНО: должен содержать ВСЕ реальные устройства!
 const MOCK_DEVICES = [
   {
-    device_id: 'Polivalka-BB00C1',  // Правильный формат
-    name: 'Polivalka-BB00C1',  // Default name (пользователь может переименовать)
+    device_id: 'Polivalka-9AC805',
+    name: 'Polivalka-9AC805',
     location: 'Home',
-    room: 'Kitchen',
-    moisture_pct: 45,
-    battery_pct: null,  // AC power - нет батареи
-    battery_charging: false,  // На розетке, но не заряжается (нет батареи)
-    mode: 'sensor',
-    state: 'STANDBY',
+    room: 'Living Room',
+    moisture_pct: null,  // No telemetry yet
+    battery_pct: null,
+    battery_charging: false,
+    mode: 'manual',
+    state: 'UNKNOWN',
     firmware_version: 'v1.0.0',
-    reboot_count: 5,
-    last_watering: Date.now() - 2 * 3600 * 1000, // 2h ago
-    last_update: Date.now() - 5 * 60 * 1000, // 5min ago
+    reboot_count: null,
+    last_watering: null,
+    last_update: null,
+    online: false,
     warnings: []
   },
   {
-    device_id: 'Polivalka-BC67E9',  // Правильный формат
-    name: 'Polivalka-BC67E9',  // Default name
+    device_id: 'Polivalka-BB00C1',
+    name: 'Polivalka-BB00C1',
     location: 'Home',
-    room: 'Bedroom',
-    moisture_pct: 18,
-    battery_pct: 12,
+    room: 'Living Room',
+    moisture_pct: 45,
+    battery_pct: null,  // AC power
     battery_charging: false,
     mode: 'sensor',
     state: 'STANDBY',
     firmware_version: 'v1.0.0',
+    reboot_count: 5,
+    last_watering: Date.now() - 2 * 3600 * 1000,
+    last_update: Date.now() - 5 * 60 * 1000,
+    online: true,
+    warnings: []
+  },
+  {
+    device_id: 'Polivalka-BC67E9',
+    name: 'Polivalka-BC67E9',
+    location: 'Office',
+    room: 'Workspace',
+    moisture_pct: 50,
+    battery_pct: 85,
+    battery_charging: true,
+    mode: 'sensor',
+    state: 'STANDBY',
+    firmware_version: 'v1.0.0',
     reboot_count: 3,
-    last_watering: Date.now() - 24 * 3600 * 1000, // 1d ago
-    last_update: Date.now() - 10 * 60 * 1000, // 10min ago
-    warnings: ['Low battery (12%)', 'Moisture too low (18%)']  // Battery warning
+    last_watering: Date.now() - 24 * 3600 * 1000,
+    last_update: Date.now() - 10 * 60 * 1000,
+    online: true,
+    warnings: []
   }
 ];
 
