@@ -275,11 +275,6 @@
 </div>
 
 <script>
-// ============ Cloud Mode Detection ============
-const IS_CLOUD = true;
-const params = new URLSearchParams(window.location.search);
-const DEVICE_ID = params.get('device') || localStorage.getItem('selected_device_id') || '';
-
 // ============ Configuration ============
 const CONFIG = {
   // API is now proxied through our Lambda (keys are server-side)
