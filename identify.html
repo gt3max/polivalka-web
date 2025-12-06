@@ -284,28 +284,73 @@ const CONFIG = {
   apiUrl: 'https://p0833p2v29.execute-api.eu-central-1.amazonaws.com'
 };
 
-// ============ Header Update ============
-async function loadDeviceStatus() {
-  if (!DEVICE_ID) return;
+// ============ Header Update (same as home.html) ============
+async function updateStatus() {
   try {
-    const status = await apiCall('GET', `/device/${DEVICE_ID}/status`);
-    if (status && !status.error) {
-      updateHeaderFromStatus(status);
-      // Set device ID in header
+    const s = await API.get('/status');
+
+    // Time
+    const timeEl = document.getElementById('header-time');
+    if (s.timestamp) {
+      const date = new Date(s.timestamp * 1000);
+      timeEl.textContent = date.toLocaleTimeString('en-US', {hour: '2-digit', minute: '2-digit', hour12: false});
+      timeEl.className = 'mono ok';
+    }
+
+    // Battery
+    const batteryStatus = document.getElementById('battery-status');
+    if (s.battery && s.battery.percent !== null && s.battery.percent !== undefined) {
+      const percent = Math.round(s.battery.percent);
+      const charging = s.battery.charging ? ' ⚡' : '';
+      batteryStatus.textContent = `🔋 ${percent}%${charging}`;
+    } else {
+      batteryStatus.textContent = '⚡ AC';
+    }
+
+    // Device ID
+    if (IS_CLOUD && DEVICE_ID) {
       document.getElementById('device-id-header').textContent = '🌱 ' + DEVICE_ID;
     }
+
+    // Location and Room
+    if (s.system_state?.location) {
+      document.getElementById('location-text').textContent = s.system_state.location;
+    }
+    if (s.system_state?.room) {
+      document.getElementById('room-text').textContent = s.system_state.room;
+    }
+
+    // Custom name
+    let customName = s.system_state?.device_name || 'Plant';
+    if (customName === 'Polivalka' || customName.toLowerCase().startsWith('polivalka-')) {
+      customName = 'Plant';
+    }
+    document.getElementById('custom-name-suffix').textContent = ' / ' + customName;
+
+    // State
+    const rawState = s.system_state?.state || 'OFF';
+    const displayState = mapStateToDisplay(rawState, s.pump_running);
+    document.getElementById('header-state').textContent = `${displayState.emoji} ${displayState.text}`;
+
+    // Mode badge
+    const mode = s.system_state?.mode || 'off';
+    const modeBadge = document.getElementById('mode-badge');
+    modeBadge.textContent = mode.charAt(0).toUpperCase() + mode.slice(1);
+    modeBadge.className = 'status-badge status-' + mode;
+
+    // Connection
+    const connText = document.getElementById('conn-text');
+    connText.textContent = s.online ? 'Online' : 'Offline';
+    connText.style.color = s.online ? '#0a0' : '#999';
+
   } catch (e) {
-    console.error('[Identify] Failed to load device status:', e);
+    console.error('[Identify] Status error:', e);
   }
 }
 
-// Load status on page load
-document.addEventListener('DOMContentLoaded', () => {
-  if (DEVICE_ID) {
-    document.getElementById('device-id-header').textContent = '🌱 ' + DEVICE_ID;
-    loadDeviceStatus();
-  }
-});
+// Load on start, refresh every 5 sec
+updateStatus();
+setInterval(updateStatus, 5000);
 
 // ============ State ============
 let selectedFiles = [];
