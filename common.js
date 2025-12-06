@@ -298,9 +298,47 @@ async function monitorWiFiMode() {
   }
 }
 
+// ============ Device ID Persistence ============
+/**
+ * Save device_id to localStorage and update navigation links
+ * This ensures identify.html and other pages can access the current device
+ */
+function initDevicePersistence() {
+  const params = new URLSearchParams(window.location.search);
+  const deviceFromUrl = params.get('device');
+
+  // Save to localStorage if present in URL
+  if (deviceFromUrl) {
+    localStorage.setItem('selected_device_id', deviceFromUrl);
+    console.log('[Common] Saved device to localStorage:', deviceFromUrl);
+  }
+
+  // Get current device (from URL or localStorage)
+  const currentDevice = deviceFromUrl || localStorage.getItem('selected_device_id');
+
+  // Update navigation links to include device parameter
+  if (currentDevice) {
+    document.querySelectorAll('.nav a, a[href*=".html"]').forEach(link => {
+      const href = link.getAttribute('href');
+      if (href && href.endsWith('.html') && !href.includes('fleet.html')) {
+        // Don't add device to fleet.html (it shows all devices)
+        const url = new URL(href, window.location.origin);
+        if (!url.searchParams.has('device')) {
+          url.searchParams.set('device', currentDevice);
+          link.setAttribute('href', url.pathname + url.search);
+        }
+      }
+    });
+    console.log('[Common] Updated nav links with device:', currentDevice);
+  }
+}
+
 // ============ Init ============
 // Show admin link on page load
 document.addEventListener('DOMContentLoaded', showAdminNavLink);
+
+// Initialize device persistence (save to localStorage, update nav links)
+document.addEventListener('DOMContentLoaded', initDevicePersistence);
 
 // Set device ID in header for Cloud mode
 if (typeof IS_CLOUD !== 'undefined' && IS_CLOUD && typeof DEVICE_ID !== 'undefined' && DEVICE_ID) {
