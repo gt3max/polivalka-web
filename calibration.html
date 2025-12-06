@@ -45,11 +45,13 @@ async function updateBattery(){
 async function loadAllData(){
 try {
 const s=await API.get('/status');
+// Battery (Cloud mode)
+const batteryStatus=document.getElementById('battery-status');
+if(s.battery&&s.battery.percent!==null&&s.battery.percent!==undefined){batteryStatus.textContent=`🔋 ${Math.round(s.battery.percent)}%${s.battery.charging?' ⚡':''}`;}else{batteryStatus.textContent='⚡ AC';}
 if(s.system_state?.location){document.getElementById('location-text').textContent=s.system_state.location;}
 if(s.system_state?.room){document.getElementById('room-text').textContent=s.system_state.room;}
-// Custom name suffix (always show device name, default to Plant)
 let customName=s.system_state?.device_name||'Plant';
-if(customName==='Polivalka')customName='Plant';
+if(customName==='Polivalka'||customName.toLowerCase().startsWith('polivalka-'))customName='Plant';
 document.getElementById('custom-name-suffix').textContent=' / '+customName;
 const mode=s.system_state?.mode||'off';const modeBadge=document.getElementById('mode-badge');
 const modeText=mode.charAt(0).toUpperCase()+mode.slice(1);

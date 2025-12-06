@@ -404,6 +404,14 @@ async function updateMode(){
   try {
     const s = await API.get('/status');
 
+    // Battery (Cloud mode)
+    const batteryStatus = document.getElementById('battery-status');
+    if (s.battery && s.battery.percent !== null && s.battery.percent !== undefined) {
+      batteryStatus.textContent = `🔋 ${Math.round(s.battery.percent)}%${s.battery.charging ? ' ⚡' : ''}`;
+    } else {
+      batteryStatus.textContent = '⚡ AC';
+    }
+
     // Location, Room, Custom Name
     if (s.system_state?.location) {
       document.getElementById('location-text').textContent = s.system_state.location;
@@ -411,9 +419,11 @@ async function updateMode(){
     if (s.system_state?.room) {
       document.getElementById('room-text').textContent = s.system_state.room;
     }
-    // Custom name suffix (always show device name, default to Plant)
+    // Custom name suffix
     let customName = s.system_state?.device_name || 'Plant';
-    if (customName === 'Polivalka') customName = 'Plant';
+    if (customName === 'Polivalka' || customName.toLowerCase().startsWith('polivalka-')) {
+      customName = 'Plant';
+    }
     document.getElementById('custom-name-suffix').textContent = ' / ' + customName;
 
     // Mode

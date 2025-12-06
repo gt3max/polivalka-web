@@ -735,6 +735,14 @@ if (IS_CLOUD) {
       // Load system telemetry from DynamoDB
       const status = await API.get('/status');
 
+      // Battery (Cloud mode)
+      const batteryStatus = document.getElementById('battery-status');
+      if (status.battery && status.battery.percent !== null && status.battery.percent !== undefined) {
+        batteryStatus.textContent = `🔋 ${Math.round(status.battery.percent)}%${status.battery.charging ? ' ⚡' : ''}`;
+      } else {
+        batteryStatus.textContent = '⚡ AC';
+      }
+
       // Update header with actual data - location, room, custom name
       if (status.system_state?.location) {
         document.getElementById('location-text').textContent = status.system_state.location;
@@ -743,16 +751,8 @@ if (IS_CLOUD) {
         document.getElementById('room-text').textContent = status.system_state.room;
       }
       let customName = status.system_state?.device_name || 'Plant';
-      if (customName === 'Polivalka') customName = 'Plant';
+      if (customName === 'Polivalka' || customName.toLowerCase().startsWith('polivalka-')) customName = 'Plant';
       document.getElementById('custom-name-suffix').textContent = ' / ' + customName;
-
-      // Battery status from Cloud API
-      const batteryEl = document.getElementById('battery-status');
-      if (status.battery_percent !== null && status.battery_percent !== undefined) {
-        batteryEl.textContent = `🔋 ${Math.round(status.battery_percent)}%${status.battery_charging ? ' ⚡' : ''}`;
-      } else {
-        batteryEl.textContent = '⚡ AC';
-      }
 
       // Header state
       const rawState = status.system_state?.state || 'OFF';
