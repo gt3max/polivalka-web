@@ -54,25 +54,6 @@
 <div class="nav"><a href="fleet.html">Fleet</a><a href="home.html">Home</a><a href="timer.html">Timer</a><a href="sensor.html">Sensor</a><a href="settings.html">Settings</a><a href="calibration.html">Calibration</a><a href="online.html">Online</a><a href="trends.html" class="active">Trends</a><a href="update.html">Update</a><a href="admin.html" id="admin-nav-link" style="display:none">Admin</a></div>
 
 <div class="container">
-  <!-- Period Selector -->
-  <div class="card">
-    <div class="row" style="justify-content:space-between;flex-wrap:wrap;gap:8px">
-      <div class="period-selector">
-        <button onclick="setPeriod(1)" id="btn-1d">24h</button>
-        <button onclick="setPeriod(3)" id="btn-3d">3 days</button>
-        <button onclick="setPeriod(7)" id="btn-7d" class="active">7 days</button>
-      </div>
-      <div class="row" style="gap:4px">
-        <div class="chart-type-selector" style="display:flex;gap:2px;border:1px solid #ddd;border-radius:8px;overflow:hidden">
-          <button onclick="setChartType('line')" id="btn-line" class="active" style="border:none;border-radius:0" title="Line chart (connected)">📈</button>
-          <button onclick="setChartType('scatter')" id="btn-scatter" style="border:none;border-radius:0" title="Scatter chart (points)">⚫</button>
-        </div>
-        <button onclick="exportCSV()" title="Download all data as CSV">📥</button>
-        <button onclick="refreshAll()">🔄</button>
-      </div>
-    </div>
-  </div>
-
   <!-- Stats Summary -->
   <div class="card">
     <h3 style="margin-top:0">📊 Summary (<span id="period-label">7 days</span>)</h3>
@@ -102,6 +83,23 @@
     <button onclick="showTab('battery')">🔋 Battery</button>
     <button onclick="showTab('watering')">🚿 Watering</button>
     <button onclick="showTab('activity')">📝 Activity</button>
+  </div>
+
+  <!-- Period & Chart Controls (right above charts) -->
+  <div class="row" style="justify-content:space-between;flex-wrap:wrap;gap:8px;margin:12px 0">
+    <div class="period-selector">
+      <button onclick="setPeriod(1)" id="btn-1d">24h</button>
+      <button onclick="setPeriod(3)" id="btn-3d">3 days</button>
+      <button onclick="setPeriod(7)" id="btn-7d" class="active">7 days</button>
+    </div>
+    <div class="row" style="gap:4px">
+      <div class="chart-type-selector" style="display:flex;gap:2px;border:1px solid #ddd;border-radius:8px;overflow:hidden">
+        <button onclick="setChartType('line')" id="btn-line" class="active" style="border:none;border-radius:0" title="Line chart">📈</button>
+        <button onclick="setChartType('scatter')" id="btn-scatter" style="border:none;border-radius:0" title="Scatter chart">⚫</button>
+      </div>
+      <button onclick="exportCSV()" title="Download CSV">📥</button>
+      <button onclick="refreshAll()">🔄</button>
+    </div>
   </div>
 
   <!-- Moisture Chart -->
@@ -175,8 +173,8 @@ async function updateHeader() {
     modeBadge.textContent = mode.charAt(0).toUpperCase() + mode.slice(1);
     modeBadge.className = 'status-badge status-' + mode;
 
-    document.getElementById('conn-text').textContent = s.online ? 'Online' : 'Offline';
-    document.getElementById('conn-text').style.color = s.online ? '#0a0' : '#999';
+    document.getElementById('conn-text').textContent = s.wifi_connected ? 'Online' : 'Offline';
+    document.getElementById('conn-text').style.color = s.wifi_connected ? '#0a0' : '#999';
 
     const displayState = mapStateToDisplay(s.system_state?.state, s.pump_running);
     document.getElementById('header-state').textContent = `${displayState.emoji} ${displayState.text}`;
