@@ -75,9 +75,6 @@
   .actions{display:flex;gap:12px;flex-wrap:wrap;margin-top:20px}
   .actions button{flex:1;min-width:140px}
 
-  /* GDPR */
-  .gdpr-checkbox{display:flex;gap:8px;align-items:start;margin:16px 0;padding:12px;background:#f9f9f9;border-radius:8px;font-size:12px;color:#666}
-  .gdpr-checkbox input{margin-top:2px}
 
   /* Loading */
   .loading{text-align:center;padding:40px}
@@ -174,12 +171,8 @@
 
     <div class="preview-area" id="preview-area"></div>
 
-    <div class="gdpr-checkbox" id="gdpr-section" style="display:none">
-      <input type="checkbox" id="gdpr-consent">
-      <label for="gdpr-consent">
-        I agree that my photo may be stored to improve plant recognition (GDPR).
-        Your photo will only be used if you confirm the plant identification.
-      </label>
+    <div id="gdpr-section" style="display:none;margin:16px 0;padding:10px 12px;background:#e3f2fd;border-radius:8px;font-size:12px;color:#1565c0">
+      ℹ️ Photo will be sent to PlantNet.org for identification
     </div>
 
     <button class="primary" id="identify-btn" onclick="identifyPlant()" disabled style="width:100%;margin-top:16px">
