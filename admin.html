@@ -160,6 +160,43 @@
 </div>
 </div>
 
+<!-- Archived Devices -->
+<div class="card">
+<h3>🗄️ Archived Devices</h3>
+<p class="muted">Hidden from Fleet but still receiving data if online</p>
+<div id="archived-list" style="margin-top:12px">
+<div class="muted">Loading...</div>
+</div>
+</div>
+
+<!-- Deleted Devices -->
+<div class="card">
+<h3>🗑️ Deleted Devices</h3>
+<p class="muted">Certificate deactivated, cannot connect to cloud</p>
+<div id="deleted-list" style="margin-top:12px">
+<div class="muted">Loading...</div>
+</div>
+</div>
+
+<!-- Danger Zone -->
+<div class="card" style="border-color:#b00;background:#2a1a1a">
+<h3 style="color:#f44">⚠️ DANGER ZONE</h3>
+<p class="muted">Actions below affect the selected device. Use with caution.</p>
+
+<div style="margin-top:16px;display:flex;gap:12px;flex-wrap:wrap">
+<button class="danger" onclick="archiveDevice()" id="btn-archive" disabled style="opacity:0.5">
+🗄️ Archive Device
+</button>
+<button class="danger" onclick="deleteDevice()" id="btn-delete" disabled style="opacity:0.5">
+🗑️ Delete Device
+</button>
+</div>
+<p class="muted" style="margin-top:12px;font-size:11px">
+<b>Archive:</b> Hides from Fleet, device keeps working.<br>
+<b>Delete:</b> Deactivates certificate, device cannot connect to cloud.
+</p>
+</div>
+
 </div>
 
 <script>
@@ -212,11 +249,13 @@ async function loadDeviceConfig() {
   const deviceId = document.getElementById('device-select').value;
   if (!deviceId) {
     document.getElementById('device-info').style.display = 'none';
+    updateDangerButtons(false);
     return;
   }
 
   selectedDeviceId = deviceId;
   document.getElementById('selected-device-id').textContent = deviceId;
+  updateDangerButtons(true);  // Enable Archive/Delete buttons
   document.getElementById('device-info').style.display = 'block';
   document.getElementById('selected-device-lastseen').textContent = 'Loading...';
 
@@ -401,6 +440,207 @@ function updateCostEstimate() {
 
 // Admin email whitelist - uses ADMIN_EMAILS from common.js
 
+// ============ Device Management Functions ============
+
+// Load archived devices list
+async function loadArchivedDevices() {
+  const container = document.getElementById('archived-list');
+  try {
+    const res = await fetch(`${API.cloudBase}/admin/devices/archived`, {
+      headers: API.getAuthHeaders()
+    });
+    if (!res.ok) throw new Error('Failed to load');
+    const devices = await res.json();
+
+    if (devices.length === 0) {
+      container.innerHTML = '<div class="muted">No archived devices</div>';
+      return;
+    }
+
+    container.innerHTML = devices.map(d => {
+      const shortId = d.device_id.replace('Polivalka-', '');
+      const date = d.archived_at ? new Date(d.archived_at * 1000).toLocaleDateString() : '—';
+      return `
+        <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid #333">
+          <div>
+            <span class="mono" style="color:#ff9800">${shortId}</span>
+            <span class="muted" style="margin-left:8px">${d.name !== d.device_id ? d.name : ''}</span>
+            <div class="muted" style="font-size:11px">Archived: ${date}</div>
+          </div>
+          <button onclick="restoreArchived('${d.device_id}')" style="font-size:12px;padding:4px 8px">Restore</button>
+        </div>
+      `;
+    }).join('');
+  } catch(e) {
+    container.innerHTML = '<div class="danger">Error loading archived devices</div>';
+  }
+}
+
+// Load deleted devices list
+async function loadDeletedDevices() {
+  const container = document.getElementById('deleted-list');
+  try {
+    const res = await fetch(`${API.cloudBase}/admin/devices/deleted`, {
+      headers: API.getAuthHeaders()
+    });
+    if (!res.ok) throw new Error('Failed to load');
+    const devices = await res.json();
+
+    if (devices.length === 0) {
+      container.innerHTML = '<div class="muted">No deleted devices</div>';
+      return;
+    }
+
+    container.innerHTML = devices.map(d => {
+      const shortId = d.device_id.replace('Polivalka-', '');
+      const date = d.deleted_at ? new Date(d.deleted_at * 1000).toLocaleDateString() : '—';
+      return `
+        <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid #333">
+          <div>
+            <span class="mono" style="color:#f44">${shortId}</span>
+            <span class="muted" style="margin-left:8px">${d.name !== d.device_id ? d.name : ''}</span>
+            <div class="muted" style="font-size:11px">Deleted: ${date}</div>
+          </div>
+          <button onclick="restoreDeleted('${d.device_id}')" style="font-size:12px;padding:4px 8px">Restore</button>
+        </div>
+      `;
+    }).join('');
+  } catch(e) {
+    container.innerHTML = '<div class="danger">Error loading deleted devices</div>';
+  }
+}
+
+// Archive selected device
+async function archiveDevice() {
+  if (!selectedDeviceId) {
+    alert('Select a device first');
+    return;
+  }
+
+  const shortId = selectedDeviceId.replace('Polivalka-', '');
+  if (!confirm(`Archive device ${shortId}?\n\nIt will be hidden from Fleet but continue to work and send data.`)) {
+    return;
+  }
+
+  try {
+    const res = await fetch(`${API.cloudBase}/admin/device/${selectedDeviceId}/archive`, {
+      method: 'POST',
+      headers: API.getAuthHeaders()
+    });
+    const data = await res.json();
+
+    if (res.ok) {
+      alert(`✓ Device ${shortId} archived`);
+      loadDevices();  // Refresh device list
+      loadArchivedDevices();  // Refresh archived list
+      document.getElementById('device-select').value = '';
+      document.getElementById('device-info').style.display = 'none';
+      updateDangerButtons(false);
+    } else {
+      alert('Error: ' + (data.error || 'Unknown error'));
+    }
+  } catch(e) {
+    alert('Error: ' + e.message);
+  }
+}
+
+// Hard delete selected device
+async function deleteDevice() {
+  if (!selectedDeviceId) {
+    alert('Select a device first');
+    return;
+  }
+
+  const shortId = selectedDeviceId.replace('Polivalka-', '');
+
+  // Double confirmation with ID input
+  const confirmId = prompt(`⚠️ DELETE DEVICE\n\nThis will deactivate the certificate and the device will no longer be able to connect to the cloud.\n\nTo confirm, type the device ID: ${shortId}`);
+
+  if (confirmId !== shortId) {
+    if (confirmId !== null) alert('Device ID does not match. Deletion cancelled.');
+    return;
+  }
+
+  try {
+    const res = await fetch(`${API.cloudBase}/admin/device/${selectedDeviceId}/delete`, {
+      method: 'POST',
+      headers: API.getAuthHeaders()
+    });
+    const data = await res.json();
+
+    if (res.ok) {
+      alert(`✓ Device ${shortId} deleted\n\nCertificate deactivated.`);
+      loadDevices();
+      loadDeletedDevices();
+      document.getElementById('device-select').value = '';
+      document.getElementById('device-info').style.display = 'none';
+      updateDangerButtons(false);
+    } else {
+      alert('Error: ' + (data.error || 'Unknown error'));
+    }
+  } catch(e) {
+    alert('Error: ' + e.message);
+  }
+}
+
+// Restore device from archive
+async function restoreArchived(deviceId) {
+  const shortId = deviceId.replace('Polivalka-', '');
+  if (!confirm(`Restore ${shortId} from archive?`)) return;
+
+  try {
+    const res = await fetch(`${API.cloudBase}/admin/device/${deviceId}/restore-archive`, {
+      method: 'POST',
+      headers: API.getAuthHeaders()
+    });
+    const data = await res.json();
+
+    if (res.ok) {
+      alert(`✓ Device ${shortId} restored`);
+      loadDevices();
+      loadArchivedDevices();
+    } else {
+      alert('Error: ' + (data.error || 'Unknown error'));
+    }
+  } catch(e) {
+    alert('Error: ' + e.message);
+  }
+}
+
+// Restore deleted device (reactivate certificate)
+async function restoreDeleted(deviceId) {
+  const shortId = deviceId.replace('Polivalka-', '');
+  if (!confirm(`Restore ${shortId}?\n\nThis will reactivate the certificate and the device will be able to connect again.`)) return;
+
+  try {
+    const res = await fetch(`${API.cloudBase}/admin/device/${deviceId}/restore`, {
+      method: 'POST',
+      headers: API.getAuthHeaders()
+    });
+    const data = await res.json();
+
+    if (res.ok) {
+      alert(`✓ Device ${shortId} restored\n\nCertificate reactivated.`);
+      loadDevices();
+      loadDeletedDevices();
+    } else {
+      alert('Error: ' + (data.error || 'Unknown error'));
+    }
+  } catch(e) {
+    alert('Error: ' + e.message);
+  }
+}
+
+// Enable/disable danger zone buttons
+function updateDangerButtons(enabled) {
+  const archiveBtn = document.getElementById('btn-archive');
+  const deleteBtn = document.getElementById('btn-delete');
+  archiveBtn.disabled = !enabled;
+  deleteBtn.disabled = !enabled;
+  archiveBtn.style.opacity = enabled ? '1' : '0.5';
+  deleteBtn.style.opacity = enabled ? '1' : '0.5';
+}
+
 // Check admin access
 function checkAdminAccess() {
   const userEmail = localStorage.getItem('user_email');
@@ -447,6 +687,8 @@ if (checkAdminAccess()) {
       }
     }
   });
+  loadArchivedDevices();
+  loadDeletedDevices();
   updateCostEstimate();
 }
 </script>
