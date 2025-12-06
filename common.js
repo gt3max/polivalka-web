@@ -238,7 +238,10 @@ function updateHeaderFromStatus(status) {
   const customNameEl = document.getElementById('custom-name-suffix');
   if (customNameEl) {
     let customName = status.system_state?.device_name || 'Plant';
-    if (customName === 'Polivalka') customName = 'Plant';
+    // Replace default names with "Plant"
+    if (customName === 'Polivalka' || customName.toLowerCase().startsWith('polivalka-')) {
+      customName = 'Plant';
+    }
     customNameEl.textContent = ' / ' + customName;
   }
 }

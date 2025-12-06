@@ -29,8 +29,17 @@ import hashlib
 import hmac
 import base64
 import os
+import urllib.request
+import urllib.parse
 from decimal import Decimal
 from boto3.dynamodb.conditions import Key
+
+# ============ CORS Global State ============
+# Used to pass origin through nested function calls without modifying all signatures
+_current_origin = None
+
+# ============ Admin Access Control ============
+ADMIN_EMAILS = ['mrmaximshurigin@gmail.com', 'admin']
 
 # ============ JWT Verification ============
 
@@ -99,6 +108,387 @@ def get_user_from_event(event):
 
 # ============ End JWT ============
 
+# ============ Input Validation (SECURITY - added 2025-12-06) ============
+import re
+
+def validate_device_id(device_id):
+    """
+    Validate device_id format.
+    Accepts:
+      - Short format: 6 uppercase hex characters (e.g., BC67E9, BB00C1)
+      - Full format: Polivalka-XXXXXX (e.g., Polivalka-BC67E9)
+    Returns: (is_valid, error_message)
+    """
+    if not device_id:
+        return False, "Device ID is required"
+
+    # Extract short ID if full format (case-insensitive check)
+    short_id = device_id
+    if device_id.upper().startswith('POLIVALKA-'):
+        short_id = device_id[10:]  # Remove "Polivalka-" prefix
+
+    if len(short_id) != 6:
+        return False, f"Device ID must be 6 hex characters, got {len(short_id)}"
+
+    # Must be uppercase hex
+    if not re.match(r'^[A-F0-9]{6}$', short_id):
+        return False, "Device ID must be 6 uppercase hex characters (A-F, 0-9)"
+
+    return True, None
+
+
+def validate_string_param(value, param_name, max_length=255, required=False):
+    """
+    Validate string parameter.
+    Returns: (is_valid, error_message)
+    """
+    if value is None:
+        if required:
+            return False, f"{param_name} is required"
+        return True, None
+
+    if not isinstance(value, str):
+        return False, f"{param_name} must be a string"
+
+    if len(value) > max_length:
+        return False, f"{param_name} exceeds maximum length ({max_length} chars)"
+
+    return True, None
+
+
+def validate_int_param(value, param_name, min_val=None, max_val=None, required=False):
+    """
+    Validate integer parameter.
+    Returns: (is_valid, sanitized_value, error_message)
+    """
+    if value is None:
+        if required:
+            return False, None, f"{param_name} is required"
+        return True, None, None
+
+    try:
+        int_val = int(value)
+    except (ValueError, TypeError):
+        return False, None, f"{param_name} must be an integer"
+
+    if min_val is not None and int_val < min_val:
+        return False, None, f"{param_name} must be at least {min_val}"
+
+    if max_val is not None and int_val > max_val:
+        return False, None, f"{param_name} must be at most {max_val}"
+
+    return True, int_val, None
+
+
+# ============ End Input Validation ============
+
+# ============ Plant Recognition API (added 2025-12-06) ============
+
+PLANTNET_API_KEY = os.environ.get('PLANTNET_API_KEY', '')
+PERENUAL_API_KEY = os.environ.get('PERENUAL_API_KEY', '')
+PLANTNET_URL = 'https://my-api.plantnet.org/v2/identify/all'
+PERENUAL_URL = 'https://perenual.com/api/species-list'
+
+
+def identify_plant_handler(event, origin):
+    """
+    POST /plants/identify
+    Receives base64 image, sends to PlantNet, returns identification results.
+    """
+    if not PLANTNET_API_KEY:
+        return {
+            'statusCode': 500,
+            'headers': cors_headers(origin),
+            'body': json.dumps({'error': 'PlantNet API key not configured'})
+        }
+
+    try:
+        body = json.loads(event.get('body', '{}'))
+        image_base64 = body.get('image')
+
+        if not image_base64:
+            return {
+                'statusCode': 400,
+                'headers': cors_headers(origin),
+                'body': json.dumps({'error': 'Missing image parameter'})
+            }
+
+        # Remove data URL prefix if present
+        if ',' in image_base64:
+            image_base64 = image_base64.split(',')[1]
+
+        # Decode base64 to bytes
+        image_bytes = base64.b64decode(image_base64)
+
+        # Detect image type from magic bytes
+        if image_bytes[:3] == b'\xff\xd8\xff':
+            content_type = 'image/jpeg'
+            filename = 'plant.jpg'
+        elif image_bytes[:8] == b'\x89PNG\r\n\x1a\n':
+            content_type = 'image/png'
+            filename = 'plant.png'
+        elif image_bytes[:4] == b'RIFF' and image_bytes[8:12] == b'WEBP':
+            content_type = 'image/webp'
+            filename = 'plant.webp'
+        else:
+            # Default to JPEG
+            content_type = 'image/jpeg'
+            filename = 'plant.jpg'
+
+        print(f"[PlantNet] Image type detected: {content_type}, size: {len(image_bytes)} bytes")
+
+        # Create proper multipart form data
+        boundary = '----PlantsFormBoundary' + uuid.uuid4().hex[:16]
+
+        # Build multipart body with correct format
+        multipart_body = b''
+        multipart_body += f'--{boundary}\r\n'.encode()
+        multipart_body += f'Content-Disposition: form-data; name="images"; filename="{filename}"\r\n'.encode()
+        multipart_body += f'Content-Type: {content_type}\r\n'.encode()
+        multipart_body += b'\r\n'
+        multipart_body += image_bytes
+        multipart_body += b'\r\n'
+        multipart_body += f'--{boundary}\r\n'.encode()
+        multipart_body += b'Content-Disposition: form-data; name="organs"\r\n'
+        multipart_body += b'\r\n'
+        multipart_body += b'auto\r\n'
+        multipart_body += f'--{boundary}--\r\n'.encode()
+
+        # Build URL with parameters
+        params = urllib.parse.urlencode({
+            'api-key': PLANTNET_API_KEY,
+            'include-related-images': 'true',
+            'lang': 'en'
+        })
+        url = f'{PLANTNET_URL}?{params}'
+
+        # Make request to PlantNet
+        req = urllib.request.Request(
+            url,
+            data=multipart_body,
+            method='POST',
+            headers={
+                'Content-Type': f'multipart/form-data; boundary={boundary}'
+            }
+        )
+
+        with urllib.request.urlopen(req, timeout=30) as response:
+            plantnet_data = json.loads(response.read().decode('utf-8'))
+
+        # Transform PlantNet response to our format
+        results = []
+        for r in plantnet_data.get('results', [])[:5]:  # Top 5 results
+            species = r.get('species', {})
+            family_info = species.get('family', {})
+            genus_info = species.get('genus', {})
+
+            # Get preset based on family
+            family_name = family_info.get('scientificNameWithoutAuthor', '')
+            preset_key = FAMILY_PRESETS.get(family_name, 'standard')
+            preset = PRESET_DETAILS.get(preset_key, PRESET_DETAILS['standard'])
+
+            results.append({
+                'id': species.get('scientificNameWithoutAuthor', '').lower().replace(' ', '_'),
+                'scientific': species.get('scientificNameWithoutAuthor', ''),
+                'commonNames': species.get('commonNames', [])[:3],
+                'family': family_name,
+                'genus': genus_info.get('scientificNameWithoutAuthor', ''),
+                'score': round(r.get('score', 0) * 100, 1),
+                'images': [img.get('url', {}).get('s', '') for img in r.get('images', [])[:3]],
+                'care': {
+                    'preset': preset['name'],
+                    'start_pct': preset['start_pct'],
+                    'stop_pct': preset['stop_pct'],
+                    'watering': preset['watering_frequency'],
+                    'light': preset['light']
+                }
+            })
+
+        return {
+            'statusCode': 200,
+            'headers': cors_headers(origin),
+            'body': json.dumps({
+                'success': True,
+                'results': results,
+                'source': 'plantnet'
+            })
+        }
+
+    except urllib.error.HTTPError as e:
+        error_body = e.read().decode('utf-8') if e.fp else str(e)
+        print(f"PlantNet API error: {e.code} - {error_body}")
+        return {
+            'statusCode': 502,
+            'headers': cors_headers(origin),
+            'body': json.dumps({'error': f'PlantNet API error: {e.code}'})
+        }
+    except Exception as e:
+        print(f"Plant identification error: {e}")
+        return {
+            'statusCode': 500,
+            'headers': cors_headers(origin),
+            'body': json.dumps({'error': str(e)})
+        }
+
+
+# Family to preset mapping for houseplants
+FAMILY_PRESETS = {
+    # Tropical - high humidity, frequent watering
+    'Araceae': 'tropical',        # Monstera, Philodendron, Pothos, Alocasia, Anthurium
+    'Marantaceae': 'tropical',    # Calathea, Maranta, Stromanthe
+    'Bromeliaceae': 'tropical',   # Bromeliads
+    'Gesneriaceae': 'tropical',   # African violets
+    'Piperaceae': 'tropical',     # Peperomia (though some are succulent-like)
+
+    # Succulents - infrequent watering, drought tolerant
+    'Cactaceae': 'succulents',    # All cacti
+    'Crassulaceae': 'succulents', # Echeveria, Sedum, Crassula, Kalanchoe
+    'Asphodelaceae': 'succulents', # Aloe, Haworthia, Gasteria
+    'Aizoaceae': 'succulents',    # Lithops, living stones
+    'Euphorbiaceae': 'succulents', # Euphorbia (some are succulent)
+
+    # Herbs - moderate, consistent moisture
+    'Lamiaceae': 'herbs',         # Basil, Mint, Rosemary, Lavender
+    'Apiaceae': 'herbs',          # Parsley, Cilantro, Dill
+
+    # Standard - average watering (default for most)
+    'Moraceae': 'standard',       # Ficus
+    'Asparagaceae': 'standard',   # Sansevieria, Dracaena, Yucca, Aspidistra
+    'Araliaceae': 'standard',     # Schefflera, Ivy
+    'Rutaceae': 'standard',       # Citrus
+    'Apocynaceae': 'standard',    # Hoya (though some need less water)
+    'Orchidaceae': 'standard',    # Orchids (specialized but moderate)
+    'Polypodiaceae': 'tropical',  # Ferns - actually need more water
+    'Pteridaceae': 'tropical',    # Ferns
+    'Begoniaceae': 'standard',    # Begonias
+    'Malvaceae': 'standard',      # Hibiscus
+}
+
+PRESET_DETAILS = {
+    'succulents': {
+        'name': 'Succulents',
+        'start_pct': 15,
+        'stop_pct': 25,
+        'watering_frequency': 'Every 2-3 weeks',
+        'watering_winter': 'Once a month',
+        'light': 'Bright direct or indirect light',
+        'humidity': 'Low (30-40%)',
+        'tips': 'Let soil dry completely between waterings. Overwatering is the #1 killer.'
+    },
+    'standard': {
+        'name': 'Standard',
+        'start_pct': 35,
+        'stop_pct': 55,
+        'watering_frequency': 'Every 7-10 days',
+        'watering_winter': 'Every 2 weeks',
+        'light': 'Bright indirect light',
+        'humidity': 'Average (40-60%)',
+        'tips': 'Water when top inch of soil is dry. Most forgiving category.'
+    },
+    'tropical': {
+        'name': 'Tropical',
+        'start_pct': 55,
+        'stop_pct': 75,
+        'watering_frequency': 'Every 5-7 days',
+        'watering_winter': 'Every 10-14 days',
+        'light': 'Bright indirect light, no direct sun',
+        'humidity': 'High (60-80%)',
+        'tips': 'Keep soil consistently moist but not soggy. Mist leaves or use humidifier.'
+    },
+    'herbs': {
+        'name': 'Herbs',
+        'start_pct': 30,
+        'stop_pct': 45,
+        'watering_frequency': 'Every 5-7 days',
+        'watering_winter': 'Every 7-10 days',
+        'light': 'Full sun (6+ hours)',
+        'humidity': 'Average (40-50%)',
+        'tips': 'Herbs like consistent moisture. Harvest regularly to promote growth.'
+    }
+}
+
+
+def get_plant_care_handler(event, origin):
+    """
+    GET /plants/care?name=scientific_name&family=family_name
+    Gets plant care info from Wikipedia + our preset mapping.
+    """
+    try:
+        query_params = event.get('queryStringParameters', {}) or {}
+        plant_name = query_params.get('name', '')
+        family = query_params.get('family', '')
+
+        if not plant_name:
+            return {
+                'statusCode': 400,
+                'headers': cors_headers(origin),
+                'body': json.dumps({'error': 'Missing name parameter'})
+            }
+
+        # 1. Get preset from family mapping
+        preset_key = FAMILY_PRESETS.get(family, 'standard')
+        preset = PRESET_DETAILS.get(preset_key, PRESET_DETAILS['standard'])
+
+        # 2. Get description from Wikipedia
+        wiki_data = {}
+        try:
+            wiki_name = plant_name.replace(' ', '_')
+            wiki_url = f'https://en.wikipedia.org/api/rest_v1/page/summary/{urllib.parse.quote(wiki_name)}'
+            req = urllib.request.Request(wiki_url, headers={'User-Agent': 'PlantApp/1.0'})
+
+            with urllib.request.urlopen(req, timeout=10) as response:
+                wiki_response = json.loads(response.read().decode('utf-8'))
+                wiki_data = {
+                    'title': wiki_response.get('title'),
+                    'description': wiki_response.get('description'),
+                    'extract': wiki_response.get('extract'),
+                    'image': wiki_response.get('thumbnail', {}).get('source'),
+                    'wiki_url': wiki_response.get('content_urls', {}).get('desktop', {}).get('page')
+                }
+        except Exception as e:
+            print(f"Wikipedia lookup failed: {e}")
+            wiki_data = {'extract': f'{plant_name} - care information based on plant family.'}
+
+        result = {
+            'scientific_name': plant_name,
+            'family': family,
+            'common_name': wiki_data.get('title', plant_name),
+            'description': wiki_data.get('extract', ''),
+            'image': wiki_data.get('image'),
+            'wiki_url': wiki_data.get('wiki_url'),
+            'care': {
+                'preset': preset['name'],
+                'start_pct': preset['start_pct'],
+                'stop_pct': preset['stop_pct'],
+                'watering_frequency': preset['watering_frequency'],
+                'watering_winter': preset['watering_winter'],
+                'light': preset['light'],
+                'humidity': preset['humidity'],
+                'tips': preset['tips']
+            }
+        }
+
+        return {
+            'statusCode': 200,
+            'headers': cors_headers(origin),
+            'body': json.dumps({
+                'success': True,
+                'plant': result,
+                'source': 'wikipedia+preset'
+            })
+        }
+
+    except Exception as e:
+        print(f"Plant care lookup error: {e}")
+        return {
+            'statusCode': 500,
+            'headers': cors_headers(origin),
+            'body': json.dumps({'error': str(e)})
+        }
+
+
+# ============ End Plant Recognition API ============
+
 # ALL resources in eu-central-1 (Frankfurt)
 dynamodb = boto3.resource('dynamodb', region_name='eu-central-1')
 # IoT Data client requires explicit endpoint
@@ -120,6 +510,15 @@ FIRMWARE_BUCKET = os.environ.get('FIRMWARE_BUCKET', 'polivalka-firmware')
 devices_table = dynamodb.Table(DEVICES_TABLE)
 telemetry_table = dynamodb.Table(TELEMETRY_TABLE)
 commands_table = dynamodb.Table(COMMANDS_TABLE)
+
+
+def get_telemetry_device_id(device_id):
+    """Convert API device_id (BB00C1) to telemetry format (Polivalka-BB00C1)
+    ESP32 publishes telemetry with 'Polivalka-' prefix, but API uses short ID
+    """
+    if device_id.startswith('Polivalka-'):
+        return device_id
+    return f'Polivalka-{device_id}'
 
 
 def lambda_handler(event, context):
@@ -146,34 +545,37 @@ def lambda_handler(event, context):
             'body': json.dumps({'error': 'Unknown API Gateway format'})
         }
 
+    # Get Origin header for CORS
+    request_headers = event.get('headers', {})
+    origin = request_headers.get('origin') or request_headers.get('Origin')
+
+    # Set global origin for nested function calls
+    global _current_origin
+    _current_origin = origin
+
     # Handle CORS preflight
     if http_method == 'OPTIONS':
         return {
             'statusCode': 200,
-            'headers': cors_headers(),
+            'headers': cors_headers(origin),
             'body': ''
         }
 
     # Extract user_id from JWT token
     user_id = get_user_from_event(event)
 
-    # For MVP: allow unauthenticated access with fallback to 'admin'
-    # TODO: Remove this fallback when auth is fully deployed
-    if not user_id:
-        # Check if Authorization header is present but invalid
-        headers = event.get('headers', {})
-        auth_header = headers.get('Authorization') or headers.get('authorization', '')
-        if auth_header:
-            # Token was provided but invalid/expired
-            return {
-                'statusCode': 401,
-                'headers': cors_headers(),
-                'body': json.dumps({'error': 'Invalid or expired token'})
-            }
-        # No token provided - allow access for backward compatibility (MVP)
-        # This will be removed once all clients are updated
-        user_id = 'admin'
-        print(f"[WARN] No auth token - using fallback user_id='admin'")
+    # Public endpoints that don't require authentication
+    PUBLIC_PATHS = ['/plants/identify', '/plants/care']
+
+    # SECURITY: Require valid authentication for all API endpoints
+    # MVP fallback removed 2025-12-06 (security hardening)
+    # Exception: /plants/* endpoints are public (plant recognition for everyone)
+    if not user_id and path not in PUBLIC_PATHS:
+        return {
+            'statusCode': 401,
+            'headers': cors_headers(origin),
+            'body': json.dumps({'error': 'Authentication required'})
+        }
 
     # Route to appropriate handler
     print(f"[DEBUG] path={path}, user_id={user_id}")
@@ -184,7 +586,16 @@ def lambda_handler(event, context):
     if path.startswith('/device/'):
         parts = path.split('/')
         if len(parts) >= 3:
-            device_id = parts[2]
+            device_id = parts[2]  # Keep original case (Polivalka-XXXXXX format)
+
+            # SECURITY: Validate device_id format (added 2025-12-06)
+            is_valid, error_msg = validate_device_id(device_id)
+            if not is_valid:
+                return {
+                    'statusCode': 400,
+                    'headers': cors_headers(origin),
+                    'body': json.dumps({'error': f'Invalid device_id: {error_msg}'})
+                }
 
             if len(parts) == 4 and parts[3] == 'status' and http_method == 'GET':
                 return get_device_status(device_id, user_id)
@@ -563,6 +974,11 @@ def lambda_handler(event, context):
             # Schedules endpoint for timer controller
             # Config is synced from ESP32 to DynamoDB via MQTT
             if len(parts) == 4 and parts[3] == 'schedules' and http_method == 'GET':
+                # SECURITY: Verify user owns this device (added 2025-12-06)
+                if not verify_device_access(device_id, user_id):
+                    return {'statusCode': 403, 'headers': cors_headers(origin),
+                            'body': json.dumps({'error': 'Access denied'})}
+
                 # Read config_timer from devices table
                 try:
                     scan_response = devices_table.scan(
@@ -575,7 +991,7 @@ def lambda_handler(event, context):
                         updated = device.get('config_timer_updated', 0)
                         return {
                             'statusCode': 200,
-                            'headers': cors_headers(),
+                            'headers': cors_headers(origin),
                             'body': json.dumps({
                                 'schedules': schedules,
                                 'config_updated': updated,
@@ -585,7 +1001,7 @@ def lambda_handler(event, context):
                     else:
                         return {
                             'statusCode': 200,
-                            'headers': cors_headers(),
+                            'headers': cors_headers(origin),
                             'body': json.dumps({
                                 'schedules': [],
                                 'message': 'Device not found or no config synced yet'
@@ -595,7 +1011,7 @@ def lambda_handler(event, context):
                     print(f"Error reading config_timer: {e}")
                     return {
                         'statusCode': 500,
-                        'headers': cors_headers(),
+                        'headers': cors_headers(origin),
                         'body': json.dumps({'error': str(e)})
                     }
 
@@ -626,9 +1042,58 @@ def lambda_handler(event, context):
             if len(parts) == 5 and parts[3] == 'telemetry' and parts[4] == 'config' and http_method == 'GET':
                 return get_telemetry_config(device_id, user_id)
 
+    # ============ Plant Recognition Routes (added 2025-12-06) ============
+    # POST /plants/identify - Identify plant from image
+    if path == '/plants/identify' and http_method == 'POST':
+        return identify_plant_handler(event, origin)
+
+    # GET /plants/care?name=xxx - Get plant care info
+    if path == '/plants/care' and http_method == 'GET':
+        return get_plant_care_handler(event, origin)
+
+    # ============ Admin Device Management Routes (added 2025-12-06) ============
+    # These endpoints are admin-only for device lifecycle management
+
+    if path.startswith('/admin/'):
+        # Verify admin access
+        if user_id not in ADMIN_EMAILS:
+            return {
+                'statusCode': 403,
+                'headers': cors_headers(origin),
+                'body': json.dumps({'error': 'Admin access required'})
+            }
+
+        # GET /admin/devices/archived - List archived devices
+        if path == '/admin/devices/archived' and http_method == 'GET':
+            return admin_get_archived_devices()
+
+        # GET /admin/devices/deleted - List deleted devices
+        if path == '/admin/devices/deleted' and http_method == 'GET':
+            return admin_get_deleted_devices()
+
+        # POST /admin/device/{id}/archive - Archive device
+        if path.startswith('/admin/device/') and path.endswith('/archive') and http_method == 'POST':
+            device_id = path.split('/')[3]  # Already formatted as Polivalka-XXXXXX
+            return admin_archive_device(device_id)
+
+        # POST /admin/device/{id}/restore-archive - Restore from archive
+        if path.startswith('/admin/device/') and path.endswith('/restore-archive') and http_method == 'POST':
+            device_id = path.split('/')[3]  # Already formatted as Polivalka-XXXXXX
+            return admin_restore_archive(device_id)
+
+        # POST /admin/device/{id}/delete - Hard delete device
+        if path.startswith('/admin/device/') and path.endswith('/delete') and http_method == 'POST':
+            device_id = path.split('/')[3]  # Already formatted as Polivalka-XXXXXX
+            return admin_delete_device(device_id)
+
+        # POST /admin/device/{id}/restore - Restore deleted device
+        if path.startswith('/admin/device/') and path.endswith('/restore') and http_method == 'POST':
+            device_id = path.split('/')[3]  # Already formatted as Polivalka-XXXXXX
+            return admin_restore_deleted(device_id)
+
     return {
         'statusCode': 404,
-        'headers': cors_headers(),
+        'headers': cors_headers(origin),
         'body': json.dumps({'error': 'Not found'})
     }
 
@@ -641,85 +1106,128 @@ def get_devices(user_id):
 
     if user_id in ADMIN_EMAILS:
         # Admin: scan ALL devices
+        print(f"[DEBUG] get_devices: Admin user {user_id}, scanning ALL devices")
         response = devices_table.scan()
     else:
         # Regular user: only their devices
+        print(f"[DEBUG] get_devices: Regular user {user_id}, querying own devices")
         response = devices_table.query(
             KeyConditionExpression=Key('user_id').eq(user_id)
         )
 
+    items = response.get('Items', [])
+    print(f"[DEBUG] get_devices: Found {len(items)} devices before filter: {[i['device_id'] for i in items]}")
+
+    # Filter out archived and deleted devices (they go to separate lists)
+    items = [i for i in items if not i.get('archived') and not i.get('deleted')]
+    print(f"[DEBUG] get_devices: {len(items)} active devices after filter")
+
     devices = []
-    for item in response.get('Items', []):
+    for item in items:
         device_id = item['device_id']
 
-        # Get latest telemetry (sensor, battery, system)
-        latest = get_latest_telemetry(device_id)
+        try:
+            # Get latest telemetry (sensor, battery, system)
+            latest = get_latest_telemetry(device_id)
+            print(f"[DEBUG] Processing device {device_id}, telemetry keys: {list(latest.keys())}")
 
-        # Merge device metadata + telemetry
-        # Migration: "off" → "manual" (backward compatibility with old firmware)
-        mode = latest.get('system', {}).get('mode', 'manual')
-        if mode == 'off':
-            mode = 'manual'
+            # Merge device metadata + telemetry
+            # Migration: "off" → "manual" (backward compatibility with old firmware)
+            mode = latest.get('system', {}).get('mode', 'manual')
+            if mode == 'off':
+                mode = 'manual'
 
-        # Controller is enabled based on state from device telemetry
-        # state = DISABLED means controller is OFF
-        # state = LAUNCH/STANDBY/ACTIVE/etc means controller is ON
-        device_state = latest.get('system', {}).get('state', 'DISABLED')
-        controller_enabled = device_state != 'DISABLED'
+            # Controller is enabled based on state from device telemetry
+            # state = DISABLED means controller is OFF
+            # state = LAUNCH/STANDBY/ACTIVE/etc means controller is ON
+            device_state = latest.get('system', {}).get('state', 'DISABLED')
+            controller_enabled = device_state != 'DISABLED'
 
-        # Device info: prefer telemetry (ESP32 source of truth), fallback to DynamoDB
-        system_data = latest.get('system', {})
-        device_name = system_data.get('device_name') or item.get('device_name') or device_id
-        device_location = system_data.get('location') or item.get('location') or '—'
-        device_room = system_data.get('room') or item.get('room') or '—'
+            # Device info: prefer telemetry (ESP32 source of truth), fallback to DynamoDB
+            system_data = latest.get('system', {})
+            device_name = system_data.get('device_name') or item.get('device_name') or device_id
+            device_location = system_data.get('location') or item.get('location') or '—'
+            device_room = system_data.get('room') or item.get('room') or '—'
 
-        # Battery: distinguish "no data" from "AC power (percent=null)"
-        battery_data = latest.get('battery')
-        battery_pct = battery_data.get('percent') if battery_data else None
-        battery_charging = battery_data.get('charging', False) if battery_data else False
-        battery_no_data = battery_data is None
+            # Battery: distinguish "no data" from "AC power (percent=null)"
+            battery_data = latest.get('battery')
+            battery_pct = battery_data.get('percent') if battery_data else None
+            battery_charging = battery_data.get('charging', False) if battery_data else False
+            battery_no_data = battery_data is None
 
-        # Pump calibration and speed from device record (set via admin panel or telemetry)
-        pump_calib = item.get('pump_calibration', 2.5)
-        pump_calib_float = float(pump_calib) if pump_calib else 2.5
-        pump_speed = item.get('pump_speed', 100)
-        pump_speed_int = int(pump_speed) if pump_speed else 100
+            # Pump calibration and speed from device record (set via admin panel or telemetry)
+            pump_calib = item.get('pump_calibration', 2.5)
+            pump_calib_float = float(pump_calib) if pump_calib else 2.5
+            pump_speed = item.get('pump_speed', 100)
+            pump_speed_int = int(pump_speed) if pump_speed else 100
 
-        # Sensor calibration from device record (set via admin panel)
-        sensor_calib = item.get('sensor_calibration', {})
-        sensor_calib_dict = {
-            'water': int(sensor_calib.get('water', 1200)) if sensor_calib else 1200,
-            'dry_soil': int(sensor_calib.get('dry_soil', 2400)) if sensor_calib else 2400,
-            'air': int(sensor_calib.get('air', 2800)) if sensor_calib else 2800
-        }
+            # Sensor calibration from device record (set via admin panel)
+            sensor_calib = item.get('sensor_calibration', {})
+            sensor_calib_dict = {
+                'water': int(sensor_calib.get('water', 1200)) if sensor_calib else 1200,
+                'dry_soil': int(sensor_calib.get('dry_soil', 2400)) if sensor_calib else 2400,
+                'air': int(sensor_calib.get('air', 2800)) if sensor_calib else 2800
+            }
 
-        device_data = {
-            'device_id': device_id,
-            'name': device_name,
-            'location': device_location,
-            'room': device_room,
-            'moisture_pct': latest.get('sensor', {}).get('moisture_percent'),
-            'adc_raw': latest.get('sensor', {}).get('adc_raw'),
-            'battery_pct': battery_pct,
-            'battery_charging': battery_charging,
-            'battery_no_data': battery_no_data,  # True = no telemetry yet
-            'mode': mode,
-            'controller_enabled': controller_enabled,  # True if state != DISABLED (from telemetry)
-            'state': latest.get('system', {}).get('state', 'UNKNOWN'),
-            'firmware_version': latest.get('system', {}).get('firmware_version', 'v1.0.0'),
-            'reboot_count': latest.get('system', {}).get('reboot_count'),
-            'uptime': format_uptime(latest.get('system', {}).get('uptime_ms')),
-            'last_watering': item.get('last_watering_timestamp'),
-            'last_update': latest.get('last_update'),
-            'online': is_device_online(latest.get('last_update')),
-            'warnings': generate_warnings(latest),
-            'pump_calibration': pump_calib_float,
-            'pump_speed': pump_speed_int,
-            'sensor_calibration': sensor_calib_dict
-        }
+            device_data = {
+                'device_id': device_id,
+                'name': device_name,
+                'location': device_location,
+                'room': device_room,
+                'moisture_pct': latest.get('sensor', {}).get('moisture_percent'),
+                'adc_raw': latest.get('sensor', {}).get('adc_raw'),
+                'battery_pct': battery_pct,
+                'battery_charging': battery_charging,
+                'battery_no_data': battery_no_data,  # True = no telemetry yet
+                'mode': mode,
+                'controller_enabled': controller_enabled,  # True if state != DISABLED (from telemetry)
+                'state': latest.get('system', {}).get('state', 'UNKNOWN'),
+                'firmware_version': latest.get('system', {}).get('firmware_version', 'v1.0.0'),
+                'reboot_count': latest.get('system', {}).get('reboot_count'),
+                'uptime': format_uptime(latest.get('system', {}).get('uptime_ms')),
+                'last_watering': item.get('last_watering_timestamp'),
+                'last_update': latest.get('last_update'),
+                'online': is_device_online(latest.get('last_update')),
+                'warnings': generate_warnings(latest),
+                'pump_calibration': pump_calib_float,
+                'pump_speed': pump_speed_int,
+                'sensor_calibration': sensor_calib_dict
+            }
 
-        devices.append(device_data)
+            devices.append(device_data)
+            print(f"[DEBUG] Device {device_id} processed successfully")
 
+        except Exception as e:
+            print(f"[ERROR] Failed to process device {device_id}: {str(e)}")
+            import traceback
+            traceback.print_exc()
+            # Still add basic device info even if telemetry fails
+            devices.append({
+                'device_id': device_id,
+                'name': item.get('device_name', device_id),
+                'location': item.get('location', '—'),
+                'room': item.get('room', '—'),
+                'moisture_pct': None,
+                'adc_raw': None,
+                'battery_pct': None,
+                'battery_charging': False,
+                'battery_no_data': True,
+                'mode': 'manual',
+                'controller_enabled': False,
+                'state': 'UNKNOWN',
+                'firmware_version': 'v1.0.0',
+                'reboot_count': None,
+                'uptime': None,
+                'last_watering': item.get('last_watering_timestamp'),
+                'last_update': None,
+                'online': False,
+                'warnings': [],
+                'pump_calibration': 2.5,
+                'pump_speed': 100,
+                'sensor_calibration': {'water': 1200, 'dry_soil': 2400, 'air': 2800}
+            })
+
+    print(f"[DEBUG] get_devices: Returning {len(devices)} devices")
     return {
         'statusCode': 200,
         'headers': cors_headers(),
@@ -1182,9 +1690,10 @@ def get_sensor_history(device_id, user_id, days=7):
 
     # Query telemetry table for sensor data (last 7 days)
     cutoff = int(time.time()) - (days * 86400)
+    telem_device_id = get_telemetry_device_id(device_id)
 
     response = telemetry_table.query(
-        KeyConditionExpression=Key('device_id').eq(device_id) &
+        KeyConditionExpression=Key('device_id').eq(telem_device_id) &
                                Key('timestamp').gt(cutoff),
         ScanIndexForward=False,  # Descending (newest first)
         Limit=1000  # Max 1000 points
@@ -1262,9 +1771,10 @@ def get_battery_history(device_id, user_id, days=7):
                 'body': json.dumps({'error': 'Access denied'})}
 
     cutoff = int(time.time()) - (days * 86400)
+    telem_device_id = get_telemetry_device_id(device_id)
 
     response = telemetry_table.query(
-        KeyConditionExpression=Key('device_id').eq(device_id) &
+        KeyConditionExpression=Key('device_id').eq(telem_device_id) &
                                Key('timestamp').gt(cutoff),
         ScanIndexForward=False,
         Limit=1000
@@ -1315,9 +1825,10 @@ def get_latest_telemetry(device_id):
     # Query recent records (schema: device_id + timestamp)
     # Data types stored as top-level Maps: system, pump, sensor, battery
     cutoff = int(time.time()) - 86400  # Last 24 hours
+    telem_device_id = get_telemetry_device_id(device_id)
 
     response = telemetry_table.query(
-        KeyConditionExpression=Key('device_id').eq(device_id) &
+        KeyConditionExpression=Key('device_id').eq(telem_device_id) &
                                Key('timestamp').gt(cutoff),
         ScanIndexForward=False,  # Newest first
         Limit=100  # Get recent records to find latest of each type
@@ -1533,13 +2044,308 @@ def generate_warnings(telemetry):
     return warnings
 
 
-def cors_headers():
-    """CORS headers for API Gateway"""
+# ============ Admin Device Management Handlers (added 2025-12-06) ============
+
+# AWS IoT client for certificate management
+iot_client = boto3.client('iot', region_name='eu-central-1')
+
+
+def admin_archive_device(device_id):
+    """Archive device - hide from Fleet but keep data flowing"""
+    try:
+        # Normalize device_id format
+        if not device_id.startswith('Polivalka-'):
+            device_id = f'Polivalka-{device_id}'
+
+        # Find device to get user_id (table has composite key: user_id + device_id)
+        response = devices_table.scan(
+            FilterExpression='device_id = :device',
+            ExpressionAttributeValues={':device': device_id}
+        )
+        items = response.get('Items', [])
+        if not items:
+            return {
+                'statusCode': 404,
+                'headers': cors_headers(),
+                'body': json.dumps({'error': f'Device {device_id} not found'})
+            }
+
+        device_user_id = items[0].get('user_id')
+
+        # Update device record with archived flag
+        devices_table.update_item(
+            Key={'user_id': device_user_id, 'device_id': device_id},
+            UpdateExpression='SET archived = :true, archived_at = :ts',
+            ExpressionAttributeValues={
+                ':true': True,
+                ':ts': int(time.time())
+            }
+        )
+
+        print(f"[ADMIN] Device {device_id} archived")
+        return {
+            'statusCode': 200,
+            'headers': cors_headers(),
+            'body': json.dumps({'success': True, 'message': f'Device {device_id} archived'})
+        }
+    except Exception as e:
+        print(f"[ADMIN] Error archiving device: {e}")
+        return {
+            'statusCode': 500,
+            'headers': cors_headers(),
+            'body': json.dumps({'error': str(e)})
+        }
+
+
+def admin_restore_archive(device_id):
+    """Restore device from archive - show on Fleet again"""
+    try:
+        if not device_id.startswith('Polivalka-'):
+            device_id = f'Polivalka-{device_id}'
+
+        # Find device to get user_id (table has composite key: user_id + device_id)
+        response = devices_table.scan(
+            FilterExpression='device_id = :device',
+            ExpressionAttributeValues={':device': device_id}
+        )
+        items = response.get('Items', [])
+        if not items:
+            return {
+                'statusCode': 404,
+                'headers': cors_headers(),
+                'body': json.dumps({'error': f'Device {device_id} not found'})
+            }
+
+        device_user_id = items[0].get('user_id')
+
+        # Remove archived flag
+        devices_table.update_item(
+            Key={'user_id': device_user_id, 'device_id': device_id},
+            UpdateExpression='REMOVE archived, archived_at'
+        )
+
+        print(f"[ADMIN] Device {device_id} restored from archive")
+        return {
+            'statusCode': 200,
+            'headers': cors_headers(),
+            'body': json.dumps({'success': True, 'message': f'Device {device_id} restored from archive'})
+        }
+    except Exception as e:
+        print(f"[ADMIN] Error restoring device: {e}")
+        return {
+            'statusCode': 500,
+            'headers': cors_headers(),
+            'body': json.dumps({'error': str(e)})
+        }
+
+
+def admin_delete_device(device_id):
+    """Hard delete device - deactivate certificate and mark as deleted"""
+    try:
+        if not device_id.startswith('Polivalka-'):
+            device_id = f'Polivalka-{device_id}'
+
+        # Find device to get user_id (table has composite key: user_id + device_id)
+        response = devices_table.scan(
+            FilterExpression='device_id = :device',
+            ExpressionAttributeValues={':device': device_id}
+        )
+        items = response.get('Items', [])
+        if not items:
+            return {
+                'statusCode': 404,
+                'headers': cors_headers(),
+                'body': json.dumps({'error': f'Device {device_id} not found'})
+            }
+
+        device_user_id = items[0].get('user_id')
+
+        # 1. Find and deactivate the device's certificate in AWS IoT
+        thing_name = device_id
+        try:
+            # List principals (certificates) attached to the thing
+            principals = iot_client.list_thing_principals(thingName=thing_name)
+            for principal_arn in principals.get('principals', []):
+                # Extract certificate ID from ARN
+                cert_id = principal_arn.split('/')[-1]
+                # Deactivate certificate
+                iot_client.update_certificate(
+                    certificateId=cert_id,
+                    newStatus='INACTIVE'
+                )
+                print(f"[ADMIN] Deactivated certificate {cert_id} for {device_id}")
+        except iot_client.exceptions.ResourceNotFoundException:
+            print(f"[ADMIN] No IoT Thing found for {device_id}, skipping certificate deactivation")
+
+        # 2. Mark device as deleted in DynamoDB (don't actually delete - keep history)
+        devices_table.update_item(
+            Key={'user_id': device_user_id, 'device_id': device_id},
+            UpdateExpression='SET deleted = :true, deleted_at = :ts REMOVE archived, archived_at',
+            ExpressionAttributeValues={
+                ':true': True,
+                ':ts': int(time.time())
+            }
+        )
+
+        print(f"[ADMIN] Device {device_id} hard deleted (certificate deactivated)")
+        return {
+            'statusCode': 200,
+            'headers': cors_headers(),
+            'body': json.dumps({'success': True, 'message': f'Device {device_id} deleted and certificate deactivated'})
+        }
+    except Exception as e:
+        print(f"[ADMIN] Error deleting device: {e}")
+        return {
+            'statusCode': 500,
+            'headers': cors_headers(),
+            'body': json.dumps({'error': str(e)})
+        }
+
+
+def admin_restore_deleted(device_id):
+    """Restore deleted device - reactivate certificate"""
+    try:
+        if not device_id.startswith('Polivalka-'):
+            device_id = f'Polivalka-{device_id}'
+
+        # Find device to get user_id (table has composite key: user_id + device_id)
+        response = devices_table.scan(
+            FilterExpression='device_id = :device',
+            ExpressionAttributeValues={':device': device_id}
+        )
+        items = response.get('Items', [])
+        if not items:
+            return {
+                'statusCode': 404,
+                'headers': cors_headers(),
+                'body': json.dumps({'error': f'Device {device_id} not found'})
+            }
+
+        device_user_id = items[0].get('user_id')
+
+        # 1. Reactivate certificate in AWS IoT
+        thing_name = device_id
+        try:
+            principals = iot_client.list_thing_principals(thingName=thing_name)
+            for principal_arn in principals.get('principals', []):
+                cert_id = principal_arn.split('/')[-1]
+                iot_client.update_certificate(
+                    certificateId=cert_id,
+                    newStatus='ACTIVE'
+                )
+                print(f"[ADMIN] Reactivated certificate {cert_id} for {device_id}")
+        except iot_client.exceptions.ResourceNotFoundException:
+            print(f"[ADMIN] No IoT Thing found for {device_id}")
+
+        # 2. Remove deleted flag from DynamoDB
+        devices_table.update_item(
+            Key={'user_id': device_user_id, 'device_id': device_id},
+            UpdateExpression='REMOVE deleted, deleted_at'
+        )
+
+        print(f"[ADMIN] Device {device_id} restored (certificate reactivated)")
+        return {
+            'statusCode': 200,
+            'headers': cors_headers(),
+            'body': json.dumps({'success': True, 'message': f'Device {device_id} restored and certificate reactivated'})
+        }
+    except Exception as e:
+        print(f"[ADMIN] Error restoring device: {e}")
+        return {
+            'statusCode': 500,
+            'headers': cors_headers(),
+            'body': json.dumps({'error': str(e)})
+        }
+
+
+def admin_get_archived_devices():
+    """Get list of archived devices"""
+    try:
+        # Scan for archived devices
+        response = devices_table.scan(
+            FilterExpression='archived = :true',
+            ExpressionAttributeValues={':true': True}
+        )
+
+        devices = []
+        for item in response.get('Items', []):
+            devices.append({
+                'device_id': item['device_id'],
+                'name': item.get('device_name', item['device_id']),
+                'location': item.get('location', '—'),
+                'archived_at': item.get('archived_at')
+            })
+
+        return {
+            'statusCode': 200,
+            'headers': cors_headers(),
+            'body': json.dumps(devices, cls=DecimalEncoder)
+        }
+    except Exception as e:
+        return {
+            'statusCode': 500,
+            'headers': cors_headers(),
+            'body': json.dumps({'error': str(e)})
+        }
+
+
+def admin_get_deleted_devices():
+    """Get list of deleted devices"""
+    try:
+        # Scan for deleted devices
+        response = devices_table.scan(
+            FilterExpression='deleted = :true',
+            ExpressionAttributeValues={':true': True}
+        )
+
+        devices = []
+        for item in response.get('Items', []):
+            devices.append({
+                'device_id': item['device_id'],
+                'name': item.get('device_name', item['device_id']),
+                'location': item.get('location', '—'),
+                'deleted_at': item.get('deleted_at')
+            })
+
+        return {
+            'statusCode': 200,
+            'headers': cors_headers(),
+            'body': json.dumps(devices, cls=DecimalEncoder)
+        }
+    except Exception as e:
+        return {
+            'statusCode': 500,
+            'headers': cors_headers(),
+            'body': json.dumps({'error': str(e)})
+        }
+
+
+# SECURITY: Allowed origins for CORS (updated 2025-12-06)
+ALLOWED_ORIGINS = [
+    'https://gt3max.github.io',
+    'https://plantapp.pro',
+    'https://www.plantapp.pro',
+    'http://localhost:8080',  # Local development
+    'http://127.0.0.1:8080',
+]
+
+def cors_headers(origin=None):
+    """CORS headers for API Gateway - restricted to allowed origins"""
+    # Use passed origin, or fall back to global _current_origin from lambda_handler
+    effective_origin = origin or _current_origin
+
+    # If origin in allowed list, echo it back. Otherwise use primary domain
+    if effective_origin and effective_origin in ALLOWED_ORIGINS:
+        allowed_origin = effective_origin
+    else:
+        allowed_origin = 'https://plantapp.pro'  # Primary domain
+
     return {
         'Content-Type': 'application/json',
-        'Access-Control-Allow-Origin': '*',
+        'Access-Control-Allow-Origin': allowed_origin,
         'Access-Control-Allow-Headers': 'Content-Type,Authorization',
-        'Access-Control-Allow-Methods': 'GET,POST,OPTIONS'
+        'Access-Control-Allow-Methods': 'GET,POST,OPTIONS',
+        'Access-Control-Allow-Credentials': 'true'
     }
 
 
@@ -1827,8 +2633,9 @@ def get_device_activity(device_id, user_id):
         # 2. Get telemetry (last 50 system events)
         # Query recent telemetry and filter for system events
         cutoff = int(time.time()) - 86400  # Last 24 hours
+        telem_device_id = get_telemetry_device_id(device_id)
         telem_response = telemetry_table.query(
-            KeyConditionExpression=Key('device_id').eq(device_id) & Key('timestamp').gt(cutoff),
+            KeyConditionExpression=Key('device_id').eq(telem_device_id) & Key('timestamp').gt(cutoff),
             Limit=100,  # Get more to filter for system events
             ScanIndexForward=False  # Sort DESC
         )

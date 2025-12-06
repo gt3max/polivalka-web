@@ -105,14 +105,47 @@
 
   /* Mock mode banner */
   .mock-banner{background:#fff3cd;border:1px solid #ffc107;color:#856404;padding:10px 16px;border-radius:8px;margin-bottom:16px;font-size:13px}
+
+  /* Nav */
+  .nav{display:flex;gap:1px;flex-wrap:wrap;padding:2px 4px;background:#f0f0f0;font-size:12px}
+  .nav a{flex:1;min-width:60px;padding:6px 4px;text-align:center;background:#fff;color:#333;text-decoration:none;border-radius:4px}
+  .nav a:hover{background:#e8f5e9}
+  .nav a.active{background:#2c5f2d;color:#fff}
+
+  /* Status badge */
+  .status-badge{display:inline-block;padding:2px 8px;border-radius:10px;font-size:10px;font-weight:600}
+  .status-off{background:#ddd;color:#666}
+  .status-timer{background:#e3f2fd;color:#1976d2}
+  .status-sensor{background:#fff3e0;color:#f57c00}
+  .status-active{background:#e8f5e9;color:#2c5f2d}
+  .mono{font-family:monospace}
 </style>
 </head>
 <body>
 <div class="header">
-  <h1>Plant Identification</h1>
-  <div class="header-info">
-    <a href="fleet.html" style="color:#fff;text-decoration:none">Back to Fleet</a>
+  <div>
+    <h1 id="device-id-header" style="margin:0;font-size:15px">🌱 Polivalka</h1>
+    <div style="font-size:13px">📍 <span id="location-text">—</span> / <span id="room-text">—</span><span id="custom-name-suffix"></span></div>
+    <div style="font-size:11px;margin-top:4px"><span id="battery-status">🔋 —</span> · <span id="header-state">💤 Standby</span></div>
   </div>
+  <div class="header-info">
+    <div id="header-time" class="mono" style="font-size:11px">--:--</div>
+    <div style="font-size:11px" id="header-mode"><span id="mode-badge" class="status-badge status-off">Off</span></div>
+    <div style="font-size:11px" id="header-conn">📡 <span id="conn-text">Offline</span></div>
+  </div>
+</div>
+<div class="nav">
+  <a href="fleet.html">Fleet</a>
+  <a href="home.html">Home</a>
+  <a href="identify.html" class="active" style="background:#e8f5e9">🌱 Identify</a>
+  <a href="timer.html">Timer</a>
+  <a href="sensor.html">Sensor</a>
+  <a href="settings.html">Settings</a>
+  <a href="calibration.html">Calibration</a>
+  <a href="online.html">Online</a>
+  <a href="trends.html">Trends</a>
+  <a href="update.html">Update</a>
+  <a href="admin.html" id="admin-nav-link" style="display:none">Admin</a>
 </div>
 
 <div class="container">
@@ -245,6 +278,11 @@
 </div>
 
 <script>
+// ============ Cloud Mode Detection ============
+const IS_CLOUD = true;
+const params = new URLSearchParams(window.location.search);
+const DEVICE_ID = params.get('device') || localStorage.getItem('selected_device_id') || '';
+
 // ============ Configuration ============
 const CONFIG = {
   // API is now proxied through our Lambda (keys are server-side)
@@ -253,6 +291,29 @@ const CONFIG = {
   // Our API endpoint (Lambda handles PlantNet/Perenual keys securely)
   apiUrl: 'https://p0833p2v29.execute-api.eu-central-1.amazonaws.com'
 };
+
+// ============ Header Update ============
+async function loadDeviceStatus() {
+  if (!DEVICE_ID) return;
+  try {
+    const status = await apiCall('GET', `/device/${DEVICE_ID}/status`);
+    if (status && !status.error) {
+      updateHeaderFromStatus(status);
+      // Set device ID in header
+      document.getElementById('device-id-header').textContent = '🌱 ' + DEVICE_ID;
+    }
+  } catch (e) {
+    console.error('[Identify] Failed to load device status:', e);
+  }
+}
+
+// Load status on page load
+document.addEventListener('DOMContentLoaded', () => {
+  if (DEVICE_ID) {
+    document.getElementById('device-id-header').textContent = '🌱 ' + DEVICE_ID;
+    loadDeviceStatus();
+  }
+});
 
 // ============ State ============
 let selectedFiles = [];
