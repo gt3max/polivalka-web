@@ -528,13 +528,19 @@ function renderResults(results) {
         '</div>';
     }
 
+    // Show care preset badge
+    const care = result.care || {};
+    const presetBadge = care.preset ? `<span style="background:#e8f5e9;color:#2c5f2d;padding:2px 8px;border-radius:10px;font-size:11px;margin-left:8px">${care.preset}</span>` : '';
+    const familyInfo = result.family ? `<div style="font-size:11px;color:#888;margin-top:2px">Family: ${result.family}</div>` : '';
+
     div.innerHTML = `
       <div class="result-header">
         <input type="radio" name="result" class="result-radio" ${index === 0 ? 'checked' : ''}>
         <div class="result-info">
-          <div class="result-name">${result.scientific}</div>
+          <div class="result-name">${result.scientific}${presetBadge}</div>
           <div class="result-common">${result.commonNames.slice(0, 2).join(', ') || 'No common name'}</div>
-          <div class="result-score">${result.score}% match</div>
+          ${familyInfo}
+          <div class="result-score">${result.score}% match${care.watering ? ' • ' + care.watering : ''}</div>
         </div>
       </div>
       ${imagesHtml}
@@ -557,21 +563,25 @@ function selectResult(index) {
 
 // ============ Plant Card ============
 function showPlantCard(result) {
-  // Try to find in local database first
-  let plantData = PLANTS_DATABASE[result.id];
+  // Use care data from API (new format with family mapping)
+  const apiCare = result.care || {};
 
-  if (!plantData) {
-    // Create from result with default category
-    plantData = {
-      id: result.id,
-      scientific: result.scientific,
-      names: { en: result.commonNames[0] || result.scientific },
-      category: 'standard',
-      care: CATEGORIES.standard,
-      tips: ['Research specific care needs for this plant'],
-      photos: result.images
-    };
-  }
+  // Build plantData from API result
+  const plantData = {
+    id: result.id,
+    scientific: result.scientific,
+    family: result.family || 'Unknown',
+    genus: result.genus || '',
+    names: { en: result.commonNames[0] || result.scientific },
+    care: {
+      preset: apiCare.preset || 'Standard',
+      start_pct: apiCare.start_pct || 35,
+      stop_pct: apiCare.stop_pct || 55,
+      watering: apiCare.watering || 'Every 7-10 days',
+      light: apiCare.light || 'Bright indirect light'
+    },
+    photos: result.images || []
+  };
 
   selectedPlant = plantData;
 
@@ -580,21 +590,49 @@ function showPlantCard(result) {
   document.getElementById('card-name').textContent = plantData.names.en || plantData.scientific;
   document.getElementById('card-scientific').textContent = plantData.scientific;
 
-  const allNames = [plantData.names.en, plantData.names.de, plantData.names.ru].filter(Boolean);
-  document.getElementById('card-names').textContent = allNames.join(' / ');
+  // Show family info
+  const familyText = plantData.family ? `Family: ${plantData.family}` : '';
+  document.getElementById('card-names').textContent = familyText;
 
-  // Care info
+  // Care info from API
   const care = plantData.care;
-  document.getElementById('care-watering').textContent = care.watering_days ? `Every ${care.watering_days} days` : 'Varies';
+  document.getElementById('care-watering').textContent = care.watering;
   document.getElementById('care-moisture').textContent = `${care.start_pct}% - ${care.stop_pct}%`;
-  document.getElementById('care-light').textContent = formatSunlight(care.sunlight);
-  document.getElementById('care-temp').textContent = care.temp_min && care.temp_max ? `${care.temp_min}-${care.temp_max}°C` : 'Room temp';
+  document.getElementById('care-light').textContent = care.light;
+  document.getElementById('care-temp').textContent = `Preset: ${care.preset}`;
 
-  // Tips
+  // Tips based on preset
   const tipsList = document.getElementById('care-tips');
-  tipsList.innerHTML = plantData.tips.map(tip => `<li>${tip}</li>`).join('');
+  const tips = getPresetTips(care.preset);
+  tipsList.innerHTML = tips.map(tip => `<li>${tip}</li>`).join('');
 
   showStep('card');
+}
+
+function getPresetTips(preset) {
+  const tips = {
+    'Succulents': [
+      'Let soil dry completely between waterings',
+      'Overwatering is the #1 killer - when in doubt, wait',
+      'Needs good drainage - use cactus soil mix'
+    ],
+    'Standard': [
+      'Water when top inch of soil is dry',
+      'Most forgiving category for beginners',
+      'Avoid direct hot afternoon sun'
+    ],
+    'Tropical': [
+      'Keep soil consistently moist but not soggy',
+      'Mist leaves regularly or use a humidifier',
+      'Protect from cold drafts and dry air'
+    ],
+    'Herbs': [
+      'Keep soil consistently moist',
+      'Needs 6+ hours of sunlight',
+      'Harvest regularly to promote growth'
+    ]
+  };
+  return tips[preset] || tips['Standard'];
 }
 
 function formatSunlight(sunlight) {
