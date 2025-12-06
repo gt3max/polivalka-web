@@ -161,15 +161,17 @@
     <!-- Login Form -->
     <div id="login-form" class="card">
       <h3 style="margin-top:0">Login</h3>
+      <form onsubmit="handleLogin();return false" autocomplete="on">
       <div style="margin-bottom:12px">
         <label style="display:block;font-size:13px;margin-bottom:4px">Email</label>
-        <input type="email" id="login-email" placeholder="your@email.com" style="width:100%;padding:10px;border:1px solid #ccc;border-radius:8px;box-sizing:border-box">
+        <input type="email" id="login-email" placeholder="your@email.com" autocomplete="email" style="width:100%;padding:10px;border:1px solid #ccc;border-radius:8px;box-sizing:border-box">
       </div>
       <div style="margin-bottom:16px">
         <label style="display:block;font-size:13px;margin-bottom:4px">Password</label>
-        <input type="password" id="login-password" placeholder="••••••••" style="width:100%;padding:10px;border:1px solid #ccc;border-radius:8px;box-sizing:border-box">
+        <input type="password" id="login-password" placeholder="••••••••" autocomplete="current-password" style="width:100%;padding:10px;border:1px solid #ccc;border-radius:8px;box-sizing:border-box">
       </div>
-      <button class="primary" style="width:100%;padding:12px" onclick="handleLogin()">Login</button>
+      <button type="submit" class="primary" style="width:100%;padding:12px">Login</button>
+      </form>
       <div style="text-align:center;margin-top:16px">
         <span class="muted">Don't have an account?</span>
         <a href="#" onclick="showRegister();return false" style="color:#2c5f2d;font-weight:600">Register</a>
@@ -181,15 +183,17 @@
     <!-- Register Form -->
     <div id="register-form" class="card" style="display:none">
       <h3 style="margin-top:0">Create Account</h3>
+      <form onsubmit="handleRegister();return false" autocomplete="on">
       <div style="margin-bottom:12px">
         <label style="display:block;font-size:13px;margin-bottom:4px">Email</label>
-        <input type="email" id="register-email" placeholder="your@email.com" style="width:100%;padding:10px;border:1px solid #ccc;border-radius:8px;box-sizing:border-box">
+        <input type="email" id="register-email" placeholder="your@email.com" autocomplete="email" style="width:100%;padding:10px;border:1px solid #ccc;border-radius:8px;box-sizing:border-box">
       </div>
       <div style="margin-bottom:16px">
         <label style="display:block;font-size:13px;margin-bottom:4px">Password (min 8 characters)</label>
-        <input type="password" id="register-password" placeholder="••••••••" style="width:100%;padding:10px;border:1px solid #ccc;border-radius:8px;box-sizing:border-box">
+        <input type="password" id="register-password" placeholder="••••••••" autocomplete="new-password" style="width:100%;padding:10px;border:1px solid #ccc;border-radius:8px;box-sizing:border-box">
       </div>
-      <button class="primary" style="width:100%;padding:12px" onclick="handleRegister()">Register</button>
+      <button type="submit" class="primary" style="width:100%;padding:12px">Register</button>
+      </form>
       <div style="text-align:center;margin-top:16px">
         <span class="muted">Already have an account?</span>
         <a href="#" onclick="showLogin();return false" style="color:#2c5f2d;font-weight:600">Login</a>
