@@ -189,9 +189,25 @@ const API = {
     return response;
   },
 
-  // GET request
+  // GET request with response normalization
   get: async function(path) {
-    return this.fetch(path).then(r => r.json());
+    const data = await this.fetch(path).then(r => r.json());
+    return this.normalize(data, path);
+  },
+
+  // Normalize Cloud response to match Local API format for consistency
+  normalize: function(data, path) {
+    if (!IS_CLOUD || !data) return data;
+
+    // /status endpoint normalization
+    if (path === '/status') {
+      // Cloud uses 'online', Local uses 'wifi_connected' - provide both
+      if (data.online !== undefined && data.wifi_connected === undefined) {
+        data.wifi_connected = data.online;
+      }
+    }
+
+    return data;
   },
 
   // POST request
