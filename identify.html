@@ -236,6 +236,10 @@
           <span class="care-label">Temperature</span>
           <span class="care-value" id="care-temp">-</span>
         </div>
+        <div class="care-item">
+          <span class="care-label">Humidity</span>
+          <span class="care-value" id="care-humidity">-</span>
+        </div>
       </div>
     </div>
 
@@ -690,12 +694,12 @@ function showPlantCard(result) {
   document.getElementById('care-watering').textContent = care.watering;
   document.getElementById('care-moisture').textContent = `${care.start_pct}% - ${care.stop_pct}%`;
   document.getElementById('care-light').textContent = care.light;
-  document.getElementById('care-temp').textContent = `Preset: ${care.preset}`;
+  document.getElementById('care-temp').textContent = care.temperature || '18-24°C';
+  document.getElementById('care-humidity').textContent = care.humidity || 'Average (40-60%)';
 
-  // Tips based on preset
+  // Tips from API
   const tipsList = document.getElementById('care-tips');
-  const tips = getPresetTips(care.preset);
-  tipsList.innerHTML = tips.map(tip => `<li>${tip}</li>`).join('');
+  tipsList.innerHTML = `<li>${care.tips || 'Water when top inch of soil is dry.'}</li>`;
 
   showStep('card');
 }

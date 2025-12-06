@@ -300,7 +300,10 @@ def identify_plant_handler(event, origin):
                     'start_pct': preset['start_pct'],
                     'stop_pct': preset['stop_pct'],
                     'watering': preset['watering_frequency'],
-                    'light': preset['light']
+                    'light': preset['light'],
+                    'temperature': preset['temperature'],
+                    'humidity': preset['humidity'],
+                    'tips': preset['tips']
                 }
             })
 
@@ -372,6 +375,7 @@ PRESET_DETAILS = {
         'watering_frequency': 'Every 2-3 weeks',
         'watering_winter': 'Once a month',
         'light': 'Bright direct or indirect light',
+        'temperature': '18-27°C (65-80°F)',
         'humidity': 'Low (30-40%)',
         'tips': 'Let soil dry completely between waterings. Overwatering is the #1 killer.'
     },
@@ -382,6 +386,7 @@ PRESET_DETAILS = {
         'watering_frequency': 'Every 7-10 days',
         'watering_winter': 'Every 2 weeks',
         'light': 'Bright indirect light',
+        'temperature': '18-24°C (65-75°F)',
         'humidity': 'Average (40-60%)',
         'tips': 'Water when top inch of soil is dry. Most forgiving category.'
     },
@@ -392,6 +397,7 @@ PRESET_DETAILS = {
         'watering_frequency': 'Every 5-7 days',
         'watering_winter': 'Every 10-14 days',
         'light': 'Bright indirect light, no direct sun',
+        'temperature': '21-29°C (70-85°F)',
         'humidity': 'High (60-80%)',
         'tips': 'Keep soil consistently moist but not soggy. Mist leaves or use humidifier.'
     },
@@ -402,6 +408,7 @@ PRESET_DETAILS = {
         'watering_frequency': 'Every 5-7 days',
         'watering_winter': 'Every 7-10 days',
         'light': 'Full sun (6+ hours)',
+        'temperature': '15-24°C (60-75°F)',
         'humidity': 'Average (40-50%)',
         'tips': 'Herbs like consistent moisture. Harvest regularly to promote growth.'
     }
