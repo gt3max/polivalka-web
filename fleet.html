@@ -627,6 +627,22 @@ function renderDevices(devices) {
   // Update container class based on view mode
   container.className = currentView === 'list' ? 'device-list' : 'device-grid';
 
+  // Show welcome message if no devices
+  if (devices.length === 0) {
+    container.innerHTML = `
+      <div class="card" style="text-align:center;padding:32px">
+        <div style="font-size:48px;margin-bottom:16px">🌱</div>
+        <h3 style="margin:0 0 8px">No devices yet</h3>
+        <p class="muted" style="margin:0 0 20px">Add your first device or try our Plant Recognition!</p>
+        <div style="display:flex;gap:12px;justify-content:center;flex-wrap:wrap">
+          <button class="primary" onclick="showClaimModal()" style="padding:12px 24px">➕ Add Device</button>
+          <a href="identify.html" style="text-decoration:none"><button style="padding:12px 24px">🌿 Identify Plant</button></a>
+        </div>
+      </div>
+    `;
+    return;
+  }
+
   devices.forEach(device => {
     const card = createDeviceCard(device);
     container.appendChild(card);
