@@ -1063,7 +1063,7 @@ async function confirmPlant() {
 
   try {
     // 1. Apply watering settings to device
-    await API.post(`/device/${deviceId}/command`, {
+    await API.post('/command', {
       command: 'set_sensor_preset',
       params: {
         preset: care.preset,
@@ -1073,7 +1073,7 @@ async function confirmPlant() {
     });
 
     // 2. Update device name to plant name
-    await API.post(`/device/${deviceId}/info`, {
+    await API.post('/info', {
       name: plantName
     });
 
