@@ -4,7 +4,9 @@
   "users": {
     "mahin84@gmail.com": {
       "status": "active",
-      "devices": [],
+      "devices": [
+        "BC67E9"
+      ],
       "added_at": "2025-12-07"
     }
   }
