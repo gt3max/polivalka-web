@@ -564,10 +564,20 @@ function addFiles(files) {
   const toAdd = files.slice(0, remaining);
 
   toAdd.forEach(file => {
-    if (file.size > 5 * 1024 * 1024) {
-      showToast('File too large (max 5MB)', 'warning');
+    // Validate file size (max 20MB)
+    if (file.size > 20 * 1024 * 1024) {
+      showToast('File too large (max 20MB)', 'warning');
       return;
     }
+
+    // Validate file type (early rejection of non-images)
+    const isImage = file.type.startsWith('image/') ||
+                    file.name.toLowerCase().match(/\.(jpg|jpeg|png|gif|webp|heic|heif|bmp)$/);
+    if (!isImage) {
+      showToast('Please select an image file', 'warning');
+      return;
+    }
+
     selectedFiles.push(file);
   });
 
@@ -750,7 +760,15 @@ async function fileToBase64(file) {
     throw new Error(`File too large (${Math.round(file.size/1024/1024)}MB). Max 20MB.`);
   }
 
+  // Validate file type (security: reject non-images early)
+  const allowedTypes = ['image/jpeg', 'image/png', 'image/webp', 'image/heic', 'image/heif', 'image/gif', 'image/bmp'];
   const isHEIC = isHEICFile(file);
+  const hasValidType = allowedTypes.includes(file.type) || isHEIC || file.type.startsWith('image/');
+
+  if (!hasValidType && file.type) {
+    console.warn(`[Security] Rejected file type: ${file.type}`);
+    throw new Error(`Invalid file type (${file.type}). Please upload an image.`);
+  }
 
   // Try native loading first
   try {
