@@ -1027,7 +1027,7 @@ async function confirmPlant() {
   }
 
   const care = selectedPlant.care;
-  const plantName = selectedPlant.names?.en || selectedPlant.scientific;
+  const plantName = selectedPlant.scientific;  // Scientific name - universal across all languages
 
   // Check if auto-watering is enabled
   let autoWateringOn = false;
