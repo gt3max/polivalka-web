@@ -1091,15 +1091,22 @@ async function loadPlantCard() {
     }
 
     if (toxicHumans || toxicPets) {
-      let warnings = [];
-      if (toxicHumans) warnings.push('humans');
-      if (toxicPets) warnings.push('pets');
-      let label = `⚠️ Toxic to ${warnings.join(' and ')}`;
-      if (toxicitySource === 'family') label += ' (family)';
-      warningEl.innerHTML = label + (toxicityNote ? `<div style="font-size:11px;margin-top:4px;opacity:0.9">ℹ️ ${toxicityNote}</div>` : '');
+      // Show note as main message (less scary than "TOXIC")
+      // Only show "Toxic to..." if no note available
+      let label;
+      if (toxicityNote) {
+        label = `⚠️ ${toxicityNote}`;
+        if (toxicPets) label += ' • Keep away from pets';
+      } else {
+        let warnings = [];
+        if (toxicHumans) warnings.push('humans');
+        if (toxicPets) warnings.push('pets');
+        label = `⚠️ Toxic to ${warnings.join(' and ')}`;
+      }
+      warningEl.innerHTML = label;
       warningEl.style.display = 'block';
-      warningEl.style.background = '#ffebee';
-      warningEl.style.color = '#c62828';
+      warningEl.style.background = '#fff3e0';
+      warningEl.style.color = '#e65100';
     } else if (plant.poisonous_to_pets === undefined && !TOXIC_FAMILIES[plant.family]) {
       // Unknown toxicity - show warning to research
       warningEl.textContent = `⚠️ Toxicity unknown — research before keeping with pets`;

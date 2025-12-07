@@ -911,63 +911,53 @@ function showPlantCard(result) {
   const toxicPetsItem = document.getElementById('toxic-pets-item');
   let showSafety = false;
 
-  // Check if toxicity came from family fallback (in Lambda)
-  const fromFamily = details.toxicity_source === 'family';
-  const familySuffix = fromFamily ? ' <span style="font-size:10px;color:#666">(family)</span>' : '';
-
-  if (details.poisonous_to_humans === true) {
-    toxicHumansItem.style.display = '';
-    document.getElementById('toxic-humans').innerHTML = '⚠️ TOXIC' + familySuffix;
-    showSafety = true;
-  } else if (details.poisonous_to_humans === false) {
-    toxicHumansItem.style.display = '';
-    toxicHumansItem.style.background = '#e8f5e9';
-    document.getElementById('toxic-humans').textContent = '✓ Safe';
-    document.getElementById('toxic-humans').style.color = '#2e7d32';
-    showSafety = true;
-  }
-
-  if (details.poisonous_to_pets === true) {
-    toxicPetsItem.style.display = '';
-    document.getElementById('toxic-pets').innerHTML = '⚠️ TOXIC' + familySuffix;
-    showSafety = true;
-  } else if (details.poisonous_to_pets === false) {
-    toxicPetsItem.style.display = '';
-    toxicPetsItem.style.background = '#e8f5e9';
-    document.getElementById('toxic-pets').textContent = '✓ Safe';
-    document.getElementById('toxic-pets').style.color = '#2e7d32';
-    showSafety = true;
-  }
-
-  // Show toxicity note from Lambda (if available)
-  if (details.toxicity_note && showSafety) {
+  // Show toxicity note as main warning (friendlier than "TOXIC")
+  if (details.toxicity_note) {
     const noteEl = document.createElement('div');
-    noteEl.style.cssText = 'font-size:11px;color:#856404;background:#fff3cd;padding:6px 8px;border-radius:4px;margin-top:6px';
-    noteEl.textContent = `ℹ️ ${details.toxicity_note}`;
-    safetySection.appendChild(noteEl);
+    noteEl.style.cssText = 'font-size:12px;color:#e65100;background:#fff3e0;padding:8px 10px;border-radius:6px;margin-bottom:8px';
+    let noteText = `⚠️ ${details.toxicity_note}`;
+    if (details.poisonous_to_pets) noteText += ' • Keep away from pets';
+    noteEl.textContent = noteText;
+    safetySection.insertBefore(noteEl, safetySection.firstChild);
+    showSafety = true;
+  } else {
+    // No note - show simple labels
+    if (details.poisonous_to_humans === true) {
+      toxicHumansItem.style.display = '';
+      document.getElementById('toxic-humans').textContent = '⚠️ Caution';
+      showSafety = true;
+    } else if (details.poisonous_to_humans === false) {
+      toxicHumansItem.style.display = '';
+      toxicHumansItem.style.background = '#e8f5e9';
+      document.getElementById('toxic-humans').textContent = '✓ Safe';
+      document.getElementById('toxic-humans').style.color = '#2e7d32';
+      showSafety = true;
+    }
+
+    if (details.poisonous_to_pets === true) {
+      toxicPetsItem.style.display = '';
+      document.getElementById('toxic-pets').textContent = '⚠️ Keep away from pets';
+      showSafety = true;
+    } else if (details.poisonous_to_pets === false) {
+      toxicPetsItem.style.display = '';
+      toxicPetsItem.style.background = '#e8f5e9';
+      document.getElementById('toxic-pets').textContent = '✓ Safe';
+      document.getElementById('toxic-pets').style.color = '#2e7d32';
+      showSafety = true;
+    }
   }
 
   // ============ Fallback: Check family toxicity if Lambda didn't have data ============
   if (!showSafety && plantData.family) {
     const familyToxicity = TOXIC_FAMILIES[plantData.family];
-    if (familyToxicity) {
-      if (familyToxicity.humans) {
-        toxicHumansItem.style.display = '';
-        document.getElementById('toxic-humans').innerHTML = '⚠️ TOXIC <span style="font-size:10px;color:#666">(family)</span>';
-        showSafety = true;
-      }
-      if (familyToxicity.pets) {
-        toxicPetsItem.style.display = '';
-        document.getElementById('toxic-pets').innerHTML = '⚠️ TOXIC <span style="font-size:10px;color:#666">(family)</span>';
-        showSafety = true;
-      }
-      // Show note about why it's toxic
-      if (familyToxicity.note) {
-        const noteEl = document.createElement('div');
-        noteEl.style.cssText = 'font-size:11px;color:#856404;background:#fff3cd;padding:6px 8px;border-radius:4px;margin-top:6px';
-        noteEl.textContent = `ℹ️ ${familyToxicity.note}`;
-        safetySection.appendChild(noteEl);
-      }
+    if (familyToxicity && familyToxicity.note) {
+      const noteEl = document.createElement('div');
+      noteEl.style.cssText = 'font-size:12px;color:#e65100;background:#fff3e0;padding:8px 10px;border-radius:6px;margin-bottom:8px';
+      let noteText = `⚠️ ${familyToxicity.note}`;
+      if (familyToxicity.pets) noteText += ' • Keep away from pets';
+      noteEl.textContent = noteText;
+      safetySection.insertBefore(noteEl, safetySection.firstChild);
+      showSafety = true;
       console.log(`[Identify] Toxicity from family ${plantData.family}:`, familyToxicity);
     }
   }
