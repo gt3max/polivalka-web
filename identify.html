@@ -923,8 +923,8 @@ function showPlantCard(result) {
   }
 
   // ============ Fallback: Check family toxicity if Perenual didn't have data ============
-  if (!showSafety && plant.family) {
-    const familyToxicity = TOXIC_FAMILIES[plant.family];
+  if (!showSafety && plantData.family) {
+    const familyToxicity = TOXIC_FAMILIES[plantData.family];
     if (familyToxicity) {
       if (familyToxicity.humans) {
         toxicHumansItem.style.display = '';
@@ -943,7 +943,7 @@ function showPlantCard(result) {
         noteEl.textContent = `ℹ️ ${familyToxicity.note}`;
         safetySection.appendChild(noteEl);
       }
-      console.log(`[Identify] Toxicity from family ${plant.family}:`, familyToxicity);
+      console.log(`[Identify] Toxicity from family ${plantData.family}:`, familyToxicity);
     }
   }
 
