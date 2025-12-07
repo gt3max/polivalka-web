@@ -939,11 +939,10 @@ setTimeout(loadPumpSpeed, 1500);
 async function loadPlantCard() {
   if (!IS_CLOUD) return; // Only in cloud mode
   try {
-    const deviceId = getDeviceId();
-    if (!deviceId) return;
+    if (!DEVICE_ID) return;
 
     // Direct fetch - /plants/list is a global endpoint, not device-prefixed
-    const url = `${API.cloudBase}/plants/list?device_id=${deviceId}`;
+    const url = `${API.cloudBase}/plants/list?device_id=${DEVICE_ID}`;
     const headers = API.getAuthHeaders();
     console.log('[Plant] Fetching:', url);
     const response = await fetch(url, { headers, cache: 'no-store' });
