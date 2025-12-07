@@ -1778,6 +1778,13 @@ def lambda_handler(event, context):
         if path == '/admin/users' and http_method == 'GET':
             return admin_get_users()
 
+        # POST /admin/user/{email}/delete - Delete unverified user
+        if path.startswith('/admin/user/') and path.endswith('/delete') and http_method == 'POST':
+            # Extract email from path: /admin/user/test@example.com/delete
+            email = path.replace('/admin/user/', '').replace('/delete', '')
+            email = urllib.parse.unquote(email)  # Decode URL-encoded email
+            return admin_delete_user(email)
+
     return {
         'statusCode': 404,
         'headers': cors_headers(origin),
@@ -3102,6 +3109,47 @@ def admin_unban_user(email):
         }
     except Exception as e:
         print(f"[Admin] Error unbanning user: {e}")
+        return {
+            'statusCode': 500,
+            'headers': cors_headers(),
+            'body': json.dumps({'error': str(e)})
+        }
+
+
+def admin_delete_user(email):
+    """Delete unverified user (admin only)"""
+    try:
+        users_table = dynamodb.Table('polivalka_users')
+
+        # First check if user exists and is unverified
+        response = users_table.get_item(Key={'email': email})
+        user = response.get('Item')
+
+        if not user:
+            return {
+                'statusCode': 404,
+                'headers': cors_headers(),
+                'body': json.dumps({'error': 'User not found'})
+            }
+
+        if user.get('verified', False):
+            return {
+                'statusCode': 400,
+                'headers': cors_headers(),
+                'body': json.dumps({'error': 'Cannot delete verified user. Use ban instead.'})
+            }
+
+        # Delete unverified user
+        users_table.delete_item(Key={'email': email})
+
+        print(f"[Admin] Unverified user {email} deleted")
+        return {
+            'statusCode': 200,
+            'headers': cors_headers(),
+            'body': json.dumps({'success': True, 'message': f'User {email} deleted'})
+        }
+    except Exception as e:
+        print(f"[Admin] Error deleting user: {e}")
         return {
             'statusCode': 500,
             'headers': cors_headers(),

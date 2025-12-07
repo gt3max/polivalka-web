@@ -162,10 +162,14 @@
 
 <!-- Device History (shows when device selected) -->
 <div class="card" id="device-history-card" style="display:none">
-<h3>📜 Device History</h3>
-<p class="muted">Assignment and claim history for selected device</p>
-<div id="device-history-list" style="margin-top:12px">
-<div class="muted">No history</div>
+<div style="display:flex;justify-content:space-between;align-items:center;cursor:pointer" onclick="toggleHistorySection()">
+  <h3 style="margin:0">📜 Device History</h3>
+  <span id="history-toggle-icon" style="color:#fff;font-size:18px">▼</span>
+</div>
+<div id="device-history-content" style="display:block;margin-top:12px">
+  <div id="device-history-list">
+    <div class="muted">No history</div>
+  </div>
 </div>
 </div>
 
@@ -531,20 +535,20 @@ async function loadDeviceHistoryUI(deviceId) {
     let text = e.event;
     if (e.event === 'assigned') {
       icon = '✅';
-      text = `Assigned to ${e.to}`;
+      text = `Assigned to <span style="color:#4caf50">${e.to}</span>`;
     } else if (e.event === 'unassigned') {
       icon = '❌';
-      text = `Unassigned from ${e.from}`;
+      text = `Unassigned from <span style="color:#ff9800">${e.from}</span>`;
     } else if (e.event === 'claimed') {
       icon = '🔗';
-      text = `Claimed by ${e.by}`;
+      text = `Claimed by <span style="color:#4caf50">${e.by}</span>`;
     } else if (e.event === 'provisioned') {
       icon = '🏭';
       text = 'Provisioned';
     }
-    return `<div style="padding:6px 0;border-bottom:1px solid #333;display:flex;justify-content:space-between">
-      <span>${icon} ${text}</span>
-      <span class="muted" style="font-size:11px">${dateStr}</span>
+    return `<div style="padding:8px 0;border-bottom:1px solid #444;display:flex;justify-content:space-between;align-items:center">
+      <span style="color:#fff;font-size:14px">${icon} ${text}</span>
+      <span style="color:#aaa;font-size:12px">${dateStr}</span>
     </div>`;
   };
 
@@ -574,6 +578,18 @@ function toggleOlderHistory() {
     el.style.display = 'none';
     const count = el.querySelectorAll('div[style*="border-bottom"]').length;
     btn.textContent = `Show ${count} older events ▼`;
+  }
+}
+
+function toggleHistorySection() {
+  const content = document.getElementById('device-history-content');
+  const icon = document.getElementById('history-toggle-icon');
+  if (content.style.display === 'none') {
+    content.style.display = 'block';
+    icon.textContent = '▼';
+  } else {
+    content.style.display = 'none';
+    icon.textContent = '▶';
   }
 }
 
@@ -982,7 +998,26 @@ async function unbanUser(email) {
 }
 
 async function deleteUser(email) {
-  alert('Delete user from AWS is not implemented yet.\nFor now, use AWS Console or let unverified users expire.');
+  if (!confirm(`Delete unverified user ${email}?\n\nThis cannot be undone.`)) return;
+
+  try {
+    const res = await fetch(`${API.cloudBase}/admin/user/${encodeURIComponent(email)}/delete`, {
+      method: 'POST',
+      headers: API.getAuthHeaders()
+    });
+
+    if (res.ok) {
+      showToast(`${email} deleted`, 'success');
+      // Remove from local array and re-render
+      allUsersData = allUsersData.filter(u => u.email !== email);
+      renderUsersList();
+    } else {
+      const data = await res.json().catch(() => ({}));
+      alert('Error: ' + (data.error || 'Failed to delete user'));
+    }
+  } catch(e) {
+    alert('Error: ' + e.message);
+  }
 }
 
 // ============ Device Assignment ============
