@@ -923,19 +923,26 @@ function closeAssignDialog() {
   assignDialogEmail = null;
 }
 
-function confirmAssignDevice() {
+async function confirmAssignDevice() {
   const select = document.getElementById('assign-device-select');
   if (select && assignDialogEmail) {
     const deviceId = select.value;
+    const email = assignDialogEmail;
     closeAssignDialog();
-    assignDevice(assignDialogEmail, deviceId);
+    await assignDevice(email, deviceId);
   }
 }
 
 async function assignDevice(email, deviceId) {
   const shortId = deviceId.replace('Polivalka-', '');
 
+  // Ensure whitelist is loaded
+  if (!whitelistData || !whitelistData.users) {
+    await loadWhitelist();
+  }
+
   if (!whitelistData.users[email]) {
+    console.error('[Admin] User not in whitelist:', email, 'whitelist:', whitelistData);
     alert('User not in whitelist');
     return;
   }
