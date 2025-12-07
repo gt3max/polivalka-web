@@ -1025,7 +1025,7 @@ function formatSunlight(sunlight) {
 
 // ============ Actions ============
 
-// Main action: Apply + Save + Redirect to home
+// Main action: Show confirmation, then Apply + Save + Redirect
 async function confirmPlant() {
   if (!selectedPlant || !selectedResult) return;
 
@@ -1036,6 +1036,35 @@ async function confirmPlant() {
   }
 
   const care = selectedPlant.care;
+  const plantName = selectedPlant.names?.en || selectedPlant.scientific;
+
+  // Check if auto-watering is enabled
+  let autoWateringOn = false;
+  try {
+    const status = await API.get('/sensor/controller/status');
+    autoWateringOn = status.state && status.state !== 'DISABLED';
+  } catch (e) {
+    console.log('Could not check auto-watering status');
+  }
+
+  // Build confirmation message
+  let message = `Binding "${plantName}" to this device:\n\n`;
+  message += `• Device name will change to "${plantName}"\n`;
+  message += `• Sensor mode will use ${care.start_pct}-${care.stop_pct}% moisture range\n`;
+
+  if (autoWateringOn) {
+    message += `\n⚠️ AUTO-WATERING IS ON!\n`;
+    message += `Watering may start immediately if soil moisture is below ${care.start_pct}%.\n`;
+  }
+
+  message += `\nContinue?`;
+
+  // Show confirmation
+  if (!confirm(message)) {
+    return;
+  }
+
+  // User confirmed - proceed
   const btn = document.querySelector('.actions button.primary');
   const originalText = btn.textContent;
   btn.disabled = true;
@@ -1043,8 +1072,7 @@ async function confirmPlant() {
 
   try {
     // 1. Apply watering settings to device
-    await apiCall('command', {
-      device_id: deviceId,
+    await API.post(`/device/${deviceId}/command`, {
       command: 'set_sensor_preset',
       params: {
         preset: care.preset,
@@ -1053,12 +1081,17 @@ async function confirmPlant() {
       }
     });
 
-    // 2. Save plant to profile
+    // 2. Update device name to plant name
+    await API.post(`/device/${deviceId}/info`, {
+      name: plantName
+    });
+
+    // 3. Save plant to profile
     await saveToProfile();
 
-    // 3. Success - redirect to home
+    // 4. Success - redirect to home
     btn.textContent = '✓ Saved!';
-    showToast('Plant saved! Redirecting...', 'success');
+    showToast('Plant bound to device!', 'success');
 
     setTimeout(() => {
       window.location.href = `home.html?device=${deviceId}`;
