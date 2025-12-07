@@ -211,6 +211,173 @@
 <script>
 let selectedDeviceId = null;
 
+// ============ GitHub API для работы с JSON файлами ============
+const GITHUB_REPO = 'gt3max/polivalka-web';
+const GITHUB_BRANCH = 'main';
+
+// Получить токен из localStorage или запросить
+function getGitHubToken() {
+  let token = localStorage.getItem('github_token');
+  if (!token) {
+    token = prompt('Enter GitHub Personal Access Token (for Admin Panel):');
+    if (token) {
+      localStorage.setItem('github_token', token);
+    }
+  }
+  return token;
+}
+
+// Прочитать JSON файл из GitHub
+async function readGitHubFile(path) {
+  try {
+    const res = await fetch(`https://api.github.com/repos/${GITHUB_REPO}/contents/${path}?ref=${GITHUB_BRANCH}`, {
+      headers: { 'Accept': 'application/vnd.github.v3+json' },
+      cache: 'no-store'
+    });
+    if (!res.ok) {
+      if (res.status === 404) return null;
+      throw new Error(`GitHub API error: ${res.status}`);
+    }
+    const data = await res.json();
+    const content = atob(data.content);
+    return { content: JSON.parse(content), sha: data.sha };
+  } catch (e) {
+    console.error('[GitHub] Read error:', e);
+    return null;
+  }
+}
+
+// Записать JSON файл в GitHub
+async function writeGitHubFile(path, content, sha, message) {
+  const token = getGitHubToken();
+  if (!token) {
+    alert('GitHub token required for write operations');
+    return false;
+  }
+
+  try {
+    const body = {
+      message: message || `Update ${path}`,
+      content: btoa(JSON.stringify(content, null, 2)),
+      branch: GITHUB_BRANCH
+    };
+    if (sha) body.sha = sha;
+
+    const res = await fetch(`https://api.github.com/repos/${GITHUB_REPO}/contents/${path}`, {
+      method: 'PUT',
+      headers: {
+        'Authorization': `token ${token}`,
+        'Accept': 'application/vnd.github.v3+json',
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(body)
+    });
+
+    if (!res.ok) {
+      const err = await res.json();
+      if (res.status === 401) {
+        localStorage.removeItem('github_token');
+        alert('Invalid GitHub token. Please reload and enter a valid token.');
+      } else {
+        alert(`GitHub write error: ${err.message || res.status}`);
+      }
+      return false;
+    }
+
+    console.log('[GitHub] File updated:', path);
+    return true;
+  } catch (e) {
+    console.error('[GitHub] Write error:', e);
+    alert('GitHub write failed: ' + e.message);
+    return false;
+  }
+}
+
+// ============ Whitelist операции ============
+let whitelistData = null;
+let whitelistSha = null;
+
+async function loadWhitelist() {
+  const result = await readGitHubFile('data/whitelist.json');
+  if (result) {
+    whitelistData = result.content;
+    whitelistSha = result.sha;
+  } else {
+    whitelistData = { users: {} };
+    whitelistSha = null;
+  }
+  return whitelistData;
+}
+
+async function saveWhitelist(message) {
+  whitelistData._updated = new Date().toISOString().split('T')[0];
+  const success = await writeGitHubFile('data/whitelist.json', whitelistData, whitelistSha, message);
+  if (success) {
+    // Reload to get new SHA
+    await loadWhitelist();
+  }
+  return success;
+}
+
+// ============ Device History операции ============
+let historyData = null;
+let historySha = null;
+
+async function loadDeviceHistory() {
+  const result = await readGitHubFile('data/device_history.json');
+  if (result) {
+    historyData = result.content;
+    historySha = result.sha;
+  } else {
+    historyData = { devices: {} };
+    historySha = null;
+  }
+  return historyData;
+}
+
+async function addDeviceHistoryEntry(deviceId, event) {
+  if (!historyData) await loadDeviceHistory();
+
+  const shortId = deviceId.replace('Polivalka-', '');
+  if (!historyData.devices[shortId]) {
+    historyData.devices[shortId] = [];
+  }
+
+  historyData.devices[shortId].push({
+    ...event,
+    timestamp: new Date().toISOString()
+  });
+
+  historyData._updated = new Date().toISOString().split('T')[0];
+  return await writeGitHubFile('data/device_history.json', historyData, historySha,
+    `History: ${event.event} for ${shortId}`);
+}
+
+// ============ Pending Claims операции ============
+let pendingData = null;
+let pendingSha = null;
+
+async function loadPendingClaims() {
+  const result = await readGitHubFile('data/pending_claims.json');
+  if (result) {
+    pendingData = result.content;
+    pendingSha = result.sha;
+  } else {
+    pendingData = { claims: [] };
+    pendingSha = null;
+  }
+  return pendingData;
+}
+
+async function savePendingClaims(message) {
+  pendingData._updated = new Date().toISOString().split('T')[0];
+  const success = await writeGitHubFile('data/pending_claims.json', pendingData, pendingSha, message);
+  if (success) {
+    await loadPendingClaims();
+  }
+  return success;
+}
+
 // Load device list - call /devices directly (no device prefix!)
 async function loadDevices() {
   console.log('[Admin] Loading devices...');
