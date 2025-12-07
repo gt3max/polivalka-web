@@ -1165,15 +1165,23 @@ async function saveToProfile() {
   };
 
   try {
-    const response = await API.post('/plants/save', {
-      device_id: deviceId,
-      plant: plantData
+    // Direct fetch - /plants/save is a global endpoint, not device-prefixed
+    const url = `${CONFIG.apiUrl}/plants/save`;
+    const headers = {
+      'Content-Type': 'application/json',
+      ...API.getAuthHeaders()
+    };
+    const response = await fetch(url, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ device_id: deviceId, plant: plantData })
     });
+    const data = await response.json();
 
-    if (response.success) {
+    if (data.success) {
       showToast('Plant saved to profile!', 'success');
     } else {
-      throw new Error(response.error || 'Save failed');
+      throw new Error(data.error || 'Save failed');
     }
 
   } catch (err) {

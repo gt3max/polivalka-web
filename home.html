@@ -942,7 +942,12 @@ async function loadPlantCard() {
     const deviceId = getDeviceId();
     if (!deviceId) return;
 
-    const resp = await API.get(`/plants/list?device_id=${deviceId}`);
+    // Direct fetch - /plants/list is a global endpoint, not device-prefixed
+    const url = `${API.cloudBase}/plants/list?device_id=${deviceId}`;
+    const headers = API.getAuthHeaders();
+    const response = await fetch(url, { headers, cache: 'no-store' });
+    if (!response.ok) throw new Error('Failed to load plants');
+    const resp = await response.json();
     const plants = resp.plants || [];
 
     // Get the most recent active plant
