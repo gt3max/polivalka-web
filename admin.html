@@ -940,8 +940,9 @@ function renderUsersList() {
     // Action buttons based on status
     let actions = '';
     if (isAdmin) {
-      // Admin can also have devices assigned (for viewing/testing)
-      actions = `<button onclick="toggleUserDevices('${email}')" style="font-size:11px;padding:4px 8px">📱 Devices (${userDevices.length})</button>`;
+      // Admin sees ALL devices (total count), not whitelist-assigned
+      const totalDevices = allDevicesData.length;
+      actions = `<button onclick="toggleUserDevices('${email}')" style="font-size:11px;padding:4px 8px">📱 Devices (all ${totalDevices})</button>`;
     } else if (isBanned) {
       actions = `<button onclick="unbanUser('${email}')" style="font-size:11px;padding:4px 8px">Unban</button>`;
     } else if (isSuspended) {
@@ -966,22 +967,42 @@ function renderUsersList() {
 
     // Devices section (expandable) - show for Admin and Whitelisted users
     const canHaveDevices = isAdmin || isWhitelisted;
-    const devicesSection = canHaveDevices && userDevices.length > 0 ? `
-      <div id="devices-${email.replace(/[@.]/g, '_')}" style="display:none;margin-top:8px;padding:8px;background:#1a1a2e;border-radius:8px">
-        ${userDevices.map(devId => `
-          <div style="display:flex;justify-content:space-between;align-items:center;padding:4px 0">
-            <span class="mono" style="color:#4caf50">📱 ${devId}</span>
-            <button onclick="unassignDevice('${email}', '${devId}')" style="font-size:10px;padding:2px 6px">Unassign</button>
-          </div>
-        `).join('')}
-        <button onclick="showAssignDeviceDialog('${email}')" style="font-size:11px;padding:4px 8px;margin-top:8px">+ Assign device</button>
-      </div>
-    ` : (canHaveDevices ? `
-      <div id="devices-${email.replace(/[@.]/g, '_')}" style="display:none;margin-top:8px;padding:8px;background:#1a1a2e;border-radius:8px">
-        <div class="muted">No devices assigned</div>
-        <button onclick="showAssignDeviceDialog('${email}')" style="font-size:11px;padding:4px 8px;margin-top:8px">+ Assign device</button>
-      </div>
-    ` : '');
+
+    // Admin sees ALL devices (read-only list), others see assigned devices
+    let devicesSection = '';
+    if (isAdmin) {
+      // Admin: show all devices (no assign/unassign - Admin has access to all by default)
+      devicesSection = `
+        <div id="devices-${email.replace(/[@.]/g, '_')}" style="display:none;margin-top:8px;padding:8px;background:#1a1a2e;border-radius:8px">
+          <div class="muted" style="margin-bottom:8px">Admin has full access to all devices</div>
+          ${allDevicesData.map(d => {
+            const shortId = d.device_id.replace('Polivalka-', '');
+            const name = d.name && d.name !== d.device_id ? ` "${d.name}"` : '';
+            const status = d.online ? '🟢' : '⚪';
+            return `<div style="padding:4px 0"><span class="mono" style="color:#4caf50">${status} ${shortId}</span>${name}</div>`;
+          }).join('')}
+        </div>
+      `;
+    } else if (canHaveDevices && userDevices.length > 0) {
+      devicesSection = `
+        <div id="devices-${email.replace(/[@.]/g, '_')}" style="display:none;margin-top:8px;padding:8px;background:#1a1a2e;border-radius:8px">
+          ${userDevices.map(devId => `
+            <div style="display:flex;justify-content:space-between;align-items:center;padding:4px 0">
+              <span class="mono" style="color:#4caf50">📱 ${devId}</span>
+              <button onclick="unassignDevice('${email}', '${devId}')" style="font-size:10px;padding:2px 6px">Unassign</button>
+            </div>
+          `).join('')}
+          <button onclick="showAssignDeviceDialog('${email}')" style="font-size:11px;padding:4px 8px;margin-top:8px">+ Assign device</button>
+        </div>
+      `;
+    } else if (canHaveDevices) {
+      devicesSection = `
+        <div id="devices-${email.replace(/[@.]/g, '_')}" style="display:none;margin-top:8px;padding:8px;background:#1a1a2e;border-radius:8px">
+          <div class="muted">No devices assigned</div>
+          <button onclick="showAssignDeviceDialog('${email}')" style="font-size:11px;padding:4px 8px;margin-top:8px">+ Assign device</button>
+        </div>
+      `;
+    }
 
     const lastLogin = u.last_login ? new Date(u.last_login).toLocaleDateString() : 'Never';
 
