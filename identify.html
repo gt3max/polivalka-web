@@ -325,9 +325,6 @@
       <button class="primary" onclick="confirmPlant()" style="width:100%;padding:14px;font-size:16px">
         ✓ Use This Plant
       </button>
-      <p class="muted" style="text-align:center;margin:12px 0 0;font-size:12px">
-        <a href="#" onclick="goToManualSettings();return false">or configure manually</a>
-      </p>
     </div>
   </div>
 
@@ -1196,14 +1193,6 @@ async function saveToProfile() {
   }
 }
 
-function goToManualSettings() {
-  const deviceId = getDeviceId();
-  if (deviceId) {
-    window.location.href = `sensor.html?device=${deviceId}`;
-  } else {
-    showToast('No device selected', 'warning');
-  }
-}
 
 // ============ Navigation ============
 function showStep(step) {
