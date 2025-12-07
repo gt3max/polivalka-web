@@ -905,8 +905,10 @@ function renderUsersList() {
 
   // Sort: Admin first, then alphabetically
   const sortedUsers = [...allUsersData].sort((a, b) => {
-    if (a.is_admin && !b.is_admin) return -1;
-    if (!a.is_admin && b.is_admin) return 1;
+    const aIsAdmin = ADMIN_EMAILS.includes(a.email.toLowerCase());
+    const bIsAdmin = ADMIN_EMAILS.includes(b.email.toLowerCase());
+    if (aIsAdmin && !bIsAdmin) return -1;
+    if (!aIsAdmin && bIsAdmin) return 1;
     return a.email.localeCompare(b.email);
   });
 
@@ -915,7 +917,8 @@ function renderUsersList() {
     const isWhitelisted = !!whitelistUsers[email];
     const isBanned = whitelistUsers[email]?.status === 'banned';
     const isSuspended = whitelistUsers[email]?.status === 'suspended';
-    const isAdmin = u.is_admin;
+    // Use ADMIN_EMAILS from common.js (not u.is_admin from DynamoDB which may not be set)
+    const isAdmin = ADMIN_EMAILS.includes(email.toLowerCase());
     const verified = u.verified;
 
     // Get devices assigned to this user
