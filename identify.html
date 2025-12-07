@@ -187,7 +187,7 @@
   <!-- Loading -->
   <div id="loading" class="card loading" style="display:none">
     <div class="spinner"></div>
-    <div>Analyzing your plant...</div>
+    <div id="loading-text">Analyzing your plant...</div>
   </div>
 
   <!-- Error -->
@@ -670,26 +670,46 @@ async function identifyPlant() {
   }
 }
 
-// Compress and convert image to base64 (max 1024px, JPEG 70%)
-function fileToBase64(file) {
+// Lazy load heic2any library for Windows/Linux HEIC support
+let heic2anyLoaded = false;
+async function loadHeic2Any() {
+  if (heic2anyLoaded) return;
+  await new Promise((resolve, reject) => {
+    const script = document.createElement('script');
+    script.src = 'https://cdn.jsdelivr.net/npm/heic2any@0.0.4/dist/heic2any.min.js';
+    script.onload = () => { heic2anyLoaded = true; resolve(); };
+    script.onerror = () => reject(new Error('Failed to load HEIC converter'));
+    document.head.appendChild(script);
+  });
+}
+
+// Check if file is HEIC format
+function isHEICFile(file) {
+  return file.type === 'image/heic' || file.type === 'image/heif' ||
+         file.name.toLowerCase().endsWith('.heic') || file.name.toLowerCase().endsWith('.heif');
+}
+
+// Convert HEIC to JPEG blob using heic2any
+async function convertHEIC(file) {
+  console.log('[HEIC] Converting on Windows/Linux...');
+  const loadingText = document.getElementById('loading-text');
+  if (loadingText) loadingText.textContent = 'Converting HEIC format...';
+  await loadHeic2Any();
+  const blob = await heic2any({ blob: file, toType: 'image/jpeg', quality: 0.8 });
+  if (loadingText) loadingText.textContent = 'Analyzing your plant...';
+  console.log('[HEIC] Conversion done');
+  return Array.isArray(blob) ? blob[0] : blob;
+}
+
+// Compress image using Canvas (max 1024px, JPEG 70%)
+function compressWithCanvas(blob, fileName) {
   return new Promise((resolve, reject) => {
-    // Check file size (max 20MB raw)
-    const MAX_FILE_SIZE = 20 * 1024 * 1024;
-    if (file.size > MAX_FILE_SIZE) {
-      reject(new Error(`File too large (${Math.round(file.size/1024/1024)}MB). Max 20MB.`));
-      return;
-    }
-
-    const isHEIC = file.type === 'image/heic' || file.type === 'image/heif' ||
-                   file.name.toLowerCase().endsWith('.heic') || file.name.toLowerCase().endsWith('.heif');
-
     const img = new Image();
-    const objectUrl = URL.createObjectURL(file);
+    const objectUrl = URL.createObjectURL(blob);
 
     img.onload = () => {
-      URL.revokeObjectURL(objectUrl); // Clean up memory
+      URL.revokeObjectURL(objectUrl);
 
-      // Calculate new dimensions (max 1024px on longest side)
       const MAX_SIZE = 1024;
       let width = img.width;
       let height = img.height;
@@ -702,30 +722,51 @@ function fileToBase64(file) {
         height = MAX_SIZE;
       }
 
-      // Draw to canvas and compress
       const canvas = document.createElement('canvas');
       canvas.width = width;
       canvas.height = height;
       const ctx = canvas.getContext('2d');
       ctx.drawImage(img, 0, 0, width, height);
 
-      // Convert to JPEG at 70% quality (~100-300KB typically)
       const compressed = canvas.toDataURL('image/jpeg', 0.7);
-      console.log(`[Compress] ${file.name}: ${img.width}x${img.height} → ${width}x${height}, ~${Math.round(compressed.length/1024)}KB`);
+      console.log(`[Compress] ${fileName}: ${img.width}x${img.height} → ${width}x${height}, ~${Math.round(compressed.length/1024)}KB`);
       resolve(compressed);
     };
 
     img.onerror = () => {
       URL.revokeObjectURL(objectUrl);
-      if (isHEIC) {
-        reject(new Error('HEIC format not supported by your browser. Please convert to JPG or use Safari/Chrome on Mac.'));
-      } else {
-        reject(new Error(`Cannot read image. Try a different file format (JPG, PNG).`));
-      }
+      reject(new Error('Cannot read image'));
     };
 
     img.src = objectUrl;
   });
+}
+
+// Main function: convert file to base64 with compression
+async function fileToBase64(file) {
+  // Check file size (max 20MB raw)
+  const MAX_FILE_SIZE = 20 * 1024 * 1024;
+  if (file.size > MAX_FILE_SIZE) {
+    throw new Error(`File too large (${Math.round(file.size/1024/1024)}MB). Max 20MB.`);
+  }
+
+  const isHEIC = isHEICFile(file);
+
+  // Try native loading first
+  try {
+    return await compressWithCanvas(file, file.name);
+  } catch (e) {
+    // If native failed and it's HEIC, try heic2any converter (Windows/Linux)
+    if (isHEIC) {
+      try {
+        const jpegBlob = await convertHEIC(file);
+        return await compressWithCanvas(jpegBlob, file.name);
+      } catch (heicError) {
+        throw new Error('Cannot convert HEIC. Try converting to JPG first.');
+      }
+    }
+    throw new Error('Cannot read image. Try JPG or PNG format.');
+  }
 }
 
 // ============ Results Rendering ============
