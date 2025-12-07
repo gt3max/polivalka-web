@@ -945,9 +945,12 @@ async function loadPlantCard() {
     // Direct fetch - /plants/list is a global endpoint, not device-prefixed
     const url = `${API.cloudBase}/plants/list?device_id=${deviceId}`;
     const headers = API.getAuthHeaders();
+    console.log('[Plant] Fetching:', url);
     const response = await fetch(url, { headers, cache: 'no-store' });
-    if (!response.ok) throw new Error('Failed to load plants');
+    console.log('[Plant] Response status:', response.status);
+    if (!response.ok) throw new Error('Failed to load plants: ' + response.status);
     const resp = await response.json();
+    console.log('[Plant] Data:', resp);
     const plants = resp.plants || [];
 
     // Get the most recent active plant
@@ -979,7 +982,7 @@ async function loadPlantCard() {
       img.style.display = 'block';
     }
   } catch (e) {
-    console.log('No plant saved yet');
+    console.log('[Plant] Error loading plant:', e.message);
   }
 }
 setTimeout(loadPlantCard, 500);
