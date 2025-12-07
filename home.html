@@ -980,6 +980,39 @@ async function loadPlantCard() {
       img.src = plant.image_url;
       img.style.display = 'block';
     }
+
+    // Add toxicity warning if needed
+    let warningEl = document.getElementById('plant-warning');
+    if (!warningEl) {
+      warningEl = document.createElement('div');
+      warningEl.id = 'plant-warning';
+      warningEl.style.cssText = 'margin-top:8px;padding:6px 10px;background:#ffebee;border-radius:6px;font-size:12px;color:#c62828;display:none';
+      card.appendChild(warningEl);
+    }
+    const toxicHumans = plant.poisonous_to_humans === true;
+    const toxicPets = plant.poisonous_to_pets === true;
+    if (toxicHumans || toxicPets) {
+      let warnings = [];
+      if (toxicHumans) warnings.push('humans');
+      if (toxicPets) warnings.push('pets');
+      warningEl.textContent = `⚠️ Toxic to ${warnings.join(' and ')}`;
+      warningEl.style.display = 'block';
+    }
+
+    // Add family and care level
+    let infoEl = document.getElementById('plant-extra-info');
+    if (!infoEl) {
+      infoEl = document.createElement('div');
+      infoEl.id = 'plant-extra-info';
+      infoEl.style.cssText = 'font-size:11px;color:#666;margin-top:4px';
+      document.getElementById('plant-scientific').after(infoEl);
+    }
+    let infoParts = [];
+    if (plant.family) infoParts.push(plant.family);
+    if (plant.care_level) infoParts.push(plant.care_level + ' care');
+    if (plant.indoor === true) infoParts.push('Indoor');
+    if (plant.indoor === false) infoParts.push('Outdoor');
+    infoEl.textContent = infoParts.join(' • ');
   } catch (e) {
     console.log('[Plant] Error loading plant:', e.message);
   }
