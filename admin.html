@@ -256,9 +256,14 @@ async function writeGitHubFile(path, content, sha, message) {
   }
 
   try {
+    // Use TextEncoder for proper UTF-8 support (btoa fails with non-ASCII)
+    const jsonStr = JSON.stringify(content, null, 2);
+    const utf8Bytes = new TextEncoder().encode(jsonStr);
+    const base64 = btoa(String.fromCharCode(...utf8Bytes));
+
     const body = {
       message: message || `Update ${path}`,
-      content: btoa(JSON.stringify(content, null, 2)),
+      content: base64,
       branch: GITHUB_BRANCH
     };
     if (sha) body.sha = sha;
@@ -336,7 +341,8 @@ async function loadDeviceHistory() {
 }
 
 async function addDeviceHistoryEntry(deviceId, event) {
-  if (!historyData) await loadDeviceHistory();
+  // Always reload to get fresh SHA (avoids conflicts after whitelist save)
+  await loadDeviceHistory();
 
   const shortId = deviceId.replace('Polivalka-', '');
   if (!historyData.devices[shortId]) {
@@ -349,8 +355,12 @@ async function addDeviceHistoryEntry(deviceId, event) {
   });
 
   historyData._updated = new Date().toISOString().split('T')[0];
-  return await writeGitHubFile('data/device_history.json', historyData, historySha,
+  const success = await writeGitHubFile('data/device_history.json', historyData, historySha,
     `History: ${event.event} for ${shortId}`);
+
+  // Reload to get new SHA for next write
+  if (success) await loadDeviceHistory();
+  return success;
 }
 
 // ============ Pending Claims операции ============
@@ -701,32 +711,34 @@ function renderUsersList() {
 
     // Action buttons based on status
     let actions = '';
-    if (!isAdmin) {
-      if (isBanned) {
-        actions = `<button onclick="unbanUser('${email}')" style="font-size:11px;padding:4px 8px">Unban</button>`;
-      } else if (isSuspended) {
-        actions = `
-          <button onclick="unsuspendUser('${email}')" style="font-size:11px;padding:4px 8px">Unsuspend</button>
-          <button onclick="banUser('${email}')" style="font-size:11px;padding:4px 8px;background:#f44;color:#fff;border-color:#f44">Ban</button>
-        `;
-      } else if (isWhitelisted) {
-        actions = `
-          <button onclick="toggleUserDevices('${email}')" style="font-size:11px;padding:4px 8px">📱 Devices (${userDevices.length})</button>
-          <button onclick="suspendUser('${email}')" style="font-size:11px;padding:4px 8px">Suspend</button>
-          <button onclick="removeFromWhitelist('${email}')" style="font-size:11px;padding:4px 8px">Remove</button>
-        `;
-      } else if (verified) {
-        actions = `
-          <button onclick="addToWhitelist('${email}')" style="font-size:11px;padding:4px 8px;background:#4caf50;color:#fff;border-color:#4caf50">+ Whitelist</button>
-          <button onclick="banUser('${email}')" style="font-size:11px;padding:4px 8px">Ban</button>
-        `;
-      } else {
-        actions = `<button onclick="deleteUser('${email}')" style="font-size:11px;padding:4px 8px">Delete</button>`;
-      }
+    if (isAdmin) {
+      // Admin can also have devices assigned (for viewing/testing)
+      actions = `<button onclick="toggleUserDevices('${email}')" style="font-size:11px;padding:4px 8px">📱 Devices (${userDevices.length})</button>`;
+    } else if (isBanned) {
+      actions = `<button onclick="unbanUser('${email}')" style="font-size:11px;padding:4px 8px">Unban</button>`;
+    } else if (isSuspended) {
+      actions = `
+        <button onclick="unsuspendUser('${email}')" style="font-size:11px;padding:4px 8px">Unsuspend</button>
+        <button onclick="banUser('${email}')" style="font-size:11px;padding:4px 8px;background:#f44;color:#fff;border-color:#f44">Ban</button>
+      `;
+    } else if (isWhitelisted) {
+      actions = `
+        <button onclick="toggleUserDevices('${email}')" style="font-size:11px;padding:4px 8px">📱 Devices (${userDevices.length})</button>
+        <button onclick="suspendUser('${email}')" style="font-size:11px;padding:4px 8px">Suspend</button>
+        <button onclick="removeFromWhitelist('${email}')" style="font-size:11px;padding:4px 8px">Remove</button>
+      `;
+    } else if (verified) {
+      actions = `
+        <button onclick="addToWhitelist('${email}')" style="font-size:11px;padding:4px 8px;background:#4caf50;color:#fff;border-color:#4caf50">+ Whitelist</button>
+        <button onclick="banUser('${email}')" style="font-size:11px;padding:4px 8px">Ban</button>
+      `;
+    } else {
+      actions = `<button onclick="deleteUser('${email}')" style="font-size:11px;padding:4px 8px">Delete</button>`;
     }
 
-    // Devices section (expandable)
-    const devicesSection = isWhitelisted && userDevices.length > 0 ? `
+    // Devices section (expandable) - show for Admin and Whitelisted users
+    const canHaveDevices = isAdmin || isWhitelisted;
+    const devicesSection = canHaveDevices && userDevices.length > 0 ? `
       <div id="devices-${email.replace(/[@.]/g, '_')}" style="display:none;margin-top:8px;padding:8px;background:#1a1a2e;border-radius:8px">
         ${userDevices.map(devId => `
           <div style="display:flex;justify-content:space-between;align-items:center;padding:4px 0">
@@ -736,7 +748,7 @@ function renderUsersList() {
         `).join('')}
         <button onclick="showAssignDeviceDialog('${email}')" style="font-size:11px;padding:4px 8px;margin-top:8px">+ Assign device</button>
       </div>
-    ` : (isWhitelisted ? `
+    ` : (canHaveDevices ? `
       <div id="devices-${email.replace(/[@.]/g, '_')}" style="display:none;margin-top:8px;padding:8px;background:#1a1a2e;border-radius:8px">
         <div class="muted">No devices assigned</div>
         <button onclick="showAssignDeviceDialog('${email}')" style="font-size:11px;padding:4px 8px;margin-top:8px">+ Assign device</button>
@@ -962,10 +974,21 @@ async function assignDevice(email, deviceId) {
     await loadWhitelist();
   }
 
+  // Auto-add admin to whitelist if not there
   if (!whitelistData.users[email]) {
-    console.error('[Admin] User not in whitelist:', email, 'whitelist:', whitelistData);
-    alert('User not in whitelist');
-    return;
+    const isAdminEmail = ADMIN_EMAILS.includes(email.toLowerCase());
+    if (isAdminEmail) {
+      whitelistData.users[email] = {
+        status: 'active',
+        devices: [],
+        added_at: new Date().toISOString().split('T')[0]
+      };
+      console.log('[Admin] Auto-added admin to whitelist:', email);
+    } else {
+      console.error('[Admin] User not in whitelist:', email, 'whitelist:', whitelistData);
+      alert('User not in whitelist');
+      return;
+    }
   }
 
   if (!whitelistData.users[email].devices) {
