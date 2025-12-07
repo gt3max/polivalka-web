@@ -160,6 +160,15 @@
 </div>
 </div>
 
+<!-- Registered Users -->
+<div class="card">
+<h3>👥 Registered Users</h3>
+<p class="muted">All users with accounts on the platform</p>
+<div id="users-list" style="margin-top:12px">
+<div class="muted">Loading...</div>
+</div>
+</div>
+
 <!-- Archived Devices -->
 <div class="card">
 <h3>🗄️ Archived Devices</h3>
@@ -443,6 +452,40 @@ function updateCostEstimate() {
 // ============ Device Management Functions ============
 
 // Load archived devices list
+async function loadUsers() {
+  const container = document.getElementById('users-list');
+  try {
+    const res = await fetch(`${API.cloudBase}/admin/users`, {
+      headers: API.getAuthHeaders()
+    });
+    if (!res.ok) throw new Error('Failed to load');
+    const users = await res.json();
+
+    if (users.length === 0) {
+      container.innerHTML = '<div class="muted">No registered users</div>';
+      return;
+    }
+
+    container.innerHTML = users.map(u => {
+      const verified = u.verified ? '✅' : '❌';
+      const admin = u.is_admin ? ' 👑' : '';
+      const deviceCount = (u.devices || []).length;
+      const lastLogin = u.last_login ? new Date(u.last_login).toLocaleDateString() : 'Never';
+      const created = u.created_at ? new Date(u.created_at).toLocaleDateString() : '—';
+      return `
+        <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid #333">
+          <div>
+            <span style="color:#fff">${verified} ${u.email}${admin}</span>
+            <div class="muted" style="font-size:11px">Devices: ${deviceCount} • Last login: ${lastLogin} • Registered: ${created}</div>
+          </div>
+        </div>
+      `;
+    }).join('');
+  } catch(e) {
+    container.innerHTML = '<div class="danger">Error loading users</div>';
+  }
+}
+
 async function loadArchivedDevices() {
   const container = document.getElementById('archived-list');
   try {
@@ -687,6 +730,7 @@ if (checkAdminAccess()) {
       }
     }
   });
+  loadUsers();           // Independent of device selection
   loadArchivedDevices();
   loadDeletedDevices();
   updateCostEstimate();
