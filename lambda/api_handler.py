@@ -3020,9 +3020,12 @@ def admin_get_users():
                 'email': item.get('email', '?'),
                 'verified': item.get('verified', False),
                 'is_admin': item.get('is_admin', False),
+                'status': item.get('status', 'active'),  # active, suspended, banned
                 'devices': item.get('devices', []),
                 'created_at': item.get('created_at', ''),
-                'last_login': item.get('last_login', '')
+                'last_login': item.get('last_login', ''),
+                'banned_at': item.get('banned_at', ''),
+                'suspended_at': item.get('suspended_at', '')
             })
 
         # Sort by created_at descending (newest first)
@@ -3035,6 +3038,132 @@ def admin_get_users():
         }
     except Exception as e:
         print(f"[Admin] Error getting users: {e}")
+        return {
+            'statusCode': 500,
+            'headers': cors_headers(),
+            'body': json.dumps({'error': str(e)})
+        }
+
+
+def admin_ban_user(email):
+    """Ban a user (admin only)"""
+    try:
+        users_table = dynamodb.Table('polivalka_users')
+
+        # Update user status to banned
+        response = users_table.update_item(
+            Key={'email': email},
+            UpdateExpression='SET #status = :status, banned_at = :banned_at',
+            ExpressionAttributeNames={'#status': 'status'},
+            ExpressionAttributeValues={
+                ':status': 'banned',
+                ':banned_at': datetime.utcnow().isoformat()
+            },
+            ReturnValues='ALL_NEW'
+        )
+
+        print(f"[Admin] User {email} banned")
+        return {
+            'statusCode': 200,
+            'headers': cors_headers(),
+            'body': json.dumps({'success': True, 'message': f'User {email} banned'})
+        }
+    except Exception as e:
+        print(f"[Admin] Error banning user: {e}")
+        return {
+            'statusCode': 500,
+            'headers': cors_headers(),
+            'body': json.dumps({'error': str(e)})
+        }
+
+
+def admin_unban_user(email):
+    """Unban a user (admin only)"""
+    try:
+        users_table = dynamodb.Table('polivalka_users')
+
+        # Update user status back to active
+        response = users_table.update_item(
+            Key={'email': email},
+            UpdateExpression='SET #status = :status, banned_at = :banned_at',
+            ExpressionAttributeNames={'#status': 'status'},
+            ExpressionAttributeValues={
+                ':status': 'active',
+                ':banned_at': ''
+            },
+            ReturnValues='ALL_NEW'
+        )
+
+        print(f"[Admin] User {email} unbanned")
+        return {
+            'statusCode': 200,
+            'headers': cors_headers(),
+            'body': json.dumps({'success': True, 'message': f'User {email} unbanned'})
+        }
+    except Exception as e:
+        print(f"[Admin] Error unbanning user: {e}")
+        return {
+            'statusCode': 500,
+            'headers': cors_headers(),
+            'body': json.dumps({'error': str(e)})
+        }
+
+
+def admin_suspend_user(email):
+    """Suspend a user - limited access (admin only)"""
+    try:
+        users_table = dynamodb.Table('polivalka_users')
+
+        response = users_table.update_item(
+            Key={'email': email},
+            UpdateExpression='SET #status = :status, suspended_at = :suspended_at',
+            ExpressionAttributeNames={'#status': 'status'},
+            ExpressionAttributeValues={
+                ':status': 'suspended',
+                ':suspended_at': datetime.utcnow().isoformat()
+            },
+            ReturnValues='ALL_NEW'
+        )
+
+        print(f"[Admin] User {email} suspended")
+        return {
+            'statusCode': 200,
+            'headers': cors_headers(),
+            'body': json.dumps({'success': True, 'message': f'User {email} suspended'})
+        }
+    except Exception as e:
+        print(f"[Admin] Error suspending user: {e}")
+        return {
+            'statusCode': 500,
+            'headers': cors_headers(),
+            'body': json.dumps({'error': str(e)})
+        }
+
+
+def admin_reactivate_user(email):
+    """Reactivate a suspended user (admin only)"""
+    try:
+        users_table = dynamodb.Table('polivalka_users')
+
+        response = users_table.update_item(
+            Key={'email': email},
+            UpdateExpression='SET #status = :status, suspended_at = :suspended_at',
+            ExpressionAttributeNames={'#status': 'status'},
+            ExpressionAttributeValues={
+                ':status': 'active',
+                ':suspended_at': ''
+            },
+            ReturnValues='ALL_NEW'
+        )
+
+        print(f"[Admin] User {email} reactivated")
+        return {
+            'statusCode': 200,
+            'headers': cors_headers(),
+            'body': json.dumps({'success': True, 'message': f'User {email} reactivated'})
+        }
+    except Exception as e:
+        print(f"[Admin] Error reactivating user: {e}")
         return {
             'statusCode': 500,
             'headers': cors_headers(),
