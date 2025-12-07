@@ -348,6 +348,24 @@ const CONFIG = {
   apiUrl: 'https://p0833p2v29.execute-api.eu-central-1.amazonaws.com'
 };
 
+// ============ Toxic Plant Families (Source: ASPCA Poison Control) ============
+// Fallback when Perenual doesn't have the plant
+const TOXIC_FAMILIES = {
+  'Araliaceae': { pets: true, humans: false, note: 'Contains calcium oxalates and saponins' },
+  'Araceae': { pets: true, humans: true, note: 'Contains calcium oxalate crystals' },
+  'Liliaceae': { pets: true, humans: false, note: 'Highly toxic to cats' },
+  'Amaryllidaceae': { pets: true, humans: true, note: 'Contains lycorine alkaloids' },
+  'Euphorbiaceae': { pets: true, humans: true, note: 'Toxic milky sap' },
+  'Apocynaceae': { pets: true, humans: true, note: 'Contains cardiac glycosides' },
+  'Solanaceae': { pets: true, humans: true, note: 'Contains solanine (some species)' },
+  'Ericaceae': { pets: true, humans: true, note: 'Contains grayanotoxins (azaleas, rhododendrons)' },
+  'Cycadaceae': { pets: true, humans: true, note: 'All parts highly toxic' },
+  'Zamiaceae': { pets: true, humans: true, note: 'Contains cycasin' },
+  'Oleaceae': { pets: true, humans: false, note: 'Toxic berries' },
+  'Moraceae': { pets: true, humans: false, note: 'Irritating sap (ficus)' },
+  'Asparagaceae': { pets: true, humans: false, note: 'Toxic to cats and dogs (some species)' }
+};
+
 // ============ Header Update (same as home.html) ============
 async function updateStatus() {
   try {
@@ -903,6 +921,32 @@ function showPlantCard(result) {
     document.getElementById('toxic-pets').style.color = '#2e7d32';
     showSafety = true;
   }
+
+  // ============ Fallback: Check family toxicity if Perenual didn't have data ============
+  if (!showSafety && plant.family) {
+    const familyToxicity = TOXIC_FAMILIES[plant.family];
+    if (familyToxicity) {
+      if (familyToxicity.humans) {
+        toxicHumansItem.style.display = '';
+        document.getElementById('toxic-humans').innerHTML = '⚠️ TOXIC <span style="font-size:10px;color:#666">(family)</span>';
+        showSafety = true;
+      }
+      if (familyToxicity.pets) {
+        toxicPetsItem.style.display = '';
+        document.getElementById('toxic-pets').innerHTML = '⚠️ TOXIC <span style="font-size:10px;color:#666">(family)</span>';
+        showSafety = true;
+      }
+      // Show note about why it's toxic
+      if (familyToxicity.note) {
+        const noteEl = document.createElement('div');
+        noteEl.style.cssText = 'font-size:11px;color:#856404;background:#fff3cd;padding:6px 8px;border-radius:4px;margin-top:6px';
+        noteEl.textContent = `ℹ️ ${familyToxicity.note}`;
+        safetySection.appendChild(noteEl);
+      }
+      console.log(`[Identify] Toxicity from family ${plant.family}:`, familyToxicity);
+    }
+  }
+
   safetySection.style.display = showSafety ? '' : 'none';
 
   // Plant info section
@@ -1163,6 +1207,18 @@ async function saveToProfile() {
     // Image URL (external, not blob)
     image_url: selectedPlant.photos?.[0] || ''
   };
+
+  // ============ Fallback: Check family toxicity if Perenual didn't have data ============
+  if (plantData.poisonous_to_pets === undefined && plantData.family) {
+    const familyToxicity = TOXIC_FAMILIES[plantData.family];
+    if (familyToxicity) {
+      plantData.poisonous_to_pets = familyToxicity.pets;
+      plantData.poisonous_to_humans = familyToxicity.humans;
+      plantData.toxicity_source = 'family';  // Mark as family-based (not species-specific)
+      plantData.toxicity_note = familyToxicity.note;
+      console.log(`[Identify] Toxicity from family ${plantData.family}:`, familyToxicity);
+    }
+  }
 
   try {
     // Direct fetch - /plants/save is a global endpoint, not device-prefixed
