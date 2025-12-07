@@ -1045,12 +1045,21 @@ async function loadPlantCard() {
     const warningEl = document.getElementById('plant-warning');
     const toxicHumans = plant.poisonous_to_humans === true;
     const toxicPets = plant.poisonous_to_pets === true;
+    const toxicityKnown = plant.poisonous_to_humans !== undefined || plant.poisonous_to_pets !== undefined;
     if (toxicHumans || toxicPets) {
       let warnings = [];
       if (toxicHumans) warnings.push('humans');
       if (toxicPets) warnings.push('pets');
       warningEl.textContent = `⚠️ Toxic to ${warnings.join(' and ')}`;
       warningEl.style.display = 'block';
+      warningEl.style.background = '#ffebee';
+      warningEl.style.color = '#c62828';
+    } else if (!toxicityKnown) {
+      // Unknown toxicity - show warning to research
+      warningEl.textContent = `⚠️ Toxicity unknown — research before keeping with pets`;
+      warningEl.style.display = 'block';
+      warningEl.style.background = '#fff3e0';
+      warningEl.style.color = '#e65100';
     } else {
       warningEl.style.display = 'none';
     }
