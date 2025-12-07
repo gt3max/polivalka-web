@@ -262,15 +262,20 @@ def normalize_scientific_name(name):
     return name.lower().strip().replace(' ', '_')
 
 
+def deterministic_hash(s):
+    """Deterministic hash that's consistent across Lambda invocations."""
+    return int(hashlib.md5(s.encode()).hexdigest()[:10], 16)
+
+
 def get_cached_plant(scientific_name):
     """
     Get plant data from global cache.
-    PK: "plantcache", SK: normalized_scientific_name
+    PK: "plantcache", SK: deterministic hash of scientific name
     """
     try:
         cache_key = normalize_scientific_name(scientific_name)
         response = telemetry_table.get_item(
-            Key={'device_id': 'plantcache', 'timestamp': hash(cache_key) % (10**10)}
+            Key={'device_id': 'plantcache', 'timestamp': deterministic_hash(cache_key)}
         )
         item = response.get('Item')
         if item and item.get('scientific_key') == cache_key:
@@ -290,7 +295,7 @@ def save_to_plant_cache(scientific_name, plant_data):
         cache_key = normalize_scientific_name(scientific_name)
         cache_record = {
             'device_id': 'plantcache',  # Special PK for cache
-            'timestamp': hash(cache_key) % (10**10),  # Deterministic SK from name
+            'timestamp': deterministic_hash(cache_key),  # Deterministic SK from name
             'scientific_key': cache_key,
             'scientific': scientific_name,
             'updated_at': int(time.time()),
