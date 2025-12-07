@@ -1,5 +1,11 @@
 {
   "_comment": "Whitelist - доверенные пользователи и их устройства. Управляется через Admin Panel.",
   "_updated": "2025-12-07",
-  "users": {}
+  "users": {
+    "mahin84@gmail.com": {
+      "status": "active",
+      "devices": [],
+      "added_at": "2025-12-07"
+    }
+  }
 }
