@@ -100,34 +100,40 @@
 // Admin nav link, sleep(), mapStateToDisplay(), navigateTo() - moved to common.js
 
 // ============ Toxic Plant Families (Source: ASPCA Poison Control) ============
-// Fallback for plants saved before toxicity data was available
+// Format: WHO affected, WHAT part, HOW serious, WHAT to do
 const TOXIC_FAMILIES = {
   // Schefflera, Ivy, Fatsia
-  'Araliaceae': { pets: true, humans: true, note: 'Sap irritates skin and mouth' },
+  'Araliaceae': { pets: true, humans: true, note: 'Sap causes skin rash. If pet chews leaves: drooling, vomiting. Wash hands after pruning' },
   // Philodendron, Pothos, Monstera, Dieffenbachia, Alocasia
-  'Araceae': { pets: true, humans: true, note: 'Causes mouth/throat burning and swelling' },
-  // Lilies - EXTREMELY dangerous for cats!
-  'Liliaceae': { pets: true, humans: true, note: '⚠️ DEADLY for cats - causes kidney failure' },
-  // Amaryllis, Daffodils, Narcissus
-  'Amaryllidaceae': { pets: true, humans: true, note: 'Causes vomiting, diarrhea, tremors' },
-  // Euphorbia, Poinsettia, Croton
-  'Euphorbiaceae': { pets: true, humans: true, note: 'Milky sap burns skin and eyes' },
-  // Oleander, Periwinkle, Mandevilla
-  'Apocynaceae': { pets: true, humans: true, note: '⚠️ HIGHLY TOXIC - affects heart' },
-  // Tomatoes, Peppers, Nightshades - fruits OK, leaves toxic!
-  'Solanaceae': { pets: true, humans: false, note: 'Leaves/stems toxic - ripe fruits are safe to eat' },
-  // Azaleas, Rhododendrons
-  'Ericaceae': { pets: true, humans: true, note: 'Causes vomiting, weakness, heart problems' },
-  // Cycads
-  'Cycadaceae': { pets: true, humans: true, note: '⚠️ HIGHLY TOXIC - causes liver failure' },
-  // Sago Palm, Zamia
-  'Zamiaceae': { pets: true, humans: true, note: '⚠️ HIGHLY TOXIC - causes liver failure' },
-  // Olive family, Jasmine, Privet
-  'Oleaceae': { pets: true, humans: true, note: 'Berries cause digestive upset' },
+  'Araceae': { pets: true, humans: true, note: 'All parts cause mouth/throat swelling if chewed. Cats/dogs: drooling, pawing at mouth. Call vet if swelling severe' },
+  // Lilies - CATS SPECIFICALLY!
+  'Liliaceae': { pets: true, humans: false, note: '🚨 CATS: Even pollen can cause kidney failure within 24-72h. Dogs less affected. If cat contacts lily - VET IMMEDIATELY' },
+  // Tomatoes, Peppers, Nightshades
+  'Solanaceae': { pets: true, humans: false, note: 'Ripe fruits safe to eat. Green parts (leaves, stems, unripe) toxic to pets - vomiting, weakness' },
+  // Amaryllis, Daffodils, Snowdrops
+  'Amaryllidaceae': { pets: true, humans: true, note: 'Bulbs most dangerous. If pet digs/chews bulb: vomiting, tremors, low blood pressure. Keep bulbs out of reach' },
+  // Oleander, Periwinkle, Hoya
+  'Apocynaceae': { pets: true, humans: true, note: 'Contains cardiac glycosides. If ingested: heart rhythm problems. Small amounts = vet visit' },
+  // Kalanchoe, Sedum, Echeveria
+  'Crassulaceae': { pets: true, humans: false, note: 'Pets only: causes vomiting, diarrhea, rarely heart issues. Humans safe to handle' },
+  // Rhododendrons, Azaleas
+  'Ericaceae': { pets: true, humans: true, note: 'All parts toxic. Even honey from flowers! Causes vomiting, weakness, heart issues. Keep away from pets' },
+  // Croton, Poinsettia, Euphorbia
+  'Euphorbiaceae': { pets: true, humans: true, note: 'Milky sap irritates skin/eyes. Wear gloves when pruning. If in eyes - rinse 15 min with water' },
+  // Cycads (Sago Palm)
+  'Cycadaceae': { pets: true, humans: true, note: '🚨 VERY TOXIC - seeds especially. Dogs love to chew them. Causes liver failure. VET IMMEDIATELY if ingested' },
+  // Sago Palm, Zamia (same as Cycadaceae)
+  'Zamiaceae': { pets: true, humans: true, note: '🚨 VERY TOXIC - seeds especially. Dogs love to chew them. Causes liver failure. VET IMMEDIATELY if ingested' },
+  // Hellebores, Buttercups, Ranunculus
+  'Ranunculaceae': { pets: true, humans: true, note: 'Sap causes skin blisters. If eaten: mouth pain, vomiting. Wear gloves when handling' },
+  // Foxglove (Digitalis)
+  'Plantaginaceae': { pets: true, humans: true, note: '🚨 Source of heart medication. Even small amounts affect heart rhythm. Keep away from children and pets' },
+  // Chrysanthemums, Daisies
+  'Asteraceae': { pets: true, humans: false, note: 'Pets: skin irritation, vomiting if eaten. Humans safe. Contains natural insecticides' },
   // Ficus, Fig, Rubber plant
-  'Moraceae': { pets: true, humans: true, note: 'Sap irritates skin' },
+  'Moraceae': { pets: true, humans: true, note: 'Sap irritates skin. Pets: drooling, vomiting if leaves chewed. Wash hands after pruning' },
   // Asparagus fern, Dracaena, Yucca
-  'Asparagaceae': { pets: true, humans: true, note: 'Berries toxic, sap may irritate skin' }
+  'Asparagaceae': { pets: true, humans: false, note: 'Berries toxic to pets - vomiting, diarrhea. Sap may irritate human skin. Keep berries away from pets' }
 };
 
 // Флаги для предотвращения рекурсии при программном изменении toggles

@@ -955,34 +955,73 @@ FAMILY_PRESETS = {
 }
 
 # Family-based toxicity fallback (ASPCA data)
-# Used when Perenual doesn't have toxicity info
+# Format: WHO is affected, WHAT part, HOW serious, WHAT to do
 TOXIC_FAMILIES = {
-    # Schefflera, Ivy, Fatsia - sap irritates skin
-    'Araliaceae': {'pets': True, 'humans': True, 'note': 'Sap irritates skin and mouth'},
+    # Schefflera, Ivy, Fatsia
+    'Araliaceae': {
+        'pets': True, 'humans': True,
+        'note': 'Sap causes skin rash. If pet chews leaves: drooling, vomiting. Wash hands after pruning'
+    },
     # Philodendron, Pothos, Monstera, Dieffenbachia, Alocasia
-    'Araceae': {'pets': True, 'humans': True, 'note': 'Causes mouth/throat burning and swelling'},
-    # Lilies - EXTREMELY dangerous for cats!
-    'Liliaceae': {'pets': True, 'humans': True, 'note': 'DEADLY for cats - kidney failure'},
-    # Tomatoes, Peppers - fruits safe, leaves toxic
-    'Solanaceae': {'pets': True, 'humans': False, 'note': 'Leaves/stems toxic, ripe fruits safe'},
+    'Araceae': {
+        'pets': True, 'humans': True,
+        'note': 'All parts cause mouth/throat swelling if chewed. Cats/dogs: drooling, pawing at mouth. Call vet if swelling severe'
+    },
+    # Lilies - CATS SPECIFICALLY!
+    'Liliaceae': {
+        'pets': True, 'humans': False,
+        'note': '🚨 CATS: Even pollen can cause kidney failure within 24-72h. Dogs less affected. If cat contacts lily - VET IMMEDIATELY'
+    },
+    # Tomatoes, Peppers, Nightshades
+    'Solanaceae': {
+        'pets': True, 'humans': False,
+        'note': 'Ripe fruits safe to eat. Green parts (leaves, stems, unripe) toxic to pets - vomiting, weakness'
+    },
     # Amaryllis, Daffodils, Snowdrops
-    'Amaryllidaceae': {'pets': True, 'humans': True, 'note': 'Bulbs most toxic - vomiting, tremors'},
-    # Oleander, Periwinkle - cardiac glycosides
-    'Apocynaceae': {'pets': True, 'humans': True, 'note': 'Heart problems if ingested'},
-    # Kalanchoe, Sedum - toxic to pets
-    'Crassulaceae': {'pets': True, 'humans': False, 'note': 'Vomiting and heart problems in pets'},
+    'Amaryllidaceae': {
+        'pets': True, 'humans': True,
+        'note': 'Bulbs most dangerous. If pet digs/chews bulb: vomiting, tremors, low blood pressure. Keep bulbs out of reach'
+    },
+    # Oleander, Periwinkle, Hoya
+    'Apocynaceae': {
+        'pets': True, 'humans': True,
+        'note': 'Contains cardiac glycosides. If ingested: heart rhythm problems. Small amounts = vet visit'
+    },
+    # Kalanchoe, Sedum, Echeveria
+    'Crassulaceae': {
+        'pets': True, 'humans': False,
+        'note': 'Pets only: causes vomiting, diarrhea, rarely heart issues. Humans safe to handle'
+    },
     # Rhododendrons, Azaleas
-    'Ericaceae': {'pets': True, 'humans': True, 'note': 'All parts toxic - vomiting, weakness'},
-    # Croton, Poinsettia - milky sap irritates
-    'Euphorbiaceae': {'pets': True, 'humans': True, 'note': 'Milky sap irritates skin and eyes'},
-    # Cycads - liver damage
-    'Cycadaceae': {'pets': True, 'humans': True, 'note': 'Liver failure - highly toxic'},
-    # Hellebores - cardiac glycosides
-    'Ranunculaceae': {'pets': True, 'humans': True, 'note': 'Heart and digestive problems'},
-    # Foxglove - heart medication source
-    'Plantaginaceae': {'pets': True, 'humans': True, 'note': 'Affects heart rhythm'},
-    # Chrysanthemums - skin irritation
-    'Asteraceae': {'pets': True, 'humans': False, 'note': 'Skin irritation, vomiting if eaten'},
+    'Ericaceae': {
+        'pets': True, 'humans': True,
+        'note': 'All parts toxic. Even honey from flowers! Causes vomiting, weakness, heart issues. Keep away from pets'
+    },
+    # Croton, Poinsettia, Euphorbia
+    'Euphorbiaceae': {
+        'pets': True, 'humans': True,
+        'note': 'Milky sap irritates skin/eyes. Wear gloves when pruning. If in eyes - rinse 15 min with water'
+    },
+    # Cycads (Sago Palm)
+    'Cycadaceae': {
+        'pets': True, 'humans': True,
+        'note': '🚨 VERY TOXIC - seeds especially. Dogs love to chew them. Causes liver failure. VET IMMEDIATELY if ingested'
+    },
+    # Hellebores, Buttercups, Ranunculus
+    'Ranunculaceae': {
+        'pets': True, 'humans': True,
+        'note': 'Sap causes skin blisters. If eaten: mouth pain, vomiting. Wear gloves when handling'
+    },
+    # Foxglove (Digitalis)
+    'Plantaginaceae': {
+        'pets': True, 'humans': True,
+        'note': '🚨 Source of heart medication. Even small amounts affect heart rhythm. Keep away from children and pets'
+    },
+    # Chrysanthemums, Daisies
+    'Asteraceae': {
+        'pets': True, 'humans': False,
+        'note': 'Pets: skin irritation, vomiting if eaten. Humans safe. Contains natural insecticides (pyrethrins)'
+    },
 }
 
 PRESET_DETAILS = {
