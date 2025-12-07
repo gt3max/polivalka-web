@@ -25,11 +25,11 @@
   .ok{color:#0a0}
   .warning{color:#f57c00;font-weight:600}
 
-  /* Stats dashboard */
-  .stats-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin-bottom:20px}
-  .stat-card{background:#fff;border:1px solid #ddd;border-radius:12px;padding:16px;text-align:center}
-  .stat-value{font-size:32px;font-weight:600;color:#2c5f2d}
-  .stat-label{font-size:12px;color:#666;margin-top:4px}
+  /* Stats dashboard - compact */
+  .stats-row{display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap}
+  .stat-card{background:#fff;border:1px solid #ddd;border-radius:8px;padding:8px 16px;text-align:center;flex:1;min-width:80px}
+  .stat-value{font-size:20px;font-weight:600;color:#2c5f2d}
+  .stat-label{font-size:10px;color:#666}
 
   /* Filters */
   .filters{display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap}
@@ -107,9 +107,9 @@
   .auth-section{display:none}
   .auth-section.active{display:block}
 
-  /* Admin controls */
-  .admin-controls{background:#e8eaf6;border:2px solid #3f51b5;border-radius:12px;padding:16px;margin-bottom:20px}
-  .admin-controls h3{margin:0 0 12px 0;color:#3f51b5}
+  /* Admin controls - compact */
+  .admin-controls{background:#e8eaf6;border:1px solid #3f51b5;border-radius:8px;padding:8px 12px;margin-bottom:12px}
+  .admin-controls h3{margin:0;color:#3f51b5;font-size:14px;display:inline-block;margin-right:12px}
 
   /* Animations */
   @keyframes pulse{
@@ -257,28 +257,19 @@
       </div>
     </div>
 
-    <!-- Add Device Button (for all users) -->
-    <div class="card" style="margin-bottom:20px;background:#e8f5e9;border:2px solid #2c5f2d">
-      <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px">
-        <div>
-          <h3 style="margin:0;color:#2c5f2d">➕ Add Your Device</h3>
-          <p class="muted" style="margin:4px 0 0">Enter the Device ID shown on your device's screen</p>
-        </div>
-        <button class="primary" onclick="showClaimModal()" style="padding:12px 24px;font-size:16px">
-          🌱 Claim Device
-        </button>
-      </div>
+    <!-- Add Device Button (for all users) - compact -->
+    <div style="margin-bottom:12px;padding:8px 12px;background:#e8f5e9;border:1px solid #2c5f2d;border-radius:8px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
+      <span style="color:#2c5f2d;font-weight:600;font-size:14px">➕ Add Device</span>
+      <button class="primary" onclick="showClaimModal()" style="padding:6px 12px;font-size:13px">🌱 Claim</button>
     </div>
 
-    <!-- Admin Controls (only for admin) -->
-    <div id="admin-controls" class="admin-controls">
-      <h3>🔧 Admin Controls</h3>
-      <div class="row" style="align-items:center">
-        <button onclick="bulkAction('refresh')">🔄 Refresh All</button>
-        <button onclick="bulkAction('ota')">📦 Mass OTA Update</button>
-        <button onclick="exportData()">📥 Export All Data</button>
-        <span id="last-refresh-time" class="muted" style="margin-left:auto;font-size:12px"></span>
-      </div>
+    <!-- Admin Controls (only for admin) - compact single line -->
+    <div id="admin-controls" class="admin-controls" style="display:flex;align-items:center;flex-wrap:wrap;gap:8px">
+      <h3>🔧 Admin</h3>
+      <button onclick="bulkAction('refresh')" style="padding:4px 8px;font-size:12px">🔄 Refresh</button>
+      <button onclick="bulkAction('ota')" style="padding:4px 8px;font-size:12px">📦 Mass OTA</button>
+      <button onclick="exportData()" style="padding:4px 8px;font-size:12px">📥 Export</button>
+      <span id="last-refresh-time" class="muted" style="margin-left:auto;font-size:11px"></span>
     </div>
 
     <!-- Filters -->
