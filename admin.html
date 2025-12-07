@@ -148,6 +148,30 @@
 </div>
 </div>
 
+<!-- Microprime Settings -->
+<div class="card">
+<h3>💧 Microprime (Maintenance Pulse)</h3>
+<p class="muted">Short pump pulse to prevent water stagnation in tubing. Runs during daytime (07:00-21:00).</p>
+
+<div class="toggle-row">
+<div><div class="toggle-label">Interval</div><div class="toggle-desc">How often to run maintenance pulse <span class="mono">(microprime_interval_hours)</span></div></div>
+<div class="row">
+<select id="microprime-interval" style="width:120px;padding:8px;border-radius:8px;border:1px solid #555;background:#1a1a2e;color:#fff">
+<option value="0">Disabled</option>
+<option value="12">Every 12h</option>
+<option value="24" selected>Every 24h</option>
+<option value="48">Every 48h</option>
+</select>
+</div>
+</div>
+<div class="row" style="margin-top:8px">
+<button onclick="saveMicroprimeSettings()">Set Microprime</button>
+</div>
+<div class="muted" style="margin-top:12px;font-size:12px">
+💡 Pulse duration: 4 seconds (hardcoded)<br>
+💡 Only runs in Sensor Mode
+</div>
+</div>
 
 <!-- Costs Estimate -->
 <div class="card">
@@ -509,6 +533,13 @@ async function loadDeviceConfig() {
           document.getElementById('wifi-scan-interval').value = wifiScanInterval;
           console.log('[Admin] Loaded wifi_scan_interval:', wifiScanInterval);
         }
+
+        // Load microprime interval from sensor config
+        const microprimeInterval = device.microprime_interval_hours || device.sensor_config?.microprime_interval_hours;
+        if (microprimeInterval !== undefined) {
+          document.getElementById('microprime-interval').value = microprimeInterval;
+          console.log('[Admin] Loaded microprime_interval:', microprimeInterval);
+        }
       }
     }
   } catch(e) {
@@ -827,6 +858,39 @@ async function saveWifiSettings() {
   }
 }
 
+// Microprime settings
+async function saveMicroprimeSettings() {
+  if (!selectedDeviceId) {
+    alert('Select a device first');
+    return;
+  }
+
+  const interval = parseInt(document.getElementById('microprime-interval').value);
+
+  try {
+    const res = await fetch(`${API.cloudBase}/device/${selectedDeviceId}/command`, {
+      method: 'POST',
+      headers: { ...API.getAuthHeaders(), 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        command: 'set_sensor_config',
+        params: { microprime_interval_hours: interval }
+      })
+    });
+
+    if (res.ok) {
+      if (interval === 0) {
+        alert('✓ Microprime disabled');
+      } else {
+        alert(`✓ Microprime set to every ${interval} hours`);
+      }
+    } else {
+      const err = await res.json().catch(() => ({}));
+      alert('Failed: ' + (err.error || res.status));
+    }
+  } catch(e) {
+    alert('Error: ' + e.message);
+  }
+}
 
 // Cost estimate (using hardcoded firmware intervals)
 function updateCostEstimate() {
