@@ -90,7 +90,7 @@ async function loadDeviceInfo() {
 
     document.getElementById('device-name').textContent = deviceId;
     document.getElementById('device-location').textContent = `${device.system_state?.location || '—'} / ${device.system_state?.room || '—'}`;
-    document.getElementById('current-version').textContent = 'v1.0.0';  // TODO: get from telemetry
+    document.getElementById('current-version').textContent = device.firmware_version || 'v1.0.0';
     document.getElementById('device-status').textContent = device.percent !== undefined ? '● Online' : '○ Offline';
     document.getElementById('device-status').style.color = device.percent !== undefined ? '#2e7d32' : '#999';
   } catch(e) {

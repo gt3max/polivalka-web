@@ -2109,6 +2109,7 @@ def get_device_status(device_id, user_id):
         'pump_running': pump_running,
         'pump_elapsed_ms': pump_elapsed_ms,
         'pump_remaining_ms': pump_remaining_ms,
+        'firmware_version': latest.get('system', {}).get('firmware_version', 'v1.0.0'),
         'timestamp': latest.get('last_update'),
         'online': is_device_online(latest.get('last_update'))  # Add online status
     }
