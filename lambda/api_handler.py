@@ -1233,6 +1233,11 @@ def lambda_handler(event, context):
     if path == '/devices' and http_method == 'GET':
         return get_devices(user_id)
 
+    # POST /devices/claim - Claim a device (whitelist check done on client)
+    if path == '/devices/claim' and http_method == 'POST':
+        body = json.loads(event.get('body', '{}'))
+        return claim_device(user_id, body)
+
     # Parse device_id from path /device/{id}/*
     if path.startswith('/device/'):
         parts = path.split('/')
@@ -1790,6 +1795,104 @@ def lambda_handler(event, context):
         'headers': cors_headers(origin),
         'body': json.dumps({'error': 'Not found'})
     }
+
+
+def claim_device(user_id, body):
+    """POST /devices/claim - Claim a device for the user.
+    Whitelist check is done on client side. Lambda just assigns the device.
+    """
+    device_id = body.get('device_id', '').strip().upper()
+
+    if not device_id:
+        return {
+            'statusCode': 400,
+            'headers': cors_headers(),
+            'body': json.dumps({'error': 'device_id required'})
+        }
+
+    # Normalize to full format
+    if not device_id.startswith('Polivalka-'):
+        full_device_id = f'Polivalka-{device_id}'
+    else:
+        full_device_id = device_id
+
+    print(f"[Claim] User {user_id} claiming device {full_device_id}")
+
+    try:
+        # Check if device exists in telemetry (has ever connected)
+        # We check polivalka_telemetry for any record
+        telemetry_table = dynamodb.Table('polivalka_telemetry')
+        response = telemetry_table.query(
+            KeyConditionExpression=Key('device_id').eq(full_device_id),
+            Limit=1
+        )
+
+        if not response.get('Items'):
+            return {
+                'statusCode': 404,
+                'headers': cors_headers(),
+                'body': json.dumps({
+                    'success': False,
+                    'message': f'Device {device_id} not found. Make sure it has connected to cloud at least once.'
+                })
+            }
+
+        # Check if device already belongs to someone
+        existing = devices_table.query(
+            IndexName='device_id-index',
+            KeyConditionExpression=Key('device_id').eq(full_device_id)
+        )
+
+        if existing.get('Items'):
+            existing_owner = existing['Items'][0].get('user_id')
+            if existing_owner == user_id:
+                return {
+                    'statusCode': 200,
+                    'headers': cors_headers(),
+                    'body': json.dumps({
+                        'success': True,
+                        'message': 'Device already belongs to you.',
+                        'device_id': device_id
+                    })
+                }
+            else:
+                # Device belongs to someone else
+                return {
+                    'statusCode': 400,
+                    'headers': cors_headers(),
+                    'body': json.dumps({
+                        'success': False,
+                        'message': 'Device is already claimed by another user.'
+                    })
+                }
+
+        # Add device to user's account
+        devices_table.put_item(Item={
+            'user_id': user_id,
+            'device_id': full_device_id,
+            'claimed_at': datetime.utcnow().isoformat(),
+            'name': f'Plant {device_id[-4:]}'  # Default name
+        })
+
+        print(f"[Claim] Device {full_device_id} claimed by {user_id}")
+
+        return {
+            'statusCode': 200,
+            'headers': cors_headers(),
+            'body': json.dumps({
+                'success': True,
+                'message': 'Device claimed successfully!',
+                'device_id': device_id
+            })
+        }
+
+    except Exception as e:
+        print(f"[Claim] Error: {e}")
+        return {
+            'statusCode': 500,
+            'headers': cors_headers(),
+            'body': json.dumps({'error': str(e)})
+        }
 
 
 def get_devices(user_id):

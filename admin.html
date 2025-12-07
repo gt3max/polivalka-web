@@ -173,6 +173,20 @@
 </div>
 </div>
 
+<!-- Pending Claims -->
+<div class="card" id="pending-claims-card">
+<div style="display:flex;justify-content:space-between;align-items:center;cursor:pointer" onclick="togglePendingSection()">
+  <h3 style="margin:0">⏳ Pending Claims <span id="pending-count" style="background:#ff9800;color:#000;padding:2px 8px;border-radius:12px;font-size:12px;margin-left:8px">0</span></h3>
+  <span id="pending-toggle-icon" style="color:#fff;font-size:18px">▶</span>
+</div>
+<div id="pending-claims-content" style="display:none;margin-top:12px">
+  <p class="muted">Users requesting to claim devices (not in whitelist)</p>
+  <div id="pending-claims-list">
+    <div class="muted">No pending claims</div>
+  </div>
+</div>
+</div>
+
 <!-- Registered Users -->
 <div class="card">
 <h3>👥 Registered Users</h3>
@@ -590,6 +604,118 @@ function toggleHistorySection() {
   } else {
     content.style.display = 'none';
     icon.textContent = '▶';
+  }
+}
+
+function togglePendingSection() {
+  const content = document.getElementById('pending-claims-content');
+  const icon = document.getElementById('pending-toggle-icon');
+  if (content.style.display === 'none') {
+    content.style.display = 'block';
+    icon.textContent = '▼';
+  } else {
+    content.style.display = 'none';
+    icon.textContent = '▶';
+  }
+}
+
+// ============ Pending Claims UI ============
+
+async function loadPendingClaimsUI() {
+  const container = document.getElementById('pending-claims-list');
+  const countBadge = document.getElementById('pending-count');
+
+  await loadPendingClaims();
+
+  const claims = pendingData?.claims || [];
+  countBadge.textContent = claims.length;
+
+  // Hide badge if no pending claims
+  countBadge.style.display = claims.length > 0 ? 'inline' : 'none';
+
+  if (claims.length === 0) {
+    container.innerHTML = '<div class="muted">No pending claims</div>';
+    return;
+  }
+
+  container.innerHTML = claims.map((c, idx) => {
+    const date = new Date(c.timestamp);
+    const dateStr = date.toLocaleDateString() + ' ' + date.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+
+    return `
+      <div style="padding:12px;background:#1a1a2e;border-radius:8px;margin-bottom:8px">
+        <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
+          <div>
+            <div style="color:#fff;font-size:14px">📱 <span class="mono" style="color:#4caf50">${c.device_id}</span></div>
+            <div style="color:#ccc;font-size:13px;margin-top:4px">User: <strong>${c.email}</strong></div>
+            <div class="muted" style="font-size:11px;margin-top:2px">Requested: ${dateStr}</div>
+          </div>
+          <div style="display:flex;gap:8px">
+            <button onclick="approveClaim(${idx})" style="background:#4caf50;color:#fff;border-color:#4caf50;font-size:12px;padding:6px 12px">✓ Approve</button>
+            <button onclick="rejectClaim(${idx})" style="background:#f44;color:#fff;border-color:#f44;font-size:12px;padding:6px 12px">✗ Reject</button>
+          </div>
+        </div>
+      </div>
+    `;
+  }).join('');
+}
+
+async function approveClaim(index) {
+  const claim = pendingData.claims[index];
+  if (!claim) return;
+
+  if (!confirm(`Approve claim?\n\nDevice: ${claim.device_id}\nUser: ${claim.email}\n\nThis will add user to whitelist and assign the device.`)) return;
+
+  // 1. Add user to whitelist if not there
+  if (!whitelistData.users[claim.email]) {
+    whitelistData.users[claim.email] = {
+      status: 'active',
+      devices: [],
+      added_at: new Date().toISOString().split('T')[0]
+    };
+  }
+
+  // 2. Assign device to user
+  if (!whitelistData.users[claim.email].devices) {
+    whitelistData.users[claim.email].devices = [];
+  }
+  if (!whitelistData.users[claim.email].devices.includes(claim.device_id)) {
+    whitelistData.users[claim.email].devices.push(claim.device_id);
+  }
+
+  // 3. Remove from pending
+  pendingData.claims.splice(index, 1);
+
+  // 4. Save both
+  const wlSuccess = await saveWhitelist(`Approve claim: ${claim.device_id} for ${claim.email}`);
+  const pcSuccess = await savePendingClaims(`Remove approved claim: ${claim.device_id}`);
+
+  if (wlSuccess && pcSuccess) {
+    // 5. Add to device history
+    await addDeviceHistoryEntry(claim.device_id, {
+      event: 'claimed',
+      by: claim.email
+    });
+
+    showToast(`Claim approved! ${claim.device_id} assigned to ${claim.email}`, 'success');
+    loadPendingClaimsUI();
+    renderUsersList();
+  }
+}
+
+async function rejectClaim(index) {
+  const claim = pendingData.claims[index];
+  if (!claim) return;
+
+  if (!confirm(`Reject claim?\n\nDevice: ${claim.device_id}\nUser: ${claim.email}`)) return;
+
+  // Remove from pending
+  pendingData.claims.splice(index, 1);
+
+  const success = await savePendingClaims(`Reject claim: ${claim.device_id} by ${claim.email}`);
+  if (success) {
+    showToast(`Claim rejected`, 'warning');
+    loadPendingClaimsUI();
   }
 }
 
@@ -1402,6 +1528,7 @@ if (checkAdminAccess()) {
     }
   });
   loadUsers();           // Independent of device selection
+  loadPendingClaimsUI(); // Load pending claims
   loadArchivedDevices();
   loadDeletedDevices();
   updateCostEstimate();

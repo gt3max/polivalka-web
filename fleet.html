@@ -1635,6 +1635,65 @@ function closeClaimModal() {
   document.getElementById('claimModal').style.display = 'none';
 }
 
+// ============ GitHub API for Whitelist ============
+const GITHUB_REPO = 'gt3max/polivalka-web';
+const GITHUB_BRANCH = 'main';
+
+async function readGitHubFile(path) {
+  try {
+    const res = await fetch(`https://api.github.com/repos/${GITHUB_REPO}/contents/${path}?ref=${GITHUB_BRANCH}`, {
+      headers: { 'Accept': 'application/vnd.github.v3+json' },
+      cache: 'no-store'
+    });
+    if (!res.ok) {
+      if (res.status === 404) return null;
+      throw new Error(`GitHub API error: ${res.status}`);
+    }
+    const data = await res.json();
+    const content = atob(data.content);
+    return { content: JSON.parse(content), sha: data.sha };
+  } catch (e) {
+    console.error('[GitHub] Read error:', e);
+    return null;
+  }
+}
+
+async function writeGitHubFile(path, content, sha, message) {
+  const token = localStorage.getItem('github_token');
+  if (!token) {
+    console.warn('[GitHub] No token for write');
+    return false;
+  }
+
+  try {
+    const jsonStr = JSON.stringify(content, null, 2);
+    const utf8Bytes = new TextEncoder().encode(jsonStr);
+    const base64 = btoa(String.fromCharCode(...utf8Bytes));
+
+    const body = {
+      message: message || `Update ${path}`,
+      content: base64,
+      branch: GITHUB_BRANCH
+    };
+    if (sha) body.sha = sha;
+
+    const res = await fetch(`https://api.github.com/repos/${GITHUB_REPO}/contents/${path}`, {
+      method: 'PUT',
+      headers: {
+        'Authorization': `token ${token}`,
+        'Accept': 'application/vnd.github.v3+json',
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(body)
+    });
+
+    return res.ok;
+  } catch (e) {
+    console.error('[GitHub] Write error:', e);
+    return false;
+  }
+}
+
 async function claimDevice() {
   const deviceIdInput = document.getElementById('claim-device-id');
   const errorEl = document.getElementById('claim-error');
@@ -1658,28 +1717,98 @@ async function claimDevice() {
 
   // Disable button and show loading
   claimBtn.disabled = true;
-  claimBtn.textContent = 'Claiming...';
+  claimBtn.textContent = 'Checking...';
   errorEl.style.display = 'none';
   successEl.style.display = 'none';
 
   try {
-    const response = await API.post('/devices/claim', { device_id: deviceId });
+    const userEmail = localStorage.getItem('user_email');
+    if (!userEmail) {
+      throw new Error('Please log in first');
+    }
 
-    if (response.success) {
-      successEl.textContent = `✅ ${response.message} Device ${response.device_id} is now yours!`;
-      successEl.style.display = 'block';
-      errorEl.style.display = 'none';
+    // Admin can always claim
+    if (isAdmin()) {
+      claimBtn.textContent = 'Claiming...';
+      const response = await API.post('/devices/claim', { device_id: deviceId });
+      if (response.success) {
+        successEl.textContent = `✅ Device ${deviceId} claimed (Admin)`;
+        successEl.style.display = 'block';
+        setTimeout(() => { closeClaimModal(); loadDevices(); }, 1500);
+      } else {
+        throw new Error(response.message || 'Claim failed');
+      }
+      return;
+    }
 
-      // Reload devices after 1.5 seconds
-      setTimeout(() => {
-        closeClaimModal();
-        loadDevices();
-        showToast(`🎉 Device ${response.device_id} claimed successfully!`, 'success');
-      }, 1500);
+    // Check whitelist
+    const whitelistResult = await readGitHubFile('data/whitelist.json');
+    const whitelist = whitelistResult?.content?.users || {};
+    const userInWhitelist = whitelist[userEmail];
 
-    } else {
-      errorEl.textContent = response.message || 'Failed to claim device';
+    if (userInWhitelist && userInWhitelist.status === 'active') {
+      // User is whitelisted - check if device is assigned to them
+      const assignedDevices = userInWhitelist.devices || [];
+
+      if (assignedDevices.includes(deviceId)) {
+        // Device assigned to this user - allow claim
+        claimBtn.textContent = 'Claiming...';
+        const response = await API.post('/devices/claim', { device_id: deviceId });
+
+        if (response.success) {
+          successEl.textContent = `✅ Device ${deviceId} is now yours!`;
+          successEl.style.display = 'block';
+          setTimeout(() => { closeClaimModal(); loadDevices(); showToast(`🎉 Device ${deviceId} claimed!`, 'success'); }, 1500);
+        } else {
+          throw new Error(response.message || 'Claim failed');
+        }
+      } else {
+        // Whitelisted but device not assigned - show error
+        errorEl.textContent = `Device ${deviceId} is not assigned to you. Contact admin.`;
+        errorEl.style.display = 'block';
+      }
+    } else if (userInWhitelist && userInWhitelist.status === 'banned') {
+      errorEl.textContent = 'Your account has been banned. Contact admin.';
       errorEl.style.display = 'block';
+    } else if (userInWhitelist && userInWhitelist.status === 'suspended') {
+      errorEl.textContent = 'Your account is suspended. Contact admin.';
+      errorEl.style.display = 'block';
+    } else {
+      // Not in whitelist - add to pending claims
+      claimBtn.textContent = 'Sending request...';
+
+      const pendingResult = await readGitHubFile('data/pending_claims.json');
+      const pendingData = pendingResult?.content || { claims: [] };
+      const pendingSha = pendingResult?.sha;
+
+      // Check if already pending
+      const alreadyPending = pendingData.claims.some(c => c.device_id === deviceId && c.email === userEmail);
+      if (alreadyPending) {
+        errorEl.textContent = 'You already have a pending request for this device.';
+        errorEl.style.display = 'block';
+        return;
+      }
+
+      // Add new claim request
+      pendingData.claims.push({
+        device_id: deviceId,
+        email: userEmail,
+        timestamp: new Date().toISOString()
+      });
+      pendingData._updated = new Date().toISOString().split('T')[0];
+
+      const saved = await writeGitHubFile('data/pending_claims.json', pendingData, pendingSha,
+        `Claim request: ${deviceId} by ${userEmail}`);
+
+      if (saved) {
+        successEl.innerHTML = `⏳ <strong>Request submitted!</strong><br>Admin will review your request to claim device ${deviceId}.`;
+        successEl.style.display = 'block';
+        setTimeout(() => { closeClaimModal(); }, 3000);
+      } else {
+        // No GitHub token - show message
+        errorEl.textContent = 'Cannot submit request. Please contact admin directly.';
+        errorEl.style.display = 'block';
+      }
     }
 
   } catch (e) {
