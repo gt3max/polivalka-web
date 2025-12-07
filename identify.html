@@ -351,19 +351,32 @@ const CONFIG = {
 // ============ Toxic Plant Families (Source: ASPCA Poison Control) ============
 // Fallback when Perenual doesn't have the plant
 const TOXIC_FAMILIES = {
-  'Araliaceae': { pets: true, humans: true, note: 'Sap causes skin/mouth irritation (oxalates)' },
-  'Araceae': { pets: true, humans: true, note: 'Contains calcium oxalate crystals' },
-  'Liliaceae': { pets: true, humans: false, note: 'Highly toxic to cats' },
-  'Amaryllidaceae': { pets: true, humans: true, note: 'Contains lycorine alkaloids' },
-  'Euphorbiaceae': { pets: true, humans: true, note: 'Toxic milky sap' },
-  'Apocynaceae': { pets: true, humans: true, note: 'Contains cardiac glycosides' },
-  'Solanaceae': { pets: true, humans: true, note: 'Contains solanine (some species)' },
-  'Ericaceae': { pets: true, humans: true, note: 'Contains grayanotoxins (azaleas, rhododendrons)' },
-  'Cycadaceae': { pets: true, humans: true, note: 'All parts highly toxic' },
-  'Zamiaceae': { pets: true, humans: true, note: 'Contains cycasin' },
-  'Oleaceae': { pets: true, humans: false, note: 'Toxic berries' },
-  'Moraceae': { pets: true, humans: false, note: 'Irritating sap (ficus)' },
-  'Asparagaceae': { pets: true, humans: false, note: 'Toxic to cats and dogs (some species)' }
+  // Schefflera, Ivy, Fatsia
+  'Araliaceae': { pets: true, humans: true, note: 'Sap irritates skin and mouth' },
+  // Philodendron, Pothos, Monstera, Dieffenbachia, Alocasia
+  'Araceae': { pets: true, humans: true, note: 'Causes mouth/throat burning and swelling' },
+  // Lilies - EXTREMELY dangerous for cats!
+  'Liliaceae': { pets: true, humans: true, note: '⚠️ DEADLY for cats - causes kidney failure' },
+  // Amaryllis, Daffodils, Narcissus
+  'Amaryllidaceae': { pets: true, humans: true, note: 'Causes vomiting, diarrhea, tremors' },
+  // Euphorbia, Poinsettia, Croton
+  'Euphorbiaceae': { pets: true, humans: true, note: 'Milky sap burns skin and eyes' },
+  // Oleander, Periwinkle, Mandevilla
+  'Apocynaceae': { pets: true, humans: true, note: '⚠️ HIGHLY TOXIC - affects heart' },
+  // Nightshades, some peppers
+  'Solanaceae': { pets: true, humans: true, note: 'Unripe parts cause digestive upset' },
+  // Azaleas, Rhododendrons
+  'Ericaceae': { pets: true, humans: true, note: 'Causes vomiting, weakness, heart problems' },
+  // Cycads
+  'Cycadaceae': { pets: true, humans: true, note: '⚠️ HIGHLY TOXIC - causes liver failure' },
+  // Sago Palm, Zamia
+  'Zamiaceae': { pets: true, humans: true, note: '⚠️ HIGHLY TOXIC - causes liver failure' },
+  // Olive family, Jasmine, Privet
+  'Oleaceae': { pets: true, humans: true, note: 'Berries cause digestive upset' },
+  // Ficus, Fig, Rubber plant
+  'Moraceae': { pets: true, humans: true, note: 'Sap irritates skin' },
+  // Asparagus fern, Dracaena, Yucca
+  'Asparagaceae': { pets: true, humans: true, note: 'Berries toxic, sap may irritate skin' }
 };
 
 // ============ Header Update (same as home.html) ============
