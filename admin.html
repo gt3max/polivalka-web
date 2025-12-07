@@ -160,6 +160,15 @@
 </div>
 </div>
 
+<!-- Device History (shows when device selected) -->
+<div class="card" id="device-history-card" style="display:none">
+<h3>📜 Device History</h3>
+<p class="muted">Assignment and claim history for selected device</p>
+<div id="device-history-list" style="margin-top:12px">
+<div class="muted">No history</div>
+</div>
+</div>
+
 <!-- Registered Users -->
 <div class="card">
 <h3>👥 Registered Users</h3>
@@ -435,6 +444,7 @@ async function loadDeviceConfig() {
   const deviceId = document.getElementById('device-select').value;
   if (!deviceId) {
     document.getElementById('device-info').style.display = 'none';
+    document.getElementById('device-history-card').style.display = 'none';
     updateDangerButtons(false);
     return;
   }
@@ -489,6 +499,82 @@ async function loadDeviceConfig() {
   }
 
   updateCostEstimate();
+  loadDeviceHistoryUI(deviceId);
+}
+
+// Load and display device history
+async function loadDeviceHistoryUI(deviceId) {
+  const card = document.getElementById('device-history-card');
+  const container = document.getElementById('device-history-list');
+  const shortId = deviceId.replace('Polivalka-', '');
+
+  card.style.display = 'block';
+  container.innerHTML = '<div class="muted">Loading...</div>';
+
+  await loadDeviceHistory();
+
+  const events = historyData?.devices?.[shortId] || [];
+
+  if (events.length === 0) {
+    container.innerHTML = '<div class="muted">No history for this device</div>';
+    return;
+  }
+
+  // Show last 3 events by default, expandable
+  const recentEvents = events.slice(-3).reverse();
+  const olderEvents = events.slice(0, -3).reverse();
+
+  const formatEvent = (e) => {
+    const date = new Date(e.timestamp);
+    const dateStr = date.toLocaleDateString() + ' ' + date.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+    let icon = '📝';
+    let text = e.event;
+    if (e.event === 'assigned') {
+      icon = '✅';
+      text = `Assigned to ${e.to}`;
+    } else if (e.event === 'unassigned') {
+      icon = '❌';
+      text = `Unassigned from ${e.from}`;
+    } else if (e.event === 'claimed') {
+      icon = '🔗';
+      text = `Claimed by ${e.by}`;
+    } else if (e.event === 'provisioned') {
+      icon = '🏭';
+      text = 'Provisioned';
+    }
+    return `<div style="padding:6px 0;border-bottom:1px solid #333;display:flex;justify-content:space-between">
+      <span>${icon} ${text}</span>
+      <span class="muted" style="font-size:11px">${dateStr}</span>
+    </div>`;
+  };
+
+  let html = recentEvents.map(formatEvent).join('');
+
+  if (olderEvents.length > 0) {
+    html += `
+      <div id="older-history" style="display:none">
+        ${olderEvents.map(formatEvent).join('')}
+      </div>
+      <button onclick="toggleOlderHistory()" id="btn-older-history" style="font-size:11px;padding:4px 8px;margin-top:8px">
+        Show ${olderEvents.length} older events ▼
+      </button>
+    `;
+  }
+
+  container.innerHTML = html;
+}
+
+function toggleOlderHistory() {
+  const el = document.getElementById('older-history');
+  const btn = document.getElementById('btn-older-history');
+  if (el.style.display === 'none') {
+    el.style.display = 'block';
+    btn.textContent = 'Hide older events ▲';
+  } else {
+    el.style.display = 'none';
+    const count = el.querySelectorAll('div[style*="border-bottom"]').length;
+    btn.textContent = `Show ${count} older events ▼`;
+  }
 }
 
 // Save pump preset (factory default)
