@@ -616,42 +616,328 @@ function updateCostEstimate() {
 
 // Admin email whitelist - uses ADMIN_EMAILS from common.js
 
-// ============ Device Management Functions ============
+// ============ User Management Functions ============
 
-// Load archived devices list
+// All users data (from AWS)
+let allUsersData = [];
+// All devices data (from AWS)
+let allDevicesData = [];
+
+// Load users with whitelist status
 async function loadUsers() {
   const container = document.getElementById('users-list');
+  container.innerHTML = '<div class="muted">Loading...</div>';
+
   try {
+    // Load whitelist from GitHub
+    await loadWhitelist();
+
+    // Load users from AWS
     const res = await fetch(`${API.cloudBase}/admin/users`, {
       headers: API.getAuthHeaders()
     });
-    if (!res.ok) throw new Error('Failed to load');
-    const users = await res.json();
+    if (!res.ok) throw new Error('Failed to load users');
+    allUsersData = await res.json();
 
-    if (users.length === 0) {
+    // Load devices from AWS
+    const devRes = await fetch(`${API.cloudBase}/devices`, {
+      headers: API.getAuthHeaders(),
+      cache: 'no-store'
+    });
+    if (devRes.ok) {
+      allDevicesData = await devRes.json();
+    }
+
+    if (allUsersData.length === 0) {
       container.innerHTML = '<div class="muted">No registered users</div>';
       return;
     }
 
-    container.innerHTML = users.map(u => {
-      const verified = u.verified ? '✅' : '❌';
-      const admin = u.is_admin ? ' 👑' : '';
-      const deviceCount = (u.devices || []).length;
-      const lastLogin = u.last_login ? new Date(u.last_login).toLocaleDateString() : 'Never';
-      const created = u.created_at ? new Date(u.created_at).toLocaleDateString() : '—';
-      return `
-        <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid #333">
-          <div>
-            <span style="color:#fff">${verified} ${u.email}${admin}</span>
-            <div class="muted" style="font-size:11px">Devices: ${deviceCount} • Last login: ${lastLogin} • Registered: ${created}</div>
-          </div>
-        </div>
-      `;
-    }).join('');
+    renderUsersList();
   } catch(e) {
-    container.innerHTML = '<div class="danger">Error loading users</div>';
+    console.error('[Admin] Load users error:', e);
+    container.innerHTML = '<div class="danger">Error loading users: ' + e.message + '</div>';
   }
 }
+
+// Render users list with current whitelist data
+function renderUsersList() {
+  const container = document.getElementById('users-list');
+  const whitelistUsers = whitelistData?.users || {};
+
+  container.innerHTML = allUsersData.map(u => {
+    const email = u.email;
+    const isWhitelisted = !!whitelistUsers[email];
+    const isBanned = whitelistUsers[email]?.status === 'banned';
+    const isSuspended = whitelistUsers[email]?.status === 'suspended';
+    const isAdmin = u.is_admin;
+    const verified = u.verified;
+
+    // Get devices assigned to this user
+    const userDevices = whitelistUsers[email]?.devices || [];
+
+    // Status badge
+    let statusBadge = '';
+    if (isAdmin) {
+      statusBadge = '<span style="color:#ffd700">👑 Admin</span>';
+    } else if (isBanned) {
+      statusBadge = '<span style="color:#f44">🚫 Banned</span>';
+    } else if (isSuspended) {
+      statusBadge = '<span style="color:#ff9800">⏸️ Suspended</span>';
+    } else if (isWhitelisted) {
+      statusBadge = '<span style="color:#4caf50">✅ Whitelisted</span>';
+    } else if (!verified) {
+      statusBadge = '<span style="color:#999">❌ Not verified</span>';
+    } else {
+      statusBadge = '<span style="color:#999">⏳ Not whitelisted</span>';
+    }
+
+    // Action buttons based on status
+    let actions = '';
+    if (!isAdmin) {
+      if (isBanned) {
+        actions = `<button onclick="unbanUser('${email}')" style="font-size:11px;padding:4px 8px">Unban</button>`;
+      } else if (isSuspended) {
+        actions = `
+          <button onclick="unsuspendUser('${email}')" style="font-size:11px;padding:4px 8px">Unsuspend</button>
+          <button onclick="banUser('${email}')" style="font-size:11px;padding:4px 8px;background:#f44;color:#fff;border-color:#f44">Ban</button>
+        `;
+      } else if (isWhitelisted) {
+        actions = `
+          <button onclick="toggleUserDevices('${email}')" style="font-size:11px;padding:4px 8px">📱 Devices (${userDevices.length})</button>
+          <button onclick="suspendUser('${email}')" style="font-size:11px;padding:4px 8px">Suspend</button>
+          <button onclick="removeFromWhitelist('${email}')" style="font-size:11px;padding:4px 8px">Remove</button>
+        `;
+      } else if (verified) {
+        actions = `
+          <button onclick="addToWhitelist('${email}')" style="font-size:11px;padding:4px 8px;background:#4caf50;color:#fff;border-color:#4caf50">+ Whitelist</button>
+          <button onclick="banUser('${email}')" style="font-size:11px;padding:4px 8px">Ban</button>
+        `;
+      } else {
+        actions = `<button onclick="deleteUser('${email}')" style="font-size:11px;padding:4px 8px">Delete</button>`;
+      }
+    }
+
+    // Devices section (expandable)
+    const devicesSection = isWhitelisted && userDevices.length > 0 ? `
+      <div id="devices-${email.replace(/[@.]/g, '_')}" style="display:none;margin-top:8px;padding:8px;background:#1a1a2e;border-radius:8px">
+        ${userDevices.map(devId => `
+          <div style="display:flex;justify-content:space-between;align-items:center;padding:4px 0">
+            <span class="mono" style="color:#4caf50">📱 ${devId}</span>
+            <button onclick="unassignDevice('${email}', '${devId}')" style="font-size:10px;padding:2px 6px">Unassign</button>
+          </div>
+        `).join('')}
+        <button onclick="showAssignDeviceDialog('${email}')" style="font-size:11px;padding:4px 8px;margin-top:8px">+ Assign device</button>
+      </div>
+    ` : (isWhitelisted ? `
+      <div id="devices-${email.replace(/[@.]/g, '_')}" style="display:none;margin-top:8px;padding:8px;background:#1a1a2e;border-radius:8px">
+        <div class="muted">No devices assigned</div>
+        <button onclick="showAssignDeviceDialog('${email}')" style="font-size:11px;padding:4px 8px;margin-top:8px">+ Assign device</button>
+      </div>
+    ` : '');
+
+    const lastLogin = u.last_login ? new Date(u.last_login).toLocaleDateString() : 'Never';
+
+    return `
+      <div style="padding:10px 0;border-bottom:1px solid #333">
+        <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
+          <div>
+            <span style="color:#fff">${email}</span>
+            <span style="margin-left:8px">${statusBadge}</span>
+            <div class="muted" style="font-size:11px">Last login: ${lastLogin}</div>
+          </div>
+          <div style="display:flex;gap:4px;flex-wrap:wrap">
+            ${actions}
+          </div>
+        </div>
+        ${devicesSection}
+      </div>
+    `;
+  }).join('');
+}
+
+// Toggle devices visibility
+function toggleUserDevices(email) {
+  const id = 'devices-' + email.replace(/[@.]/g, '_');
+  const el = document.getElementById(id);
+  if (el) {
+    el.style.display = el.style.display === 'none' ? 'block' : 'none';
+  }
+}
+
+// ============ Whitelist Actions ============
+
+async function addToWhitelist(email) {
+  if (!confirm(`Add ${email} to whitelist?`)) return;
+
+  if (!whitelistData.users) whitelistData.users = {};
+  whitelistData.users[email] = {
+    status: 'active',
+    devices: [],
+    added_at: new Date().toISOString().split('T')[0]
+  };
+
+  const success = await saveWhitelist(`Add ${email} to whitelist`);
+  if (success) {
+    showToast(`${email} added to whitelist`, 'success');
+    renderUsersList();
+  }
+}
+
+async function removeFromWhitelist(email) {
+  const userData = whitelistData.users[email];
+  const deviceCount = userData?.devices?.length || 0;
+
+  let msg = `Remove ${email} from whitelist?`;
+  if (deviceCount > 0) {
+    msg += `\n\nThis will also unassign ${deviceCount} device(s).`;
+  }
+
+  if (!confirm(msg)) return;
+
+  delete whitelistData.users[email];
+
+  const success = await saveWhitelist(`Remove ${email} from whitelist`);
+  if (success) {
+    showToast(`${email} removed from whitelist`, 'success');
+    renderUsersList();
+  }
+}
+
+async function suspendUser(email) {
+  if (!confirm(`Suspend ${email}? They will not be able to use their devices.`)) return;
+
+  whitelistData.users[email].status = 'suspended';
+
+  const success = await saveWhitelist(`Suspend ${email}`);
+  if (success) {
+    showToast(`${email} suspended`, 'warning');
+    renderUsersList();
+  }
+}
+
+async function unsuspendUser(email) {
+  whitelistData.users[email].status = 'active';
+
+  const success = await saveWhitelist(`Unsuspend ${email}`);
+  if (success) {
+    showToast(`${email} unsuspended`, 'success');
+    renderUsersList();
+  }
+}
+
+async function banUser(email) {
+  if (!confirm(`BAN ${email}?\n\nThis will remove them from whitelist and mark as banned.`)) return;
+
+  if (!whitelistData.users) whitelistData.users = {};
+  whitelistData.users[email] = {
+    status: 'banned',
+    devices: [],
+    banned_at: new Date().toISOString().split('T')[0]
+  };
+
+  const success = await saveWhitelist(`Ban ${email}`);
+  if (success) {
+    showToast(`${email} banned`, 'error');
+    renderUsersList();
+  }
+}
+
+async function unbanUser(email) {
+  if (!confirm(`Unban ${email}?`)) return;
+
+  delete whitelistData.users[email];
+
+  const success = await saveWhitelist(`Unban ${email}`);
+  if (success) {
+    showToast(`${email} unbanned`, 'success');
+    renderUsersList();
+  }
+}
+
+async function deleteUser(email) {
+  alert('Delete user from AWS is not implemented yet.\nFor now, use AWS Console or let unverified users expire.');
+}
+
+// ============ Device Assignment ============
+
+function showAssignDeviceDialog(email) {
+  // Get available devices (not assigned to anyone)
+  const assignedDevices = new Set();
+  Object.values(whitelistData.users || {}).forEach(u => {
+    (u.devices || []).forEach(d => assignedDevices.add(d));
+  });
+
+  const availableDevices = allDevicesData.filter(d => {
+    const shortId = d.device_id.replace('Polivalka-', '');
+    return !assignedDevices.has(shortId);
+  });
+
+  if (availableDevices.length === 0) {
+    alert('No available devices to assign.\nAll devices are already assigned.');
+    return;
+  }
+
+  const deviceList = availableDevices.map(d => d.device_id.replace('Polivalka-', '')).join('\n');
+  const deviceId = prompt(`Assign device to ${email}\n\nAvailable devices:\n${deviceList}\n\nEnter device ID:`);
+
+  if (deviceId) {
+    assignDevice(email, deviceId.toUpperCase());
+  }
+}
+
+async function assignDevice(email, deviceId) {
+  const shortId = deviceId.replace('Polivalka-', '');
+
+  if (!whitelistData.users[email]) {
+    alert('User not in whitelist');
+    return;
+  }
+
+  if (!whitelistData.users[email].devices) {
+    whitelistData.users[email].devices = [];
+  }
+
+  if (whitelistData.users[email].devices.includes(shortId)) {
+    alert('Device already assigned to this user');
+    return;
+  }
+
+  whitelistData.users[email].devices.push(shortId);
+
+  const success = await saveWhitelist(`Assign ${shortId} to ${email}`);
+  if (success) {
+    // Add to device history
+    await addDeviceHistoryEntry(shortId, {
+      event: 'assigned',
+      to: email
+    });
+
+    showToast(`${shortId} assigned to ${email}`, 'success');
+    renderUsersList();
+  }
+}
+
+async function unassignDevice(email, deviceId) {
+  if (!confirm(`Unassign ${deviceId} from ${email}?`)) return;
+
+  const devices = whitelistData.users[email]?.devices || [];
+  whitelistData.users[email].devices = devices.filter(d => d !== deviceId);
+
+  const success = await saveWhitelist(`Unassign ${deviceId} from ${email}`);
+  if (success) {
+    // Add to device history
+    await addDeviceHistoryEntry(deviceId, {
+      event: 'unassigned',
+      from: email
+    });
+
+    showToast(`${deviceId} unassigned`, 'success');
+    renderUsersList();
+  }
+}
+
+// ============ Device Management Functions ============
 
 async function loadArchivedDevices() {
   const container = document.getElementById('archived-list');
