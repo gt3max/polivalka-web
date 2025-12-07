@@ -665,7 +665,14 @@ function renderUsersList() {
   const container = document.getElementById('users-list');
   const whitelistUsers = whitelistData?.users || {};
 
-  container.innerHTML = allUsersData.map(u => {
+  // Sort: Admin first, then alphabetically
+  const sortedUsers = [...allUsersData].sort((a, b) => {
+    if (a.is_admin && !b.is_admin) return -1;
+    if (!a.is_admin && b.is_admin) return 1;
+    return a.email.localeCompare(b.email);
+  });
+
+  container.innerHTML = sortedUsers.map(u => {
     const email = u.email;
     const isWhitelisted = !!whitelistUsers[email];
     const isBanned = whitelistUsers[email]?.status === 'banned';
