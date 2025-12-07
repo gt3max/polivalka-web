@@ -102,7 +102,7 @@
 // ============ Toxic Plant Families (Source: ASPCA Poison Control) ============
 // Fallback for plants saved before toxicity data was available
 const TOXIC_FAMILIES = {
-  'Araliaceae': { pets: true, humans: false, note: 'Contains calcium oxalates and saponins' },
+  'Araliaceae': { pets: true, humans: true, note: 'Sap causes skin/mouth irritation (oxalates)' },
   'Araceae': { pets: true, humans: true, note: 'Contains calcium oxalate crystals' },
   'Liliaceae': { pets: true, humans: false, note: 'Highly toxic to cats' },
   'Amaryllidaceae': { pets: true, humans: true, note: 'Contains lycorine alkaloids' },
@@ -1055,8 +1055,8 @@ async function loadPlantCard() {
     let infoParts = [];
     if (plant.family) infoParts.push(plant.family);
     if (plant.care_level) infoParts.push(plant.care_level + ' care');
+    // Only show Indoor if confirmed - Outdoor is misleading for tropical plants
     if (plant.indoor === true) infoParts.push('🏠 Indoor');
-    if (plant.indoor === false) infoParts.push('🌳 Outdoor');
     document.getElementById('plant-extra-info').textContent = infoParts.join(' • ');
 
     // Toxicity warning (with family fallback for old data)
