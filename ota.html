@@ -79,8 +79,7 @@ input[type="file"]{display:none}
 </div>
 
 <script>
-const deviceId = new URLSearchParams(window.location.search).get('device') || 'Polivalka-BB00C1';
-
+// DEVICE_ID comes from api-adapter.js
 let selectedFile = null;
 
 // Load device info
@@ -89,14 +88,15 @@ async function loadDeviceInfo() {
     // Use /status endpoint for single device (works in both Local and Cloud mode)
     const device = await API.get('/status');
 
-    document.getElementById('device-name').textContent = deviceId;
+    document.getElementById('device-name').textContent = DEVICE_ID;
     document.getElementById('device-location').textContent = `${device.system_state?.location || '—'} / ${device.system_state?.room || '—'}`;
-    document.getElementById('current-version').textContent = device.firmware_version || 'v1.0.0';
-    document.getElementById('device-status').textContent = device.percent !== undefined ? '● Online' : '○ Offline';
-    document.getElementById('device-status').style.color = device.percent !== undefined ? '#2e7d32' : '#999';
+    document.getElementById('current-version').textContent = device.firmware_version || '—';
+    const isOnline = device.online === true;
+    document.getElementById('device-status').textContent = isOnline ? '● Online' : '○ Offline';
+    document.getElementById('device-status').style.color = isOnline ? '#2e7d32' : '#999';
   } catch(e) {
     console.error('Failed to load device info:', e);
-    document.getElementById('device-name').textContent = deviceId;
+    document.getElementById('device-name').textContent = DEVICE_ID;
     document.getElementById('device-status').textContent = '⚠ Error loading';
   }
 }
