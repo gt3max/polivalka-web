@@ -960,8 +960,8 @@ async function loadPlantCard() {
     const card = document.getElementById('plant-card');
     card.style.display = 'block';
 
-    document.getElementById('plant-name').textContent = plant.common_name || plant.scientific;
-    document.getElementById('plant-scientific').textContent = plant.scientific || '';
+    document.getElementById('plant-name').textContent = plant.scientific;  // Scientific name = primary
+    document.getElementById('plant-scientific').textContent = plant.common_name || '';  // Common name = secondary
     document.getElementById('plant-range').textContent = `${plant.start_pct || 35}-${plant.stop_pct || 55}%`;
 
     // Frequency from preset

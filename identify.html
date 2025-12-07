@@ -852,8 +852,8 @@ function showPlantCard(result) {
 
   // Populate card
   document.getElementById('card-photo').src = plantData.photos[0] || '';
-  document.getElementById('card-name').textContent = plantData.names.en || plantData.scientific;
-  document.getElementById('card-scientific').textContent = plantData.scientific;
+  document.getElementById('card-name').textContent = plantData.scientific;  // Scientific = primary
+  document.getElementById('card-scientific').textContent = plantData.names.en || '';  // Common = secondary
 
   // Show family info
   const familyText = plantData.family ? `Family: ${plantData.family}` : '';
