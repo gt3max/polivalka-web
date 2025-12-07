@@ -89,8 +89,9 @@
 <div id="plant-warning" style="padding:6px 10px;background:#ffebee;border-radius:6px;font-size:12px;color:#c62828;margin-bottom:8px;display:none"></div>
 <div id="plant-description" style="font-size:13px;color:#444;margin-bottom:12px;line-height:1.4"></div>
 <div class="detail-row">
-<div class="detail-item">🌡️ Air Temperature: <span id="plant-temperature">18-24°C</span></div>
-<div class="detail-item">💨 Air Humidity: <span id="plant-humidity">40-60%</span></div>
+<div class="detail-item">💧 Watering: <span id="plant-watering-detail">Every 7-10 days</span></div>
+<div class="detail-item">🌡️ Temperature: <span id="plant-temperature">18-24°C</span></div>
+<div class="detail-item">💨 Humidity: <span id="plant-humidity">40-60%</span></div>
 </div>
 <div style="margin-top:12px">
 <a href="identify.html" style="padding:8px 12px;background:#2c5f2d;color:#fff;border-radius:8px;font-size:12px;text-decoration:none">🌱 Change Plant</a>
@@ -1045,7 +1046,9 @@ async function loadPlantCard() {
       'tropical': 'Every 5-7 days',
       'moisture_loving': 'Every 3-5 days'
     };
-    document.getElementById('plant-frequency').textContent = freq[plant.preset] || 'Every 7-10 days';
+    const wateringText = freq[plant.preset] || 'Every 7-10 days';
+    document.getElementById('plant-frequency').textContent = wateringText;
+    document.getElementById('plant-watering-detail').textContent = wateringText;
 
     // Image if available
     if (plant.image_url) {
