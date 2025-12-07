@@ -20,6 +20,38 @@ function showAdminNavLink() {
   }
 }
 
+// ============ Universal Clock ============
+/**
+ * Start a universal clock that updates header-time element every second.
+ * Shows current browser time, NOT device telemetry timestamp.
+ * Call this from any page that has <div id="header-time">
+ */
+function startHeaderClock() {
+  const timeEl = document.getElementById('header-time');
+  if (!timeEl) return;
+
+  function updateClock() {
+    const now = new Date();
+    const timeStr = now.toLocaleTimeString('en-US', {
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: false
+    });
+    timeEl.textContent = timeStr;
+    timeEl.className = 'mono ok';
+  }
+
+  updateClock(); // Initial update
+  setInterval(updateClock, 1000); // Update every second
+}
+
+// Auto-start clock when DOM is ready
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', startHeaderClock);
+} else {
+  startHeaderClock();
+}
+
 // ============ State Display ============
 /**
  * Map internal controller states to user-friendly display
