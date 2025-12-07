@@ -339,14 +339,15 @@ if (IS_CLOUD && DEVICE_ID) {
 }
 
 setInterval(updateStatus, 30000);  // 30s interval (reduced load)
-setInterval(updateTime, 60000);
 setInterval(updateBattery, 60000);  // Battery: every minute
 updateBattery();
-if (!IS_CLOUD) { setInterval(monitorWiFiMode, 5000);  // 5 sec - balance UX/load (active settings editing)
+if (!IS_CLOUD) {
+  setInterval(updateTime, 60000);  // Time: only in local mode (cloud uses common.js clock)
+  setInterval(monitorWiFiMode, 5000);
+  updateTime();
+  monitorWiFiMode();
 }
 updateStatus();
-updateTime();
-if (!IS_CLOUD) { monitorWiFiMode(); }
 loadSensorSettings();
 
 // Cloud mode: show info notice (editing via MQTT is now supported!)

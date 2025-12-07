@@ -233,16 +233,16 @@ if (IS_CLOUD) {
   });
 }
 
-updateTime();loadAllData();loadPumpCalibration();
+loadAllData();loadPumpCalibration();
 
-// Admin nav link + monitorWiFiMode() - moved to common.js
-
-setInterval(updateTime, 60000);
-setInterval(updateBattery, 60000);  // Battery: every minute
+// Time from common.js universal clock, battery/wifi separate
+setInterval(updateBattery, 60000);
 updateBattery();
 if (!IS_CLOUD) {
-  setInterval(monitorWiFiMode, 5000);  // 5 sec - balance UX/load (active calibration operations)
-  monitorWiFiMode();  // Initial load - only in local mode
+  updateTime();
+  setInterval(updateTime, 60000);
+  setInterval(monitorWiFiMode, 5000);
+  monitorWiFiMode();
 }
 </script>
 </body></html>

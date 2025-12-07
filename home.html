@@ -114,19 +114,9 @@ async function updateStatus(){
   try {
     const s = await API.get('/status');
 
-    // Cloud mode: update time and battery from /status (no separate endpoints)
+    // Cloud mode: update battery from /status (time handled by common.js)
     if (IS_CLOUD) {
-      // Time: use timestamp from telemetry
-      const timeEl = document.getElementById('header-time');
-      if (s.timestamp) {
-        const date = new Date(s.timestamp * 1000);
-        const timeStr = date.toLocaleTimeString('en-US', {hour: '2-digit', minute: '2-digit', hour12: false});
-        timeEl.textContent = timeStr;
-        timeEl.className = 'mono ok';
-      } else {
-        timeEl.textContent = '--:--';
-        timeEl.className = 'mono';
-      }
+      // Time is handled by universal clock in common.js
 
       // Battery: from /status response (3 states only)
       // 1. 🔋 XX% - battery, not charging

@@ -697,17 +697,15 @@ if (IS_CLOUD && DEVICE_ID) {
   document.getElementById('device-id-header').textContent = '🌱 ' + DEVICE_ID;
   document.title = `${DEVICE_ID} — Trends`;
 
-  // Load data
+  // Load data (time handled by common.js universal clock)
   refreshAll();
   updateHeader();
   updateBattery();
-  updateTime();
 
   // Auto-refresh every 5 minutes
   setInterval(refreshAll, 300000);
   setInterval(updateHeader, 30000);
   setInterval(updateBattery, 60000);
-  setInterval(updateTime, 60000);
 } else {
   // AP mode - show message
   document.querySelector('.container').innerHTML = `

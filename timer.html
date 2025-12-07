@@ -459,21 +459,19 @@ if (IS_CLOUD && DEVICE_ID) {
   document.title = `${DEVICE_ID} — Timer Mode`;
 }
 
-// Auto-update intervals
-setInterval(updateTime, 60000);      // Time: every minute
+// Auto-update intervals (time from common.js universal clock)
 setInterval(updateMode, 30000);      // Status/Mode: every 30 seconds
 setInterval(updateBattery, 60000);   // Battery: every minute
 updateBattery();
 if (!IS_CLOUD) {
-  setInterval(monitorWiFiMode, 5000);  // WiFi mode: every 5 seconds (balance UX/load for active editing)
+  setInterval(updateTime, 60000);      // Local mode: ESP32 time
+  setInterval(monitorWiFiMode, 5000);
+  updateTime();
+  monitorWiFiMode();
 }
 
 // Initial load
-updateTime();
 updateMode();
-if (!IS_CLOUD) {
-  monitorWiFiMode();  // Only monitor WiFi in local mode
-}
 loadSchedules();
 </script>
 </body></html>

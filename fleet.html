@@ -557,12 +557,8 @@ function loginSuccess(email) {
     document.getElementById('admin-link').innerHTML = '<a href="admin.html" style="color:#fff;text-decoration:none">⚙️ Admin</a> | ';
   }
 
-  // Load devices
+  // Load devices (time handled by common.js universal clock)
   loadDevices();
-
-  // Update time
-  updateTime();
-  setInterval(updateTime, 60000);
 }
 
 function logout() {
@@ -597,14 +593,10 @@ function initUserDisplay() {
     if (authSection) authSection.style.display = 'none';
     if (fleetView) fleetView.style.display = 'block';
 
-    // Load devices if not already loaded
+    // Load devices if not already loaded (time handled by common.js)
     if (allDevices.length === 0) {
       loadDevices();
     }
-
-    // Update time
-    updateTime();
-    setInterval(updateTime, 60000);
   }
 }
 

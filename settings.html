@@ -287,11 +287,11 @@ if (IS_CLOUD && DEVICE_ID) {
   document.title = `${DEVICE_ID} — Settings`;
 }
 
-// Only time updates automatically (lightweight)
-setInterval(updateTime, 60000);
-setInterval(updateBattery, 60000);  // Battery: every minute
+// Battery updates, time from common.js universal clock
+setInterval(updateBattery, 60000);
 updateBattery();
 if (!IS_CLOUD) {
+  setInterval(updateTime, 60000);  // Local mode: ESP32 time
   setInterval(monitorWiFiMode, 10000);
   monitorWiFiMode();
 }
