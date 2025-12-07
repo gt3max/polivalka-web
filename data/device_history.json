@@ -7,6 +7,11 @@
         "event": "assigned",
         "to": "mahin84@gmail.com",
         "timestamp": "2025-12-07T20:07:16.769Z"
+      },
+      {
+        "event": "unassigned",
+        "from": "mahin84@gmail.com",
+        "timestamp": "2025-12-07T20:09:41.617Z"
       }
     ]
   }
