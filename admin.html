@@ -761,15 +761,36 @@ function renderUsersList() {
       </div>
     `;
   }).join('');
+
+  // Restore expanded sections
+  restoreExpandedUsers();
 }
+
+// Track expanded user sections
+const expandedUsers = new Set();
 
 // Toggle devices visibility
 function toggleUserDevices(email) {
   const id = 'devices-' + email.replace(/[@.]/g, '_');
   const el = document.getElementById(id);
   if (el) {
-    el.style.display = el.style.display === 'none' ? 'block' : 'none';
+    const isHidden = el.style.display === 'none';
+    el.style.display = isHidden ? 'block' : 'none';
+    if (isHidden) {
+      expandedUsers.add(email);
+    } else {
+      expandedUsers.delete(email);
+    }
   }
+}
+
+// Restore expanded state after render
+function restoreExpandedUsers() {
+  expandedUsers.forEach(email => {
+    const id = 'devices-' + email.replace(/[@.]/g, '_');
+    const el = document.getElementById(id);
+    if (el) el.style.display = 'block';
+  });
 }
 
 // ============ Whitelist Actions ============
