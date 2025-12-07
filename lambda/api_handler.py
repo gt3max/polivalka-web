@@ -450,13 +450,26 @@ def identify_plant_handler(event, origin):
                 if cached_data or perenual_data:
                     final_details = merge_plant_data(cached_data, perenual_data or {})
 
-                    # Step 4: Save to cache if we got new data
-                    if perenual_data and final_details:
-                        save_to_plant_cache(scientific_name, {
-                            'common_name': species.get('commonNames', [''])[0],
-                            'family': family_name,
-                            **final_details
-                        })
+                # Step 3.5: Family-based toxicity fallback (ASPCA data)
+                # If no toxicity info from Perenual, use family data
+                if family_name and (not final_details or final_details.get('poisonous_to_pets') is None):
+                    family_toxicity = TOXIC_FAMILIES.get(family_name)
+                    if family_toxicity:
+                        if not final_details:
+                            final_details = {}
+                        final_details['poisonous_to_pets'] = family_toxicity['pets']
+                        final_details['poisonous_to_humans'] = family_toxicity['humans']
+                        final_details['toxicity_source'] = 'family'
+                        final_details['toxicity_note'] = family_toxicity['note']
+                        print(f"[Toxicity] Using family fallback for {scientific_name} ({family_name})")
+
+                # Step 4: Save to cache if we have data
+                if final_details and (perenual_data or family_name in TOXIC_FAMILIES):
+                    save_to_plant_cache(scientific_name, {
+                        'common_name': species.get('commonNames', [''])[0],
+                        'family': family_name,
+                        **final_details
+                    })
 
             # Build result object
             result = {
@@ -485,6 +498,8 @@ def identify_plant_handler(event, origin):
                     # Safety info (CRITICAL)
                     'poisonous_to_humans': final_details.get('poisonous_to_humans'),
                     'poisonous_to_pets': final_details.get('poisonous_to_pets'),
+                    'toxicity_source': final_details.get('toxicity_source'),
+                    'toxicity_note': final_details.get('toxicity_note'),
                     # Size & Growth
                     'dimension': final_details.get('dimension', ''),
                     'growth_rate': final_details.get('growth_rate', ''),
@@ -937,6 +952,37 @@ FAMILY_PRESETS = {
     'Pteridaceae': 'tropical',    # Ferns
     'Begoniaceae': 'standard',    # Begonias
     'Malvaceae': 'standard',      # Hibiscus
+}
+
+# Family-based toxicity fallback (ASPCA data)
+# Used when Perenual doesn't have toxicity info
+TOXIC_FAMILIES = {
+    # Schefflera, Ivy, Fatsia - sap irritates skin
+    'Araliaceae': {'pets': True, 'humans': True, 'note': 'Sap irritates skin and mouth'},
+    # Philodendron, Pothos, Monstera, Dieffenbachia, Alocasia
+    'Araceae': {'pets': True, 'humans': True, 'note': 'Causes mouth/throat burning and swelling'},
+    # Lilies - EXTREMELY dangerous for cats!
+    'Liliaceae': {'pets': True, 'humans': True, 'note': 'DEADLY for cats - kidney failure'},
+    # Tomatoes, Peppers - fruits safe, leaves toxic
+    'Solanaceae': {'pets': True, 'humans': False, 'note': 'Leaves/stems toxic, ripe fruits safe'},
+    # Amaryllis, Daffodils, Snowdrops
+    'Amaryllidaceae': {'pets': True, 'humans': True, 'note': 'Bulbs most toxic - vomiting, tremors'},
+    # Oleander, Periwinkle - cardiac glycosides
+    'Apocynaceae': {'pets': True, 'humans': True, 'note': 'Heart problems if ingested'},
+    # Kalanchoe, Sedum - toxic to pets
+    'Crassulaceae': {'pets': True, 'humans': False, 'note': 'Vomiting and heart problems in pets'},
+    # Rhododendrons, Azaleas
+    'Ericaceae': {'pets': True, 'humans': True, 'note': 'All parts toxic - vomiting, weakness'},
+    # Croton, Poinsettia - milky sap irritates
+    'Euphorbiaceae': {'pets': True, 'humans': True, 'note': 'Milky sap irritates skin and eyes'},
+    # Cycads - liver damage
+    'Cycadaceae': {'pets': True, 'humans': True, 'note': 'Liver failure - highly toxic'},
+    # Hellebores - cardiac glycosides
+    'Ranunculaceae': {'pets': True, 'humans': True, 'note': 'Heart and digestive problems'},
+    # Foxglove - heart medication source
+    'Plantaginaceae': {'pets': True, 'humans': True, 'note': 'Affects heart rhythm'},
+    # Chrysanthemums - skin irritation
+    'Asteraceae': {'pets': True, 'humans': False, 'note': 'Skin irritation, vomiting if eaten'},
 }
 
 PRESET_DETAILS = {

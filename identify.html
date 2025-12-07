@@ -911,9 +911,13 @@ function showPlantCard(result) {
   const toxicPetsItem = document.getElementById('toxic-pets-item');
   let showSafety = false;
 
+  // Check if toxicity came from family fallback (in Lambda)
+  const fromFamily = details.toxicity_source === 'family';
+  const familySuffix = fromFamily ? ' <span style="font-size:10px;color:#666">(family)</span>' : '';
+
   if (details.poisonous_to_humans === true) {
     toxicHumansItem.style.display = '';
-    document.getElementById('toxic-humans').textContent = '⚠️ TOXIC';
+    document.getElementById('toxic-humans').innerHTML = '⚠️ TOXIC' + familySuffix;
     showSafety = true;
   } else if (details.poisonous_to_humans === false) {
     toxicHumansItem.style.display = '';
@@ -925,7 +929,7 @@ function showPlantCard(result) {
 
   if (details.poisonous_to_pets === true) {
     toxicPetsItem.style.display = '';
-    document.getElementById('toxic-pets').textContent = '⚠️ TOXIC';
+    document.getElementById('toxic-pets').innerHTML = '⚠️ TOXIC' + familySuffix;
     showSafety = true;
   } else if (details.poisonous_to_pets === false) {
     toxicPetsItem.style.display = '';
@@ -935,7 +939,15 @@ function showPlantCard(result) {
     showSafety = true;
   }
 
-  // ============ Fallback: Check family toxicity if Perenual didn't have data ============
+  // Show toxicity note from Lambda (if available)
+  if (details.toxicity_note && showSafety) {
+    const noteEl = document.createElement('div');
+    noteEl.style.cssText = 'font-size:11px;color:#856404;background:#fff3cd;padding:6px 8px;border-radius:4px;margin-top:6px';
+    noteEl.textContent = `ℹ️ ${details.toxicity_note}`;
+    safetySection.appendChild(noteEl);
+  }
+
+  // ============ Fallback: Check family toxicity if Lambda didn't have data ============
   if (!showSafety && plantData.family) {
     const familyToxicity = TOXIC_FAMILIES[plantData.family];
     if (familyToxicity) {
