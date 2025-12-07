@@ -549,10 +549,7 @@ def save_plant_handler(event, origin):
     """
     POST /plants/save
     Save a plant card to DynamoDB.
-    Protections:
-    - Max 20 plants per device
-    - Max 10 saves per hour (rate limit)
-    - No duplicate scientific names (same plant can't be saved twice)
+    ONE plant per device - new plant REPLACES the old one.
     """
     try:
         body = json.loads(event.get('body', '{}'))
@@ -569,38 +566,23 @@ def save_plant_handler(event, origin):
         scientific = plant_data.get('scientific', 'unknown')
         plants_pk = f"plants#{device_id}"
 
-        # Get ALL plants for this device (for all checks)
+        # Get existing plants for this device
         existing = telemetry_table.query(
             KeyConditionExpression=Key('device_id').eq(plants_pk)
         )
         plants = existing.get('Items', [])
-        current_count = len(plants)
 
-        # Check 1: Plant limit (max 20)
-        if current_count >= MAX_PLANTS_PER_DEVICE:
-            return {
-                'statusCode': 429,
-                'headers': cors_headers(origin),
-                'body': json.dumps({
-                    'error': f'Plant limit reached ({MAX_PLANTS_PER_DEVICE} per device). Archive or delete some plants.',
-                    'current_count': current_count,
-                    'limit': MAX_PLANTS_PER_DEVICE
-                })
-            }
-
-        # Check 2: Duplicate scientific name (no same plant twice)
+        # Delete ALL existing plants (one device = one plant)
         for p in plants:
-            if p.get('scientific', '').lower() == scientific.lower() and p.get('status') == 'active':
-                return {
-                    'statusCode': 409,
-                    'headers': cors_headers(origin),
-                    'body': json.dumps({
-                        'error': f'This plant ({scientific}) is already saved. Archive it first if you want to re-add.',
-                        'existing_plant_id': p.get('plant_id')
-                    })
-                }
+            try:
+                telemetry_table.delete_item(
+                    Key={'device_id': plants_pk, 'timestamp': p['timestamp']}
+                )
+                print(f"[Plants] Deleted old plant: {p.get('scientific')}")
+            except Exception as e:
+                print(f"[Plants] Failed to delete old plant: {e}")
 
-        # Check 3: Rate limit (max 10 per hour)
+        # Rate limit check (max 10 saves per hour) - still useful
         one_hour_ago = int(time.time()) - 3600
         recent_saves = len([p for p in plants if p.get('timestamp', 0) > one_hour_ago])
         if recent_saves >= MAX_SAVES_PER_HOUR:
