@@ -322,15 +322,12 @@
     </div>
 
     <div class="actions">
-      <button class="primary" onclick="applyToDevice()">
-        Apply to Device
+      <button class="primary" onclick="confirmPlant()" style="width:100%;padding:14px;font-size:16px">
+        ✓ Use This Plant
       </button>
-      <button class="secondary" onclick="saveToProfile()">
-        Save to Profile
-      </button>
-      <button class="secondary" onclick="goToManualSettings()">
-        Configure Manually
-      </button>
+      <p class="muted" style="text-align:center;margin:12px 0 0;font-size:12px">
+        <a href="#" onclick="goToManualSettings();return false">or configure manually</a>
+      </p>
     </div>
   </div>
 
@@ -1027,6 +1024,54 @@ function formatSunlight(sunlight) {
 }
 
 // ============ Actions ============
+
+// Main action: Apply + Save + Redirect to home
+async function confirmPlant() {
+  if (!selectedPlant || !selectedResult) return;
+
+  const deviceId = getDeviceId();
+  if (!deviceId) {
+    showToast('No device selected. Go to Fleet first.', 'warning');
+    return;
+  }
+
+  const care = selectedPlant.care;
+  const btn = document.querySelector('.actions button.primary');
+  const originalText = btn.textContent;
+  btn.disabled = true;
+  btn.textContent = 'Saving...';
+
+  try {
+    // 1. Apply watering settings to device
+    await apiCall('command', {
+      device_id: deviceId,
+      command: 'set_sensor_preset',
+      params: {
+        preset: care.preset,
+        start_pct: care.start_pct,
+        stop_pct: care.stop_pct
+      }
+    });
+
+    // 2. Save plant to profile
+    await saveToProfile();
+
+    // 3. Success - redirect to home
+    btn.textContent = '✓ Saved!';
+    showToast('Plant saved! Redirecting...', 'success');
+
+    setTimeout(() => {
+      window.location.href = `home.html?device=${deviceId}`;
+    }, 1500);
+
+  } catch (err) {
+    console.error('Confirm error:', err);
+    showToast('Error: ' + err.message, 'error');
+    btn.disabled = false;
+    btn.textContent = originalText;
+  }
+}
+
 async function applyToDevice() {
   if (!selectedPlant) return;
 
