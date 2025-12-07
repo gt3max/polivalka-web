@@ -2675,8 +2675,8 @@ def generate_warnings(telemetry):
 
 # ============ Admin Device Management Handlers (added 2025-12-06) ============
 
-# AWS IoT client for certificate management
-iot_client = boto3.client('iot', region_name='eu-central-1')
+# AWS IoT control plane client for certificate management (NOT for publish!)
+iot_mgmt_client = boto3.client('iot', region_name='eu-central-1')
 
 
 def admin_archive_device(device_id):
@@ -2793,17 +2793,17 @@ def admin_delete_device(device_id):
         thing_name = device_id
         try:
             # List principals (certificates) attached to the thing
-            principals = iot_client.list_thing_principals(thingName=thing_name)
+            principals = iot_mgmt_client.list_thing_principals(thingName=thing_name)
             for principal_arn in principals.get('principals', []):
                 # Extract certificate ID from ARN
                 cert_id = principal_arn.split('/')[-1]
                 # Deactivate certificate
-                iot_client.update_certificate(
+                iot_mgmt_client.update_certificate(
                     certificateId=cert_id,
                     newStatus='INACTIVE'
                 )
                 print(f"[ADMIN] Deactivated certificate {cert_id} for {device_id}")
-        except iot_client.exceptions.ResourceNotFoundException:
+        except iot_mgmt_client.exceptions.ResourceNotFoundException:
             print(f"[ADMIN] No IoT Thing found for {device_id}, skipping certificate deactivation")
 
         # 2. Mark device as deleted in DynamoDB (don't actually delete - keep history)
@@ -2855,15 +2855,15 @@ def admin_restore_deleted(device_id):
         # 1. Reactivate certificate in AWS IoT
         thing_name = device_id
         try:
-            principals = iot_client.list_thing_principals(thingName=thing_name)
+            principals = iot_mgmt_client.list_thing_principals(thingName=thing_name)
             for principal_arn in principals.get('principals', []):
                 cert_id = principal_arn.split('/')[-1]
-                iot_client.update_certificate(
+                iot_mgmt_client.update_certificate(
                     certificateId=cert_id,
                     newStatus='ACTIVE'
                 )
                 print(f"[ADMIN] Reactivated certificate {cert_id} for {device_id}")
-        except iot_client.exceptions.ResourceNotFoundException:
+        except iot_mgmt_client.exceptions.ResourceNotFoundException:
             print(f"[ADMIN] No IoT Thing found for {device_id}")
 
         # 2. Remove deleted flag from DynamoDB
