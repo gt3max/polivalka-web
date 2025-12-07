@@ -55,6 +55,7 @@ input[type="file"]{display:none}
   <div class="file-info" id="fileInfo" style="display:none">
     <div><strong>File:</strong> <span id="fileName">—</span></div>
     <div><strong>Size:</strong> <span id="fileSize">—</span></div>
+    <div><strong>New version:</strong> <span id="newVersion">—</span></div>
   </div>
 
   <button class="btn btn-primary" id="uploadBtn" disabled onclick="startOTA()">
@@ -135,6 +136,12 @@ uploadArea.addEventListener('drop', (e) => {
 function showFileInfo(file) {
   document.getElementById('fileName').textContent = file.name;
   document.getElementById('fileSize').textContent = (file.size / 1024 / 1024).toFixed(2) + ' MB';
+
+  // Parse version from filename: polivalka_v1.0.4.bin -> v1.0.4
+  const versionMatch = file.name.match(/[_-](v\d+\.\d+\.\d+)\.bin$/i);
+  const newVersion = versionMatch ? versionMatch[1] : 'unknown';
+  document.getElementById('newVersion').textContent = newVersion;
+
   document.getElementById('fileInfo').style.display = 'block';
   document.getElementById('uploadBtn').disabled = false;
 }
@@ -159,9 +166,13 @@ async function startOTA() {
 
     // Trigger OTA via Lambda
     // API adapter already adds /device/${deviceId} prefix in cloud mode
+    // Get version from filename
+    const versionMatch = selectedFile.name.match(/[_-](v\d+\.\d+\.\d+)\.bin$/i);
+    const version = versionMatch ? versionMatch[1] : 'unknown';
+
     const response = await API.post('/ota', {
       url: firmwareUrl,
-      version: 'v1.0.0'
+      version: version
     });
 
     updateProgress(100, 'OTA update triggered!');
