@@ -1317,41 +1317,50 @@ function deviceUpdate(deviceId) {
 // Admin actions
 async function bulkAction(action) {
   if (action === 'refresh') {
-    // Real refresh: query each device via MQTT for live data
-    const totalDevices = allDevices.length;
-    if (totalDevices === 0) {
-      showToast('❌ No devices to refresh', 'error');
+    // Step 1: Reload all data from DynamoDB (name, location, calibration, last_watering, etc.)
+    showToast(`🔄 Loading device data...`, 'info');
+
+    try {
+      await loadDevices();
+    } catch(e) {
+      showToast(`❌ Failed to load devices: ${e.message}`, 'error');
       return;
     }
 
-    showToast(`🔄 Refreshing ${totalDevices} devices...`, 'info');
+    const totalDevices = allDevices.length;
+    if (totalDevices === 0) {
+      showToast('❌ No devices found', 'error');
+      return;
+    }
+
+    // Step 2: Query each device via MQTT for real-time status
+    showToast(`🔄 Querying ${totalDevices} devices...`, 'info');
 
     let successCount = 0;
     let failCount = 0;
-    let onlineCount = 0;
 
-    // Query all devices in parallel (with concurrency limit)
+    // Query all devices in parallel
     const refreshPromises = allDevices.map(async (device) => {
       try {
         const result = await API.get(`/device/${device.device_id}/sensor`);
 
-        // Update device data
+        // Update real-time data from device response
         device.moisture_pct = result.moisture_pct;
         device.adc_raw = result.adc_raw;
-        device.mode = result.mode || 'manual';
-        device.state = result.state || 'DISABLED';
+        device.mode = result.mode || device.mode || 'manual';
+        device.state = result.state || device.state || 'DISABLED';
         device.pump_running = result.pump_running || false;
         if (result.battery) {
           device.battery_pct = result.battery.percent;
           device.battery_charging = result.battery.charging;
+          device.battery_voltage = result.battery.voltage;
         }
         if (result.firmware_version) device.firmware_version = result.firmware_version;
         if (result.reboot_count !== undefined) device.reboot_count = result.reboot_count;
-        device.last_update = result.timestamp;
+        device.last_update = result.timestamp || Math.floor(Date.now() / 1000);
         device.online = true;
 
         successCount++;
-        onlineCount++;
       } catch(e) {
         // Device didn't respond = offline
         device.online = false;
@@ -1373,8 +1382,10 @@ async function bulkAction(action) {
     // Show summary
     if (failCount === 0) {
       showToast(`✅ All ${successCount} devices online!`, 'success');
+    } else if (successCount === 0) {
+      showToast(`❌ All ${failCount} devices offline!`, 'error');
     } else {
-      showToast(`✅ ${onlineCount} online, ❌ ${failCount} offline`, onlineCount > 0 ? 'success' : 'error');
+      showToast(`✅ ${successCount} online, ❌ ${failCount} offline`, 'success');
     }
 
   } else if (action === 'ota') {
