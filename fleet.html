@@ -1317,20 +1317,64 @@ function deviceUpdate(deviceId) {
 // Admin actions
 async function bulkAction(action) {
   if (action === 'refresh') {
-    // Simple refresh: reload cached data from DynamoDB (fast, reliable)
-    showToast('🔄 Refreshing device list...', 'info');
+    // Real refresh: query each device via MQTT for live data
+    const totalDevices = allDevices.length;
+    if (totalDevices === 0) {
+      showToast('❌ No devices to refresh', 'error');
+      return;
+    }
 
-    try {
-      await loadDevices();
+    showToast(`🔄 Refreshing ${totalDevices} devices...`, 'info');
 
-      // Update last refresh timestamp
-      const now = new Date();
-      const timeStr = now.toLocaleTimeString('en-US', {hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false});
-      document.getElementById('last-refresh-time').textContent = `Last refresh: ${timeStr}`;
+    let successCount = 0;
+    let failCount = 0;
+    let onlineCount = 0;
 
-      showToast(`✅ Refreshed ${allDevices.length} devices from cache`, 'success');
-    } catch(e) {
-      showToast(`❌ Failed to refresh: ${e.message}`, 'error');
+    // Query all devices in parallel (with concurrency limit)
+    const refreshPromises = allDevices.map(async (device) => {
+      try {
+        const result = await API.get(`/device/${device.device_id}/sensor`);
+
+        // Update device data
+        device.moisture_pct = result.moisture_pct;
+        device.adc_raw = result.adc_raw;
+        device.mode = result.mode || 'manual';
+        device.state = result.state || 'DISABLED';
+        device.pump_running = result.pump_running || false;
+        if (result.battery) {
+          device.battery_pct = result.battery.percent;
+          device.battery_charging = result.battery.charging;
+        }
+        if (result.firmware_version) device.firmware_version = result.firmware_version;
+        if (result.reboot_count !== undefined) device.reboot_count = result.reboot_count;
+        device.last_update = result.timestamp;
+        device.online = true;
+
+        successCount++;
+        onlineCount++;
+      } catch(e) {
+        // Device didn't respond = offline
+        device.online = false;
+        failCount++;
+      }
+    });
+
+    await Promise.all(refreshPromises);
+
+    // Re-render with updated data
+    renderDevices(allDevices);
+    updateStats(allDevices);
+
+    // Update last refresh timestamp
+    const now = new Date();
+    const timeStr = now.toLocaleTimeString('en-US', {hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false});
+    document.getElementById('last-refresh-time').textContent = `Last refresh: ${timeStr}`;
+
+    // Show summary
+    if (failCount === 0) {
+      showToast(`✅ All ${successCount} devices online!`, 'success');
+    } else {
+      showToast(`✅ ${onlineCount} online, ❌ ${failCount} offline`, onlineCount > 0 ? 'success' : 'error');
     }
 
   } else if (action === 'ota') {
