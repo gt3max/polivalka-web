@@ -355,8 +355,8 @@ function initDevicePersistence() {
   if (currentDevice) {
     document.querySelectorAll('.nav a, a[href*=".html"]').forEach(link => {
       const href = link.getAttribute('href');
-      if (href && href.endsWith('.html') && !href.includes('index.html')) {
-        // Don't add device to index.html (it shows all devices)
+      if (href && href.endsWith('.html') && !href.includes('index.html') && href !== '/') {
+        // Don't add device to index.html or root (Fleet page shows all devices)
         const url = new URL(href, window.location.origin);
         if (!url.searchParams.has('device')) {
           url.searchParams.set('device', currentDevice);
