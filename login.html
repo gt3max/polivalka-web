@@ -348,7 +348,7 @@
 
                 // Redirect to fleet page
                 setTimeout(() => {
-                    window.location.href = 'fleet.html';
+                    window.location.href = '/';
                 }, 1000);
 
             } catch (err) {
@@ -503,7 +503,7 @@
 
             if (token && expires > Date.now()) {
                 // Already logged in - redirect to fleet
-                window.location.href = 'fleet.html';
+                window.location.href = '/';
             }
 
             // Check URL params for pre-filled email

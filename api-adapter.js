@@ -239,10 +239,10 @@ if (IS_CLOUD && !publicPages.includes(currentPage)) {
   }
 }
 
-// Redirect to fleet.html if Cloud mode without device ID (on device pages)
+// Redirect to home if Cloud mode without device ID (on device pages)
 if (IS_CLOUD && !DEVICE_ID && deviceRequiredPages.includes(currentPage)) {
-  console.warn('[API Adapter] No device ID in Cloud mode, redirecting to fleet.html');
-  window.location.href = 'fleet.html';
+  console.warn('[API Adapter] No device ID in Cloud mode, redirecting to home');
+  window.location.href = '/';
 }
 
 // В Cloud mode: добавить ?device=XX ко всем внутренним ссылкам (кроме fleet, login)
@@ -252,7 +252,7 @@ if (IS_CLOUD && DEVICE_ID) {
       const href = link.getAttribute('href');
       // Только локальные ссылки на .html страницы (не fleet, login, внешние)
       if (href && href.endsWith('.html') && !href.includes('?') &&
-          !href.includes('fleet.html') && !href.includes('login.html') &&
+          !href.includes('index.html') && !href.includes('login.html') &&
           !href.startsWith('http')) {
         link.setAttribute('href', `${href.split('?')[0]}?device=${DEVICE_ID}`);
       }
