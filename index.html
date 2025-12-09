@@ -267,7 +267,7 @@
     <div id="admin-controls" class="admin-controls" style="display:flex;align-items:center;flex-wrap:wrap;gap:8px">
       <h3>🔧 Admin</h3>
       <button onclick="bulkAction('refresh')" style="padding:4px 8px;font-size:12px">🔄 Refresh All</button>
-      <button onclick="bulkAction('ota')" style="padding:4px 8px;font-size:12px">📦 Mass OTA</button>
+      <button onclick="bulkAction('ota')" style="padding:4px 8px;font-size:12px">📦 Update All Online</button>
       <button onclick="exportData()" style="padding:4px 8px;font-size:12px">📥 Export</button>
       <span id="last-refresh-time" class="muted" style="margin-left:auto;font-size:11px"></span>
     </div>
@@ -1413,7 +1413,7 @@ async function massOTAUpdate() {
       return;
     }
 
-    if (!confirm(`📦 Mass OTA Update\n\nFile: ${file.name} (${(file.size/1024/1024).toFixed(2)} MB)\nOnline devices: ${onlineDevices.length}\n\n⚠️ This will update ALL online devices!\n\nContinue?`)) {
+    if (!confirm(`📦 Update All Online\n\nFile: ${file.name} (${(file.size/1024/1024).toFixed(2)} MB)\nOnline devices: ${onlineDevices.length}\n\n⚠️ Offline devices will NOT be updated.\nYou'll need to update them individually when they come online.\n\nContinue?`)) {
       return;
     }
 
@@ -1466,7 +1466,7 @@ async function massOTAUpdate() {
       const successful = results.filter(r => r.success).length;
       const failed = results.filter(r => !r.success).length;
 
-      let resultMsg = `✅ Mass OTA Update Complete!\n\nSuccessful: ${successful}\nFailed: ${failed}\n\n`;
+      let resultMsg = `✅ Update All Online Complete!\n\nSuccessful: ${successful}\nFailed: ${failed}\n\n`;
 
       if (failed > 0) {
         resultMsg += 'Failed devices:\n';
