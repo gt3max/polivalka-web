@@ -378,9 +378,11 @@ function renderMoistureChart(data) {
   const adcValues = data.map(d => d.adc_raw);
   const hasAdc = adcValues.some(v => v != null);
 
-  // Sensor 2 ADC values (resistive sensor J7)
-  const sensor2Values = data.map(d => d.sensor2_adc);
-  const hasSensor2 = sensor2Values.some(v => v != null && v !== undefined);
+  // Sensor 2 data (resistive sensor J7)
+  const sensor2AdcValues = data.map(d => d.sensor2_adc);
+  const sensor2PctValues = data.map(d => d.sensor2_percent);
+  const hasSensor2Adc = sensor2AdcValues.some(v => v != null && v !== undefined);
+  const hasSensor2Pct = sensor2PctValues.some(v => v != null && v !== undefined);
 
   moistureChart = new Chart(ctx, {
     type: isScatter ? 'scatter' : 'line',
@@ -388,7 +390,7 @@ function renderMoistureChart(data) {
       labels: labels,
       datasets: [
         {
-          label: 'Moisture %',
+          label: 'Capacitive %',
           data: isScatter ? data.map(d => ({ x: new Date(d.timestamp * 1000), y: d.moisture_percent })) : values,
           borderColor: '#1976d2',
           backgroundColor: isScatter ? '#1976d2' : 'rgba(25, 118, 210, 0.1)',
@@ -400,6 +402,21 @@ function renderMoistureChart(data) {
           pointBackgroundColor: '#1976d2',
           showLine: !isScatter,
           yAxisID: 'y'
+        },
+        {
+          label: 'Resistive %',
+          data: isScatter ? data.map(d => ({ x: new Date(d.timestamp * 1000), y: d.sensor2_percent })) : sensor2PctValues,
+          borderColor: '#9c27b0',
+          backgroundColor: isScatter ? '#9c27b0' : 'rgba(156, 39, 176, 0.1)',
+          fill: false,
+          tension: isScatter ? 0 : 0.3,
+          pointRadius: isScatter ? 5 : 4,
+          pointHoverRadius: 9,
+          pointBorderWidth: 2,
+          pointBackgroundColor: '#9c27b0',
+          showLine: !isScatter,
+          yAxisID: 'y',
+          hidden: !hasSensor2Pct
         },
         {
           label: 'ADC Capacitive',
@@ -418,18 +435,18 @@ function renderMoistureChart(data) {
         },
         {
           label: 'ADC Resistive',
-          data: isScatter ? data.map(d => ({ x: new Date(d.timestamp * 1000), y: d.sensor2_adc })) : sensor2Values,
-          borderColor: '#9c27b0',
+          data: isScatter ? data.map(d => ({ x: new Date(d.timestamp * 1000), y: d.sensor2_adc })) : sensor2AdcValues,
+          borderColor: '#e91e63',
           borderDash: isScatter ? [] : [3, 3],
           fill: false,
           tension: isScatter ? 0 : 0.3,
           pointRadius: isScatter ? 5 : 4,
           pointHoverRadius: 9,
           pointBorderWidth: 2,
-          pointBackgroundColor: '#9c27b0',
+          pointBackgroundColor: '#e91e63',
           showLine: !isScatter,
           yAxisID: 'y1',
-          hidden: !hasSensor2
+          hidden: !hasSensor2Adc
         }
       ]
     },
@@ -449,7 +466,8 @@ function renderMoistureChart(data) {
           callbacks: {
             title: (items) => new Date(items[0].parsed.x).toLocaleString(),
             label: (item) => {
-              if (item.dataset.label === 'Moisture %') return `Moisture: ${item.parsed.y}%`;
+              if (item.dataset.label === 'Capacitive %') return `Capacitive: ${item.parsed.y}%`;
+              if (item.dataset.label === 'Resistive %') return `Resistive: ${item.parsed.y}%`;
               if (item.dataset.label === 'ADC Capacitive') return `ADC Cap: ${item.parsed.y}`;
               if (item.dataset.label === 'ADC Resistive') return `ADC Res: ${item.parsed.y}`;
               return `${item.dataset.label}: ${item.parsed.y}`;
@@ -667,12 +685,12 @@ function updateStats() {
 
 // Export CSV
 function exportCSV() {
-  let csv = 'timestamp,type,moisture_percent,adc_capacitive,adc_resistive,battery_percent,battery_voltage,charging,message\n';
+  let csv = 'timestamp,type,moisture_cap_pct,moisture_res_pct,adc_capacitive,adc_resistive,battery_percent,battery_voltage,charging,message\n';
 
   // Add sensor data
   for (const d of sensorData) {
     const time = new Date(d.timestamp * 1000).toISOString();
-    csv += `${time},sensor,${d.moisture_percent || ''},${d.adc_raw || ''},${d.sensor2_adc || ''},,,\n`;
+    csv += `${time},sensor,${d.moisture_percent || ''},${d.sensor2_percent || ''},${d.adc_raw || ''},${d.sensor2_adc || ''},,,\n`;
   }
 
   // Add battery data

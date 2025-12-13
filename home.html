@@ -222,7 +222,8 @@ async function updateStatus(){
 
     // Sensor 2 data (resistive - test sensor)
     if (s.sensor2_adc !== undefined && s.sensor2_adc !== null) {
-      document.getElementById('sensor2-vals').textContent = `Resistive: ADC ${s.sensor2_adc}`;
+      const pct2 = s.sensor2_percent !== undefined && s.sensor2_percent !== null ? s.sensor2_percent + '%' : '—';
+      document.getElementById('sensor2-vals').textContent = `Resistive: ADC ${s.sensor2_adc}  |  Moisture: ${pct2}`;
       document.getElementById('sensor2-vals').style.display = 'block';
     } else {
       document.getElementById('sensor2-vals').style.display = 'none';
