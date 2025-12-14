@@ -105,6 +105,23 @@ def lambda_handler(event, context):
         print(f"Error saving telemetry: {e}")
         return {'statusCode': 500, 'body': str(e)}
 
+    # Also update "latest" record (timestamp=0) for quick access from home.html
+    # This ensures fresh data is available without sending get_status command
+    if data_type in ['sensor', 'battery']:
+        try:
+            telemetry_table.update_item(
+                Key={'device_id': device_id, 'timestamp': 0},
+                UpdateExpression='SET #dt = :data, last_update = :ts',
+                ExpressionAttributeNames={'#dt': data_type},
+                ExpressionAttributeValues={
+                    ':data': convert_floats_to_decimal(data),
+                    ':ts': timestamp
+                }
+            )
+            print(f"Updated latest record for {device_id}: {data_type}")
+        except Exception as e:
+            print(f"Failed to update latest record: {e}")  # Non-fatal
+
     # If system telemetry with device info, update Devices table
     if data_type == 'system':
         device_name = data.get('device_name')

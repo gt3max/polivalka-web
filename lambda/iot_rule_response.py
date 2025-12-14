@@ -111,11 +111,17 @@ def lambda_handler(event, context):
             if isinstance(result, dict) and 'sensor' in result:
                 sensor = result.get('sensor', {})
                 update_expr += ', sensor = :sensor'
-                expr_values[':sensor'] = {
+                sensor_data = {
                     'adc_raw': sensor.get('adc'),
                     'moisture_percent': sensor.get('moisture')
                 }
-                print(f"Updating sensor telemetry: adc={sensor.get('adc')}, moisture={sensor.get('moisture')}")
+                # Include sensor2 (resistive J7) if present
+                if 'sensor2' in result:
+                    sensor2 = result.get('sensor2', {})
+                    sensor_data['sensor2_adc'] = sensor2.get('adc')
+                    sensor_data['sensor2_percent'] = sensor2.get('percent')
+                expr_values[':sensor'] = sensor_data
+                print(f"Updating sensor telemetry: adc={sensor.get('adc')}, moisture={sensor.get('moisture')}, sensor2={result.get('sensor2')}")
 
             telemetry_table.update_item(
                 Key={'device_id': device_id, 'timestamp': 0},  # timestamp=0 is "latest" record
