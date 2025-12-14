@@ -1271,6 +1271,33 @@ def lambda_handler(event, context):
             if len(parts) == 4 and parts[3] == 'moisture' and http_method == 'GET':
                 return get_sensor_realtime(device_id, user_id)
 
+            # Sensor 2 (Resistive) status - returns ADC and percent from latest telemetry
+            if len(parts) == 5 and parts[3] == 'sensor2' and parts[4] == 'status' and http_method == 'GET':
+                latest = get_latest_telemetry(device_id)
+                sensor_data = latest.get('sensor', {})
+                return {
+                    'statusCode': 200,
+                    'headers': cors_headers(),
+                    'body': json.dumps({
+                        'adc': sensor_data.get('sensor2_adc', 0),
+                        'percent': sensor_data.get('sensor2_percent', 0)
+                    })
+                }
+
+            # Sensor 2 (Resistive) settings - returns calibration values
+            if len(parts) == 5 and parts[3] == 'sensor2' and parts[4] == 'settings' and http_method == 'GET':
+                device_info = get_device_info(device_id, user_id)
+                sensor2_calib = device_info.get('sensor2_calibration', {})
+                return {
+                    'statusCode': 200,
+                    'headers': cors_headers(),
+                    'body': json.dumps({
+                        'dry': sensor2_calib.get('dry', 4095),
+                        'wet': sensor2_calib.get('wet', 1000),
+                        'calibrated': bool(sensor2_calib)  # True if any calibration exists
+                    })
+                }
+
             if len(parts) == 5 and parts[3] == 'sensor' and parts[4] == 'history':
                 return get_sensor_history(device_id, user_id)
 
@@ -1966,6 +1993,13 @@ def get_devices(user_id):
                 'air': int(sensor_calib.get('air', 2800)) if sensor_calib else 2800
             }
 
+            # Sensor 2 (Resistive) calibration
+            sensor2_calib = item.get('sensor2_calibration', {})
+            sensor2_calib_dict = {
+                'dry': int(sensor2_calib.get('dry', 4095)) if sensor2_calib else 4095,
+                'wet': int(sensor2_calib.get('wet', 1000)) if sensor2_calib else 1000
+            }
+
             device_data = {
                 'device_id': device_id,
                 'name': device_name,
@@ -1988,7 +2022,8 @@ def get_devices(user_id):
                 'warnings': generate_warnings(latest),
                 'pump_calibration': pump_calib_float,
                 'pump_speed': pump_speed_int,
-                'sensor_calibration': sensor_calib_dict
+                'sensor_calibration': sensor_calib_dict,
+                'sensor2_calibration': sensor2_calib_dict
             }
 
             devices.append(device_data)
@@ -2021,7 +2056,8 @@ def get_devices(user_id):
                 'warnings': [],
                 'pump_calibration': 2.5,
                 'pump_speed': 100,
-                'sensor_calibration': {'water': 1200, 'dry_soil': 2400, 'air': 2800}
+                'sensor_calibration': {'water': 1200, 'dry_soil': 2400, 'air': 2800},
+                'sensor2_calibration': {'dry': 4095, 'wet': 1000}
             })
 
     print(f"[DEBUG] get_devices: Returning {len(devices)} devices")

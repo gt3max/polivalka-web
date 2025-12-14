@@ -125,7 +125,20 @@
 <div class="row"><input type="number" id="calib-adc-air" min="0" max="4095" value="3200" style="width:80px"></div>
 </div>
 <div class="row" style="margin-top:8px">
-<button onclick="saveSensorPreset()">Set Sensor Preset</button>
+<button onclick="saveSensorPreset()">Set Capacitive Preset</button>
+</div>
+
+<div class="section-header" style="margin-top:20px">Resistive Sensor Preset (2-point)</div>
+<div class="toggle-row">
+<div><div class="toggle-label">ADC Dry Soil</div><div class="toggle-desc">Default 0% moisture <span class="mono">(adc_s2_dry)</span></div></div>
+<div class="row"><input type="number" id="calib-s2-dry" min="0" max="4095" value="4095" style="width:80px"></div>
+</div>
+<div class="toggle-row">
+<div><div class="toggle-label">ADC Wet Soil</div><div class="toggle-desc">Default 100% moisture <span class="mono">(adc_s2_wet)</span></div></div>
+<div class="row"><input type="number" id="calib-s2-wet" min="0" max="4095" value="1000" style="width:80px"></div>
+</div>
+<div class="row" style="margin-top:8px">
+<button onclick="saveSensor2Preset()">Set Resistive Preset</button>
 </div>
 </div>
 
@@ -506,12 +519,18 @@ async function loadDeviceConfig() {
         document.getElementById('calib-pump-mlsec').value = pumpCalib;
         console.log('[Admin] Loaded pump_calibration:', pumpCalib);
 
-        // Populate sensor calibration (from DynamoDB)
+        // Populate Capacitive sensor calibration (from DynamoDB)
         const sensorCalib = device.sensor_calibration || {};
         document.getElementById('calib-adc-water').value = sensorCalib.water || 1200;
         document.getElementById('calib-adc-dry').value = sensorCalib.dry_soil || 2400;
         document.getElementById('calib-adc-air').value = sensorCalib.air || 2800;
         console.log('[Admin] Loaded sensor_calibration:', sensorCalib);
+
+        // Populate Resistive sensor calibration (from DynamoDB)
+        const sensor2Calib = device.sensor2_calibration || {};
+        document.getElementById('calib-s2-dry').value = sensor2Calib.dry || 4095;
+        document.getElementById('calib-s2-wet').value = sensor2Calib.wet || 1000;
+        console.log('[Admin] Loaded sensor2_calibration:', sensor2Calib);
 
         // Show last seen info
         if (device.last_update) {
@@ -807,7 +826,44 @@ async function saveSensorPreset() {
     });
 
     if (res.ok) {
-      alert(`✓ Sensor preset saved: water=${adcWater}, dry=${adcDry}, air=${adcAir}`);
+      alert(`✓ Capacitive preset saved: water=${adcWater}, dry=${adcDry}, air=${adcAir}`);
+    } else {
+      const err = await res.json().catch(() => ({}));
+      alert('Failed: ' + (err.error || res.status));
+    }
+  } catch(e) {
+    alert('Error: ' + e.message);
+  }
+}
+
+// Save Resistive sensor preset
+async function saveSensor2Preset() {
+  const selectedDeviceId = document.getElementById('device-select').value;
+  if (!selectedDeviceId) {
+    alert('Please select a device first');
+    return;
+  }
+
+  const adcDry = parseInt(document.getElementById('calib-s2-dry').value);
+  const adcWet = parseInt(document.getElementById('calib-s2-wet').value);
+
+  if ([adcDry, adcWet].some(v => isNaN(v) || v < 0 || v > 4095)) {
+    alert('ADC values must be between 0 and 4095');
+    return;
+  }
+
+  try {
+    const res = await fetch(`${API.cloudBase}/device/${selectedDeviceId}/command`, {
+      method: 'POST',
+      headers: { ...API.getAuthHeaders(), 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        command: 'set_sensor2_preset',
+        params: { adc_dry: adcDry, adc_wet: adcWet }
+      })
+    });
+
+    if (res.ok) {
+      alert(`✓ Resistive preset saved: dry=${adcDry}, wet=${adcWet}`);
     } else {
       const err = await res.json().catch(() => ({}));
       alert('Failed: ' + (err.error || res.status));

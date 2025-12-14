@@ -193,6 +193,27 @@ def lambda_handler(event, context):
                         )
                         print(f"Updated sensor_calibration (flat format) for {device_id}: {sensor_calib_decimal}")
 
+                    # Sensor 2 (Resistive) calibration - adc_dry, adc_wet
+                    # From sensor2_calibrate_dry, sensor2_calibrate_wet, set_sensor2_preset commands
+                    if 'adc_dry' in result or 'adc_wet' in result:
+                        # Only update fields that were provided
+                        update_parts = []
+                        expr_values = {}
+                        if 'adc_dry' in result:
+                            update_parts.append('sensor2_calibration.dry = :dry')
+                            expr_values[':dry'] = int(result['adc_dry'])
+                        if 'adc_wet' in result:
+                            update_parts.append('sensor2_calibration.wet = :wet')
+                            expr_values[':wet'] = int(result['adc_wet'])
+
+                        if update_parts:
+                            devices_table.update_item(
+                                Key={'user_id': user_id, 'device_id': device_id},
+                                UpdateExpression='SET ' + ', '.join(update_parts),
+                                ExpressionAttributeValues=expr_values
+                            )
+                            print(f"Updated sensor2_calibration for {device_id}: {expr_values}")
+
             except Exception as e:
                 print(f"Failed to update calibration: {e}")  # Non-fatal
 
