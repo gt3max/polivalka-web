@@ -2128,9 +2128,13 @@ def get_device_status(device_id, user_id):
     )
 
     # Format response matching ESP32 /api/status structure
+    sensor_data = latest.get('sensor', {})
     status = {
-        'adc': latest.get('sensor', {}).get('adc_raw'),
-        'percent': latest.get('sensor', {}).get('moisture_percent'),
+        'adc': sensor_data.get('adc_raw'),
+        'percent': sensor_data.get('moisture_percent'),
+        # Sensor 2 (Resistive - J7) - include if present in telemetry
+        'sensor2_adc': sensor_data.get('sensor2_adc'),
+        'sensor2_percent': sensor_data.get('sensor2_percent'),
         'calib': calib,
         'sensor_calibrated': sensor_calibrated,
         'system_state': {
@@ -2539,11 +2543,17 @@ def get_sensor_history(device_id, user_id, days=7):
         if 'sensor' in item:
             timestamp = int(item.get('timestamp', 0))
             sensor_data = item['sensor']
-            history.append({
+            point = {
                 'timestamp': timestamp,
                 'moisture_percent': sensor_data.get('moisture_percent'),
                 'adc_raw': sensor_data.get('adc_raw')
-            })
+            }
+            # Include sensor2 data if present (resistive sensor J7)
+            if 'sensor2_adc' in sensor_data:
+                point['sensor2_adc'] = sensor_data.get('sensor2_adc')
+            if 'sensor2_percent' in sensor_data:
+                point['sensor2_percent'] = sensor_data.get('sensor2_percent')
+            history.append(point)
 
     return {
         'statusCode': 200,
@@ -2674,10 +2684,20 @@ def get_latest_telemetry(device_id):
 
         # Check each data type and keep the latest
         for data_type in ['sensor', 'battery', 'system', 'pump']:
-            if data_type in item and data_type not in latest:
+            if data_type in item:
                 data = dict(item[data_type])  # Copy to avoid mutation
                 data['timestamp'] = timestamp  # Add record timestamp to data
-                latest[data_type] = data
+
+                if data_type not in latest:
+                    # First time seeing this data type
+                    latest[data_type] = data
+                else:
+                    # Merge: add missing fields from telemetry to existing data
+                    # (e.g., sensor2 fields from telemetry when latest record doesn't have them)
+                    for key, value in data.items():
+                        if key not in latest[data_type] or latest[data_type][key] is None:
+                            latest[data_type][key] = value
+
                 # Update last_update if this record is newer
                 if 'last_update' not in latest or timestamp > latest['last_update']:
                     latest['last_update'] = timestamp

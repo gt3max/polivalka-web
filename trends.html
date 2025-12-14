@@ -105,13 +105,19 @@
   <!-- Moisture Chart -->
   <div id="tab-moisture" class="tab-content active">
     <div class="card">
-      <h3 style="margin-top:0">💧 Moisture Trend</h3>
+      <h3 style="margin-top:0">💧 Capacitive Sensor (J6)</h3>
       <div class="chart-container">
         <canvas id="moisture-chart"></canvas>
       </div>
-      <div id="moisture-loading" class="loading">Loading moisture data...</div>
-      <div id="moisture-error" class="error-msg" style="display:none"></div>
     </div>
+    <div class="card" id="sensor2-chart-card" style="display:none">
+      <h3 style="margin-top:0;color:#9c27b0">🌡️ Resistive Sensor (J7)</h3>
+      <div class="chart-container">
+        <canvas id="sensor2-chart"></canvas>
+      </div>
+    </div>
+    <div id="moisture-loading" class="loading">Loading moisture data...</div>
+    <div id="moisture-error" class="error-msg" style="display:none"></div>
   </div>
 
   <!-- Battery Chart -->
@@ -374,137 +380,123 @@ function renderMoistureChart(data) {
   // Chart type settings
   const isScatter = chartType === 'scatter';
 
-  // ADC values for second axis
+  // Capacitive sensor data
   const adcValues = data.map(d => d.adc_raw);
   const hasAdc = adcValues.some(v => v != null);
 
   // Sensor 2 data (resistive sensor J7)
   const sensor2AdcValues = data.map(d => d.sensor2_adc);
   const sensor2PctValues = data.map(d => d.sensor2_percent);
-  const hasSensor2Adc = sensor2AdcValues.some(v => v != null && v !== undefined);
-  const hasSensor2Pct = sensor2PctValues.some(v => v != null && v !== undefined);
+  const hasSensor2 = sensor2AdcValues.some(v => v != null && v !== undefined);
 
+  // Chart options template
+  const chartOptions = (annotations) => ({
+    responsive: true,
+    maintainAspectRatio: false,
+    interaction: { mode: 'nearest', axis: 'x', intersect: false },
+    plugins: {
+      legend: { position: 'top' },
+      tooltip: {
+        enabled: true,
+        position: 'nearest',
+        callbacks: {
+          title: (items) => new Date(items[0].parsed.x).toLocaleString(),
+          label: (item) => {
+            const label = item.dataset.label;
+            if (label.includes('%')) return `${label}: ${item.parsed.y}%`;
+            return `${label}: ${item.parsed.y}`;
+          }
+        }
+      },
+      annotation: { annotations: annotations || {} }
+    },
+    scales: {
+      x: {
+        type: 'time',
+        time: {
+          unit: currentPeriod === 1 ? 'hour' : 'day',
+          displayFormats: { hour: 'HH:mm', day: 'MMM d' }
+        },
+        grid: { display: false }
+      },
+      y: { type: 'linear', position: 'left', min: 0, max: 100, ticks: { callback: v => v + '%' } },
+      y1: { type: 'linear', position: 'right', min: 0, max: 4095, grid: { drawOnChartArea: false } }
+    }
+  });
+
+  // === Chart 1: Capacitive Sensor (J6) ===
   moistureChart = new Chart(ctx, {
     type: isScatter ? 'scatter' : 'line',
     data: {
       labels: labels,
       datasets: [
         {
-          label: 'Capacitive %',
+          label: 'Moisture %',
           data: isScatter ? data.map(d => ({ x: new Date(d.timestamp * 1000), y: d.moisture_percent })) : values,
           borderColor: '#1976d2',
           backgroundColor: isScatter ? '#1976d2' : 'rgba(25, 118, 210, 0.1)',
           fill: !isScatter,
-          tension: isScatter ? 0 : 0.3,
-          pointRadius: isScatter ? 6 : 5,
-          pointHoverRadius: 10,
-          pointBorderWidth: 2,
-          pointBackgroundColor: '#1976d2',
-          showLine: !isScatter,
+          tension: 0.3,
+          pointRadius: isScatter ? 6 : 3,
           yAxisID: 'y'
         },
         {
-          label: 'Resistive %',
-          data: isScatter ? data.map(d => ({ x: new Date(d.timestamp * 1000), y: d.sensor2_percent })) : sensor2PctValues,
-          borderColor: '#9c27b0',
-          backgroundColor: isScatter ? '#9c27b0' : 'rgba(156, 39, 176, 0.1)',
-          fill: false,
-          tension: isScatter ? 0 : 0.3,
-          pointRadius: isScatter ? 5 : 4,
-          pointHoverRadius: 9,
-          pointBorderWidth: 2,
-          pointBackgroundColor: '#9c27b0',
-          showLine: !isScatter,
-          yAxisID: 'y',
-          hidden: !hasSensor2Pct
-        },
-        {
-          label: 'ADC Capacitive',
+          label: 'ADC',
           data: isScatter ? data.map(d => ({ x: new Date(d.timestamp * 1000), y: d.adc_raw })) : adcValues,
           borderColor: '#ff9800',
-          borderDash: isScatter ? [] : [5, 5],
+          borderDash: [5, 5],
           fill: false,
-          tension: isScatter ? 0 : 0.3,
-          pointRadius: isScatter ? 5 : 4,
-          pointHoverRadius: 9,
-          pointBorderWidth: 2,
-          pointBackgroundColor: '#ff9800',
-          showLine: !isScatter,
+          tension: 0.3,
+          pointRadius: isScatter ? 5 : 2,
           yAxisID: 'y1',
           hidden: !hasAdc
-        },
-        {
-          label: 'ADC Resistive',
-          data: isScatter ? data.map(d => ({ x: new Date(d.timestamp * 1000), y: d.sensor2_adc })) : sensor2AdcValues,
-          borderColor: '#e91e63',
-          borderDash: isScatter ? [] : [3, 3],
-          fill: false,
-          tension: isScatter ? 0 : 0.3,
-          pointRadius: isScatter ? 5 : 4,
-          pointHoverRadius: 9,
-          pointBorderWidth: 2,
-          pointBackgroundColor: '#e91e63',
-          showLine: !isScatter,
-          yAxisID: 'y1',
-          hidden: !hasSensor2Adc
         }
       ]
     },
-    options: {
-      responsive: true,
-      maintainAspectRatio: false,
-      interaction: {
-        mode: 'nearest',
-        axis: 'x',
-        intersect: false
-      },
-      plugins: {
-        legend: { position: 'top' },
-        tooltip: {
-          enabled: true,
-          position: 'nearest',
-          callbacks: {
-            title: (items) => new Date(items[0].parsed.x).toLocaleString(),
-            label: (item) => {
-              if (item.dataset.label === 'Capacitive %') return `Capacitive: ${item.parsed.y}%`;
-              if (item.dataset.label === 'Resistive %') return `Resistive: ${item.parsed.y}%`;
-              if (item.dataset.label === 'ADC Capacitive') return `ADC Cap: ${item.parsed.y}`;
-              if (item.dataset.label === 'ADC Resistive') return `ADC Res: ${item.parsed.y}`;
-              return `${item.dataset.label}: ${item.parsed.y}`;
-            }
-          }
-        },
-        annotation: {
-          annotations: pumpAnnotations
-        }
-      },
-      scales: {
-        x: {
-          type: 'time',
-          time: {
-            unit: currentPeriod === 1 ? 'hour' : 'day',
-            displayFormats: { hour: 'HH:mm', day: 'MMM d' }
-          },
-          grid: { display: false }
-        },
-        y: {
-          type: 'linear',
-          position: 'left',
-          min: 0,
-          max: 100,
-          ticks: { callback: v => v + '%' }
-        },
-        y1: {
-          type: 'linear',
-          position: 'right',
-          min: 0,
-          max: 4095,
-          grid: { drawOnChartArea: false },
-          ticks: { callback: v => v }
-        }
-      }
-    }
+    options: chartOptions(pumpAnnotations)
   });
+
+  // === Chart 2: Resistive Sensor (J7) - only if data exists ===
+  const sensor2Card = document.getElementById('sensor2-chart-card');
+  if (hasSensor2) {
+    sensor2Card.style.display = 'block';
+    const ctx2 = document.getElementById('sensor2-chart').getContext('2d');
+
+    // Destroy existing chart if any
+    if (window.sensor2Chart) window.sensor2Chart.destroy();
+
+    window.sensor2Chart = new Chart(ctx2, {
+      type: isScatter ? 'scatter' : 'line',
+      data: {
+        labels: labels,
+        datasets: [
+          {
+            label: 'Moisture %',
+            data: isScatter ? data.map(d => ({ x: new Date(d.timestamp * 1000), y: d.sensor2_percent })) : sensor2PctValues,
+            borderColor: '#9c27b0',
+            backgroundColor: isScatter ? '#9c27b0' : 'rgba(156, 39, 176, 0.1)',
+            fill: !isScatter,
+            tension: 0.3,
+            pointRadius: isScatter ? 6 : 3,
+            yAxisID: 'y'
+          },
+          {
+            label: 'ADC',
+            data: isScatter ? data.map(d => ({ x: new Date(d.timestamp * 1000), y: d.sensor2_adc })) : sensor2AdcValues,
+            borderColor: '#e91e63',
+            borderDash: [5, 5],
+            fill: false,
+            tension: 0.3,
+            pointRadius: isScatter ? 5 : 2,
+            yAxisID: 'y1'
+          }
+        ]
+      },
+      options: chartOptions({})
+    });
+  } else {
+    sensor2Card.style.display = 'none';
+  }
 }
 
 // Render battery chart
