@@ -3657,15 +3657,54 @@ def get_device_activity(device_id, user_id):
         )
 
         for cmd in cmd_response.get('Items', []):
+            # Generate human-readable message for commands
+            command_name = cmd.get('command', '')
+            params = cmd.get('params', {})
+            status = cmd.get('status', 'pending')
+
+            # Format message based on command type
+            message = cmd.get('message', '')
+            if not message:
+                if command_name == 'calibrate_sensor':
+                    cal_type = params.get('type', '?')
+                    message = f"🎯 Capacitive calibration: {cal_type}"
+                elif command_name == 'sensor2_calibrate_dry':
+                    message = "🎯 Resistive calibration: dry (0%)"
+                elif command_name == 'sensor2_calibrate_wet':
+                    message = "🎯 Resistive calibration: wet (100%)"
+                elif command_name == 'reset_sensor_calibration':
+                    message = "🔄 Capacitive calibration reset"
+                elif command_name == 'reset_sensor2_calibration':
+                    message = "🔄 Resistive calibration reset"
+                elif command_name == 'set_sensor_preset':
+                    message = "⚙️ Capacitive preset updated"
+                elif command_name == 'set_sensor2_preset':
+                    message = "⚙️ Resistive preset updated"
+                elif command_name == 'set_pump_speed':
+                    speed = params.get('speed', '?')
+                    message = f"⚙️ Pump speed set to {speed}%"
+                elif command_name == 'pump_start':
+                    message = "💧 Pump started (manual)"
+                elif command_name == 'pump_stop':
+                    message = "🛑 Pump stopped"
+                elif command_name.startswith('sensor_controller_'):
+                    action = command_name.replace('sensor_controller_', '')
+                    message = f"🌱 Sensor mode: {action}"
+                elif command_name.startswith('timer_controller_'):
+                    action = command_name.replace('timer_controller_', '')
+                    message = f"⏰ Timer mode: {action}"
+                else:
+                    message = f"📡 {command_name}"
+
             activity_items.append({
                 'timestamp': cmd.get('created_at', 0),
                 'type': 'COMMAND',
-                'level': 'ERROR' if cmd.get('status') == 'error' else 'INFO',
+                'level': 'ERROR' if status == 'error' else 'INFO',
                 'component': 'AWS_IOT',
-                'command': cmd.get('command'),
-                'status': cmd.get('status', 'pending'),
-                'message': cmd.get('message', ''),
-                'params': cmd.get('params', {}),
+                'command': command_name,
+                'status': status,
+                'message': message,
+                'params': params,
                 'result': cmd.get('result', {})
             })
 
