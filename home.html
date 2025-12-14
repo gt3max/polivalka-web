@@ -1064,9 +1064,10 @@ async function loadPlantCard() {
     document.getElementById('plant-frequency').textContent = wateringText;
     document.getElementById('plant-watering-detail').textContent = wateringText;
 
-    // Image if available
+    // Image if available (with fallback for PlantNet outages)
     if (plant.image_url) {
       const img = document.getElementById('plant-image');
+      img.onerror = () => { img.style.display = 'none'; };
       img.src = plant.image_url;
       img.style.display = 'block';
     }
