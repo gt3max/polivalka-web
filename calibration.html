@@ -65,7 +65,7 @@ const air=s.calib.adc_air;const water=s.calib.adc_water;const soil=s.calib.adc_d
 document.getElementById('calib').textContent=`adc_air=${air}  adc_water=${water}  adc_dry_soil=${soil||'—'}`;
 const sensorBadge=document.getElementById('sensor-cal-badge');
 if(s.sensor_calibrated){sensorBadge.textContent='✓ Calibrated';sensorBadge.style.background='#e8f5e9';sensorBadge.style.color='#2e7d32';}
-else{sensorBadge.textContent='⚠️ Defaults';sensorBadge.style.background='#fff3e0';sensorBadge.style.color='#f57c00';}
+else{sensorBadge.textContent='⚠️ Presets';sensorBadge.style.background='#fff3e0';sensorBadge.style.color='#f57c00';}
 if(air!==null&&soil!==null&&air!=='—'&&soil!=='—'){
 const diff=Math.abs(air-soil);const warningDiv=document.getElementById('calib-warning');
 const warningText=document.getElementById('warning-text');
@@ -122,7 +122,7 @@ try{const s=await API.get('/pump/status');
 const ml=s.ml_per_sec||10.0;document.getElementById('current-ml-per-sec').textContent=ml.toFixed(2)+' ml/sec';
 const pumpBadge=document.getElementById('pump-cal-badge');
 if(s.calibrated){pumpBadge.textContent='✓ Calibrated';pumpBadge.style.background='#e8f5e9';pumpBadge.style.color='#2e7d32';}
-else{pumpBadge.textContent='⚠️ Defaults';pumpBadge.style.background='#fff3e0';pumpBadge.style.color='#f57c00';}
+else{pumpBadge.textContent='⚠️ Presets';pumpBadge.style.background='#fff3e0';pumpBadge.style.color='#f57c00';}
 const speed=s.speed!==undefined?s.speed:100;
 const speedWarn=document.getElementById('speed-warning');
 if(speedWarn){if(speed!==100){speedWarn.style.display='block';speedWarn.innerHTML='ℹ️ Pump speed is '+speed+'%. Calibration will apply to this speed. <a href="home.html">Change speed</a>';}

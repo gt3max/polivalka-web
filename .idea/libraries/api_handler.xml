@@ -1,0 +1,9 @@
+<component name="libraryTable">
+  <library name="api_handler">
+    <CLASSES>
+      <root url="jar://$PROJECT_DIR$/lambda/api_handler.zip!/" />
+    </CLASSES>
+    <JAVADOC />
+    <SOURCES />
+  </library>
+</component>
