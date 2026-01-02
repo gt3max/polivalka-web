@@ -338,7 +338,31 @@ if (IS_CLOUD && DEVICE_ID) {
   document.title = `${DEVICE_ID} — Sensor Mode`;
 }
 
-setInterval(updateStatus, 30000);  // 30s interval (reduced load)
+// Smart polling with visibility pause (saves API costs when tab hidden)
+const STATUS_INTERVAL = IS_CLOUD ? 60000 : 30000;
+let statusIntervalId = null;
+
+function startPolling() {
+  if (statusIntervalId) return;
+  statusIntervalId = setInterval(updateStatus, STATUS_INTERVAL);
+}
+
+function stopPolling() {
+  if (statusIntervalId) {
+    clearInterval(statusIntervalId);
+    statusIntervalId = null;
+  }
+}
+
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden) {
+    stopPolling();
+  } else {
+    updateStatus();
+    startPolling();
+  }
+});
+
 setInterval(updateBattery, 60000);  // Battery: every minute
 updateBattery();
 if (!IS_CLOUD) {
@@ -348,6 +372,7 @@ if (!IS_CLOUD) {
   monitorWiFiMode();
 }
 updateStatus();
+startPolling();
 loadSensorSettings();
 
 // Cloud mode: show info notice (editing via MQTT is now supported!)

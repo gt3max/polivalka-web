@@ -459,8 +459,31 @@ if (IS_CLOUD && DEVICE_ID) {
   document.title = `${DEVICE_ID} — Timer Mode`;
 }
 
-// Auto-update intervals (time from common.js universal clock)
-setInterval(updateMode, 30000);      // Status/Mode: every 30 seconds
+// Smart polling with visibility pause (saves API costs when tab hidden)
+const MODE_INTERVAL = IS_CLOUD ? 60000 : 30000;
+let modeIntervalId = null;
+
+function startPolling() {
+  if (modeIntervalId) return;
+  modeIntervalId = setInterval(updateMode, MODE_INTERVAL);
+}
+
+function stopPolling() {
+  if (modeIntervalId) {
+    clearInterval(modeIntervalId);
+    modeIntervalId = null;
+  }
+}
+
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden) {
+    stopPolling();
+  } else {
+    updateMode();
+    startPolling();
+  }
+});
+
 setInterval(updateBattery, 60000);   // Battery: every minute
 updateBattery();
 if (!IS_CLOUD) {
@@ -472,6 +495,7 @@ if (!IS_CLOUD) {
 
 // Initial load
 updateMode();
+startPolling();
 loadSchedules();
 </script>
 </body></html>

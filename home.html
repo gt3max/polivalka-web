@@ -630,16 +630,48 @@ async function cancelArming(){
 
 // monitorWiFiMode() - moved to common.js
 
-// КРИТИЧНО: последовательная загрузка, не одновременно!
-// Интервалы разнесены чтобы не нагружать ESP32 одновременными запросами
-setInterval(updateStatus, 5000);   // каждые 5 сек
+// Smart polling: different intervals for Cloud vs Local
+// Cloud: 60 sec (data updates hourly from device, no point polling faster)
+// Local: 5 sec (ESP32 is local, fast feedback needed for pump control)
+// CRITICAL: Stop polling when tab is hidden (saves API Gateway costs!)
+const STATUS_INTERVAL = IS_CLOUD ? 60000 : 5000;
+let statusIntervalId = null;
+let localIntervalsStarted = false;
 
-// Time/Battery/WiFi monitoring только в локальном режиме (Cloud получает данные через /status)
-if (!IS_CLOUD) {
-  setInterval(updateTime, 60000);    // каждые 60 сек
-  setInterval(updateBattery, 10000); // каждые 10 сек (было 5, конфликтовало с updateStatus)
-  setInterval(monitorWiFiMode, 5000); // каждые 5 сек - баланс UX/нагрузка (активные операции)
+function startPolling() {
+  if (statusIntervalId) return; // Already polling
+  statusIntervalId = setInterval(updateStatus, STATUS_INTERVAL);
+
+  // Time/Battery/WiFi monitoring только в локальном режиме
+  if (!IS_CLOUD && !localIntervalsStarted) {
+    localIntervalsStarted = true;
+    setInterval(updateTime, 60000);    // каждые 60 сек
+    setInterval(updateBattery, 10000); // каждые 10 сек
+    setInterval(monitorWiFiMode, 5000); // каждые 5 сек
+  }
 }
+
+function stopPolling() {
+  if (statusIntervalId) {
+    clearInterval(statusIntervalId);
+    statusIntervalId = null;
+  }
+}
+
+// Visibility change: pause polling when tab is hidden
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden) {
+    stopPolling();
+    console.log('Tab hidden - polling paused');
+  } else {
+    updateStatus(); // Immediate update when tab becomes visible
+    startPolling();
+    console.log('Tab visible - polling resumed');
+  }
+});
+
+// Start polling
+startPolling();
 
 // Cloud mode: показать device ID в header сразу (до загрузки данных из API)
 if (IS_CLOUD && DEVICE_ID) {

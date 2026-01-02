@@ -429,9 +429,34 @@ async function updateStatus() {
   }
 }
 
-// Load on start, refresh every 5 sec
+// Smart polling: 60 sec for Cloud, 10 sec for Local
+// Stop polling when tab is hidden (saves API costs)
+const STATUS_INTERVAL = IS_CLOUD ? 60000 : 10000;
+let statusIntervalId = null;
+
+function startPolling() {
+  if (statusIntervalId) return;
+  statusIntervalId = setInterval(updateStatus, STATUS_INTERVAL);
+}
+
+function stopPolling() {
+  if (statusIntervalId) {
+    clearInterval(statusIntervalId);
+    statusIntervalId = null;
+  }
+}
+
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden) {
+    stopPolling();
+  } else {
+    updateStatus();
+    startPolling();
+  }
+});
+
 updateStatus();
-setInterval(updateStatus, 5000);
+startPolling();
 
 // ============ State ============
 let selectedFiles = [];
