@@ -78,60 +78,28 @@
 <!-- Device Stats (показывается после выбора устройства) -->
 <div class="card" id="device-stats-card" style="display:none">
 <h3>📊 Device Stats</h3>
-
-<div class="info-row" style="border-bottom:1px solid #333;padding:12px 0">
-<span class="info-label">🔧 Firmware</span>
-<span class="info-value" id="stat-firmware">—</span>
+<div class="info-list">
+<div class="info-row"><span class="info-label">Firmware</span><span class="info-value" id="stat-firmware">—</span></div>
 </div>
 
 <div class="section-header" style="margin-top:16px">Restarts</div>
-
-<div class="info-row" style="padding:12px 0;border-bottom:1px solid #333">
-<div style="flex:1">
-<div class="info-label">Clean Restarts</div>
-<div class="toggle-desc">OTA updates, commands, normal operation</div>
+<div class="info-list">
+<div class="info-row"><span class="info-label">Clean</span><span class="info-value" id="stat-clean-restarts">—</span></div>
+<div class="info-row"><span class="info-label">Unexpected</span><span class="info-value" id="stat-unexpected-restarts" style="color:#ff9800">—</span></div>
 </div>
-<div style="display:flex;align-items:center;gap:12px">
-<span class="info-value" id="stat-clean-restarts">—</span>
-<button onclick="resetStat('clean_restarts')" style="font-size:11px;padding:4px 8px">Reset</button>
-</div>
-</div>
-
-<div class="info-row" style="padding:12px 0;border-bottom:1px solid #333">
-<div style="flex:1">
-<div class="info-label">Unexpected Restarts</div>
-<div class="toggle-desc">Power loss, brownout, crash, watchdog</div>
-</div>
-<div style="display:flex;align-items:center;gap:12px">
-<span class="info-value" id="stat-unexpected-restarts" style="color:#ff9800">—</span>
-<button onclick="resetStat('unexpected_restarts')" style="font-size:11px;padding:4px 8px">Reset</button>
-</div>
+<p class="muted" style="font-size:11px;margin:4px 0">Clean = OTA, commands. Unexpected = power loss, crash, watchdog.</p>
+<div class="row" style="margin-top:8px">
+<button onclick="resetStats('restarts')">Reset Restarts</button>
 </div>
 
 <div class="section-header" style="margin-top:16px">Pump & Water</div>
-
-<div class="info-row" style="padding:12px 0;border-bottom:1px solid #333">
-<div style="flex:1">
-<div class="info-label">Total Water</div>
-<div class="toggle-desc">Lifetime water pumped (all modes)</div>
+<div class="info-list">
+<div class="info-row"><span class="info-label">Total Water</span><span class="info-value" id="stat-total-water">— ml</span></div>
+<div class="info-row"><span class="info-label">Pump Runtime</span><span class="info-value" id="stat-pump-runtime">— sec</span></div>
 </div>
-<div style="display:flex;align-items:center;gap:12px">
-<span class="info-value" id="stat-total-water">— ml</span>
-<button onclick="resetStat('total_water_ml')" style="font-size:11px;padding:4px 8px">Reset</button>
+<div class="row" style="margin-top:8px">
+<button onclick="resetStats('pump')">Reset Pump Stats</button>
 </div>
-</div>
-
-<div class="info-row" style="padding:12px 0">
-<div style="flex:1">
-<div class="info-label">Pump Runtime</div>
-<div class="toggle-desc">Lifetime pump operation time</div>
-</div>
-<div style="display:flex;align-items:center;gap:12px">
-<span class="info-value" id="stat-pump-runtime">— sec</span>
-<button onclick="resetStat('pump_runtime_sec')" style="font-size:11px;padding:4px 8px">Reset</button>
-</div>
-</div>
-
 </div>
 
 <!-- Periodic Telemetry (Info only - hardcoded in firmware) -->
@@ -1022,21 +990,19 @@ async function saveMicroprimeSettings() {
   }
 }
 
-// Reset individual device stat
-async function resetStat(statName) {
+// Reset device stats by group
+async function resetStats(group) {
   if (!selectedDeviceId) {
     alert('Select a device first');
     return;
   }
 
   const labels = {
-    'clean_restarts': 'Clean Restarts',
-    'unexpected_restarts': 'Unexpected Restarts',
-    'total_water_ml': 'Total Water',
-    'pump_runtime_sec': 'Pump Runtime'
+    'restarts': 'Restart counters (Clean + Unexpected)',
+    'pump': 'Pump stats (Water + Runtime)'
   };
 
-  if (!confirm(`Reset ${labels[statName] || statName} to 0?\n\nDevice: ${selectedDeviceId}`)) {
+  if (!confirm(`Reset ${labels[group]}?\n\nDevice: ${selectedDeviceId}`)) {
     return;
   }
 
@@ -1045,20 +1011,20 @@ async function resetStat(statName) {
       method: 'POST',
       headers: { ...API.getAuthHeaders(), 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        command: 'reset_stat',
-        params: { stat: statName }
+        command: 'reset_stats',
+        params: { group: group }
       })
     });
 
     if (res.ok) {
-      alert(`✓ ${labels[statName]} reset to 0`);
+      alert(`✓ ${labels[group]} reset to 0`);
       // Update UI immediately
-      const elId = 'stat-' + statName.replace(/_/g, '-');
-      const el = document.getElementById(elId);
-      if (el) {
-        if (statName.includes('water')) el.textContent = '0 ml';
-        else if (statName.includes('runtime')) el.textContent = '0 sec';
-        else el.textContent = '0';
+      if (group === 'restarts') {
+        document.getElementById('stat-clean-restarts').textContent = '0';
+        document.getElementById('stat-unexpected-restarts').textContent = '0';
+      } else if (group === 'pump') {
+        document.getElementById('stat-total-water').textContent = '0 ml';
+        document.getElementById('stat-pump-runtime').textContent = '0 sec';
       }
     } else {
       const err = await res.json().catch(() => ({}));
