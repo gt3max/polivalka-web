@@ -67,7 +67,7 @@
 <div class="card">
 <h3>📱 Select Device</h3>
 <select id="device-select" onchange="loadDeviceConfig()">
-<option value="">— Select device —</option>
+<option value="">Loading devices...</option>
 </select>
 <div id="device-info" style="margin-top:12px;display:none">
 <div class="muted">Device ID: <span id="selected-device-id" class="mono">—</span></div>
@@ -512,6 +512,7 @@ async function loadDevices() {
     console.error('[Admin] Failed to load devices:', e);
     document.getElementById('aws-status').textContent = 'Error: ' + e.message;
     document.getElementById('aws-status-dot').className = 'status-dot offline';
+    document.getElementById('device-select').innerHTML = '<option value="">Error loading devices</option>';
   }
 }
 
