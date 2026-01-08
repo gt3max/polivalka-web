@@ -530,6 +530,7 @@ async function loadDeviceConfig() {
   document.getElementById('selected-device-id').textContent = deviceId;
   updateDangerButtons(true);  // Enable Archive/Delete buttons
   document.getElementById('device-info').style.display = 'block';
+  document.getElementById('device-stats-card').style.display = 'block';
   document.getElementById('selected-device-lastseen').textContent = 'Loading...';
 
   // Fetch current device data to populate fields
@@ -583,7 +584,6 @@ async function loadDeviceConfig() {
         }
 
         // Load Device Stats
-        document.getElementById('device-stats-card').style.display = 'block';
         document.getElementById('stat-firmware').textContent = device.firmware_version || '—';
         document.getElementById('stat-clean-restarts').textContent = device.clean_restarts ?? '—';
         document.getElementById('stat-unexpected-restarts').textContent = device.unexpected_restarts ?? '—';
