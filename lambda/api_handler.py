@@ -3730,7 +3730,7 @@ def get_device_activity(device_id, user_id):
 
         # 2. Get telemetry (last 50 system events)
         # Query recent telemetry and filter for system events
-        cutoff = int(time.time()) - 86400  # Last 24 hours
+        cutoff = int(time.time()) - 604800  # Last 7 days
         telem_device_id = get_telemetry_device_id(device_id)
         telem_response = telemetry_table.query(
             KeyConditionExpression=Key('device_id').eq(telem_device_id) & Key('timestamp').gt(cutoff),
