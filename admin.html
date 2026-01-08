@@ -75,6 +75,65 @@
 </div>
 </div>
 
+<!-- Device Stats (показывается после выбора устройства) -->
+<div class="card" id="device-stats-card" style="display:none">
+<h3>📊 Device Stats</h3>
+
+<div class="info-row" style="border-bottom:1px solid #333;padding:12px 0">
+<span class="info-label">🔧 Firmware</span>
+<span class="info-value" id="stat-firmware">—</span>
+</div>
+
+<div class="section-header" style="margin-top:16px">Restarts</div>
+
+<div class="info-row" style="padding:12px 0;border-bottom:1px solid #333">
+<div style="flex:1">
+<div class="info-label">Clean Restarts</div>
+<div class="toggle-desc">OTA updates, commands, normal operation</div>
+</div>
+<div style="display:flex;align-items:center;gap:12px">
+<span class="info-value" id="stat-clean-restarts">—</span>
+<button onclick="resetStat('clean_restarts')" style="font-size:11px;padding:4px 8px">Reset</button>
+</div>
+</div>
+
+<div class="info-row" style="padding:12px 0;border-bottom:1px solid #333">
+<div style="flex:1">
+<div class="info-label">Unexpected Restarts</div>
+<div class="toggle-desc">Power loss, brownout, crash, watchdog</div>
+</div>
+<div style="display:flex;align-items:center;gap:12px">
+<span class="info-value" id="stat-unexpected-restarts" style="color:#ff9800">—</span>
+<button onclick="resetStat('unexpected_restarts')" style="font-size:11px;padding:4px 8px">Reset</button>
+</div>
+</div>
+
+<div class="section-header" style="margin-top:16px">Pump & Water</div>
+
+<div class="info-row" style="padding:12px 0;border-bottom:1px solid #333">
+<div style="flex:1">
+<div class="info-label">Total Water</div>
+<div class="toggle-desc">Lifetime water pumped (all modes)</div>
+</div>
+<div style="display:flex;align-items:center;gap:12px">
+<span class="info-value" id="stat-total-water">— ml</span>
+<button onclick="resetStat('total_water_ml')" style="font-size:11px;padding:4px 8px">Reset</button>
+</div>
+</div>
+
+<div class="info-row" style="padding:12px 0">
+<div style="flex:1">
+<div class="info-label">Pump Runtime</div>
+<div class="toggle-desc">Lifetime pump operation time</div>
+</div>
+<div style="display:flex;align-items:center;gap:12px">
+<span class="info-value" id="stat-pump-runtime">— sec</span>
+<button onclick="resetStat('pump_runtime_sec')" style="font-size:11px;padding:4px 8px">Reset</button>
+</div>
+</div>
+
+</div>
+
 <!-- Periodic Telemetry (Info only - hardcoded in firmware) -->
 <div class="card">
 <h3>📊 Periodic Telemetry</h3>
@@ -493,6 +552,7 @@ async function loadDeviceConfig() {
   const deviceId = document.getElementById('device-select').value;
   if (!deviceId) {
     document.getElementById('device-info').style.display = 'none';
+    document.getElementById('device-stats-card').style.display = 'none';
     document.getElementById('device-history-card').style.display = 'none';
     updateDangerButtons(false);
     return;
@@ -553,6 +613,21 @@ async function loadDeviceConfig() {
           document.getElementById('microprime-interval').value = microprimeInterval;
           console.log('[Admin] Loaded microprime_interval:', microprimeInterval);
         }
+
+        // Load Device Stats
+        document.getElementById('device-stats-card').style.display = 'block';
+        document.getElementById('stat-firmware').textContent = device.firmware_version || '—';
+        document.getElementById('stat-clean-restarts').textContent = device.clean_restarts ?? '—';
+        document.getElementById('stat-unexpected-restarts').textContent = device.unexpected_restarts ?? '—';
+        document.getElementById('stat-total-water').textContent = device.total_water_ml ? device.total_water_ml.toLocaleString() + ' ml' : '— ml';
+        document.getElementById('stat-pump-runtime').textContent = device.pump_runtime_sec ? device.pump_runtime_sec.toLocaleString() + ' sec' : '— sec';
+        console.log('[Admin] Loaded device stats:', {
+          firmware: device.firmware_version,
+          clean_restarts: device.clean_restarts,
+          unexpected_restarts: device.unexpected_restarts,
+          total_water_ml: device.total_water_ml,
+          pump_runtime_sec: device.pump_runtime_sec
+        });
       }
     }
   } catch(e) {
@@ -937,6 +1012,53 @@ async function saveMicroprimeSettings() {
         alert('✓ Microprime disabled');
       } else {
         alert(`✓ Microprime set to every ${interval} hours`);
+      }
+    } else {
+      const err = await res.json().catch(() => ({}));
+      alert('Failed: ' + (err.error || res.status));
+    }
+  } catch(e) {
+    alert('Error: ' + e.message);
+  }
+}
+
+// Reset individual device stat
+async function resetStat(statName) {
+  if (!selectedDeviceId) {
+    alert('Select a device first');
+    return;
+  }
+
+  const labels = {
+    'clean_restarts': 'Clean Restarts',
+    'unexpected_restarts': 'Unexpected Restarts',
+    'total_water_ml': 'Total Water',
+    'pump_runtime_sec': 'Pump Runtime'
+  };
+
+  if (!confirm(`Reset ${labels[statName] || statName} to 0?\n\nDevice: ${selectedDeviceId}`)) {
+    return;
+  }
+
+  try {
+    const res = await fetch(`${API.cloudBase}/device/${selectedDeviceId}/command`, {
+      method: 'POST',
+      headers: { ...API.getAuthHeaders(), 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        command: 'reset_stat',
+        params: { stat: statName }
+      })
+    });
+
+    if (res.ok) {
+      alert(`✓ ${labels[statName]} reset to 0`);
+      // Update UI immediately
+      const elId = 'stat-' + statName.replace(/_/g, '-');
+      const el = document.getElementById(elId);
+      if (el) {
+        if (statName.includes('water')) el.textContent = '0 ml';
+        else if (statName.includes('runtime')) el.textContent = '0 sec';
+        else el.textContent = '0';
       }
     } else {
       const err = await res.json().catch(() => ({}));
