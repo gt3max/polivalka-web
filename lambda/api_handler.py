@@ -1279,8 +1279,8 @@ def lambda_handler(event, context):
                     'statusCode': 200,
                     'headers': cors_headers(),
                     'body': json.dumps({
-                        'adc': sensor_data.get('sensor2_adc', 0),
-                        'percent': sensor_data.get('sensor2_percent', 0)
+                        'adc': int(sensor_data.get('sensor2_adc', 0) or 0),
+                        'percent': float(sensor_data.get('sensor2_percent', 0) or 0)
                     })
                 }
 
@@ -2015,6 +2015,8 @@ def get_devices(user_id):
                 'state': latest.get('system', {}).get('state', 'UNKNOWN'),
                 'firmware_version': latest.get('system', {}).get('firmware_version', 'v1.0.0'),
                 'reboot_count': latest.get('system', {}).get('reboot_count'),
+                'clean_restarts': latest.get('system', {}).get('clean_restarts'),
+                'unexpected_restarts': latest.get('system', {}).get('unexpected_restarts'),
                 'uptime': format_uptime(latest.get('system', {}).get('uptime_ms')),
                 'last_watering': item.get('last_watering_timestamp'),
                 'last_update': latest.get('last_update'),
@@ -2049,6 +2051,8 @@ def get_devices(user_id):
                 'state': 'UNKNOWN',
                 'firmware_version': 'v1.0.0',
                 'reboot_count': None,
+                'clean_restarts': None,
+                'unexpected_restarts': None,
                 'uptime': None,
                 'last_watering': item.get('last_watering_timestamp'),
                 'last_update': None,
