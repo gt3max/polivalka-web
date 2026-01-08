@@ -1,103 +1,135 @@
-<!doctype html>
-<html>
-<head>
+<!doctype html><html><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width, initial-scale=1"><title>PlantApp — Update</title>
+<link rel="icon" href="favicon.svg" type="image/svg+xml">
 <script src="api-adapter.js"></script>
-<meta charset="utf-8"/>
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>PlantApp — OTA Update</title>
+<script src="common.js"></script>
 <style>
-body{font-family:system-ui,Arial;margin:0;padding:20px;background:#f5f5f5}
-.container{max-width:600px;margin:0 auto;background:#fff;padding:30px;border-radius:12px;box-shadow:0 2px 8px rgba(0,0,0,0.1)}
-h1{margin:0 0 20px 0;font-size:24px;color:#2c5f2d}
-.device-info{background:#f9f9f9;padding:15px;border-radius:8px;margin-bottom:20px}
-.device-info div{margin:5px 0;font-size:14px}
-.upload-area{border:2px dashed #ccc;border-radius:8px;padding:40px;text-align:center;margin:20px 0;cursor:pointer;transition:all 0.3s}
-.upload-area:hover{border-color:#2c5f2d;background:#f0f7f0}
-.upload-area.dragover{border-color:#2c5f2d;background:#e8f5e9}
-input[type="file"]{display:none}
-.file-info{margin:15px 0;padding:15px;background:#e8f5e9;border-radius:8px;font-size:14px}
-.btn{padding:12px 24px;border:none;border-radius:8px;font-size:16px;cursor:pointer;width:100%;margin-top:10px}
-.btn-primary{background:#2c5f2d;color:#fff}
-.btn-primary:disabled{background:#ccc;cursor:not-allowed}
-.progress{display:none;margin:20px 0}
-.progress-bar{width:100%;height:30px;background:#f0f0f0;border-radius:8px;overflow:hidden}
-.progress-fill{height:100%;background:#2c5f2d;transition:width 0.3s;display:flex;align-items:center;justify-content:center;color:#fff;font-size:14px;font-weight:600}
-.status{margin:20px 0;padding:15px;border-radius:8px;font-size:14px;display:none}
-.status.success{background:#e8f5e9;color:#2e7d32;border:1px solid #2e7d32}
-.status.error{background:#ffebee;color:#c62828;border:1px solid #c62828}
-.warning{background:#fff3cd;padding:15px;border-radius:8px;margin:20px 0;font-size:13px;color:#856404;border:1px solid #ffc107}
+    body{font-family:system-ui,Arial;margin:0;padding:0;max-width:100%}
+    .header{position:sticky;top:0;z-index:1000;background:#2c5f2d;color:#fff;padding:8px 10px;display:flex;justify-content:space-between;align-items:center;gap:8px}
+    .header h1{margin:0;font-size:18px}
+    .header-info{font-size:12px;text-align:right;line-height:1.3}
+    .nav{position:sticky;top:65px;z-index:999;background:#f0f0f0;padding:5px 8px;display:flex;gap:2px;border-bottom:1px solid #ddd;overflow-x:auto;white-space:nowrap;-webkit-overflow-scrolling:touch}
+    .nav a{text-decoration:none;color:#333;padding:6px 8px;border-radius:6px;font-size:14px;flex-shrink:0}
+    .nav a.active{background:#2c5f2d;color:#fff}
+    .nav a:hover{background:#ddd}
+    .container{padding:18px;max-width:760px}
+    .card{border:1px solid #ddd;padding:16px;border-radius:12px;margin:12px 0}
+    .row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+    .mono{font-family:ui-monospace,monospace}
+    button{padding:8px 12px;border-radius:8px;border:1px solid #888;background:#fafafa;cursor:pointer}
+    button.primary{background:#2c5f2d;color:#fff;border-color:#2c5f2d}
+    button:disabled{background:#ccc;cursor:not-allowed;border-color:#999}
+    .muted{color:#666;font-size:14px}
+    .danger{color:#b00}
+    .ok{color:#0a0}
+    .status-badge{display:inline-block;padding:4px 10px;border-radius:12px;font-size:13px;font-weight:600}
+    .status-timer{background:#e3f2fd;color:#1976d2}
+    .status-sensor{background:#fff3e0;color:#f57c00}
+    .status-off{background:#fce4ec;color:#c2185b}
+    .status-manual{background:#e0e0e0;color:#616161}
+    .upload-area{border:2px dashed #ccc;border-radius:8px;padding:30px;text-align:center;margin:12px 0;cursor:pointer;transition:all 0.3s}
+    .upload-area:hover{border-color:#2c5f2d;background:#f0f7f0}
+    .upload-area.dragover{border-color:#2c5f2d;background:#e8f5e9}
+    input[type="file"]{display:none}
+    .file-info{margin:12px 0;padding:12px;background:#e8f5e9;border-radius:8px;font-size:14px}
+    .progress-bar{width:100%;height:24px;background:#f0f0f0;border-radius:8px;overflow:hidden;margin:12px 0}
+    .progress-fill{height:100%;background:#2c5f2d;transition:width 0.3s;display:flex;align-items:center;justify-content:center;color:#fff;font-size:13px;font-weight:600}
+    .status-msg{margin:12px 0;padding:12px;border-radius:8px;font-size:14px}
+    .status-msg.success{background:#e8f5e9;color:#2e7d32;border:1px solid #2e7d32}
+    .status-msg.error{background:#ffebee;color:#c62828;border:1px solid #c62828}
+    .warning-box{background:#fff3cd;padding:12px;border-radius:8px;font-size:13px;color:#856404;border:1px solid #ffc107}
 </style>
-</head>
-<body>
-<div class="container">
-  <h1>🔄 OTA Firmware Update</h1>
+</head><body><div class="header"><div><h1 id="device-id-header" style="margin:0;font-size:15px">🌱 Polivalka</h1><div style="font-size:13px">📍 <span id="location-text">—</span> / <span id="room-text">—</span><span id="custom-name-suffix"></span></div><div style="font-size:11px;margin-top:4px"><span id="battery-status">🔋 —</span> · <span id="header-state">💤 Standby</span></div></div><div class="header-info"><div id="header-time" class="mono" style="font-size:11px">--:--</div><div style="font-size:11px" id="header-mode"><span id="mode-badge" class="status-badge status-off">Off</span></div><div style="font-size:11px" id="header-conn">📡 <span id="conn-text">Offline</span></div></div></div></div><div class="nav"><a href="/">Fleet</a><a href="home.html">Home</a><a href="identify.html" style="background:#e8f5e9">🌱 Plant</a><a href="timer.html">Timer</a><a href="sensor.html">Sensor</a><a href="settings.html">Settings</a><a href="calibration.html">Calibration</a><a href="online.html">Online</a><a href="trends.html">Trends</a><a href="ota.html" class="active">Update</a><a href="admin.html" id="admin-nav-link" style="display:none">Admin</a></div><div class="container">
 
-  <div class="device-info">
-    <div><strong>Device:</strong> <span id="device-name">Loading...</span></div>
-    <div><strong>Location:</strong> <span id="device-location">—</span></div>
-    <div><strong>Current:</strong> <span id="current-version">—</span></div>
-    <div><strong>Status:</strong> <span id="device-status">—</span></div>
-  </div>
+<div class="card">
+<h3>🔄 OTA Firmware Update</h3>
+<div class="warning-box" style="margin-bottom:16px">
+⚠️ <strong>Warning:</strong> Do NOT power off device during update! Update takes ~2-3 minutes. Device will restart automatically.
+</div>
 
-  <div class="warning">
-    ⚠️ <strong>Warning:</strong> Do NOT power off device during update!
-    Update takes ~2-3 minutes. Device will restart automatically.
-  </div>
+<div style="margin:12px 0">
+<span class="muted">Current Firmware:</span> <span class="mono" id="current-version">—</span>
+</div>
 
-  <div class="upload-area" id="uploadArea" onclick="document.getElementById('fileInput').click()">
-    <div style="font-size:48px;margin-bottom:10px">📦</div>
-    <div style="font-size:16px;font-weight:600;margin-bottom:5px">Click to select firmware file</div>
-    <div style="font-size:13px;color:#666">or drag and drop polivalka.bin here</div>
-  </div>
+<div class="upload-area" id="uploadArea" onclick="document.getElementById('fileInput').click()">
+<div style="font-size:36px;margin-bottom:8px">📦</div>
+<div style="font-size:15px;font-weight:600;margin-bottom:4px">Click to select firmware file</div>
+<div style="font-size:12px;color:#666">or drag and drop polivalka.bin here</div>
+</div>
 
-  <input type="file" id="fileInput" accept=".bin">
+<input type="file" id="fileInput" accept=".bin">
 
-  <div class="file-info" id="fileInfo" style="display:none">
-    <div><strong>File:</strong> <span id="fileName">—</span></div>
-    <div><strong>Size:</strong> <span id="fileSize">—</span></div>
-    <div><strong>New version:</strong> <span id="newVersion">—</span></div>
-  </div>
+<div class="file-info" id="fileInfo" style="display:none">
+<div><strong>File:</strong> <span id="fileName">—</span></div>
+<div><strong>Size:</strong> <span id="fileSize">—</span></div>
+<div><strong>New version:</strong> <span id="newVersion" class="ok">—</span></div>
+</div>
 
-  <button class="btn btn-primary" id="uploadBtn" disabled onclick="startOTA()">
-    Upload & Update Firmware
-  </button>
+<div class="row" style="margin-top:12px">
+<button class="primary" id="uploadBtn" disabled onclick="startOTA()" style="width:100%">Upload & Update Firmware</button>
+</div>
 
-  <div class="progress" id="progress">
-    <div class="progress-bar">
-      <div class="progress-fill" id="progressFill">0%</div>
-    </div>
-    <div style="text-align:center;margin-top:10px;font-size:13px;color:#666" id="progressText">
-      Uploading firmware...
-    </div>
-  </div>
+<div id="progressSection" style="display:none;margin-top:16px">
+<div class="progress-bar">
+<div class="progress-fill" id="progressFill" style="width:0%">0%</div>
+</div>
+<div class="muted" style="text-align:center" id="progressText">Uploading firmware...</div>
+</div>
 
-  <div class="status" id="status"></div>
+<div class="status-msg" id="statusMsg" style="display:none"></div>
+</div>
 
-  <div style="margin-top:30px;text-align:center">
-    <a href="/" style="color:#2c5f2d;text-decoration:none">← Back to Fleet</a>
-  </div>
 </div>
 
 <script>
-// DEVICE_ID comes from api-adapter.js
 let selectedFile = null;
 
-// Load device info
-async function loadDeviceInfo() {
+async function loadHeaderData() {
   try {
-    // Use /status endpoint for single device (works in both Local and Cloud mode)
-    const device = await API.get('/status');
+    const s = await API.get('/status');
 
-    document.getElementById('device-name').textContent = DEVICE_ID;
-    document.getElementById('device-location').textContent = `${device.system_state?.location || '—'} / ${device.system_state?.room || '—'}`;
-    document.getElementById('current-version').textContent = device.firmware_version || '—';
-    const isOnline = device.online === true;
-    document.getElementById('device-status').textContent = isOnline ? '● Online' : '○ Offline';
-    document.getElementById('device-status').style.color = isOnline ? '#2e7d32' : '#999';
+    // Battery
+    const batteryEl = document.getElementById('battery-status');
+    if (s.battery && s.battery.percent !== null && s.battery.percent !== undefined) {
+      batteryEl.textContent = `🔋 ${Math.round(s.battery.percent)}%${s.battery.charging ? ' ⚡' : ''}`;
+    } else {
+      batteryEl.textContent = '⚡ AC';
+    }
+
+    // Location/Room
+    if (s.system_state?.location) document.getElementById('location-text').textContent = s.system_state.location;
+    if (s.system_state?.room) document.getElementById('room-text').textContent = s.system_state.room;
+
+    // Custom name
+    let customName = s.system_state?.device_name || 'Plant';
+    if (customName === 'Polivalka' || customName.toLowerCase().startsWith('polivalka-')) customName = 'Plant';
+    document.getElementById('custom-name-suffix').textContent = ' / ' + customName;
+
+    // Mode badge
+    const mode = s.system_state?.mode || 'off';
+    const modeBadge = document.getElementById('mode-badge');
+    modeBadge.textContent = mode.charAt(0).toUpperCase() + mode.slice(1);
+    modeBadge.className = 'status-badge status-' + mode;
+
+    // Connection
+    const connText = document.getElementById('conn-text');
+    if (s.wifi_connected) {
+      connText.textContent = 'Online';
+      connText.style.color = '#0a0';
+    } else {
+      connText.textContent = 'Offline';
+      connText.style.color = '#999';
+    }
+
+    // State
+    const rawState = s.system_state?.state || 'OFF';
+    const displayState = mapStateToDisplay(rawState, s.pump_running);
+    document.getElementById('header-state').textContent = `${displayState.emoji} ${displayState.text}`;
+
+    // Firmware version
+    document.getElementById('current-version').textContent = s.firmware_version || '—';
+
   } catch(e) {
-    console.error('Failed to load device info:', e);
-    document.getElementById('device-name').textContent = DEVICE_ID;
-    document.getElementById('device-status').textContent = '⚠ Error loading';
+    console.error('Failed to load header data:', e);
   }
 }
 
@@ -139,8 +171,7 @@ function showFileInfo(file) {
 
   // Parse version from filename: polivalka_v1.0.4.bin -> v1.0.4
   const versionMatch = file.name.match(/[_-](v\d+\.\d+\.\d+)\.bin$/i);
-  const newVersion = versionMatch ? versionMatch[1] : 'unknown';
-  document.getElementById('newVersion').textContent = newVersion;
+  document.getElementById('newVersion').textContent = versionMatch ? versionMatch[1] : 'unknown';
 
   document.getElementById('fileInfo').style.display = 'block';
   document.getElementById('uploadBtn').disabled = false;
@@ -150,78 +181,53 @@ async function startOTA() {
   if (!selectedFile) return;
 
   const uploadBtn = document.getElementById('uploadBtn');
-  const progressDiv = document.getElementById('progress');
-  const statusDiv = document.getElementById('status');
+  const progressSection = document.getElementById('progressSection');
+  const statusMsg = document.getElementById('statusMsg');
 
   uploadBtn.disabled = true;
-  progressDiv.style.display = 'block';
-  statusDiv.style.display = 'none';
+  progressSection.style.display = 'block';
+  statusMsg.style.display = 'none';
 
   try {
-    // Upload to S3
     updateProgress(10, 'Uploading to S3...');
     const firmwareUrl = await uploadToS3(selectedFile);
 
     updateProgress(50, 'Triggering OTA update...');
 
-    // Trigger OTA via Lambda
-    // API adapter already adds /device/${deviceId} prefix in cloud mode
-    // Get version from filename
     const versionMatch = selectedFile.name.match(/[_-](v\d+\.\d+\.\d+)\.bin$/i);
     const version = versionMatch ? versionMatch[1] : 'unknown';
 
-    const response = await API.post('/ota', {
-      url: firmwareUrl,
-      version: version
-    });
+    await API.post('/ota', { url: firmwareUrl, version: version });
 
     updateProgress(100, 'OTA update triggered!');
 
     setTimeout(() => {
-      showStatus(`✅ OTA update started! Device will restart in ~60 seconds. <br>Check Fleet page for status.`, 'success');
-      progressDiv.style.display = 'none';
+      showStatus('✅ OTA update started! Device will restart in ~60 seconds.', 'success');
+      progressSection.style.display = 'none';
     }, 1000);
 
   } catch(e) {
     console.error('OTA failed:', e);
     showStatus(`❌ Failed: ${e.message}`, 'error');
-    progressDiv.style.display = 'none';
+    progressSection.style.display = 'none';
     uploadBtn.disabled = false;
   }
 }
 
 async function uploadToS3(file) {
-  try {
-    // 1. Get presigned upload URL from Lambda
-    // API adapter already adds /device/${deviceId} prefix in cloud mode
-    const urlResponse = await API.get('/ota/upload-url');
+  const urlResponse = await API.get('/ota/upload-url');
+  if (!urlResponse.upload_url) throw new Error('Failed to get upload URL');
 
-    if (!urlResponse.upload_url) {
-      throw new Error('Failed to get upload URL');
-    }
+  const { upload_url, download_url } = urlResponse;
 
-    const { upload_url, download_url } = urlResponse;
+  const uploadResponse = await fetch(upload_url, {
+    method: 'PUT',
+    body: file,
+    headers: { 'Content-Type': 'application/octet-stream' }
+  });
 
-    // 2. Upload file directly to S3 using presigned URL
-    const uploadResponse = await fetch(upload_url, {
-      method: 'PUT',
-      body: file,
-      headers: {
-        'Content-Type': 'application/octet-stream'
-      }
-    });
-
-    if (!uploadResponse.ok) {
-      throw new Error(`S3 upload failed: ${uploadResponse.status}`);
-    }
-
-    // 3. Return the public download URL
-    return download_url;
-
-  } catch (error) {
-    console.error('Upload error:', error);
-    throw new Error(`Upload failed: ${error.message}`);
-  }
+  if (!uploadResponse.ok) throw new Error(`S3 upload failed: ${uploadResponse.status}`);
+  return download_url;
 }
 
 function updateProgress(percent, text) {
@@ -231,13 +237,12 @@ function updateProgress(percent, text) {
 }
 
 function showStatus(message, type) {
-  const statusDiv = document.getElementById('status');
-  statusDiv.innerHTML = message;
-  statusDiv.className = `status ${type}`;
-  statusDiv.style.display = 'block';
+  const el = document.getElementById('statusMsg');
+  el.innerHTML = message;
+  el.className = `status-msg ${type}`;
+  el.style.display = 'block';
 }
 
-loadDeviceInfo();
+loadHeaderData();
 </script>
-</body>
-</html>
+</body></html>
