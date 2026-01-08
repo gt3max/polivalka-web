@@ -268,7 +268,7 @@ def handle_config(event, device_id, timestamp):
                 'stop_pct': event.get('stop_pct', 55),
                 'pulse_sec': event.get('pulse_sec', 5),
                 'wait_sec': event.get('wait_sec', 120),
-                'max_water_cycle_ml': event.get('max_water_cycle_ml', 300),
+                'max_pulses': event.get('max_pulses', 5),
                 'cooldown_min': event.get('cooldown_min', 120),
                 'max_water_day_ml': event.get('max_water_day_ml', 400),
                 'no_rise_check_ml': event.get('no_rise_check_ml', 60),
