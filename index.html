@@ -315,6 +315,28 @@
 <script>
 // getRssiDisplay, mapStateToDisplay, timeAgo, showToast - moved to common.js
 
+// Format restarts display: "15 (3 unexpected)" or just "15"
+function formatRestarts(device) {
+  const clean = device.clean_restarts;
+  const unexpected = device.unexpected_restarts;
+
+  // Both values available
+  if (clean !== null && clean !== undefined && unexpected !== null && unexpected !== undefined) {
+    const total = clean + unexpected;
+    if (unexpected > 0) {
+      return `${total} <span style="color:#ff9800">(${unexpected} unexpected)</span>`;
+    }
+    return String(total);
+  }
+
+  // Fallback to old reboot_count if available
+  if (device.reboot_count !== null && device.reboot_count !== undefined) {
+    return String(device.reboot_count);
+  }
+
+  return 'N/A';
+}
+
 // Mock data (fallback when API fails)
 // ВАЖНО: должен содержать ВСЕ реальные устройства!
 const MOCK_DEVICES = [
@@ -329,7 +351,8 @@ const MOCK_DEVICES = [
     mode: 'manual',
     state: 'UNKNOWN',
     firmware_version: 'v1.0.0',
-    reboot_count: null,
+    clean_restarts: null,
+    unexpected_restarts: null,
     last_watering: null,
     last_update: null,
     online: false,
@@ -346,7 +369,8 @@ const MOCK_DEVICES = [
     mode: 'sensor',
     state: 'STANDBY',
     firmware_version: 'v1.0.0',
-    reboot_count: 5,
+    clean_restarts: 12,
+    unexpected_restarts: 3,
     last_watering: Date.now() - 2 * 3600 * 1000,
     last_update: Date.now() - 5 * 60 * 1000,
     online: true,
@@ -363,7 +387,8 @@ const MOCK_DEVICES = [
     mode: 'sensor',
     state: 'STANDBY',
     firmware_version: 'v1.0.0',
-    reboot_count: 3,
+    clean_restarts: 8,
+    unexpected_restarts: 0,
     last_watering: Date.now() - 24 * 3600 * 1000,
     last_update: Date.now() - 10 * 60 * 1000,
     online: true,
@@ -781,7 +806,7 @@ function createExpandableRow(device, isOnline, hasWarnings, isCritical) {
       <div class="detail-row" style="margin-top:8px">
         <span class="detail-item">Last watering: ${lastWateringAgo}</span>
         <span class="detail-item">🔧 Firmware: ${device.firmware_version || 'v1.0.0'}</span>
-        <span class="detail-item">🔄 Reboots: ${device.reboot_count || 'N/A'}</span>
+        <span class="detail-item">🔄 Restarts: ${formatRestarts(device)}</span>
         ${device.sta_rssi ? `<span class="detail-item" style="color:${getRssiDisplay(device.sta_rssi).color}">📶 Signal: ${device.sta_rssi} dBm</span>` : ''}
       </div>
 
@@ -969,7 +994,7 @@ function createDeviceCard(device) {
     <div class="muted" style="font-size:12px;margin:8px 0">
       Water: ≈${((device.watering_duration || 60) * (device.pump_calibration || 2.5) * (device.pump_speed || 100) / 100).toFixed(0)}ml / ${device.watering_duration || 60}s<br>
       Last watering: ${lastWateringAgo} | Last update: ${lastUpdateAgo}<br>
-      🔧 ${device.firmware_version || 'v1.0.0'} | 🔄 Reboots: ${device.reboot_count || 'N/A'}${device.sta_rssi ? ` | <span style="color:${getRssiDisplay(device.sta_rssi).color}">📶 ${device.sta_rssi} dBm</span>` : ''}
+      🔧 ${device.firmware_version || 'v1.0.0'} | 🔄 Restarts: ${formatRestarts(device)}${device.sta_rssi ? ` | <span style="color:${getRssiDisplay(device.sta_rssi).color}">📶 ${device.sta_rssi} dBm</span>` : ''}
     </div>
 
     ${hasWarnings ? `
@@ -1082,9 +1107,11 @@ async function refreshSensor(deviceId) {
         device.battery_pct = result.battery.percent;
         device.battery_charging = result.battery.charging;
       }
-      // Firmware and reboot count
+      // Firmware and restart counters
       if (result.firmware_version) device.firmware_version = result.firmware_version;
-      if (result.reboot_count !== undefined) device.reboot_count = result.reboot_count;
+      if (result.clean_restarts !== undefined) device.clean_restarts = result.clean_restarts;
+      if (result.unexpected_restarts !== undefined) device.unexpected_restarts = result.unexpected_restarts;
+      if (result.reboot_count !== undefined) device.reboot_count = result.reboot_count; // fallback
       device.last_update = result.timestamp;
       device.online = true;  // Device responded = online
 
@@ -1121,9 +1148,11 @@ async function refreshSensorSilent(deviceId) {
         device.battery_pct = result.battery.percent;
         device.battery_charging = result.battery.charging;
       }
-      // Firmware and reboot count
+      // Firmware and restart counters
       if (result.firmware_version) device.firmware_version = result.firmware_version;
-      if (result.reboot_count !== undefined) device.reboot_count = result.reboot_count;
+      if (result.clean_restarts !== undefined) device.clean_restarts = result.clean_restarts;
+      if (result.unexpected_restarts !== undefined) device.unexpected_restarts = result.unexpected_restarts;
+      if (result.reboot_count !== undefined) device.reboot_count = result.reboot_count; // fallback
       device.last_update = result.timestamp;
       device.online = true;  // Device responded = online
 
