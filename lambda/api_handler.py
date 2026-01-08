@@ -1317,7 +1317,7 @@ def lambda_handler(event, context):
                         'stop_pct': sensor_config.get('stop_pct', 55),
                         'pulse_sec': sensor_config.get('pulse_sec', 5),
                         'wait_sec': sensor_config.get('wait_sec', 120),
-                        'max_pulses': sensor_config.get('max_pulses', 5),
+                        'max_water_cycle_ml': sensor_config.get('max_water_cycle_ml', 300),
                         'cooldown_min': sensor_config.get('cooldown_min', 120),
                         'max_water_day_ml': sensor_config.get('max_water_day_ml', 400),
                         'no_rise_check_ml': sensor_config.get('no_rise_check_ml', 60),
@@ -1350,7 +1350,7 @@ def lambda_handler(event, context):
                 # Parse all sensor parameters
                 param_names = [
                     'start_moisture_pct', 'stop_moisture_pct', 'pulse_sec', 'wait_sec',
-                    'max_pulses', 'cooldown_min', 'max_water_day_ml', 'no_rise_check_ml',
+                    'max_water_cycle_ml', 'cooldown_min', 'max_water_day_ml', 'no_rise_check_ml',
                     'idle_check_interval_min', 'microprime_interval_hours',
                     'microprime_pulse_sec', 'microprime_settle_sec'
                 ]

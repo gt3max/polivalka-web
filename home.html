@@ -809,7 +809,7 @@ async function updateSensorControllerStatus() {
     const progressRow = document.getElementById('status-progress-row');
     if (sc.state === 'PULSE' || sc.state === 'SETTLE' || sc.state === 'CHECK') {
       progressRow.style.display = 'block';
-      const progressText = `Pulse ${sc.pulses_delivered} / ${preset.max_pulses || '?'}, ${sc.total_water_ml} ml delivered`;
+      const progressText = `${sc.total_water_ml} / ${preset.max_water_cycle_ml || '?'} ml this cycle`;
       document.getElementById('status-watering-progress').textContent = progressText;
     } else {
       progressRow.style.display = 'none';
