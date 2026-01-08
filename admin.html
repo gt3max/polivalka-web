@@ -585,8 +585,19 @@ async function loadDeviceConfig() {
         // Load Device Stats
         document.getElementById('device-stats-card').style.display = 'block';
         document.getElementById('stat-firmware').textContent = device.firmware_version || '—';
-        document.getElementById('stat-clean-restarts').textContent = device.clean_restarts ?? '—';
-        document.getElementById('stat-unexpected-restarts').textContent = device.unexpected_restarts ?? '—';
+
+        // Restarts: show split data if available, otherwise fallback to total reboot_count
+        if (device.clean_restarts !== undefined && device.clean_restarts !== null) {
+          document.getElementById('stat-clean-restarts').textContent = device.clean_restarts;
+          document.getElementById('stat-unexpected-restarts').textContent = device.unexpected_restarts ?? '—';
+        } else if (device.reboot_count !== undefined && device.reboot_count !== null) {
+          // Fallback: show total reboot_count as "Total" (split tracking not yet implemented in firmware)
+          document.getElementById('stat-clean-restarts').textContent = `${device.reboot_count} (total)`;
+          document.getElementById('stat-unexpected-restarts').textContent = 'n/a';
+        } else {
+          document.getElementById('stat-clean-restarts').textContent = '—';
+          document.getElementById('stat-unexpected-restarts').textContent = '—';
+        }
         document.getElementById('stat-total-water').textContent = device.total_water_ml ? device.total_water_ml.toLocaleString() + ' ml' : '— ml';
         document.getElementById('stat-pump-runtime').textContent = device.pump_runtime_sec ? device.pump_runtime_sec.toLocaleString() + ' sec' : '— sec';
         console.log('[Admin] Loaded device stats:', {
