@@ -329,9 +329,9 @@ function formatRestarts(device) {
     return String(total);
   }
 
-  // Fallback to old reboot_count if available (split tracking not yet in firmware)
+  // Fallback to reboot_count if split tracking not available
   if (device.reboot_count !== null && device.reboot_count !== undefined) {
-    return `${device.reboot_count} <span class="muted">(total)</span>`;
+    return String(device.reboot_count);
   }
 
   return 'N/A';
