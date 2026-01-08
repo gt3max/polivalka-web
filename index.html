@@ -604,6 +604,11 @@ function initUserDisplay() {
       usernameEl.textContent = email;
     }
 
+    // Show admin features for admins
+    if (isAdmin()) {
+      document.getElementById('admin-link').innerHTML = '<a href="admin.html" style="color:#fff;text-decoration:none">⚙️ Admin</a> | ';
+      document.getElementById('consoleToggle').style.display = 'block';
+    }
 
     // Hide auth section if exists, show fleet view
     const authSection = document.getElementById('auth-section');
