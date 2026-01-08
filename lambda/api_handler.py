@@ -3734,7 +3734,7 @@ def get_device_activity(device_id, user_id):
         telem_device_id = get_telemetry_device_id(device_id)
         telem_response = telemetry_table.query(
             KeyConditionExpression=Key('device_id').eq(telem_device_id) & Key('timestamp').gt(cutoff),
-            Limit=100,  # Get more to filter for system events
+            Limit=500,  # 7 days of data (~3 events/hour × 168 hours)
             ScanIndexForward=False  # Sort DESC
         )
 
@@ -3744,7 +3744,7 @@ def get_device_activity(device_id, user_id):
 
         for telem in telem_response.get('Items', []):
             event_count += 1
-            if event_count > 100:  # Limit to 100 events total
+            if event_count > 500:  # Limit to 500 events (7 days)
                 break
 
             ts = int(telem.get('timestamp', 0))
