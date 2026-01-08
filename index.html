@@ -571,6 +571,8 @@ function loginSuccess(email) {
   // Uses isAdmin() from common.js
   if (isAdmin()) {
     document.getElementById('admin-link').innerHTML = '<a href="admin.html" style="color:#fff;text-decoration:none">⚙️ Admin</a> | ';
+    // Show debug console toggle for admins
+    document.getElementById('consoleToggle').style.display = 'block';
   }
 
   // Load devices (time handled by common.js universal clock)
@@ -1969,8 +1971,8 @@ window.addEventListener('DOMContentLoaded', () => {
   </div>
 </div>
 
-<!-- Debug Console -->
-<button id="consoleToggle" class="console-toggle" onclick="toggleConsole()">▲ Show Console</button>
+<!-- Debug Console (admin only) -->
+<button id="consoleToggle" class="console-toggle" onclick="toggleConsole()" style="display:none">▲ Show Console</button>
 
 <div id="debugConsole" class="debug-console" style="display:none">
   <div class="console-header">
