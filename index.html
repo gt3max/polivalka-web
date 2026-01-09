@@ -315,29 +315,26 @@
 <script>
 // getRssiDisplay, mapStateToDisplay, timeAgo, showToast - moved to common.js
 
-// Format restarts display: "15 (3 unexpected)" or just "15"
-// reboot_count = total since manufacturing (from telemetry)
-// unexpected_restarts = unplanned restarts tracked separately (from devices table)
+// Format restarts display: "10 (9 unexpected)" or just "10"
+// Prefer clean_restarts + unexpected_restarts (accurate, from devices table)
+// Fallback to reboot_count (legacy, from telemetry)
 function formatRestarts(device) {
-  const reboot = device.reboot_count;
+  const clean = device.clean_restarts;
   const unexpected = device.unexpected_restarts;
 
-  // Show reboot_count (total) with unexpected annotation if available
-  if (reboot !== null && reboot !== undefined) {
-    if (unexpected !== null && unexpected !== undefined && unexpected > 0) {
-      return `${reboot} <span style="color:#ff9800">(${unexpected} unexpected)</span>`;
-    }
-    return String(reboot);
-  }
-
-  // Fallback: show clean + unexpected if reboot_count not available
-  const clean = device.clean_restarts;
+  // Prefer clean + unexpected (new accurate counters from devices table)
   if (clean !== null && clean !== undefined && unexpected !== null && unexpected !== undefined) {
     const total = clean + unexpected;
     if (unexpected > 0) {
       return `${total} <span style="color:#ff9800">(${unexpected} unexpected)</span>`;
     }
     return String(total);
+  }
+
+  // Fallback: reboot_count from telemetry (legacy)
+  const reboot = device.reboot_count;
+  if (reboot !== null && reboot !== undefined) {
+    return String(reboot);
   }
 
   return 'N/A';
