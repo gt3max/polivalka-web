@@ -38,7 +38,7 @@ function startHeaderClock() {
       hour12: false
     });
     timeEl.textContent = timeStr;
-    timeEl.className = 'mono ok';
+    timeEl.className = 'mono';
   }
 
   updateClock(); // Initial update
@@ -217,7 +217,7 @@ function updateHeaderFromStatus(status) {
   const timeEl = document.getElementById('header-time');
   if (timeEl && status.timestamp) {
     timeEl.textContent = formatTime(status.timestamp);
-    timeEl.className = 'mono ok';
+    timeEl.className = 'mono';
   }
 
   // Battery
@@ -251,7 +251,7 @@ function updateHeaderFromStatus(status) {
   if (connText) {
     if (status.wifi_connected) {
       connText.textContent = 'Online';
-      connText.style.color = '#0a0';
+      connText.style.color = '#fff';
     } else {
       connText.textContent = 'Offline';
       connText.style.color = '#999';

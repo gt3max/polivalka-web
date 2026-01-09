@@ -275,7 +275,7 @@ async function updateStatus(){
     const connText = document.getElementById('conn-text');
     if (s.wifi_connected) {
       connText.textContent = 'Online';
-      connText.style.color = '#0a0';
+      connText.style.color = '#fff';
     } else {
       connText.textContent = 'Offline';
       connText.style.color = '#999';
@@ -379,7 +379,7 @@ async function updateTime(){
     const timeEl = document.getElementById('header-time');
     if (t.time_set && t.current_time) {
       timeEl.textContent=t.current_time.substring(11,16);
-      timeEl.className = 'mono ok';
+      timeEl.className = 'mono';
     } else {
       timeEl.textContent = '--:--';
       timeEl.className = 'mono danger';

@@ -79,7 +79,7 @@ async function loadAllData(){
     const connText = document.getElementById('conn-text');
     if (s.wifi_connected) {
       connText.textContent = 'Online';
-      connText.style.color = '#0a0';
+      connText.style.color = '#fff';
     } else {
       connText.textContent = 'Offline';
       connText.style.color = '#999';
@@ -184,9 +184,9 @@ async function updateTime(){
       const mins = String(dt.getMinutes()).padStart(2,'0');
 
       timeEl.textContent = hours + ':' + mins;
-      timeEl.className = 'mono ok';
+      timeEl.className = 'mono';
       currentTimeEl.textContent = day + ' ' + month + ' ' + year + ', ' + hours + ':' + mins;
-      currentTimeEl.className = 'mono ok';
+      currentTimeEl.className = 'mono';
     } else {
       timeEl.textContent = '--:--';
       timeEl.className = 'mono danger';
