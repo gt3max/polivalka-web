@@ -1441,18 +1441,29 @@ async function bulkAction(action) {
 
 // Mass OTA Update
 async function massOTAUpdate() {
+  console.log('[OTA] massOTAUpdate started');
+  console.log('[OTA] allDevices count:', allDevices.length);
+  console.log('[OTA] allDevices online status:', allDevices.map(d => ({id: d.device_id, online: d.online})));
+
   // Step 1: Select firmware file
   const input = document.createElement('input');
   input.type = 'file';
   input.accept = '.bin';
 
   input.onchange = async (e) => {
+    console.log('[OTA] File selected');
     const file = e.target.files[0];
-    if (!file) return;
+    if (!file) {
+      console.log('[OTA] No file selected (cancelled)');
+      return;
+    }
+    console.log('[OTA] File:', file.name, 'Size:', file.size);
 
     // Confirm
     const onlineDevices = allDevices.filter(d => d.online);
+    console.log('[OTA] Online devices:', onlineDevices.length, onlineDevices.map(d => d.device_id));
     if (onlineDevices.length === 0) {
+      console.log('[OTA] No online devices - showing alert');
       alert('❌ No online devices to update!');
       return;
     }
@@ -1463,44 +1474,54 @@ async function massOTAUpdate() {
 
     // Step 2: Upload firmware to S3 (use first device for presigned URL)
     showToast('📤 Uploading firmware to S3...', 'info');
+    console.log('[OTA] Getting presigned URL for device:', onlineDevices[0].device_id);
 
     try {
       // Get presigned URL from first device (same S3 bucket for all devices)
       const urlResponse = await API.get(`/device/${onlineDevices[0].device_id}/ota/upload-url`);
+      console.log('[OTA] Presigned URL response:', urlResponse);
 
       if (!urlResponse.upload_url) {
+        console.error('[OTA] No upload_url in response');
         throw new Error('Failed to get S3 upload URL');
       }
 
       // Upload to S3
+      console.log('[OTA] Uploading to S3:', urlResponse.upload_url.substring(0, 100) + '...');
       const uploadResponse = await fetch(urlResponse.upload_url, {
         method: 'PUT',
         body: file,
         headers: {'Content-Type': 'application/octet-stream'}
       });
 
+      console.log('[OTA] S3 upload response status:', uploadResponse.status);
       if (!uploadResponse.ok) {
         throw new Error(`S3 upload failed: ${uploadResponse.status}`);
       }
 
       const firmwareUrl = urlResponse.download_url;
+      console.log('[OTA] Firmware URL:', firmwareUrl);
       showToast('✅ Firmware uploaded to S3', 'success');
 
       // Step 3: Trigger OTA for all online devices
+      console.log('[OTA] Triggering OTA for', onlineDevices.length, 'devices');
       const results = [];
       let completed = 0;
 
       for (const device of onlineDevices) {
         try {
+          console.log('[OTA] Triggering OTA for device:', device.device_id);
           showToast(`Updating ${device.device_id}... (${completed+1}/${onlineDevices.length})`, 'info');
 
-          await API.post(`/device/${device.device_id}/ota`, {
+          const otaResult = await API.post(`/device/${device.device_id}/ota`, {
             url: firmwareUrl,
             version: 'cloud-update'
           });
+          console.log('[OTA] OTA trigger result for', device.device_id, ':', otaResult);
 
           results.push({device_id: device.device_id, success: true});
         } catch(e) {
+          console.error('[OTA] OTA trigger failed for', device.device_id, ':', e.message);
           results.push({device_id: device.device_id, success: false, error: e.message});
         }
         completed++;
