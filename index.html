@@ -605,9 +605,14 @@ function initUserDisplay() {
     }
 
     // Show admin features for admins
-    if (isAdmin()) {
-      document.getElementById('admin-link').innerHTML = '<a href="admin.html" style="color:#fff;text-decoration:none">⚙️ Admin</a> | ';
-      document.getElementById('consoleToggle').style.display = 'block';
+    try {
+      if (typeof isAdmin === 'function' && isAdmin()) {
+        document.getElementById('admin-link').innerHTML = '<a href="admin.html" style="color:#fff;text-decoration:none">⚙️ Admin</a> | ';
+        const consoleToggle = document.getElementById('consoleToggle');
+        if (consoleToggle) consoleToggle.style.display = 'block';
+      }
+    } catch (e) {
+      console.error('Admin check failed:', e);
     }
 
     // Hide auth section if exists, show fleet view
