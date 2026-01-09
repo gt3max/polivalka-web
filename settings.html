@@ -300,7 +300,6 @@ async function saveTimezone(){
     const data = await API.post('/time/timezone', {timezone});
 
     if (data.success) {
-      alert('Timezone saved!\n\nTime will update after next NTP sync or manual time set.');
       loadTimezone();
       updateTime();
     } else {
