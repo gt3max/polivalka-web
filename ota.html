@@ -180,6 +180,9 @@ function showFileInfo(file) {
 async function startOTA() {
   if (!selectedFile) return;
 
+  console.log('[OTA] Starting OTA update');
+  console.log('[OTA] File:', selectedFile.name, 'Size:', selectedFile.size);
+
   const uploadBtn = document.getElementById('uploadBtn');
   const progressSection = document.getElementById('progressSection');
   const statusMsg = document.getElementById('statusMsg');
@@ -190,14 +193,18 @@ async function startOTA() {
 
   try {
     updateProgress(10, 'Uploading to S3...');
+    console.log('[OTA] Getting presigned URL...');
     const firmwareUrl = await uploadToS3(selectedFile);
+    console.log('[OTA] Firmware uploaded, URL:', firmwareUrl);
 
     updateProgress(50, 'Triggering OTA update...');
 
     const versionMatch = selectedFile.name.match(/[_-](v\d+\.\d+\.\d+)\.bin$/i);
     const version = versionMatch ? versionMatch[1] : 'unknown';
+    console.log('[OTA] Triggering OTA with version:', version);
 
-    await API.post('/ota', { url: firmwareUrl, version: version });
+    const result = await API.post('/ota', { url: firmwareUrl, version: version });
+    console.log('[OTA] OTA trigger result:', result);
 
     updateProgress(100, 'OTA update triggered!');
 
@@ -207,7 +214,7 @@ async function startOTA() {
     }, 1000);
 
   } catch(e) {
-    console.error('OTA failed:', e);
+    console.error('[OTA] OTA failed:', e);
     showStatus(`❌ Failed: ${e.message}`, 'error');
     progressSection.style.display = 'none';
     uploadBtn.disabled = false;
@@ -215,10 +222,17 @@ async function startOTA() {
 }
 
 async function uploadToS3(file) {
+  console.log('[OTA] Requesting presigned URL from API...');
   const urlResponse = await API.get('/ota/upload-url');
-  if (!urlResponse.upload_url) throw new Error('Failed to get upload URL');
+  console.log('[OTA] Presigned URL response:', urlResponse);
+
+  if (!urlResponse.upload_url) {
+    console.error('[OTA] No upload_url in response');
+    throw new Error('Failed to get upload URL');
+  }
 
   const { upload_url, download_url } = urlResponse;
+  console.log('[OTA] Uploading to S3...');
 
   const uploadResponse = await fetch(upload_url, {
     method: 'PUT',
@@ -226,6 +240,7 @@ async function uploadToS3(file) {
     headers: { 'Content-Type': 'application/octet-stream' }
   });
 
+  console.log('[OTA] S3 upload response:', uploadResponse.status, uploadResponse.statusText);
   if (!uploadResponse.ok) throw new Error(`S3 upload failed: ${uploadResponse.status}`);
   return download_url;
 }
