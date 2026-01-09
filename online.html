@@ -202,7 +202,7 @@ async function updateHeader(){
       modeInfoBox.innerHTML += '<b>Current status:</b><br>';
       modeInfoBox.innerHTML += '• <b>Network:</b> ' + (s.sta_ssid || '—') + '<br>';
       modeInfoBox.innerHTML += '• <b>Device IP:</b> ' + (s.sta_ip || '—') + '<br>';
-      modeInfoBox.innerHTML += '• <b>mDNS:</b> ' + (s.mdns_hostname || 'polivalka-BB00C1') + '.local<br>';
+      modeInfoBox.innerHTML += '• <b>mDNS:</b> ' + (s.mdns_hostname || 'polivalka-XXXXXX') + '.local<br>';
       modeInfoBox.innerHTML += '• <b>Local access:</b> Available via WiFi router ✅<br>';
       modeInfoBox.innerHTML += '• <b>Cloud (AWS):</b> ' + (s.aws_connected ? 'Connected ✅' : 'Disconnected ❌') + '<br>';
       modeInfoBox.innerHTML += '• <b>Time sync:</b> ' + (s.time_set ? 'Working ✅' : 'Not set ❌') + '<br><br>';
@@ -211,7 +211,7 @@ async function updateHeader(){
 
       modeInfoBox.innerHTML += '<b>How to access device:</b><br>';
       modeInfoBox.innerHTML += '<b>1️⃣ Local access (via .local):</b><br>';
-      const mdnsHostname = (s.mdns_hostname || 'polivalka-BB00C1') + '.local';
+      const mdnsHostname = (s.mdns_hostname || 'polivalka-XXXXXX') + '.local';
       modeInfoBox.innerHTML += '   • Switch phone to WiFi: <b>' + (s.sta_ssid || '—') + '</b><br>';
       modeInfoBox.innerHTML += '   • Open: <code style="background:#fff;padding:2px 6px;border-radius:4px">' + (s.sta_ip || '—') + '</code> OR<br>';
       modeInfoBox.innerHTML += '   • Open: <code style="background:#fff;padding:2px 6px;border-radius:4px">' + mdnsHostname + '</code><br><br>';
@@ -279,7 +279,7 @@ async function updateHeader(){
       modeInfoBox.innerHTML = '✅ <b>[' + homeOnWiFiScenario + ' - on WiFi] Router Connected</b><br><br>';
       modeInfoBox.innerHTML += '<b>Device is accessible:</b><br>';
       modeInfoBox.innerHTML += '• <b>Via WiFi:</b> ' + (s.sta_ip || '—') + ' ✅<br>';
-      modeInfoBox.innerHTML += '• <b>Via mDNS:</b> ' + (s.mdns_hostname || 'polivalka-BB00C1') + '.local ✅<br>';
+      modeInfoBox.innerHTML += '• <b>Via mDNS:</b> ' + (s.mdns_hostname || 'polivalka-XXXXXX') + '.local ✅<br>';
       modeInfoBox.innerHTML += '• <b>Via AP:</b> 192.168.4.1 (will disable in ~10 min) ⏱️<br><br>';
       modeInfoBox.innerHTML += '<small style="color:#2e7d32">💡 AP will auto-disable to save battery. Use IP or mDNS address above.</small>';
     }
@@ -710,7 +710,7 @@ window.addEventListener('load', function() {
 
 // Admin nav link - moved to common.js
 
-// Enable AP mode remotely (via MQTT command)
+// Enable AP+STA mode remotely (via MQTT command)
 async function enableAPMode() {
   if (!IS_CLOUD || !DEVICE_ID) {
     alert('This feature only works in Cloud mode');
@@ -737,7 +737,7 @@ async function enableAPMode() {
       const apPassword = 'ms' + deviceSuffix;
 
       statusDiv.innerHTML = `
-        <div style="color:#2e7d32;font-weight:600;margin-bottom:8px">✅ AP Mode Enabled for ${minutes} minutes!</div>
+        <div style="color:#2e7d32;font-weight:600;margin-bottom:8px">✅ AP+STA Mode Enabled for ${minutes} minutes!</div>
         <div style="font-size:13px;line-height:1.6">
           <b>How to connect:</b><br>
           1. Open WiFi settings on your phone<br>
@@ -754,14 +754,14 @@ async function enableAPMode() {
       btn.textContent = '✅ Command Sent';
       setTimeout(() => {
         btn.disabled = false;
-        btn.textContent = '📡 Enable AP Mode';
+        btn.textContent = '📡 Enable AP+STA';
       }, 5000);
     } else {
       throw new Error(result.message || 'Command failed');
     }
   } catch (e) {
     statusDiv.innerHTML = `
-      <div style="color:#c62828;font-weight:600">❌ Failed to enable AP mode</div>
+      <div style="color:#c62828;font-weight:600">❌ Failed to enable AP+STA mode</div>
       <div style="font-size:13px;margin-top:4px">${e.message}</div>
       <div style="font-size:12px;color:#666;margin-top:8px">Make sure device is online and connected to AWS.</div>
     `;
@@ -770,7 +770,7 @@ async function enableAPMode() {
     statusDiv.style.display = 'block';
 
     btn.disabled = false;
-    btn.textContent = '📡 Enable AP Mode';
+    btn.textContent = '📡 Enable AP+STA';
   }
 }
 
@@ -913,8 +913,8 @@ if (IS_CLOUD) {
         </div>
 
         <div class="card" id="enable-ap-card">
-          <h3>📡 Remote AP Activation</h3>
-          <p class="muted">Device is connected to WiFi but you need local access?<br>Enable AP mode temporarily to access 192.168.4.1</p>
+          <h3>📡 Remote AP+STA Activation</h3>
+          <p class="muted">Device is connected to WiFi but you need local access?<br>Enable AP+STA temporarily to access 192.168.4.1</p>
           <div id="ap-enable-section" style="margin-top:16px">
             <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap">
               <select id="ap-duration" style="padding:8px 12px;border:1px solid #ddd;border-radius:6px;font-size:14px">
@@ -924,7 +924,7 @@ if (IS_CLOUD) {
                 <option value="60">60 minutes</option>
               </select>
               <button id="enable-ap-btn" onclick="enableAPMode()" style="padding:10px 20px;border-radius:8px;border:1px solid #3f51b5;background:#3f51b5;color:#fff;cursor:pointer;font-size:14px;font-weight:600">
-                📡 Enable AP Mode
+                📡 Enable AP+STA
               </button>
             </div>
             <div id="ap-status" style="display:none;margin-top:12px;padding:12px;background:#e8f5e9;border-radius:8px;border:1px solid #4caf50">
