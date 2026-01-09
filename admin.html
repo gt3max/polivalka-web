@@ -82,14 +82,25 @@
 <div class="info-row"><span class="info-label">Firmware</span><span class="info-value" id="stat-firmware">—</span></div>
 </div>
 
-<div class="section-header" style="margin-top:16px">Restarts</div>
+<div class="section-header" style="margin-top:16px">Restarts (since last reset)</div>
 <div class="info-list">
-<div class="info-row"><span class="info-label">Clean</span><span class="info-value" id="stat-clean-restarts">—</span></div>
-<div class="info-row"><span class="info-label">Unexpected</span><span class="info-value" id="stat-unexpected-restarts" style="color:#ff9800">—</span></div>
+<div class="info-row">
+  <span class="info-label">Planned restarts</span>
+  <span class="info-value" id="stat-clean-restarts">—</span>
 </div>
-<p class="muted" style="font-size:11px;margin:4px 0">Clean = OTA, commands. Unexpected = power loss, crash, watchdog.</p>
+<div class="info-row" style="padding-left:16px;border-bottom:none">
+  <span class="muted" style="font-size:11px">OTA updates, reboot commands, wake from sleep</span>
+</div>
+<div class="info-row">
+  <span class="info-label">Unplanned restarts</span>
+  <span class="info-value" id="stat-unexpected-restarts" style="color:#ff9800">—</span>
+</div>
+<div class="info-row" style="padding-left:16px;border-bottom:none">
+  <span class="muted" style="font-size:11px">Power loss, crash, watchdog, brownout</span>
+</div>
+</div>
 <div class="row" style="margin-top:8px">
-<button onclick="resetStats('restarts')">Reset Restarts</button>
+<button onclick="resetStats('restarts')">Reset Counters</button>
 </div>
 
 <div class="section-header" style="margin-top:16px">OTA Updates</div>
