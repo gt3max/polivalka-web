@@ -82,21 +82,28 @@
 <div class="info-row"><span class="info-label">Firmware</span><span class="info-value" id="stat-firmware">—</span></div>
 </div>
 
-<div class="section-header" style="margin-top:16px">Restarts (since last reset)</div>
+<div class="section-header" style="margin-top:16px">Restarts</div>
 <div class="info-list">
+<div class="info-row">
+  <span class="info-label">Total (all time)</span>
+  <span class="info-value" id="stat-reboot-count" style="font-weight:600">—</span>
+</div>
+<div class="info-row" style="padding-left:16px;border-bottom:none">
+  <span class="muted" style="font-size:11px">Historical total since device first boot</span>
+</div>
 <div class="info-row">
   <span class="info-label">Planned restarts</span>
   <span class="info-value" id="stat-clean-restarts">—</span>
 </div>
 <div class="info-row" style="padding-left:16px;border-bottom:none">
-  <span class="muted" style="font-size:11px">OTA updates, reboot commands, wake from sleep</span>
+  <span class="muted" style="font-size:11px">OTA updates, reboot commands (since v1.0.10+)</span>
 </div>
 <div class="info-row">
   <span class="info-label">Unplanned restarts</span>
   <span class="info-value" id="stat-unexpected-restarts" style="color:#ff9800">—</span>
 </div>
 <div class="info-row" style="padding-left:16px;border-bottom:none">
-  <span class="muted" style="font-size:11px">Power loss, crash, watchdog, brownout</span>
+  <span class="muted" style="font-size:11px">Power loss, crash, watchdog (since v1.0.10+)</span>
 </div>
 </div>
 <div class="row" style="margin-top:8px">
@@ -597,6 +604,7 @@ async function loadDeviceConfig() {
 
         // Load Device Stats
         document.getElementById('stat-firmware').textContent = device.firmware_version || '—';
+        document.getElementById('stat-reboot-count').textContent = device.reboot_count ?? '—';
         document.getElementById('stat-clean-restarts').textContent = device.clean_restarts ?? '—';
         document.getElementById('stat-unexpected-restarts').textContent = device.unexpected_restarts ?? '—';
         document.getElementById('stat-total-water').textContent = device.total_water_ml ? device.total_water_ml.toLocaleString() + ' ml' : '— ml';
@@ -1033,6 +1041,7 @@ async function resetStats(group) {
       alert(`✓ ${labels[group]} reset to 0`);
       // Update UI immediately
       if (group === 'restarts') {
+        document.getElementById('stat-reboot-count').textContent = '0';
         document.getElementById('stat-clean-restarts').textContent = '0';
         document.getElementById('stat-unexpected-restarts').textContent = '0';
       } else if (group === 'pump') {
