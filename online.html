@@ -710,6 +710,70 @@ window.addEventListener('load', function() {
 
 // Admin nav link - moved to common.js
 
+// Enable AP mode remotely (via MQTT command)
+async function enableAPMode() {
+  if (!IS_CLOUD || !DEVICE_ID) {
+    alert('This feature only works in Cloud mode');
+    return;
+  }
+
+  const btn = document.getElementById('enable-ap-btn');
+  const statusDiv = document.getElementById('ap-status');
+  const minutes = parseInt(document.getElementById('ap-duration').value) || 10;
+
+  btn.disabled = true;
+  btn.textContent = 'Sending...';
+  statusDiv.style.display = 'none';
+
+  try {
+    const result = await API.post('/command', {
+      command: 'enable_ap',
+      params: { minutes: minutes }
+    });
+
+    if (result.success || result.status === 'sent') {
+      // AP password = 'ms' + last 6 chars of device ID
+      const deviceSuffix = DEVICE_ID.replace('Polivalka-', '');
+      const apPassword = 'ms' + deviceSuffix;
+
+      statusDiv.innerHTML = `
+        <div style="color:#2e7d32;font-weight:600;margin-bottom:8px">✅ AP Mode Enabled for ${minutes} minutes!</div>
+        <div style="font-size:13px;line-height:1.6">
+          <b>How to connect:</b><br>
+          1. Open WiFi settings on your phone<br>
+          2. Connect to: <b>${DEVICE_ID}</b><br>
+          3. Password: <b>${apPassword}</b><br>
+          4. Open: <b>192.168.4.1</b><br><br>
+          <small style="color:#666">AP will auto-disable after ${minutes} minutes to save battery.</small>
+        </div>
+      `;
+      statusDiv.style.background = '#e8f5e9';
+      statusDiv.style.borderColor = '#4caf50';
+      statusDiv.style.display = 'block';
+
+      btn.textContent = '✅ Command Sent';
+      setTimeout(() => {
+        btn.disabled = false;
+        btn.textContent = '📡 Enable AP Mode';
+      }, 5000);
+    } else {
+      throw new Error(result.message || 'Command failed');
+    }
+  } catch (e) {
+    statusDiv.innerHTML = `
+      <div style="color:#c62828;font-weight:600">❌ Failed to enable AP mode</div>
+      <div style="font-size:13px;margin-top:4px">${e.message}</div>
+      <div style="font-size:12px;color:#666;margin-top:8px">Make sure device is online and connected to AWS.</div>
+    `;
+    statusDiv.style.background = '#ffebee';
+    statusDiv.style.borderColor = '#f44336';
+    statusDiv.style.display = 'block';
+
+    btn.disabled = false;
+    btn.textContent = '📡 Enable AP Mode';
+  }
+}
+
 // ========== CLOUD MODE ==========
 if (IS_CLOUD) {
   // Update device ID in header
@@ -845,6 +909,29 @@ if (IS_CLOUD) {
           <div style="margin-top:12px;padding:10px;background:#f5f5f5;border-radius:6px;font-size:13px">
             <b>💡 Tip:</b> Once connected to home WiFi, device will sync with AWS IoT
             and you can monitor it from this Cloud interface.
+          </div>
+        </div>
+
+        <div class="card" id="enable-ap-card">
+          <h3>📡 Remote AP Activation</h3>
+          <p class="muted">Device is connected to WiFi but you need local access?<br>Enable AP mode temporarily to access 192.168.4.1</p>
+          <div id="ap-enable-section" style="margin-top:16px">
+            <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap">
+              <select id="ap-duration" style="padding:8px 12px;border:1px solid #ddd;border-radius:6px;font-size:14px">
+                <option value="5">5 minutes</option>
+                <option value="10" selected>10 minutes</option>
+                <option value="30">30 minutes</option>
+                <option value="60">60 minutes</option>
+              </select>
+              <button id="enable-ap-btn" onclick="enableAPMode()" style="padding:10px 20px;border-radius:8px;border:1px solid #3f51b5;background:#3f51b5;color:#fff;cursor:pointer;font-size:14px;font-weight:600">
+                📡 Enable AP Mode
+              </button>
+            </div>
+            <div id="ap-status" style="display:none;margin-top:12px;padding:12px;background:#e8f5e9;border-radius:8px;border:1px solid #4caf50">
+            </div>
+          </div>
+          <div style="margin-top:12px;font-size:12px;color:#666">
+            <b>Note:</b> Device must be online (connected to WiFi + AWS) for this to work.
           </div>
         </div>
       `;
