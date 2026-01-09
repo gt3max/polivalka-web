@@ -1155,7 +1155,7 @@ import os
 DEVICES_TABLE = os.environ.get('DEVICES_TABLE', 'polivalka_devices')
 TELEMETRY_TABLE = os.environ.get('TELEMETRY_TABLE', 'polivalka_telemetry')
 COMMANDS_TABLE = os.environ.get('COMMANDS_TABLE', 'polivalka_commands')
-FIRMWARE_BUCKET = os.environ.get('FIRMWARE_BUCKET', 'polivalka-firmware')
+FIRMWARE_BUCKET = os.environ.get('FIRMWARE_BUCKET', 'polivalka-ota-updates')
 
 # All tables in eu-central-1
 devices_table = dynamodb.Table(DEVICES_TABLE)
