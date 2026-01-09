@@ -1779,6 +1779,15 @@ if (urlDeviceId) {
 
 // Init
 if (checkAdminAccess()) {
+  // If came from device page, show cards immediately with "Loading..."
+  if (urlDeviceId) {
+    document.getElementById('selected-device-id').textContent = urlDeviceId;
+    document.getElementById('device-info').style.display = 'block';
+    document.getElementById('device-stats-card').style.display = 'block';
+    document.getElementById('selected-device-lastseen').textContent = 'Loading...';
+    document.getElementById('stat-firmware').textContent = 'Loading...';
+  }
+
   loadDevices().then(() => {
     // Auto-select device if came from device page
     if (urlDeviceId) {
