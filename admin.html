@@ -103,13 +103,6 @@
 <button onclick="resetStats('restarts')">Reset Counters</button>
 </div>
 
-<div class="section-header" style="margin-top:16px">OTA Updates</div>
-<div class="info-list">
-<div class="info-row"><span class="info-label">OTA Count</span><span class="info-value" id="stat-ota-count">—</span></div>
-<div class="info-row"><span class="info-label">Last OTA</span><span class="info-value" id="stat-ota-last" style="color:#ff9800">—</span></div>
-</div>
-<p class="muted" style="font-size:11px;margin:4px 0">Number of remote firmware updates via MQTT command.</p>
-
 <div class="section-header" style="margin-top:16px">Pump & Water</div>
 <div class="info-list">
 <div class="info-row"><span class="info-label">Total Water</span><span class="info-value" id="stat-total-water">— ml</span></div>
@@ -609,23 +602,12 @@ async function loadDeviceConfig() {
         document.getElementById('stat-total-water').textContent = device.total_water_ml ? device.total_water_ml.toLocaleString() + ' ml' : '— ml';
         document.getElementById('stat-pump-runtime').textContent = device.pump_runtime_sec ? device.pump_runtime_sec.toLocaleString() + ' sec' : '— sec';
 
-        // Load OTA Stats
-        document.getElementById('stat-ota-count').textContent = device.ota_count ?? '0';
-        if (device.ota_last_timestamp && device.ota_last_timestamp > 0) {
-          const otaDate = new Date(device.ota_last_timestamp * 1000);
-          document.getElementById('stat-ota-last').textContent = otaDate.toLocaleString();
-        } else {
-          document.getElementById('stat-ota-last').textContent = 'Never';
-        }
-
         console.log('[Admin] Loaded device stats:', {
           firmware: device.firmware_version,
           clean_restarts: device.clean_restarts,
           unexpected_restarts: device.unexpected_restarts,
           total_water_ml: device.total_water_ml,
-          pump_runtime_sec: device.pump_runtime_sec,
-          ota_count: device.ota_count,
-          ota_last_timestamp: device.ota_last_timestamp
+          pump_runtime_sec: device.pump_runtime_sec
         });
       }
     }
