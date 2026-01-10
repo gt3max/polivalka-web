@@ -682,7 +682,7 @@ function exportCSV() {
   // Add sensor data
   for (const d of sensorData) {
     const time = new Date(d.timestamp * 1000).toISOString();
-    csv += `${time},sensor,${d.moisture_percent || ''},${d.sensor2_percent || ''},${d.adc_raw || ''},${d.sensor2_adc || ''},,,\n`;
+    csv += `${time},sensor,${d.moisture_percent || ''},${d.sensor2_percent || ''},${d.adc_raw || ''},${d.sensor2_adc || ''},,,,\n`;
   }
 
   // Add battery data
@@ -695,7 +695,7 @@ function exportCSV() {
   for (const a of activityData) {
     const time = new Date(a.timestamp * 1000).toISOString();
     const msg = (a.message || '').replace(/,/g, ';').replace(/\n/g, ' ');
-    csv += `${time},${a.type},,,,,,,${msg}\n`;
+    csv += `${time},${a.type},,,,,,,,${msg}\n`;
   }
 
   // Download
