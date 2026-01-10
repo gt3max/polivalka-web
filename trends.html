@@ -92,13 +92,12 @@
       <button onclick="setPeriod(3)" id="btn-3d">3 days</button>
       <button onclick="setPeriod(7)" id="btn-7d" class="active">7 days</button>
     </div>
-    <div class="row" style="gap:4px">
+    <div class="row" style="gap:8px">
       <div class="chart-type-selector" style="display:flex;gap:2px;border:1px solid #ddd;border-radius:8px;overflow:hidden">
-        <button onclick="setChartType('line')" id="btn-line" class="active" style="border:none;border-radius:0" title="Line chart">📈</button>
-        <button onclick="setChartType('scatter')" id="btn-scatter" style="border:none;border-radius:0" title="Scatter chart">⚫</button>
+        <button onclick="setChartType('line')" id="btn-line" class="active" style="border:none;border-radius:0;padding:6px 10px;font-size:13px">Line</button>
+        <button onclick="setChartType('scatter')" id="btn-scatter" style="border:none;border-radius:0;padding:6px 10px;font-size:13px">Dots</button>
       </div>
-      <button onclick="exportCSV()" title="Download CSV">📥</button>
-      <button onclick="refreshAll()">🔄</button>
+      <button onclick="exportCSV()" style="padding:6px 10px;font-size:13px">Export</button>
     </div>
   </div>
 
