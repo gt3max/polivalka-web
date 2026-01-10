@@ -773,7 +773,7 @@ function createExpandableRow(device, isOnline, hasWarnings, isCritical) {
       </div>
 
       <div class="detail-row" style="margin-top:8px">
-        <span class="detail-item" style="color:${moistureColor}">💧 Moisture: ${moisturePct !== null ? moisturePct + '%' : '—'} (ADC: ${device.adc_raw || 'N/A'})</span>
+        <span class="detail-item" style="color:${moistureColor}">💧 Moisture: ${moisturePct !== null ? moisturePct + '%' : '—'} (ADC: ${device.adc_raw != null ? device.adc_raw : 'N/A'})</span>
         <span class="detail-item" style="color:${batteryColor}">${batteryDisplayLong}</span>
         <span class="detail-item">Water: ≈${((device.watering_duration || maxWateringTime) * (device.pump_calibration || pumpCalibration) * (device.pump_speed || 100) / 100).toFixed(0)}ml / ${device.watering_duration || maxWateringTime}s</span>
       </div>
@@ -958,7 +958,7 @@ function createDeviceCard(device) {
     <div class="device-metrics">
       <div class="metric">
         <div class="metric-label">💧 Moisture</div>
-        <div class="metric-value ${moistureClass}">${cardMoisturePct !== null ? cardMoisturePct + '%' : '—'} <span style="font-size:11px;color:#666">(ADC: ${device.adc_raw || 'N/A'})</span></div>
+        <div class="metric-value ${moistureClass}">${cardMoisturePct !== null ? cardMoisturePct + '%' : '—'} <span style="font-size:11px;color:#666">(ADC: ${device.adc_raw != null ? device.adc_raw : 'N/A'})</span></div>
       </div>
       <div class="metric">
         <div class="metric-label">🔋 Battery</div>
