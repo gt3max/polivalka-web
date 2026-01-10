@@ -108,6 +108,7 @@
       <div class="chart-container">
         <canvas id="moisture-chart"></canvas>
       </div>
+      <div id="moisture-nodata" class="muted" style="display:none;text-align:center;padding:40px">No moisture data for this period</div>
     </div>
     <div class="card" id="sensor2-chart-card" style="display:none">
       <h3 style="margin-top:0;color:#9c27b0">🌡️ Resistive Sensor (J7)</h3>
@@ -126,6 +127,7 @@
       <div class="chart-container">
         <canvas id="battery-chart"></canvas>
       </div>
+      <div id="battery-nodata" class="muted" style="display:none;text-align:center;padding:40px">No battery data (device on AC power)</div>
       <div id="battery-loading" class="loading">Loading battery data...</div>
       <div id="battery-error" class="error-msg" style="display:none"></div>
     </div>
@@ -335,16 +337,25 @@ async function loadActivity() {
 
 // Render moisture chart
 function renderMoistureChart(data) {
-  const ctx = document.getElementById('moisture-chart').getContext('2d');
+  const canvas = document.getElementById('moisture-chart');
+  const nodata = document.getElementById('moisture-nodata');
 
   if (moistureChart) {
     moistureChart.destroy();
+    moistureChart = null;
   }
 
   if (data.length === 0) {
-    document.getElementById('moisture-chart').parentElement.innerHTML = '<div class="muted" style="text-align:center;padding:40px">No moisture data for this period</div>';
+    canvas.style.display = 'none';
+    nodata.style.display = 'block';
     return;
   }
+
+  // Show canvas, hide nodata message
+  canvas.style.display = 'block';
+  nodata.style.display = 'none';
+
+  const ctx = canvas.getContext('2d');
 
   // Sort by timestamp ascending
   data.sort((a, b) => a.timestamp - b.timestamp);
@@ -500,19 +511,28 @@ function renderMoistureChart(data) {
 
 // Render battery chart
 function renderBatteryChart(data) {
-  const ctx = document.getElementById('battery-chart').getContext('2d');
+  const canvas = document.getElementById('battery-chart');
+  const nodata = document.getElementById('battery-nodata');
 
   if (batteryChart) {
     batteryChart.destroy();
+    batteryChart = null;
   }
 
   // Filter out null percent (AC power)
   const withBattery = data.filter(d => d.percent !== null);
 
   if (withBattery.length === 0) {
-    document.getElementById('battery-chart').parentElement.innerHTML = '<div class="muted" style="text-align:center;padding:40px">No battery data (device on AC power)</div>';
+    canvas.style.display = 'none';
+    nodata.style.display = 'block';
     return;
   }
+
+  // Show canvas, hide nodata message
+  canvas.style.display = 'block';
+  nodata.style.display = 'none';
+
+  const ctx = canvas.getContext('2d');
 
   withBattery.sort((a, b) => a.timestamp - b.timestamp);
 
