@@ -1666,6 +1666,78 @@ async function viewDeviceLogs(deviceId) {
   }
 }
 
+// Copy all logs to clipboard
+async function copyLogs() {
+  const logsContent = document.getElementById('logsContent').textContent;
+  if (!logsContent || logsContent.includes('Loading') || logsContent.includes('Error')) {
+    alert('No logs to copy');
+    return;
+  }
+
+  try {
+    await navigator.clipboard.writeText(logsContent);
+    // Brief visual feedback
+    const btn = event.target;
+    const originalText = btn.textContent;
+    btn.textContent = '✅ Copied!';
+    setTimeout(() => btn.textContent = originalText, 1500);
+  } catch(e) {
+    // Fallback for older browsers
+    const textarea = document.createElement('textarea');
+    textarea.value = logsContent;
+    document.body.appendChild(textarea);
+    textarea.select();
+    document.execCommand('copy');
+    document.body.removeChild(textarea);
+    alert('Logs copied to clipboard');
+  }
+}
+
+// Download logs as CSV file
+function downloadLogsCSV() {
+  const logsContent = document.getElementById('logsContent').textContent;
+  if (!logsContent || logsContent.includes('Loading') || logsContent.includes('Error')) {
+    alert('No logs to download');
+    return;
+  }
+
+  // Parse logs into CSV format
+  const lines = logsContent.split('\n').filter(line => line.trim());
+  const csvRows = ['timestamp,type,message'];  // CSV header
+
+  for (const line of lines) {
+    // Parse format: "I (2026-01-10 13:59:29) SENSOR: message"
+    // or "E (2026-01-10 00:19:50) AWS_IOT: message"
+    const match = line.match(/^([IEW])\s+\((\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}:\d{2})\)\s+(\w+):\s*(.*)$/);
+    if (match) {
+      const [, level, timestamp, type, message] = match;
+      // Escape quotes in message for CSV
+      const escapedMsg = message.replace(/"/g, '""');
+      csvRows.push(`"${timestamp}","${type}","${escapedMsg}"`);
+    } else if (line.trim() && !line.startsWith('===') && !line.startsWith('Uptime')) {
+      // Non-standard line, include as-is
+      const escapedLine = line.replace(/"/g, '""');
+      csvRows.push(`"","","${escapedLine}"`);
+    }
+  }
+
+  // Create and download file
+  const csvContent = csvRows.join('\n');
+  const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+
+  const deviceId = currentLogsDeviceId || 'device';
+  const date = new Date().toISOString().split('T')[0];
+  const filename = `${deviceId}-logs-${date}.csv`;
+
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = filename;
+  link.click();
+
+  URL.revokeObjectURL(url);
+}
+
 // ========== DEBUG CONSOLE ==========
 const consoleLines = [];
 const MAX_CONSOLE_LINES = 100;
@@ -1999,7 +2071,11 @@ window.addEventListener('DOMContentLoaded', () => {
     <div class="modal-body" style="max-height:60vh;overflow-y:auto">
       <div id="logsContent" style="font-family:monospace;font-size:13px;line-height:1.6;white-space:pre-wrap;background:#1e1e1e;color:#d4d4d4;padding:16px;border-radius:8px;overflow-x:auto"></div>
     </div>
-    <div class="modal-footer">
+    <div class="modal-footer" style="display:flex;gap:8px;justify-content:space-between">
+      <div style="display:flex;gap:8px">
+        <button onclick="copyLogs()" class="btn-secondary" style="padding:8px 16px">📋 Copy All</button>
+        <button onclick="downloadLogsCSV()" class="btn-secondary" style="padding:8px 16px">📥 Download CSV</button>
+      </div>
       <button onclick="closeLogsModal()" class="btn-secondary">Close</button>
     </div>
   </div>
