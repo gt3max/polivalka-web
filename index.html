@@ -836,7 +836,8 @@ function createExpandableRow(device, isOnline, hasWarnings, isCritical) {
         <button onclick="event.stopPropagation(); startPump('${device.device_id}', event)" class="btn-primary btn-water-toggle">💧 Water Now</button>
         <button onclick="event.stopPropagation(); stopPump('${device.device_id}', event)" class="btn-danger">⛔ Stop</button>
         <button onclick="event.stopPropagation(); viewDevice('${device.device_id}')">🏠 Home</button>
-        <button onclick="event.stopPropagation(); deviceUpdate('${device.device_id}')">📦 OTA Update</button>
+        <button onclick="event.stopPropagation(); viewTrends('${device.device_id}')">📊 Trends</button>
+        <button onclick="event.stopPropagation(); deviceUpdate('${device.device_id}')">📦 OTA</button>
         <button onclick="event.stopPropagation(); viewLogs('${device.device_id}')">📝 Logs</button>
       </div>
     </div>
@@ -1023,7 +1024,8 @@ function createDeviceCard(device) {
       <button onclick="startPump('${device.device_id}', event)" class="btn-primary btn-water-toggle">💧 Water Now</button>
       <button onclick="stopPump('${device.device_id}', event)" class="btn-danger">⛔ Stop</button>
       <button onclick="viewDevice('${device.device_id}')">🏠 Home</button>
-      <button onclick="deviceUpdate('${device.device_id}')">📦 OTA Update</button>
+      <button onclick="viewTrends('${device.device_id}')">📊 Trends</button>
+      <button onclick="deviceUpdate('${device.device_id}')">📦 OTA</button>
       <button onclick="viewLogs('${device.device_id}')">📝 Logs</button>
     </div>
   `;
@@ -1352,6 +1354,11 @@ function stopPumpTimer(deviceId) {
 function viewDevice(deviceId) {
   // Navigate to home.html with device_id parameter
   window.location.href = `home.html?device=${deviceId}`;
+}
+
+function viewTrends(deviceId) {
+  // Navigate to trends.html with device_id parameter
+  window.location.href = `trends.html?device=${deviceId}`;
 }
 
 function deviceUpdate(deviceId) {
