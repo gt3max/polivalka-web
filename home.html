@@ -217,14 +217,16 @@ async function updateStatus(){
     }
     document.getElementById('custom-name-suffix').textContent = ' / ' + customName;
 
-    // Sensor data (Capacitive - primary sensor)
+    // Sensor data (Capacitive - primary sensor) - use float for 0.1% precision
+    const moisturePct = s.percent_float !== undefined ? s.percent_float.toFixed(1) : (s.percent !== null ? s.percent : '—');
     document.getElementById('sensor-vals').innerHTML =
-      `ADC: ${s.adc}<br>Moisture: ${s.percent===null?'—':s.percent+' %'}`;
+      `ADC: ${s.adc}<br>Moisture: ${moisturePct} %`;
 
-    // Sensor 2 data (Resistive)
+    // Sensor 2 data (Resistive) - use float for 0.1% precision
     if (s.sensor2_adc !== undefined && s.sensor2_adc !== null) {
-      const pct2 = s.sensor2_percent !== undefined && s.sensor2_percent !== null ? s.sensor2_percent + ' %' : '—';
-      document.getElementById('sensor2-vals').innerHTML = `ADC: ${s.sensor2_adc}<br>Moisture: ${pct2}`;
+      const pct2 = s.sensor2_percent_float !== undefined ? s.sensor2_percent_float.toFixed(1) :
+                   (s.sensor2_percent !== undefined && s.sensor2_percent !== null ? s.sensor2_percent : '—');
+      document.getElementById('sensor2-vals').innerHTML = `ADC: ${s.sensor2_adc}<br>Moisture: ${pct2} %`;
     }
 
     // System State (в System Status card, не в header!)
@@ -780,8 +782,9 @@ async function updateSensorControllerStatus() {
       stateEl.style.color = stateColor;
     }
 
-    // Current Moisture (duplicate from sensor reading)
-    document.getElementById('status-current-moisture').textContent = sc.moisture_pct + '%';
+    // Current Moisture (use float for precision if available)
+    const scMoisture = sc.moisture_pct_float !== undefined ? sc.moisture_pct_float.toFixed(1) : sc.moisture_pct;
+    document.getElementById('status-current-moisture').textContent = scMoisture + '%';
 
     // Target Range
     if (preset && preset.start_pct && preset.stop_pct) {

@@ -60,7 +60,13 @@ const connText=document.getElementById('conn-text');
 if(s.wifi_connected){connText.textContent='Online';connText.style.color='#0a0';}else{connText.textContent='Offline';connText.style.color='#999';}
 document.getElementById('live-adc').textContent=`ADC: ${s.adc}`;
 const moistureEl=document.getElementById('live-moisture');
-if(s.percent!==null&&s.percent!==undefined){moistureEl.textContent=`${s.percent}%`;}else{moistureEl.textContent='Not calibrated';}
+const pctVal=s.percent_float!==undefined?s.percent_float.toFixed(1):(s.percent!==null?s.percent:'—');
+if(pctVal!==null&&pctVal!==undefined&&pctVal!=='—'){moistureEl.textContent=`${pctVal}%`;}else{moistureEl.textContent='Not calibrated';}
+// Update sensor2 from main status (Cloud mode - no separate /sensor2/status endpoint)
+if(s.sensor2_adc!==undefined&&s.sensor2_adc!==null){
+const s2pct=s.sensor2_percent_float!==undefined?s.sensor2_percent_float.toFixed(1):(s.sensor2_percent!==null?s.sensor2_percent:'—');
+document.getElementById('s2-live-adc').textContent='ADC: '+s.sensor2_adc;
+document.getElementById('s2-live-moisture').textContent=s2pct+'%';}
 const air=s.calib.adc_air;const water=s.calib.adc_water;const soil=s.calib.adc_dry_soil;
 document.getElementById('calib').textContent=`adc_air=${air}  adc_water=${water}  adc_dry_soil=${soil||'—'}`;
 const sensorBadge=document.getElementById('sensor-cal-badge');
@@ -117,20 +123,34 @@ async function resetCalib(){
   } catch(e) { console.error('Reset error:', e); }
   await loadAllData();
 }
-// Sensor 2 (Resistive) functions
+// Sensor 2 (Resistive) functions - Cloud mode: data comes from main status, no separate endpoints
 async function loadSensor2Data(){
-try{const s=await API.get('/sensor2/status');
-document.getElementById('s2-live-adc').textContent='ADC: '+s.adc;
-document.getElementById('s2-live-moisture').textContent=s.percent+'%';
-const settings=await API.get('/sensor2/settings');
-document.getElementById('s2-calib').textContent='adc_dry='+settings.dry+'  adc_wet='+settings.wet;
-const badge=document.getElementById('sensor2-cal-badge');
-if(settings.calibrated){badge.textContent='✓ Calibrated';badge.style.background='#e8f5e9';badge.style.color='#2e7d32';}
-else{badge.textContent='⚠️ Presets';badge.style.background='#fff3e0';badge.style.color='#f57c00';}}catch(e){}}
+// Cloud API doesn't have /sensor2/status or /sensor2/settings - data comes from loadAllData()
+// This function is kept for local AP mode compatibility
+try{
+  if(typeof API !== 'undefined' && API.mode === 'local') {
+    const s=await API.get('/sensor2/status');
+    const pct=s.percent_float!==undefined?s.percent_float.toFixed(1):s.percent;
+    document.getElementById('s2-live-adc').textContent='ADC: '+s.adc;
+    document.getElementById('s2-live-moisture').textContent=pct+'%';
+    const settings=await API.get('/sensor2/settings');
+    document.getElementById('s2-calib').textContent='adc_dry='+settings.dry+'  adc_wet='+settings.wet;
+    const badge=document.getElementById('sensor2-cal-badge');
+    if(settings.calibrated){badge.textContent='✓ Calibrated';badge.style.background='#e8f5e9';badge.style.color='#2e7d32';}
+    else{badge.textContent='⚠️ Presets';badge.style.background='#fff3e0';badge.style.color='#f57c00';}
+  }
+}catch(e){console.log('Sensor2 data from main status in cloud mode');}}
 async function updateSensor2(){
 const btn=event?event.target:document.querySelector('button[onclick*="updateSensor2"]');
 if(btn){btn.disabled=true;btn.textContent='⏳';}
-try{await API.get('/sensor2/status');await new Promise(r=>setTimeout(r,500));await loadSensor2Data();}catch(e){alert('Read failed');}
+try{
+  if(typeof API !== 'undefined' && API.mode === 'local') {
+    await API.get('/sensor2/status');await new Promise(r=>setTimeout(r,500));await loadSensor2Data();
+  } else {
+    // Cloud mode: refresh from main status
+    await loadAllData();
+  }
+}catch(e){console.log('Sensor2 refresh error:', e);}
 if(btn){btn.disabled=false;btn.textContent='🔬 Read';}}
 async function calib2(kind){
 document.getElementById('btn-s2-dry').disabled=true;document.getElementById('btn-s2-wet').disabled=true;
