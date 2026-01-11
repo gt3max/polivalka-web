@@ -60,11 +60,11 @@ const connText=document.getElementById('conn-text');
 if(s.wifi_connected){connText.textContent='Online';connText.style.color='#0a0';}else{connText.textContent='Offline';connText.style.color='#999';}
 document.getElementById('live-adc').textContent=`ADC: ${s.adc}`;
 const moistureEl=document.getElementById('live-moisture');
-const pctVal=s.percent_float!==undefined?s.percent_float.toFixed(1):(s.percent!==null?s.percent:'—');
+const pctVal=(s.percent_float!==undefined&&s.percent_float!==null)?s.percent_float.toFixed(1):(s.percent!==null&&s.percent!==undefined?s.percent:'—');
 if(pctVal!==null&&pctVal!==undefined&&pctVal!=='—'){moistureEl.textContent=`${pctVal}%`;}else{moistureEl.textContent='Not calibrated';}
 // Update sensor2 from main status (Cloud mode - no separate /sensor2/status endpoint)
 if(s.sensor2_adc!==undefined&&s.sensor2_adc!==null){
-const s2pct=s.sensor2_percent_float!==undefined?s.sensor2_percent_float.toFixed(1):(s.sensor2_percent!==null?s.sensor2_percent:'—');
+const s2pct=(s.sensor2_percent_float!==undefined&&s.sensor2_percent_float!==null)?s.sensor2_percent_float.toFixed(1):(s.sensor2_percent!==null&&s.sensor2_percent!==undefined?s.sensor2_percent:'—');
 document.getElementById('s2-live-adc').textContent='ADC: '+s.sensor2_adc;
 document.getElementById('s2-live-moisture').textContent=s2pct+'%';}
 const air=s.calib.adc_air;const water=s.calib.adc_water;const soil=s.calib.adc_dry_soil;
@@ -130,7 +130,7 @@ async function loadSensor2Data(){
 try{
   if(typeof API !== 'undefined' && API.mode === 'local') {
     const s=await API.get('/sensor2/status');
-    const pct=s.percent_float!==undefined?s.percent_float.toFixed(1):s.percent;
+    const pct=(s.percent_float!==undefined&&s.percent_float!==null)?s.percent_float.toFixed(1):s.percent;
     document.getElementById('s2-live-adc').textContent='ADC: '+s.adc;
     document.getElementById('s2-live-moisture').textContent=pct+'%';
     const settings=await API.get('/sensor2/settings');

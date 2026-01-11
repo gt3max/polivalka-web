@@ -218,14 +218,18 @@ async function updateStatus(){
     document.getElementById('custom-name-suffix').textContent = ' / ' + customName;
 
     // Sensor data (Capacitive - primary sensor) - use float for 0.1% precision
-    const moisturePct = s.percent_float !== undefined ? s.percent_float.toFixed(1) : (s.percent !== null ? s.percent : '—');
+    // Check both undefined AND null (API returns null when data missing in DynamoDB)
+    const moisturePct = (s.percent_float !== undefined && s.percent_float !== null)
+      ? s.percent_float.toFixed(1)
+      : (s.percent !== null && s.percent !== undefined ? s.percent : '—');
     document.getElementById('sensor-vals').innerHTML =
-      `ADC: ${s.adc}<br>Moisture: ${moisturePct} %`;
+      `ADC: ${s.adc !== null && s.adc !== undefined ? s.adc : '—'}<br>Moisture: ${moisturePct} %`;
 
     // Sensor 2 data (Resistive) - use float for 0.1% precision
     if (s.sensor2_adc !== undefined && s.sensor2_adc !== null) {
-      const pct2 = s.sensor2_percent_float !== undefined ? s.sensor2_percent_float.toFixed(1) :
-                   (s.sensor2_percent !== undefined && s.sensor2_percent !== null ? s.sensor2_percent : '—');
+      const pct2 = (s.sensor2_percent_float !== undefined && s.sensor2_percent_float !== null)
+        ? s.sensor2_percent_float.toFixed(1)
+        : (s.sensor2_percent !== undefined && s.sensor2_percent !== null ? s.sensor2_percent : '—');
       document.getElementById('sensor2-vals').innerHTML = `ADC: ${s.sensor2_adc}<br>Moisture: ${pct2} %`;
     }
 
@@ -783,7 +787,10 @@ async function updateSensorControllerStatus() {
     }
 
     // Current Moisture (use float for precision if available)
-    const scMoisture = sc.moisture_pct_float !== undefined ? sc.moisture_pct_float.toFixed(1) : sc.moisture_pct;
+    // Check both undefined AND null (API returns null when data missing)
+    const scMoisture = (sc.moisture_pct_float !== undefined && sc.moisture_pct_float !== null)
+      ? sc.moisture_pct_float.toFixed(1)
+      : (sc.moisture_pct !== undefined && sc.moisture_pct !== null ? sc.moisture_pct : '—');
     document.getElementById('status-current-moisture').textContent = scMoisture + '%';
 
     // Target Range
