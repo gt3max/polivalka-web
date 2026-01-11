@@ -85,21 +85,24 @@ def lambda_handler(event, context):
         print(f"Unknown message type: {event}")
         return {'statusCode': 400, 'body': 'Unknown message type'}
 
-    # Create DynamoDB item
-    # ВАЖНО: Данные хранятся в КОРНЕ (sensor, battery, pump, system как top-level keys)
-    # НЕ вложены в 'data' Map - для простоты query и совместимости
-    item = {
-        'device_id': device_id,
-        'timestamp': timestamp,
-        data_type: data,  # e.g., 'sensor': {...}, 'battery': {...}
-        'ttl': timestamp + TTL_SECONDS
-    }
-
-    # Save to DynamoDB telemetry table
-    # Convert floats to Decimal (DynamoDB doesn't support Python floats)
+    # Save to DynamoDB telemetry table using UpdateItem
+    # ВАЖНО: Используем UpdateItem вместо PutItem чтобы НЕ перезаписывать другие типы данных!
+    # Если pump и sensor приходят с одинаковым timestamp (в пределах секунды),
+    # PutItem перезаписывал первую запись. UpdateItem добавляет поля к существующей записи.
     try:
-        item_converted = convert_floats_to_decimal(item)
-        telemetry_table.put_item(Item=item_converted)
+        data_converted = convert_floats_to_decimal(data)
+        telemetry_table.update_item(
+            Key={'device_id': device_id, 'timestamp': timestamp},
+            UpdateExpression='SET #dt = :data, #ttl = :ttl',
+            ExpressionAttributeNames={
+                '#dt': data_type,
+                '#ttl': 'ttl'
+            },
+            ExpressionAttributeValues={
+                ':data': data_converted,
+                ':ttl': timestamp + TTL_SECONDS
+            }
+        )
         print(f"Saved {data_type} data for {device_id} at {timestamp}")
     except Exception as e:
         print(f"Error saving telemetry: {e}")
