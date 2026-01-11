@@ -1138,25 +1138,32 @@ async function confirmPlant() {
   btn.textContent = 'Saving...';
 
   try {
-    // 1. Apply watering settings to device
+    // 1. Apply watering preset to device (loads ALL preset values including max_water_cycle_ml)
     await API.post('/command', {
-      command: 'set_sensor_preset',
+      command: 'sensor_preset_set',
       params: {
-        preset: care.preset,
-        start_pct: care.start_pct,
-        stop_pct: care.stop_pct
+        preset: care.preset
       }
     });
 
-    // 2. Update device name to plant name
+    // 2. Override start_pct and stop_pct if AI recommends different values
+    await API.post('/command', {
+      command: 'sensor_set',
+      params: {
+        start_moisture_pct: care.start_pct,
+        stop_moisture_pct: care.stop_pct
+      }
+    });
+
+    // 3. Update device name to plant name
     await API.post('/info', {
       name: plantName
     });
 
-    // 3. Save plant to profile
+    // 4. Save plant to profile
     await saveToProfile();
 
-    // 4. Success - redirect to home
+    // 5. Success - redirect to home
     btn.textContent = '✓ Saved!';
     showToast('Plant bound to device!', 'success');
 
@@ -1184,14 +1191,22 @@ async function applyToDevice() {
   const care = selectedPlant.care;
 
   try {
-    // Send command to device via existing API
+    // 1. Apply watering preset (loads ALL values including max_water_cycle_ml)
     await apiCall('command', {
       device_id: deviceId,
-      command: 'set_sensor_preset',
+      command: 'sensor_preset_set',
       params: {
-        preset: care.preset,
-        start_pct: care.start_pct,
-        stop_pct: care.stop_pct
+        preset: care.preset
+      }
+    });
+
+    // 2. Override start_pct and stop_pct with AI recommendations
+    await apiCall('command', {
+      device_id: deviceId,
+      command: 'sensor_set',
+      params: {
+        start_moisture_pct: care.start_pct,
+        stop_moisture_pct: care.stop_pct
       }
     });
 
