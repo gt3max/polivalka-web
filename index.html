@@ -791,7 +791,7 @@ function createExpandableRow(device, isOnline, hasWarnings, isCritical) {
       <span class="device-name">🌱 ${device.device_id}</span>
       <div class="device-quick-info">
         ${plantName ? `<span style="font-weight:600">${plantName}</span>` : ''}
-        <span style="color:${moistureColor}">💧${moisturePct !== null ? moisturePct + '%' : '—'}</span>
+        <span style="color:${moistureColor}">💧${moisturePct !== null ? Math.round(moisturePct) + '%' : '—'}</span>
         <span style="color:${batteryColor}">${batteryDisplay}</span>
         ${modeBadgeCompact}
         ${automationControl}
@@ -999,7 +999,7 @@ function createDeviceCard(device) {
     <div class="device-metrics">
       <div class="metric">
         <div class="metric-label">💧 Moisture</div>
-        <div class="metric-value ${moistureClass}">${cardMoisturePct !== null ? cardMoisturePct + '%' : '—'} <span style="font-size:11px;color:#666">(ADC: ${device.adc_raw != null ? device.adc_raw : 'N/A'})</span></div>
+        <div class="metric-value ${moistureClass}">${cardMoisturePct !== null ? Math.round(cardMoisturePct) + '%' : '—'} <span style="font-size:11px;color:#666">(ADC: ${device.adc_raw != null ? device.adc_raw : 'N/A'})</span></div>
       </div>
       <div class="metric">
         <div class="metric-label">🔋 Battery</div>
