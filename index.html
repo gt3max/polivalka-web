@@ -1681,13 +1681,11 @@ async function copyLogs() {
     return;
   }
 
+  const btn = event.target;
+  const originalText = btn.textContent;
+
   try {
     await navigator.clipboard.writeText(logsContent);
-    // Brief visual feedback
-    const btn = event.target;
-    const originalText = btn.textContent;
-    btn.textContent = '✅ Copied!';
-    setTimeout(() => btn.textContent = originalText, 1500);
   } catch(e) {
     // Fallback for older browsers
     const textarea = document.createElement('textarea');
@@ -1696,8 +1694,11 @@ async function copyLogs() {
     textarea.select();
     document.execCommand('copy');
     document.body.removeChild(textarea);
-    alert('Logs copied to clipboard');
   }
+
+  // Brief visual feedback (no alert!)
+  btn.textContent = '✅ Copied!';
+  setTimeout(() => btn.textContent = originalText, 1500);
 }
 
 // Download logs as CSV file
