@@ -181,8 +181,9 @@ async function updateStatus(){
       // 1. 🔋 XX% - battery, not charging
       // 2. 🔋 XX% ⚡ - battery, charging
       // 3. ⚡ AC - no battery, AC power
+      // percent < 0 means "no battery detected" (ESP32 returns -1.0)
       const batteryStatus = document.getElementById('battery-status');
-      if (s.battery && s.battery.percent !== null && s.battery.percent !== undefined) {
+      if (s.battery && s.battery.percent !== null && s.battery.percent !== undefined && s.battery.percent >= 0) {
         const percent = Math.round(s.battery.percent);
         const charging = s.battery.charging ? ' ⚡' : '';
         batteryStatus.textContent = `🔋 ${percent}%${charging}`;
@@ -398,7 +399,8 @@ async function updateBattery(){
     // 1. 🔋 XX% - battery, not charging
     // 2. 🔋 XX% ⚡ - battery, charging
     // 3. ⚡ AC - no battery, AC power
-    if (b.percent !== null && b.percent !== undefined) {
+    // percent < 0 means "no battery detected" (ESP32 returns -1.0)
+    if (b.percent !== null && b.percent !== undefined && b.percent >= 0) {
       const percent = Math.round(b.percent);
       const charging = b.charging ? ' ⚡' : '';
       batteryStatus.textContent = `🔋 ${percent}%${charging}`;
