@@ -837,7 +837,7 @@ function createExpandableRow(device, isOnline, hasWarnings, isCritical) {
         <button onclick="event.stopPropagation(); stopPump('${device.device_id}', event)" class="btn-danger">⛔ Stop</button>
         <button onclick="event.stopPropagation(); viewDevice('${device.device_id}')">🏠 Home</button>
         <button onclick="event.stopPropagation(); viewTrends('${device.device_id}')">📊 Trends</button>
-        <button onclick="event.stopPropagation(); deviceUpdate('${device.device_id}')">📦 OTA</button>
+        <button onclick="event.stopPropagation(); deviceUpdate('${device.device_id}')">📦 OTA Update</button>
         <button onclick="event.stopPropagation(); viewLogs('${device.device_id}')">📝 Logs</button>
       </div>
     </div>
@@ -1025,7 +1025,7 @@ function createDeviceCard(device) {
       <button onclick="stopPump('${device.device_id}', event)" class="btn-danger">⛔ Stop</button>
       <button onclick="viewDevice('${device.device_id}')">🏠 Home</button>
       <button onclick="viewTrends('${device.device_id}')">📊 Trends</button>
-      <button onclick="deviceUpdate('${device.device_id}')">📦 OTA</button>
+      <button onclick="deviceUpdate('${device.device_id}')">📦 OTA Update</button>
       <button onclick="viewLogs('${device.device_id}')">📝 Logs</button>
     </div>
   `;
