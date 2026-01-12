@@ -246,7 +246,7 @@ async function softReset(){
     // 3. Reset sensor preset to Standard
     try {
       await API.post('/command', {
-        command: 'set_sensor_preset',
+        command: 'sensor_preset_set',
         params: { preset: 'Standard' }
       });
     } catch(e) {
