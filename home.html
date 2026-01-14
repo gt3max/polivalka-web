@@ -232,9 +232,13 @@ async function updateStatus(){
       : (s.percent !== null && s.percent !== undefined ? s.percent : '—');
     // Check if sensor is disconnected (ADC < 100 = not connected) - update global state
     sensor1Disconnected = (s.adc !== null && s.adc !== undefined && s.adc < 100);
-    const sensor1Warning = sensor1Disconnected ? '<br><span style="color:#c00;font-weight:600">⚠️ Sensor not connected!</span>' : '';
+    const sensor1Warning = sensor1Disconnected ? '<br><span style="color:#e65100;font-size:12px">⚠️ Sensor not connected</span>' : '';
     document.getElementById('sensor-vals').innerHTML =
       `ADC: ${s.adc !== null && s.adc !== undefined ? s.adc : '—'}<br>Moisture: ${moisturePct} %${sensor1Warning}`;
+    // Hide auto-watering warning when sensor is connected
+    if (!sensor1Disconnected) {
+      hideSensorDisconnectedWarning();
+    }
 
     // Sensor 2 data (Resistive) - use float for 0.1% precision
     if (s.sensor2_adc !== undefined && s.sensor2_adc !== null) {
@@ -242,7 +246,7 @@ async function updateStatus(){
         ? s.sensor2_percent_float.toFixed(1)
         : (s.sensor2_percent !== undefined && s.sensor2_percent !== null ? s.sensor2_percent : '—');
       sensor2Disconnected = (s.sensor2_adc < 100);
-      const sensor2Warning = sensor2Disconnected ? '<br><span style="color:#c00;font-weight:600">⚠️ Sensor not connected!</span>' : '';
+      const sensor2Warning = sensor2Disconnected ? '<br><span style="color:#e65100;font-size:12px">⚠️ Sensor not connected</span>' : '';
       document.getElementById('sensor2-vals').innerHTML = `ADC: ${s.sensor2_adc}<br>Moisture: ${pct2} %${sensor2Warning}`;
     }
 
@@ -565,13 +569,39 @@ async function toggleTimerAuto(checked){
   }
 }
 
+// Show sensor disconnection warning in auto-watering section
+function showSensorDisconnectedWarning() {
+  let warningEl = document.getElementById('sensor-disconnect-warning');
+  if (!warningEl) {
+    // Create warning element if it doesn't exist
+    warningEl = document.createElement('div');
+    warningEl.id = 'sensor-disconnect-warning';
+    warningEl.style.cssText = 'margin-top:12px;padding:10px;background:#ffebee;border-radius:8px;border:2px solid #c00;color:#b00;font-size:13px';
+    warningEl.innerHTML = '<b>⚠️ Sensor not connected!</b><br>Connect the capacitive sensor (J6) before enabling auto watering. ADC must be > 100.';
+    // Insert before the "Before enabling" hint
+    const sensorControl = document.getElementById('sensor-auto-control');
+    if (sensorControl) {
+      sensorControl.appendChild(warningEl);
+    }
+  }
+  warningEl.style.display = 'block';
+}
+
+// Hide sensor disconnection warning when sensor is connected
+function hideSensorDisconnectedWarning() {
+  const warningEl = document.getElementById('sensor-disconnect-warning');
+  if (warningEl) {
+    warningEl.style.display = 'none';
+  }
+}
+
 async function toggleSensorAuto(checked){
   // Ignore programmatic changes
   if (updatingSensorToggle) return;
 
-  // Block if sensor is disconnected
+  // Block if sensor is disconnected - show inline warning instead of alert
   if (checked && sensor1Disconnected) {
-    alert('⚠️ Sensor not connected!\n\nPlease connect the capacitive sensor (J6) before enabling auto watering.\n\nADC value must be > 100 when sensor is properly connected.');
+    showSensorDisconnectedWarning();
     document.getElementById('sensor-auto-toggle').checked = false;
     return;
   }
