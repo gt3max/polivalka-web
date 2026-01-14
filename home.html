@@ -129,6 +129,10 @@ let updatingSensorToggle = false;
 let sensorCommandPending = false;
 let timerCommandPending = false;
 
+// Track sensor disconnection state (ADC < 100 = not connected)
+let sensor1Disconnected = false;
+let sensor2Disconnected = false;
+
 // Глобальные переменные для хранения состояний контроллеров (для badge индикации)
 let lastSensorState = 'DISABLED';
 let lastTimerState = 'DISABLED';
@@ -226,15 +230,20 @@ async function updateStatus(){
     const moisturePct = (s.percent_float !== undefined && s.percent_float !== null)
       ? s.percent_float.toFixed(1)
       : (s.percent !== null && s.percent !== undefined ? s.percent : '—');
+    // Check if sensor is disconnected (ADC < 100 = not connected) - update global state
+    sensor1Disconnected = (s.adc !== null && s.adc !== undefined && s.adc < 100);
+    const sensor1Warning = sensor1Disconnected ? '<br><span style="color:#c00;font-weight:600">⚠️ Sensor not connected!</span>' : '';
     document.getElementById('sensor-vals').innerHTML =
-      `ADC: ${s.adc !== null && s.adc !== undefined ? s.adc : '—'}<br>Moisture: ${moisturePct} %`;
+      `ADC: ${s.adc !== null && s.adc !== undefined ? s.adc : '—'}<br>Moisture: ${moisturePct} %${sensor1Warning}`;
 
     // Sensor 2 data (Resistive) - use float for 0.1% precision
     if (s.sensor2_adc !== undefined && s.sensor2_adc !== null) {
       const pct2 = (s.sensor2_percent_float !== undefined && s.sensor2_percent_float !== null)
         ? s.sensor2_percent_float.toFixed(1)
         : (s.sensor2_percent !== undefined && s.sensor2_percent !== null ? s.sensor2_percent : '—');
-      document.getElementById('sensor2-vals').innerHTML = `ADC: ${s.sensor2_adc}<br>Moisture: ${pct2} %`;
+      sensor2Disconnected = (s.sensor2_adc < 100);
+      const sensor2Warning = sensor2Disconnected ? '<br><span style="color:#c00;font-weight:600">⚠️ Sensor not connected!</span>' : '';
+      document.getElementById('sensor2-vals').innerHTML = `ADC: ${s.sensor2_adc}<br>Moisture: ${pct2} %${sensor2Warning}`;
     }
 
     // System State (в System Status card, не в header!)
@@ -559,6 +568,13 @@ async function toggleTimerAuto(checked){
 async function toggleSensorAuto(checked){
   // Ignore programmatic changes
   if (updatingSensorToggle) return;
+
+  // Block if sensor is disconnected
+  if (checked && sensor1Disconnected) {
+    alert('⚠️ Sensor not connected!\n\nPlease connect the capacitive sensor (J6) before enabling auto watering.\n\nADC value must be > 100 when sensor is properly connected.');
+    document.getElementById('sensor-auto-toggle').checked = false;
+    return;
+  }
 
   // Block toggle sync while command is processing (prevents bounce)
   sensorCommandPending = true;
