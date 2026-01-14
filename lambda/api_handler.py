@@ -1383,7 +1383,11 @@ def lambda_handler(event, context):
                 latest = get_latest_telemetry(device_id)
                 mode = latest.get('system', {}).get('mode', 'manual')
                 # Get state from system telemetry (ESP32 now sends it)
-                state = latest.get('system', {}).get('state', 'DISABLED')
+                system_data = latest.get('system', {})
+                state = system_data.get('state', 'DISABLED')
+                # Get warning from system telemetry
+                warning_active = system_data.get('warning_active', False)
+                warning_msg = system_data.get('warning_msg', '')
                 # Get sensor data for moisture display
                 sensor_data = latest.get('sensor', {})
                 moisture_pct = sensor_data.get('percent', 0) or 0
@@ -1404,8 +1408,8 @@ def lambda_handler(event, context):
                         'pulses_delivered': 0,
                         'total_water_ml': 0,
                         'cooldown_remaining': 0,
-                        'warning_active': False,
-                        'warning_msg': '',
+                        'warning_active': warning_active,
+                        'warning_msg': warning_msg,
                         'watering': state in ['PULSE', 'SETTLE', 'CHECK'],
                         'start_threshold': 35,
                         'stop_threshold': 55,
@@ -3572,7 +3576,9 @@ def get_ota_upload_url(device_id, user_id):
             ExpiresIn=600  # 10 minutes
         )
 
-        # Public download URL for the firmware (after upload)
+        # Use simple S3 URL for download (bucket has public read policy for firmware)
+        # Presigned URL with IAM Role credentials includes Security-Token which makes URL 1300+ chars
+        # ESP32 cannot handle such long URLs - OTA fails!
         download_url = f"https://{FIRMWARE_BUCKET}.s3.eu-central-1.amazonaws.com/{filename}"
 
         return {
