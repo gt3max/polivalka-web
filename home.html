@@ -576,7 +576,7 @@ function showSensorDisconnectedWarning() {
     // Create warning element if it doesn't exist
     warningEl = document.createElement('div');
     warningEl.id = 'sensor-disconnect-warning';
-    warningEl.style.cssText = 'margin-top:12px;padding:10px;background:#ffebee;border-radius:8px;border:2px solid #c00;color:#b00;font-size:13px';
+    warningEl.style.cssText = 'margin-top:12px;padding:10px;background:#fff3e0;border-radius:8px;border:1px solid #f57c00;color:#e65100;font-size:13px';
     warningEl.innerHTML = '<b>⚠️ Sensor not connected!</b><br>Connect the capacitive sensor (J6) before enabling auto watering. ADC must be > 100.';
     // Insert before the "Before enabling" hint
     const sensorControl = document.getElementById('sensor-auto-control');
