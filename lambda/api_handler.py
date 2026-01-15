@@ -2029,7 +2029,10 @@ def get_devices(user_id):
                 'pump_calibration': pump_calib_float,
                 'pump_speed': pump_speed_int,
                 'sensor_calibration': sensor_calib_dict,
-                'sensor2_calibration': sensor2_calib_dict
+                'sensor2_calibration': sensor2_calib_dict,
+                # Pump stats (accumulated from telemetry)
+                'total_water_ml': item.get('total_water_ml'),
+                'pump_runtime_sec': item.get('pump_runtime_sec')
             }
 
             devices.append(device_data)
@@ -2180,6 +2183,46 @@ def send_device_command(device_id, user_id, body):
     # Extract command
     command = body.get('command')
     params = body.get('params', {})
+
+    # Special handling for reset_stats command
+    # - group='pump' → reset DynamoDB directly (pump stats are NOT on ESP32)
+    # - group='restarts' → send MQTT command to ESP32 (counters ARE on ESP32)
+    if command == 'reset_stats':
+        group = params.get('group', 'all')
+
+        if group == 'pump':
+            # Reset pump stats directly in DynamoDB (no ESP32 involved)
+            try:
+                # Find user_id for this device
+                scan_response = devices_table.scan(
+                    FilterExpression='device_id = :device',
+                    ExpressionAttributeValues={':device': device_id}
+                )
+                if scan_response['Items']:
+                    owner_id = scan_response['Items'][0]['user_id']
+                    devices_table.update_item(
+                        Key={'user_id': owner_id, 'device_id': device_id},
+                        UpdateExpression='SET total_water_ml = :zero, pump_runtime_sec = :zero',
+                        ExpressionAttributeValues={':zero': 0}
+                    )
+                    print(f"[ADMIN] Reset pump stats for {device_id}")
+                    return {
+                        'statusCode': 200,
+                        'headers': cors_headers(),
+                        'body': json.dumps({'success': True, 'message': 'Pump stats reset to 0'})
+                    }
+                else:
+                    return {'statusCode': 404, 'headers': cors_headers(),
+                            'body': json.dumps({'error': 'Device not found'})}
+            except Exception as e:
+                print(f"[ERROR] Failed to reset pump stats: {e}")
+                return {'statusCode': 500, 'headers': cors_headers(),
+                        'body': json.dumps({'error': str(e)})}
+
+        elif group == 'restarts':
+            # Send MQTT command to ESP32 (counters are in ESP32 NVS)
+            command = 'admin_reset_counters'
+            params = {}  # ESP32 handles this without params
 
     if not command:
         return {'statusCode': 400, 'headers': cors_headers(),

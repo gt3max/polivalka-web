@@ -191,10 +191,57 @@ def lambda_handler(event, context):
                 update_expr_parts = []
                 expr_values = {}
 
-                # Update last_watering_timestamp on pump stop
+                # Update last_watering_timestamp and aggregate stats on pump stop
                 if action == 'stop':
                     update_expr_parts.append('last_watering_timestamp = :ts')
                     expr_values[':ts'] = timestamp
+
+                    # Aggregate total_water_ml
+                    volume_ml = data.get('volume_ml', 0)
+                    if volume_ml and volume_ml > 0:
+                        update_expr_parts.append('total_water_ml = if_not_exists(total_water_ml, :zero) + :vol')
+                        expr_values[':vol'] = int(volume_ml)
+                        expr_values[':zero'] = 0
+
+                    # Aggregate pump_runtime_sec
+                    duration_sec = data.get('duration_sec', 0)
+                    if duration_sec and duration_sec > 0:
+                        update_expr_parts.append('pump_runtime_sec = if_not_exists(pump_runtime_sec, :zero2) + :dur')
+                        expr_values[':dur'] = int(duration_sec)
+                        expr_values[':zero2'] = 0
+
+                # Admin reset: reset stats by group
+                # group='restarts' → only restart counters
+                # group='pump' → only pump stats
+                # group='all' or no group → all stats (backward compat)
+                elif action == 'admin_reset':
+                    group = data.get('group', 'all')
+
+                    if group == 'restarts':
+                        update_expr_parts = [
+                            'reboot_count = :zero',
+                            'clean_restarts = :zero',
+                            'unexpected_restarts = :zero'
+                        ]
+                        print(f"ADMIN RESET for {device_id}: resetting restart counters only")
+                    elif group == 'pump':
+                        update_expr_parts = [
+                            'total_water_ml = :zero',
+                            'pump_runtime_sec = :zero'
+                        ]
+                        print(f"ADMIN RESET for {device_id}: resetting pump stats only")
+                    else:
+                        # 'all' or backward compatibility
+                        update_expr_parts = [
+                            'total_water_ml = :zero',
+                            'pump_runtime_sec = :zero',
+                            'reboot_count = :zero',
+                            'clean_restarts = :zero',
+                            'unexpected_restarts = :zero'
+                        ]
+                        print(f"ADMIN RESET for {device_id}: resetting ALL stats")
+
+                    expr_values = {':zero': 0}
 
                 # Update pump_speed if present
                 if pump_speed is not None:
@@ -212,7 +259,7 @@ def lambda_handler(event, context):
                         UpdateExpression='SET ' + ', '.join(update_expr_parts),
                         ExpressionAttributeValues=expr_values
                     )
-                    print(f"Updated pump data for {device_id}: action={action}, speed={pump_speed}, calibration={pump_calibration}")
+                    print(f"Updated pump data for {device_id}: action={action}, volume_ml={data.get('volume_ml')}, duration_sec={data.get('duration_sec')}, speed={pump_speed}")
             else:
                 print(f"Device {device_id} not found in devices table for pump update")
         except Exception as e:
