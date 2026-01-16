@@ -131,9 +131,12 @@ def lambda_handler(event, context):
         location = data.get('location')
         room = data.get('room')
         wifi_scan_interval = data.get('wifi_scan_interval_hours')
+        # Pump stats from ESP32 NVS (source of truth for offline mode)
+        esp32_total_water = data.get('total_water_ml')
+        esp32_total_runtime = data.get('total_runtime_sec')
 
         # Only update if at least one field is present and non-empty
-        if device_name or location or room or wifi_scan_interval:
+        if device_name or location or room or wifi_scan_interval or esp32_total_water is not None or esp32_total_runtime is not None:
             # Find user_id for this device (scan the table)
             try:
                 scan_response = devices_table.scan(
@@ -160,12 +163,21 @@ def lambda_handler(event, context):
                         update_expr_parts.append('wifi_scan_interval_hours = :wifi_scan')
                         expr_attr_values[':wifi_scan'] = wifi_scan_interval
 
+                    # Pump stats from ESP32 NVS (ESP32 is source of truth)
+                    # This syncs offline watering events to DynamoDB
+                    if esp32_total_water is not None:
+                        update_expr_parts.append('total_water_ml = :water')
+                        expr_attr_values[':water'] = int(esp32_total_water)
+                    if esp32_total_runtime is not None:
+                        update_expr_parts.append('pump_runtime_sec = :runtime')
+                        expr_attr_values[':runtime'] = int(esp32_total_runtime)
+
                     devices_table.update_item(
                         Key={'user_id': user_id, 'device_id': device_id},
                         UpdateExpression='SET ' + ', '.join(update_expr_parts),
                         ExpressionAttributeValues=expr_attr_values
                     )
-                    print(f"Updated device info for {device_id}: name={device_name}, location={location}, room={room}, wifi_scan={wifi_scan_interval}")
+                    print(f"Updated device info for {device_id}: name={device_name}, location={location}, room={room}, wifi_scan={wifi_scan_interval}, total_water={esp32_total_water}, runtime={esp32_total_runtime}")
                 else:
                     print(f"Device {device_id} not found in devices table")
             except Exception as e:

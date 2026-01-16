@@ -3580,6 +3580,8 @@ def get_sensor_realtime(device_id, user_id):
                         'state': system.get('state', 'DISABLED'),
                         'firmware_version': system.get('firmware'),
                         'reboot_count': system.get('reboot_count'),
+                        'clean_restarts': system.get('clean_restarts'),
+                        'unexpected_restarts': system.get('unexpected_restarts'),
                         'timestamp': item.get('completed_at', int(time.time()))
                     }, cls=DecimalEncoder)
                 }

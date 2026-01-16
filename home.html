@@ -806,7 +806,13 @@ async function updateSensorControllerStatus() {
       let stateColor = '#333';
 
       if (sc.state === 'LAUNCH') {
-        stateText = `🚀 LAUNCH IN ${sc.arming_countdown}s`;
+        // Cloud mode: calculate local countdown (API always returns 60)
+        let countdown = sc.arming_countdown;
+        if (IS_CLOUD && sensorLaunchStartTime) {
+          const elapsed = Math.floor((Date.now() - sensorLaunchStartTime) / 1000);
+          countdown = Math.max(0, SENSOR_LAUNCH_DURATION - elapsed);
+        }
+        stateText = `🚀 LAUNCH IN ${countdown}s`;
         stateColor = '#f57c00';
       } else if (sc.state === 'STANDBY') {
         stateText = '👀 Monitoring';
@@ -894,7 +900,11 @@ async function updateSensorControllerStatus() {
     const armingSection = document.getElementById('arming-cancel-section');
     if (sc.state === 'LAUNCH') {
       armingSection.style.display = 'block';
-      document.getElementById('arming-countdown-display').textContent = sc.arming_countdown;
+      // Cloud mode: don't overwrite local countdown with API value (API always returns 60)
+      // Local countdown is managed by countdownTick() and is more accurate
+      if (!IS_CLOUD || !sensorLaunchStartTime) {
+        document.getElementById('arming-countdown-display').textContent = sc.arming_countdown;
+      }
     } else {
       armingSection.style.display = 'none';
     }
@@ -970,7 +980,13 @@ async function updateTimerControllerStatus() {
       let stateColor = '#333';
 
       if (tc.state === 'LAUNCH') {
-        stateText = `⏰ LAUNCH ${tc.arming_countdown_sec}s`;
+        // Cloud mode: calculate local countdown (API always returns 15)
+        let countdown = tc.arming_countdown_sec;
+        if (IS_CLOUD && timerLaunchStartTime) {
+          const elapsed = Math.floor((Date.now() - timerLaunchStartTime) / 1000);
+          countdown = Math.max(0, TIMER_LAUNCH_DURATION - elapsed);
+        }
+        stateText = `⏰ LAUNCH ${countdown}s`;
         stateColor = '#f57c00';
       } else if (tc.state === 'ACTIVE') {
         stateText = '⏰ Active';
@@ -1025,7 +1041,11 @@ async function updateTimerControllerStatus() {
     const armingSection = document.getElementById('timer-arming-cancel-section');
     if (tc.state === 'LAUNCH') {
       armingSection.style.display = 'block';
-      document.getElementById('timer-arming-countdown-display').textContent = tc.arming_countdown_sec;
+      // Cloud mode: don't overwrite local countdown with API value (API always returns 15)
+      // Local countdown is managed by countdownTick() and is more accurate
+      if (!IS_CLOUD || !timerLaunchStartTime) {
+        document.getElementById('timer-arming-countdown-display').textContent = tc.arming_countdown_sec;
+      }
     } else {
       armingSection.style.display = 'none';
     }
