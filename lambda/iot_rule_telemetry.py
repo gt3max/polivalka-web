@@ -28,6 +28,7 @@ Output (to DynamoDB polivalka_telemetry):
 import json
 import boto3
 import os
+import time
 from decimal import Decimal
 
 dynamodb = boto3.resource('dynamodb', region_name='eu-central-1')
@@ -60,6 +61,13 @@ def lambda_handler(event, context):
     # СТАНДАРТ: device_id ВСЕГДА в формате "Polivalka-BC67E9" (с префиксом!)
     device_id = event.get('device_id', '')  # "Polivalka-BB00C1"
     timestamp = event.get('timestamp', 0)
+
+    # FIX: If device sends uptime instead of Unix timestamp (before NTP sync),
+    # use current server time. Unix timestamps are > 1000000000 (year 2001+).
+    if timestamp < 1000000000:
+        real_timestamp = int(time.time())
+        print(f"Timestamp {timestamp} too small (uptime?), using server time: {real_timestamp}")
+        timestamp = real_timestamp
 
     # Determine data type (sensor, battery, pump, system)
     data_type = None
@@ -110,7 +118,8 @@ def lambda_handler(event, context):
 
     # Also update "latest" record (timestamp=0) for quick access from home.html
     # This ensures fresh data is available without sending get_status command
-    if data_type in ['sensor', 'battery']:
+    # IMPORTANT: Include 'system' for firmware_version, restart counters, etc.
+    if data_type in ['sensor', 'battery', 'system']:
         try:
             telemetry_table.update_item(
                 Key={'device_id': device_id, 'timestamp': 0},
