@@ -246,8 +246,9 @@ async function updateStatus(){
       const pct2 = (s.sensor2_percent_float !== undefined && s.sensor2_percent_float !== null)
         ? s.sensor2_percent_float.toFixed(1)
         : (s.sensor2_percent !== undefined && s.sensor2_percent !== null ? s.sensor2_percent : '—');
-      // Resistive sensor: ADC in [20, 3800] = connected (dry air can be ~0, so < 20 = disconnected)
-      sensor2Disconnected = !(s.sensor2_adc >= 20 && s.sensor2_adc <= 3800);
+      // Resistive sensor (DFRobot SEN0114): ADC=0 is valid for dry conditions (no conductivity)
+      // Only ADC > 3900 = shorted to VCC (invalid)
+      sensor2Disconnected = (s.sensor2_adc > 3900);
       const sensor2Warning = sensor2Disconnected ? '<br><span style="color:#e65100;font-size:12px">⚠️ Sensor not connected</span>' : '';
       document.getElementById('sensor2-vals').innerHTML = `ADC: ${s.sensor2_adc}<br>Moisture: ${pct2} %${sensor2Warning}`;
     } else {
