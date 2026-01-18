@@ -1469,30 +1469,26 @@ def lambda_handler(event, context):
             if len(parts) == 6 and parts[3] == 'timer' and parts[4] == 'controller' and parts[5] == 'status' and http_method == 'GET':
                 # Get latest telemetry to determine controller state
                 latest = get_latest_telemetry(device_id)
-                mode = latest.get('system', {}).get('mode', 'manual')
+                system_data = latest.get('system', {})
+                mode = system_data.get('mode', 'manual')
                 # Get state from system telemetry (ESP32 now sends it)
-                state = latest.get('system', {}).get('state', 'DISABLED')
+                state = system_data.get('state', 'DISABLED')
 
-                # arming_countdown_sec: 15 when LAUNCH, 0 otherwise (timer uses 15 sec)
-                arming_countdown_sec = 15 if state == 'LAUNCH' else 0
-
+                # Read timer controller values from system telemetry (ESP32 v1.0.50+)
+                # These are now sent by ESP32, no extra DynamoDB reads needed
                 return {
                     'statusCode': 200,
                     'headers': cors_headers(),
                     'body': json.dumps({
                         'state': state,
-                        'arming_countdown_sec': arming_countdown_sec,
-                        'schedule_exists': True,
-                        'next_watering_str': 'Not scheduled',
+                        'arming_countdown_sec': system_data.get('timer_arming_countdown', 0),
+                        'schedule_exists': system_data.get('timer_schedule_exists', False),
+                        'next_watering_sec': system_data.get('timer_next_watering_sec', 0),
+                        'next_watering_str': system_data.get('timer_next_watering_str', 'No schedules'),
                         'current_duration_sec': 0,
-                        'daily_water_ml': 0,
-                        'warning_active': False,
-                        'warning_msg': '',
-                        'morning_enabled': True,
-                        'morning_time': '06:00',
-                        'evening_enabled': False,
-                        'evening_time': '20:00',
-                        'duration': 30,
+                        'daily_water_ml': system_data.get('timer_daily_water_ml', 0),
+                        'warning_active': system_data.get('timer_warning_active', False),
+                        'warning_msg': system_data.get('timer_warning_msg', ''),
                         'timestamp': int(time.time())
                     })
                 }
