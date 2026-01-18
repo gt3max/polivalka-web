@@ -1396,6 +1396,8 @@ def lambda_handler(event, context):
                 # Frontend will show countdown locally
                 arming_countdown = 60 if state == 'LAUNCH' else 0
 
+                # Read runtime values from system telemetry (ESP32 v1.0.49+)
+                # These are now sent by ESP32, no extra DynamoDB reads needed
                 return {
                     'statusCode': 200,
                     'headers': cors_headers(),
@@ -1403,18 +1405,21 @@ def lambda_handler(event, context):
                         'state': state,
                         'arming_countdown': arming_countdown,
                         'moisture_pct': moisture_pct,
-                        'daily_water_ml': 0,
-                        'daily_hard_limit_reached': False,
-                        'pulses_delivered': 0,
-                        'total_water_ml': 0,
-                        'cooldown_remaining': 0,
+                        'daily_water_ml': system_data.get('daily_water_ml', 0),
+                        'daily_hard_limit_reached': system_data.get('daily_hard_limit_reached', False),
+                        'pulses_delivered': system_data.get('pulses_in_cycle', 0),
+                        'total_water_ml': system_data.get('cycle_water_ml', 0),
+                        'cooldown_remaining': system_data.get('cooldown_remaining_sec', 0),
                         'warning_active': warning_active,
                         'warning_msg': warning_msg,
                         'watering': state in ['PULSE', 'SETTLE', 'CHECK'],
-                        'start_threshold': 35,
-                        'stop_threshold': 55,
-                        'pulse_duration': 32,
-                        'retry_interval': 600,
+                        'start_threshold': system_data.get('start_pct', 35),
+                        'stop_threshold': system_data.get('stop_pct', 55),
+                        'pulse_duration': system_data.get('pulse_sec', 5),
+                        'retry_interval': system_data.get('wait_sec', 120),
+                        'max_water_day_ml': system_data.get('max_water_day_ml', 400),
+                        'cooldown_min': system_data.get('cooldown_min', 120),
+                        'preset_id': system_data.get('preset_id', 1),
                         'last_check': None,
                         'last_watering': None,
                         'timestamp': int(time.time())
