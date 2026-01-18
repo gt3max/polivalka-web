@@ -1381,20 +1381,18 @@ def lambda_handler(event, context):
             if len(parts) == 6 and parts[3] == 'sensor' and parts[4] == 'controller' and parts[5] == 'status':
                 # Get latest telemetry to determine controller state
                 latest = get_latest_telemetry(device_id)
-                mode = latest.get('system', {}).get('mode', 'manual')
                 # Get state from system telemetry (ESP32 now sends it)
                 system_data = latest.get('system', {})
                 state = system_data.get('state', 'DISABLED')
                 # Get warning from system telemetry
                 warning_active = system_data.get('warning_active', False)
                 warning_msg = system_data.get('warning_msg', '')
-                # Get sensor data for moisture display
+                # Get sensor data for moisture display (field is moisture_percent in telemetry)
                 sensor_data = latest.get('sensor', {})
-                moisture_pct = sensor_data.get('percent', 0) or 0
+                moisture_pct = sensor_data.get('moisture_percent', 0) or 0
 
-                # arming_countdown: 60 when LAUNCH, 0 otherwise
-                # Frontend will show countdown locally
-                arming_countdown = 60 if state == 'LAUNCH' else 0
+                # arming_countdown: read from telemetry (v1.0.53+)
+                arming_countdown = system_data.get('sensor_arming_countdown', 0)
 
                 # Read runtime values from system telemetry (ESP32 v1.0.49+)
                 # These are now sent by ESP32, no extra DynamoDB reads needed
@@ -1470,17 +1468,18 @@ def lambda_handler(event, context):
                 # Get latest telemetry to determine controller state
                 latest = get_latest_telemetry(device_id)
                 system_data = latest.get('system', {})
-                mode = system_data.get('mode', 'manual')
-                # Get state from system telemetry (ESP32 now sends it)
-                state = system_data.get('state', 'DISABLED')
 
-                # Read timer controller values from system telemetry (ESP32 v1.0.50+)
+                # Use timer_state specifically for timer controller endpoint (v1.0.53+)
+                # Falls back to DISABLED if not yet available
+                timer_state = system_data.get('timer_state', 'DISABLED')
+
+                # Read timer controller values from system telemetry (ESP32 v1.0.53+)
                 # These are now sent by ESP32, no extra DynamoDB reads needed
                 return {
                     'statusCode': 200,
                     'headers': cors_headers(),
                     'body': json.dumps({
-                        'state': state,
+                        'state': timer_state,
                         'arming_countdown_sec': system_data.get('timer_arming_countdown', 0),
                         'schedule_exists': system_data.get('timer_schedule_exists', False),
                         'next_watering_sec': system_data.get('timer_next_watering_sec', 0),

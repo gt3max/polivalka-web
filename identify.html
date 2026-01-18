@@ -915,9 +915,10 @@ function showPlantCard(result) {
   document.getElementById('care-temp').textContent = care.temperature || '18-24°C';
   document.getElementById('care-humidity').textContent = care.humidity || 'Average (40-60%)';
 
-  // Tips from API
+  // Tips from API (use textContent to prevent XSS)
   const tipsList = document.getElementById('care-tips');
-  tipsList.innerHTML = `<li>${care.tips || 'Water when top inch of soil is dry.'}</li>`;
+  tipsList.innerHTML = '<li></li>';
+  tipsList.querySelector('li').textContent = care.tips || 'Water when top inch of soil is dry.';
 
   // Detailed info from Perenual (if available)
   const details = result.details || {};

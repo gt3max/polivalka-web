@@ -53,7 +53,6 @@ class DeviceController {
   async safeApiCall(key, apiFunction, options = {}) {
     // Проверка на повторный вызов
     if (this.pendingRequests.has(key)) {
-      console.log(`Request ${key} already pending, skipping`);
       return this.pendingRequests.get(key);
     }
 
@@ -72,7 +71,6 @@ class DeviceController {
       .catch(async (error) => {
         // Retry логика
         if (retries > 0) {
-          console.log(`Retrying ${key}, attempts left: ${retries}`);
           await new Promise(r => setTimeout(r, 1000));
           return this.safeApiCall(key + '_retry', apiFunction, { ...options, retries: retries - 1 });
         }
@@ -106,7 +104,6 @@ class DeviceController {
 
     // Проверка состояния
     if (device?.pump_running) {
-      console.log('Pump already running for', deviceId);
       return { status: 'already_running' };
     }
 
@@ -150,7 +147,6 @@ class DeviceController {
     const device = this.getDevice(deviceId);
 
     if (!device?.pump_running) {
-      console.log('Pump not running for', deviceId);
       return { status: 'not_running' };
     }
 

@@ -100,27 +100,6 @@
 </div><div class="card"><h3>💧 Capacitive Sensor (J6)</h3><div class="mono" style="font-size:14px;margin:8px 0" id="sensor-vals">ADC: —<br>Moisture: — %</div><div class="row"><button onclick="navigateTo('calibration.html')">Calibrate Sensor</button></div></div><div class="card"><h3>🌡️ Resistive Sensor (J7)</h3><div class="mono" style="font-size:14px;margin:8px 0;color:#9c27b0" id="sensor2-vals">ADC: —<br>Moisture: — %</div></div><div class="card"><h3>🚰 Manual Control</h3><div style="display:flex;gap:12px"><div style="flex:1"><div class="row"><label>Duration:</label><input id="manual-duration" type="number" min="1" max="300" value="5" style="width:80px"><select id="manual-unit" style="padding:6px"><option value="sec">seconds</option><option value="min">minutes</option></select></div><div class="row" style="margin-top:10px"><button id="btn-manual" onclick="manualWater()">Water Now</button><button id="btn-stop" onclick="stopPump()" style="background:#b00;color:#fff;border-color:#900" disabled>STOP</button></div><div id="pump-running" style="display:none;margin-top:12px;padding:10px;background:#e8f5e9;border-radius:8px;border:2px solid #2c5f2d"><div style="font-weight:600;color:#2c5f2d">💧 Pump Running</div><div class="mono" style="font-size:13px;margin-top:4px"><span id="pump-elapsed">0s</span> / <span id="pump-total">0s</span><span id="pump-remaining" style="margin-left:8px">(—)</span></div></div><div class="row" style="margin-top:12px"><button onclick="navigateTo('calibration.html#pump')" style="font-size:12px;padding:6px 10px">Calibrate Pump</button></div></div><div style="display:flex;flex-direction:column;align-items:center;padding:8px 12px;background:#f5f5f5;border-radius:8px;min-width:50px"><div class="muted" style="font-size:11px;margin-bottom:4px">Speed</div><div class="mono" style="font-size:14px;font-weight:600;color:#2c5f2d" id="speed-display">100%</div><input type="range" class="vertical" id="speed-slider" min="0" max="100" value="100" oninput="speedPreview(this.value)" onchange="setSpeed(this.value)" style="margin:8px 0"><div style="display:flex;flex-direction:column;font-size:10px;color:#666;text-align:center"><span>0</span></div></div></div></div><div class="card"><h3>Operating Mode</h3><p class="muted">Select how the system should water your plants</p><div class="mode-selector"><div class="mode-btn" data-mode="manual" onclick="selectMode('manual')"><div class="mode-icon">✋</div><div class="mode-name">Manual</div><div class="muted" style="font-size:11px">Manual watering only</div></div><div class="mode-btn" data-mode="timer" onclick="selectMode('timer')"><div class="mode-icon">⏰</div><div class="mode-name">Timer</div><div class="muted" style="font-size:11px">Schedule-based</div></div><div class="mode-btn" data-mode="sensor" onclick="selectMode('sensor')"><div class="mode-icon">💧</div><div class="mode-name">Sensor</div><div class="muted" style="font-size:11px">Moisture-based</div></div></div><p class="muted" style="margin-top:12px;font-size:12px"> ℹ️ Configure schedules on <b>Timer</b> page, sensor settings on <b>Sensor</b> page, and calibration on <b>Calibration</b> page.</p></div><div class="card" style="padding:12px"><h3 style="margin-top:0">System Status</h3><div style="display:flex;gap:16px;flex-wrap:wrap;margin-bottom:12px"><div style="flex:1;min-width:100px"><div class="muted" style="font-size:12px">State</div><div id="current-state" class="mono" style="font-size:14px">—</div></div><div style="flex:1;min-width:100px"><div class="muted" style="font-size:12px">Mode</div><div id="current-mode" style="font-size:14px">—</div></div><div style="flex:1;min-width:120px"><div class="muted" style="font-size:12px">Last Watering</div><div id="last-watering" class="mono" style="font-size:14px">—</div></div></div><div id="sensor-status-details" style="display:none;border-top:1px solid #ddd;padding-top:12px;margin-top:4px"><div style="display:flex;gap:16px;flex-wrap:wrap;margin-bottom:8px"><div style="flex:1;min-width:100px"><div class="muted" style="font-size:12px">Current Moisture</div><div id="status-current-moisture" class="mono" style="font-size:14px">—</div></div><div style="flex:1;min-width:100px"><div class="muted" style="font-size:12px">Target Range</div><div id="status-target-range" class="mono" style="font-size:14px">—</div></div><div style="flex:1;min-width:120px"><div class="muted" style="font-size:12px">Daily Water</div><div id="status-daily-water" class="mono" style="font-size:14px">—</div></div></div><div id="status-progress-row" style="display:none;margin-bottom:8px"><div class="muted" style="font-size:12px">Watering Progress</div><div id="status-watering-progress" class="mono" style="font-size:14px">—</div></div><div id="status-warning-row" style="display:none;padding:8px;background:#fff3cd;border-radius:8px;border:1px solid #ffc107"><div style="font-weight:600;color:#856404">⚠️ Warning</div><div id="status-warning-message" style="font-size:13px;color:#856404;margin-top:4px">—</div></div></div><div id="timer-status-details" style="display:none;border-top:1px solid #ddd;padding-top:12px;margin-top:4px"><div style="display:flex;gap:16px;flex-wrap:wrap;margin-bottom:8px"><div style="flex:1;min-width:100px"><div class="muted" style="font-size:12px">Next Watering</div><div id="status-next-watering" class="mono" style="font-size:14px">—</div></div><div style="flex:1;min-width:100px"><div class="muted" style="font-size:12px">Schedules</div><div id="status-schedule-count" class="mono" style="font-size:14px">—</div></div><div style="flex:1;min-width:120px"><div class="muted" style="font-size:12px">Daily Water</div><div id="timer-daily-water" class="mono" style="font-size:14px">—</div></div></div><div id="timer-watering-row" style="display:none;margin-bottom:8px"><div class="muted" style="font-size:12px">Watering Duration</div><div id="timer-watering-duration" class="mono" style="font-size:14px">—</div></div><div id="timer-warning-row" style="display:none;padding:8px;background:#fff3cd;border-radius:8px;border:1px solid #ffc107"><div style="font-weight:600;color:#856404">⚠️ Warning</div><div id="timer-warning-message" style="font-size:13px;color:#856404;margin-top:4px">—</div></div></div></div><div class="card"><h3>Automation Control</h3><p class="muted" id="auto-instruction">Select Timer or Sensor mode to enable automation</p><div id="timer-auto-control" style="display:none;margin-top:12px"><div class="toggle-row" id="timer-toggle-row" style="visibility:hidden"><div><div style="font-weight:600">Timer Auto Watering</div><div class="muted" style="font-size:12px">Schedule-based automatic watering</div></div><label class="toggle-switch"><input type="checkbox" id="timer-auto-toggle" onchange="toggleTimerAuto(this.checked)"><span class="toggle-slider"></span></label></div><div id="timer-arming-cancel-section" style="display:none;margin-top:12px;padding:12px;background:#fff3e0;border-radius:8px;border:2px solid #f57c00"><div style="display:flex;justify-content:space-between;align-items:center"><div><div style="font-weight:600;color:#e65100">⏰ Timer Countdown</div><div class="muted" style="font-size:13px;margin-top:4px">Timer mode starting in <span id="timer-arming-countdown-display" style="font-weight:600">15</span> seconds...</div></div><button onclick="cancelTimerArming()" style="background:#b00;color:#fff;border-color:#900;padding:8px 16px;font-weight:600">CANCEL</button></div></div><p class="muted" style="margin-top:8px;font-size:12px"> ⚠️ Before enabling: make sure pump and delivery tubes are properly connected! </p></div><div id="sensor-auto-control" style="display:none;margin-top:12px"><div class="toggle-row" id="sensor-toggle-row" style="visibility:hidden"><div><div style="font-weight:600">Sensor Auto Watering</div><div class="muted" style="font-size:12px">Moisture-based automatic watering</div></div><label class="toggle-switch"><input type="checkbox" id="sensor-auto-toggle" onchange="toggleSensorAuto(this.checked)"><span class="toggle-slider"></span></label></div><div id="arming-cancel-section" style="display:none;margin-top:12px;padding:12px;background:#fff3e0;border-radius:8px;border:2px solid #f57c00"><div style="display:flex;justify-content:space-between;align-items:center"><div><div style="font-weight:600;color:#e65100">🚀 Launch Countdown</div><div class="muted" style="font-size:13px;margin-top:4px">Sensor mode starting in <span id="arming-countdown-display" style="font-weight:600">60</span> seconds...</div></div><button onclick="cancelArming()" style="background:#b00;color:#fff;border-color:#900;padding:8px 16px;font-weight:600">CANCEL</button></div></div><p class="muted" style="margin-top:8px;font-size:12px"> ⚠️ Before enabling: make sure sensor is inserted in soil and calibrated! </p></div></div></div> <script>
 // Admin nav link, sleep(), mapStateToDisplay(), navigateTo() - moved to common.js
 
-// ============ Toxic Plant Families (Source: ASPCA Poison Control) ============
-// Format: CAUSE → EFFECT → ACTION
-const TOXIC_FAMILIES = {
-  'Araliaceae': { pets: true, humans: true, note: 'Sap on skin → rash. Pet eats leaf → vomiting. Wash hands after pruning' },
-  'Araceae': { pets: true, humans: true, note: 'Chewing → mouth/throat swelling, drooling. Severe swelling → vet' },
-  'Liliaceae': { pets: true, humans: false, note: '🚨 CATS: pollen/leaf contact → kidney failure in 24-72h. Any contact → vet immediately' },
-  'Solanaceae': { pets: true, humans: false, note: 'Ripe fruit = safe. Green leaves/stems → pet vomiting. Keep unripe away from pets' },
-  'Amaryllidaceae': { pets: true, humans: true, note: 'Bulb most toxic. Pet chews bulb → vomiting, tremors. Keep bulbs buried or out of reach' },
-  'Apocynaceae': { pets: true, humans: true, note: 'Any part eaten → heart rhythm problems. Even small amount → vet' },
-  'Crassulaceae': { pets: true, humans: false, note: 'Pet eats → vomiting, diarrhea. Humans safe to handle' },
-  'Ericaceae': { pets: true, humans: true, note: 'Any part eaten → vomiting, weakness, heart issues. Keep away from pets' },
-  'Euphorbiaceae': { pets: true, humans: true, note: 'Milky sap on skin → irritation. In eyes → rinse 15 min. Wear gloves when pruning' },
-  'Cycadaceae': { pets: true, humans: true, note: '🚨 Seeds eaten → liver failure. Dogs love to chew them. Any ingestion → vet immediately' },
-  'Zamiaceae': { pets: true, humans: true, note: '🚨 Seeds eaten → liver failure. Dogs love to chew them. Any ingestion → vet immediately' },
-  'Ranunculaceae': { pets: true, humans: true, note: 'Sap on skin → blisters. Eaten → mouth pain, vomiting. Wear gloves' },
-  'Plantaginaceae': { pets: true, humans: true, note: '🚨 Any amount eaten → heart rhythm problems. Keep away from children and pets' },
-  'Asteraceae': { pets: true, humans: false, note: 'Pet eats → skin irritation, vomiting. Humans safe' },
-  'Moraceae': { pets: true, humans: true, note: 'Sap on skin → rash. Pet eats leaf → vomiting. Wash hands after pruning' },
-  'Asparagaceae': { pets: true, humans: false, note: 'Pet eats berries → vomiting, diarrhea. Keep berries away from pets' }
-};
-
 // Флаги для предотвращения рекурсии при программном изменении toggles
 let updatingTimerToggle = false;
 let updatingSensorToggle = false;
@@ -1106,6 +1085,20 @@ async function updateControllerStatus() {
 setInterval(updateControllerStatus, 2000); // every 2 seconds
 setTimeout(updateControllerStatus, 1000); // initial load after 1 sec
 
+// Fallback: show toggles after 5 seconds even if API fails
+setTimeout(() => {
+  const sensorToggle = document.getElementById('sensor-toggle-row');
+  const timerToggle = document.getElementById('timer-toggle-row');
+  if (sensorToggle) sensorToggle.style.visibility = 'visible';
+  if (timerToggle) timerToggle.style.visibility = 'visible';
+}, 5000);
+
+// Cleanup intervals on page unload to prevent memory leaks
+window.addEventListener('beforeunload', () => {
+  if (window.pumpCountdownInterval) clearInterval(window.pumpCountdownInterval);
+  if (typeof statusIntervalId !== 'undefined') clearInterval(statusIntervalId);
+});
+
 // Pump speed control
 function speedPreview(val){document.getElementById('speed-display').textContent=val+'%';}
 let speedDebounceTimer=null;
@@ -1142,129 +1135,4 @@ function togglePlantExpand() {
   }
 }
 
-// Load saved plant for this device
-async function loadPlantCard() {
-  if (!IS_CLOUD) return; // Only in cloud mode
-  try {
-    if (!DEVICE_ID) return;
-
-    // Direct fetch - /plants/list is a global endpoint, not device-prefixed
-    const url = `${API.cloudBase}/plants/list?device_id=${DEVICE_ID}`;
-    const headers = API.getAuthHeaders();
-    console.log('[Plant] Fetching:', url);
-    const response = await fetch(url, { headers, cache: 'no-store' });
-    console.log('[Plant] Response status:', response.status);
-    if (!response.ok) throw new Error('Failed to load plants: ' + response.status);
-    const resp = await response.json();
-    console.log('[Plant] Data:', resp);
-    const plants = resp.plants || [];
-
-    // Get the most recent active plant
-    const plant = plants.find(p => !p.deleted_at) || plants[0];
-    if (!plant) return;
-
-    // Show the card
-    document.getElementById('plant-card').style.display = 'block';
-
-    // Compact row data
-    document.getElementById('plant-name').textContent = plant.scientific || '—';
-    document.getElementById('plant-scientific').textContent = plant.common_name || '';
-    document.getElementById('plant-range').textContent = `${plant.start_pct || 35}-${plant.stop_pct || 55}%`;
-
-    // Frequency from preset
-    const freq = {
-      'succulent': 'Every 14-21 days',
-      'drought_tolerant': 'Every 10-14 days',
-      'standard': 'Every 7-10 days',
-      'tropical': 'Every 5-7 days',
-      'moisture_loving': 'Every 3-5 days'
-    };
-    const wateringText = freq[plant.preset] || 'Every 7-10 days';
-    document.getElementById('plant-frequency').textContent = wateringText;
-    document.getElementById('plant-watering-detail').textContent = wateringText;
-
-    // Image if available (with fallback for PlantNet outages)
-    if (plant.image_url) {
-      const img = document.getElementById('plant-image');
-      img.onerror = () => { img.style.display = 'none'; };
-      img.src = plant.image_url;
-      img.style.display = 'block';
-    }
-
-    // Expanded details: family, care level, indoor/outdoor
-    let infoParts = [];
-    if (plant.family) infoParts.push(plant.family);
-    if (plant.care_level) infoParts.push(plant.care_level + ' care');
-    // Only show Indoor if confirmed - Outdoor is misleading for tropical plants
-    if (plant.indoor === true) infoParts.push('🏠 Indoor');
-    document.getElementById('plant-extra-info').textContent = infoParts.join(' • ');
-
-    // Toxicity warning (with family fallback for old data)
-    const warningEl = document.getElementById('plant-warning');
-    let toxicHumans = plant.poisonous_to_humans === true;
-    let toxicPets = plant.poisonous_to_pets === true;
-    let toxicityNote = plant.toxicity_note || '';
-    let toxicitySource = plant.toxicity_source || 'species';
-
-    // Fallback: check family if no toxicity data from Perenual
-    if (plant.poisonous_to_pets === undefined && plant.family) {
-      const familyToxicity = TOXIC_FAMILIES[plant.family];
-      if (familyToxicity) {
-        toxicHumans = familyToxicity.humans;
-        toxicPets = familyToxicity.pets;
-        toxicityNote = familyToxicity.note;
-        toxicitySource = 'family';
-      }
-    }
-
-    if (toxicHumans || toxicPets) {
-      // Show note as main message (less scary than "TOXIC")
-      // Only show "Toxic to..." if no note available
-      let label;
-      if (toxicityNote) {
-        label = `⚠️ ${toxicityNote}`;
-        if (toxicPets) label += ' • Keep away from pets';
-      } else {
-        let warnings = [];
-        if (toxicHumans) warnings.push('humans');
-        if (toxicPets) warnings.push('pets');
-        label = `⚠️ Toxic to ${warnings.join(' and ')}`;
-      }
-      warningEl.innerHTML = label;
-      warningEl.style.display = 'block';
-      warningEl.style.background = '#fff3e0';
-      warningEl.style.color = '#e65100';
-    } else if (plant.poisonous_to_pets === undefined && !TOXIC_FAMILIES[plant.family]) {
-      // Unknown toxicity - show warning to research
-      warningEl.textContent = `⚠️ Toxicity unknown — research before keeping with pets`;
-      warningEl.style.display = 'block';
-      warningEl.style.background = '#fff3e0';
-      warningEl.style.color = '#e65100';
-    } else {
-      warningEl.style.display = 'none';
-    }
-
-    // Description (if available from API)
-    const descEl = document.getElementById('plant-description');
-    if (plant.description) {
-      descEl.textContent = plant.description;
-      descEl.style.display = 'block';
-    } else {
-      descEl.style.display = 'none';
-    }
-
-    // Environment requirements
-    if (plant.humidity_min || plant.humidity_max) {
-      document.getElementById('plant-humidity').textContent = `${plant.humidity_min || 30}-${plant.humidity_max || 70}%`;
-    }
-    if (plant.temp_min || plant.temp_max) {
-      document.getElementById('plant-temperature').textContent = `${plant.temp_min || 18}-${plant.temp_max || 24}°C`;
-    }
-
-  } catch (e) {
-    console.log('[Plant] Error loading plant:', e.message);
-  }
-}
-// TODO: Enable when /plants/list endpoint is deployed to Lambda
-// setTimeout(loadPlantCard, 500);
 </script> </body></html>
