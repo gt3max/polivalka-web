@@ -2701,19 +2701,22 @@ def get_latest_telemetry(device_id):
 
     latest = {}
 
-    # First, get the "latest" record (timestamp=0) which has last_update from command responses
+    # First, get the "latest" record (timestamp=0) which has aggregated data from telemetry
+    # Lambda saves sensor, battery, system to this record for quick access
     try:
         latest_record = telemetry_table.get_item(
             Key={'device_id': device_id, 'timestamp': 0}
         )
         if 'Item' in latest_record:
             item = latest_record['Item']
-            # Use last_update from this record (updated by iot_rule_response.py)
+            # Use last_update from this record
             if 'last_update' in item:
                 latest['last_update'] = int(item['last_update'])
-            # Also get sensor data if present (from get_status command response)
-            if 'sensor' in item:
-                latest['sensor'] = dict(item['sensor'])
+            # Get all data types from latest record (sensor, battery, system)
+            # These are saved by iot_rule_telemetry.py Lambda
+            for data_type in ['sensor', 'battery', 'system']:
+                if data_type in item:
+                    latest[data_type] = dict(item[data_type])
     except Exception as e:
         print(f"Error getting latest record: {e}")
 
