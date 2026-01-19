@@ -150,6 +150,35 @@
       <div id="activity-loading" class="loading">Loading activity...</div>
     </div>
   </div>
+
+  <!-- Long-term Trends (from GitHub JSON) -->
+  <div class="card" style="margin-top:24px;border-top:3px solid #2c5f2d">
+    <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
+      <h3 style="margin:0">📈 Long-term (<span id="longterm-period-label">3 months</span>)</h3>
+      <div class="longterm-period-selector" style="display:flex;gap:4px">
+        <button onclick="setLongTermPeriod(4)" id="btn-lt-4w">1mo</button>
+        <button onclick="setLongTermPeriod(12)" id="btn-lt-12w" class="active">3mo</button>
+        <button onclick="setLongTermPeriod(26)" id="btn-lt-26w">6mo</button>
+        <button onclick="setLongTermPeriod(52)" id="btn-lt-52w">1y</button>
+      </div>
+    </div>
+    <p class="muted" style="margin:8px 0">Weekly summaries stored in GitHub (unlimited history)</p>
+    <div class="chart-container" style="height:300px">
+      <canvas id="longterm-chart"></canvas>
+    </div>
+    <div id="longterm-nodata" class="muted" style="display:none;text-align:center;padding:40px">No long-term data available yet. Data will appear after the first week.</div>
+    <div id="longterm-loading" class="loading">Loading long-term data...</div>
+    <div id="longterm-error" class="error-msg" style="display:none"></div>
+  </div>
+
+  <!-- History List -->
+  <div class="card">
+    <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
+      <h3 style="margin:0">📋 Weekly History</h3>
+      <button onclick="exportLongTermCSV()" style="padding:6px 10px;font-size:13px">📥 Export CSV</button>
+    </div>
+    <div id="history-list" style="margin-top:12px"></div>
+  </div>
 </div>
 
 <script>
@@ -742,6 +771,247 @@ async function refreshAll() {
 
 // Admin nav link - moved to common.js
 
+// ============ LONG-TERM DATA (from GitHub JSON) ============
+let longTermData = []; // Weekly summaries from GitHub
+
+// Load weekly summaries from GitHub
+async function loadLongTermData() {
+  const loading = document.getElementById('longterm-loading');
+  const error = document.getElementById('longterm-error');
+  const nodata = document.getElementById('longterm-nodata');
+
+  loading.style.display = 'block';
+  error.style.display = 'none';
+  nodata.style.display = 'none';
+
+  try {
+    // Extract short device ID (BB00C1) from DEVICE_ID (Polivalka-BB00C1 or BB00C1)
+    const shortId = DEVICE_ID.replace('Polivalka-', '');
+    const url = `data/weekly/${shortId}.json`;
+
+    const response = await fetch(url, { cache: 'no-store' });
+    if (!response.ok) {
+      if (response.status === 404) {
+        loading.style.display = 'none';
+        nodata.style.display = 'block';
+        longTermData = [];
+        renderLongTermChart([]);
+        renderHistoryList([]);
+        return;
+      }
+      throw new Error(`HTTP ${response.status}`);
+    }
+
+    const data = await response.json();
+    longTermData = data.summaries || [];
+
+    loading.style.display = 'none';
+
+    // Filter and render based on selected period
+    const filtered = filterLongTermData(longTermPeriod);
+    renderLongTermChart(filtered);
+    renderHistoryList(longTermData); // History shows all data
+
+  } catch(e) {
+    loading.style.display = 'none';
+    error.style.display = 'block';
+    error.textContent = 'Failed to load long-term data: ' + e.message;
+    console.error('Long-term data error:', e);
+  }
+}
+
+// Current long-term period (weeks)
+let longTermPeriod = 12; // 3 months by default
+
+// Filter data by period
+function filterLongTermData(weeks) {
+  if (longTermData.length === 0) return [];
+
+  // Sort by week descending
+  const sorted = [...longTermData].sort((a, b) => b.week.localeCompare(a.week));
+
+  // Take last N weeks
+  return sorted.slice(0, weeks).reverse();
+}
+
+// Set long-term period
+function setLongTermPeriod(weeks) {
+  longTermPeriod = weeks;
+  document.querySelectorAll('.longterm-period-selector button').forEach(b => b.classList.remove('active'));
+  document.getElementById('btn-lt-' + weeks + 'w').classList.add('active');
+
+  const labels = { 4: '1 month', 12: '3 months', 26: '6 months', 52: '1 year' };
+  document.getElementById('longterm-period-label').textContent = labels[weeks] || weeks + ' weeks';
+
+  const filtered = filterLongTermData(weeks);
+  renderLongTermChart(filtered);
+}
+
+// Long-term chart instance
+let longTermChart = null;
+
+// Render long-term chart
+function renderLongTermChart(data) {
+  const canvas = document.getElementById('longterm-chart');
+  const nodata = document.getElementById('longterm-nodata');
+
+  if (longTermChart) {
+    longTermChart.destroy();
+    longTermChart = null;
+  }
+
+  if (data.length === 0) {
+    canvas.style.display = 'none';
+    nodata.style.display = 'block';
+    return;
+  }
+
+  canvas.style.display = 'block';
+  nodata.style.display = 'none';
+
+  const ctx = canvas.getContext('2d');
+
+  // Prepare data
+  const labels = data.map(d => d.week);
+  const moistureAvg = data.map(d => d.moisture?.avg_percent || null);
+  const batteryAvg = data.map(d => d.battery?.avg_percent || null);
+  const wateringMl = data.map(d => d.watering?.total_ml || 0);
+
+  longTermChart = new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels: labels,
+      datasets: [
+        {
+          label: 'Avg Moisture %',
+          data: moistureAvg,
+          borderColor: '#1976d2',
+          backgroundColor: 'rgba(25, 118, 210, 0.1)',
+          fill: true,
+          tension: 0.3,
+          yAxisID: 'y'
+        },
+        {
+          label: 'Avg Battery %',
+          data: batteryAvg,
+          borderColor: '#4caf50',
+          borderDash: [5, 5],
+          fill: false,
+          tension: 0.3,
+          yAxisID: 'y'
+        },
+        {
+          label: 'Water ml',
+          data: wateringMl,
+          type: 'bar',
+          backgroundColor: 'rgba(33, 150, 243, 0.5)',
+          borderColor: '#2196f3',
+          borderWidth: 1,
+          yAxisID: 'y1'
+        }
+      ]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      interaction: { mode: 'index', intersect: false },
+      plugins: {
+        legend: { position: 'top' },
+        tooltip: {
+          callbacks: {
+            title: (items) => {
+              const week = items[0].label;
+              const weekData = data.find(d => d.week === week);
+              return `Week ${week} (${weekData?.start_date || ''} - ${weekData?.end_date || ''})`;
+            }
+          }
+        }
+      },
+      scales: {
+        x: { grid: { display: false } },
+        y: {
+          type: 'linear',
+          position: 'left',
+          min: 0,
+          max: 100,
+          ticks: { callback: v => v + '%' }
+        },
+        y1: {
+          type: 'linear',
+          position: 'right',
+          min: 0,
+          grid: { drawOnChartArea: false },
+          ticks: { callback: v => v + 'ml' }
+        }
+      }
+    }
+  });
+}
+
+// Render history list
+function renderHistoryList(data) {
+  const container = document.getElementById('history-list');
+
+  if (data.length === 0) {
+    container.innerHTML = '<div class="muted">No historical data available yet</div>';
+    return;
+  }
+
+  // Sort by week descending (newest first)
+  const sorted = [...data].sort((a, b) => b.week.localeCompare(a.week));
+
+  let html = '';
+  for (const w of sorted) {
+    const moisture = w.moisture?.avg_percent != null ? Math.round(w.moisture.avg_percent) + '%' : '—';
+    const battery = w.battery?.avg_percent != null ? Math.round(w.battery.avg_percent) + '%' : '—';
+    const waterings = w.watering?.events_count ?? 0;
+    const volume = w.watering?.total_ml ?? 0;
+    const online = w.system?.online_hours != null ? Math.round(w.system.online_hours) + 'h' : '—';
+
+    html += `<div class="event-row event-system" style="flex-direction:column;align-items:stretch">
+      <div style="display:flex;justify-content:space-between;align-items:center">
+        <strong>Week ${w.week}</strong>
+        <span class="muted">${w.start_date} — ${w.end_date}</span>
+      </div>
+      <div style="display:flex;gap:16px;margin-top:8px;font-size:13px;color:#666">
+        <span>💧 Moisture: ${moisture}</span>
+        <span>🔋 Battery: ${battery}</span>
+        <span>🚿 ${waterings} waterings (${volume}ml)</span>
+        <span>📡 Online: ${online}</span>
+      </div>
+    </div>`;
+  }
+
+  container.innerHTML = html;
+}
+
+// Export long-term data as CSV
+function exportLongTermCSV() {
+  if (longTermData.length === 0) {
+    alert('No long-term data to export');
+    return;
+  }
+
+  let csv = 'week,start_date,end_date,moisture_avg,moisture_min,moisture_max,battery_avg,battery_min,battery_max,waterings,total_ml,auto_events,manual_events,online_hours,offline_hours,restarts,firmware\n';
+
+  for (const w of longTermData) {
+    csv += `${w.week},${w.start_date},${w.end_date},`;
+    csv += `${w.moisture?.avg_percent || ''},${w.moisture?.min_percent || ''},${w.moisture?.max_percent || ''},`;
+    csv += `${w.battery?.avg_percent || ''},${w.battery?.min_percent || ''},${w.battery?.max_percent || ''},`;
+    csv += `${w.watering?.events_count || 0},${w.watering?.total_ml || 0},${w.watering?.auto_events || 0},${w.watering?.manual_events || 0},`;
+    csv += `${w.system?.online_hours || ''},${w.system?.offline_hours || ''},${w.system?.restarts || 0},${w.system?.firmware_version || ''}\n`;
+  }
+
+  const blob = new Blob([csv], { type: 'text/csv' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  const shortId = DEVICE_ID.replace('Polivalka-', '');
+  a.download = `polivalka-${shortId}-longterm-${new Date().toISOString().split('T')[0]}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
 // Init
 if (IS_CLOUD && DEVICE_ID) {
   document.getElementById('device-id-header').textContent = '🌱 ' + DEVICE_ID;
@@ -751,11 +1021,13 @@ if (IS_CLOUD && DEVICE_ID) {
   refreshAll();
   updateHeader();
   updateBattery();
+  loadLongTermData(); // Load weekly summaries from GitHub
 
   // Auto-refresh every 5 minutes
   setInterval(refreshAll, 300000);
   setInterval(updateHeader, 30000);
   setInterval(updateBattery, 60000);
+  setInterval(loadLongTermData, 3600000); // Refresh long-term data every hour
 } else {
   // AP mode - show message
   document.querySelector('.container').innerHTML = `

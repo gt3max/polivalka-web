@@ -1,0 +1,96 @@
+{
+  "device_id": "BB00C1",
+  "last_updated": "2026-01-19T23:59:00Z",
+  "summaries": [
+    {
+      "week": "2026-W03",
+      "start_date": "2026-01-13",
+      "end_date": "2026-01-19",
+      "generated_at": "2026-01-19T23:59:00Z",
+      "moisture": {
+        "avg_percent": 47,
+        "min_percent": 35,
+        "max_percent": 62,
+        "readings_count": 156
+      },
+      "battery": {
+        "avg_percent": 81,
+        "min_percent": 72,
+        "max_percent": 95,
+        "charging_hours": 8.5
+      },
+      "watering": {
+        "events_count": 4,
+        "total_ml": 180,
+        "auto_events": 3,
+        "manual_events": 1
+      },
+      "system": {
+        "online_hours": 162,
+        "offline_hours": 6,
+        "restarts": 2,
+        "firmware_version": "v1.0.59"
+      }
+    },
+    {
+      "week": "2026-W02",
+      "start_date": "2026-01-06",
+      "end_date": "2026-01-12",
+      "generated_at": "2026-01-12T23:59:00Z",
+      "moisture": {
+        "avg_percent": 52,
+        "min_percent": 38,
+        "max_percent": 71,
+        "readings_count": 168
+      },
+      "battery": {
+        "avg_percent": 75,
+        "min_percent": 58,
+        "max_percent": 89,
+        "charging_hours": 14.2
+      },
+      "watering": {
+        "events_count": 2,
+        "total_ml": 100,
+        "auto_events": 2,
+        "manual_events": 0
+      },
+      "system": {
+        "online_hours": 168,
+        "offline_hours": 0,
+        "restarts": 0,
+        "firmware_version": "v1.0.55"
+      }
+    },
+    {
+      "week": "2026-W01",
+      "start_date": "2025-12-30",
+      "end_date": "2026-01-05",
+      "generated_at": "2026-01-05T23:59:00Z",
+      "moisture": {
+        "avg_percent": 44,
+        "min_percent": 30,
+        "max_percent": 58,
+        "readings_count": 160
+      },
+      "battery": {
+        "avg_percent": 68,
+        "min_percent": 45,
+        "max_percent": 85,
+        "charging_hours": 20.0
+      },
+      "watering": {
+        "events_count": 5,
+        "total_ml": 250,
+        "auto_events": 4,
+        "manual_events": 1
+      },
+      "system": {
+        "online_hours": 155,
+        "offline_hours": 13,
+        "restarts": 1,
+        "firmware_version": "v1.0.52"
+      }
+    }
+  ]
+}

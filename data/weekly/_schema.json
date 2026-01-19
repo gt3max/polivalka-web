@@ -1,0 +1,53 @@
+{
+  "_comment": "JSON Schema for weekly device summaries. Each device has its own file: BB00C1.json",
+  "_updated": "2026-01-19",
+  "_version": "1.0",
+
+  "schema": {
+    "device_id": "BB00C1",
+    "summaries": [
+      {
+        "week": "2026-W03",
+        "start_date": "2026-01-13",
+        "end_date": "2026-01-19",
+        "generated_at": "2026-01-19T23:59:00Z",
+
+        "moisture": {
+          "avg_percent": 45,
+          "min_percent": 32,
+          "max_percent": 68,
+          "readings_count": 168
+        },
+
+        "battery": {
+          "avg_percent": 78,
+          "min_percent": 65,
+          "max_percent": 92,
+          "charging_hours": 12.5
+        },
+
+        "watering": {
+          "events_count": 3,
+          "total_ml": 150,
+          "auto_events": 2,
+          "manual_events": 1
+        },
+
+        "system": {
+          "online_hours": 164.5,
+          "offline_hours": 3.5,
+          "restarts": 1,
+          "firmware_version": "v1.0.59"
+        }
+      }
+    ]
+  },
+
+  "notes": {
+    "storage": "GitHub Pages: polivalka-web/data/weekly/{device_id}.json",
+    "update_frequency": "Weekly (Sunday 23:59 UTC)",
+    "retention": "Unlimited (git history)",
+    "backup": "Local git clone + GitLab mirror",
+    "size_estimate": "~500 bytes per week, ~26 KB per year per device"
+  }
+}
