@@ -28,7 +28,6 @@ Output (to DynamoDB polivalka_telemetry):
 import json
 import boto3
 import os
-import time
 from decimal import Decimal
 
 dynamodb = boto3.resource('dynamodb', region_name='eu-central-1')
@@ -62,13 +61,6 @@ def lambda_handler(event, context):
     device_id = event.get('device_id', '')  # "Polivalka-BB00C1"
     timestamp = event.get('timestamp', 0)
 
-    # FIX: If device sends uptime instead of Unix timestamp (before NTP sync),
-    # use current server time. Unix timestamps are > 1000000000 (year 2001+).
-    if timestamp < 1000000000:
-        real_timestamp = int(time.time())
-        print(f"Timestamp {timestamp} too small (uptime?), using server time: {real_timestamp}")
-        timestamp = real_timestamp
-
     # Determine data type (sensor, battery, pump, system)
     data_type = None
     data = None
@@ -93,105 +85,153 @@ def lambda_handler(event, context):
         print(f"Unknown message type: {event}")
         return {'statusCode': 400, 'body': 'Unknown message type'}
 
-    # Save to DynamoDB telemetry table using UpdateItem
-    # ВАЖНО: Используем UpdateItem вместо PutItem чтобы НЕ перезаписывать другие типы данных!
-    # Если pump и sensor приходят с одинаковым timestamp (в пределах секунды),
-    # PutItem перезаписывал первую запись. UpdateItem добавляет поля к существующей записи.
+    # Create DynamoDB item
+    # ВАЖНО: Данные хранятся в КОРНЕ (sensor, battery, pump, system как top-level keys)
+    # НЕ вложены в 'data' Map - для простоты query и совместимости
+    item = {
+        'device_id': device_id,
+        'timestamp': timestamp,
+        data_type: data,  # e.g., 'sensor': {...}, 'battery': {...}
+        'ttl': timestamp + TTL_SECONDS
+    }
+
+    # Save to DynamoDB telemetry table
+    # Convert floats to Decimal (DynamoDB doesn't support Python floats)
     try:
-        data_converted = convert_floats_to_decimal(data)
-        telemetry_table.update_item(
-            Key={'device_id': device_id, 'timestamp': timestamp},
-            UpdateExpression='SET #dt = :data, #ttl = :ttl',
-            ExpressionAttributeNames={
-                '#dt': data_type,
-                '#ttl': 'ttl'
-            },
-            ExpressionAttributeValues={
-                ':data': data_converted,
-                ':ttl': timestamp + TTL_SECONDS
-            }
-        )
+        item_converted = convert_floats_to_decimal(item)
+        telemetry_table.put_item(Item=item_converted)
         print(f"Saved {data_type} data for {device_id} at {timestamp}")
     except Exception as e:
         print(f"Error saving telemetry: {e}")
         return {'statusCode': 500, 'body': str(e)}
 
-    # Also update "latest" record (timestamp=0) for quick access from home.html
-    # This ensures fresh data is available without sending get_status command
-    # IMPORTANT: Include 'system' for firmware_version, restart counters, etc.
-    if data_type in ['sensor', 'battery', 'system']:
-        try:
-            telemetry_table.update_item(
-                Key={'device_id': device_id, 'timestamp': 0},
-                UpdateExpression='SET #dt = :data, last_update = :ts',
-                ExpressionAttributeNames={'#dt': data_type},
-                ExpressionAttributeValues={
-                    ':data': convert_floats_to_decimal(data),
-                    ':ts': timestamp
-                }
-            )
-            print(f"Updated latest record for {device_id}: {data_type}")
-        except Exception as e:
-            print(f"Failed to update latest record: {e}")  # Non-fatal
-
-    # If system telemetry with device info, update Devices table
+    # If system telemetry, update Devices table with all device stats
     if data_type == 'system':
+        # Extract all fields we want to persist to devices table
         device_name = data.get('device_name')
         location = data.get('location')
         room = data.get('room')
         wifi_scan_interval = data.get('wifi_scan_interval_hours')
-        # Pump stats from ESP32 NVS (source of truth for offline mode)
-        esp32_total_water = data.get('total_water_ml')
-        esp32_total_runtime = data.get('total_runtime_sec')
+        firmware_version = data.get('firmware_version')
+        reboot_count = data.get('reboot_count')
+        clean_restarts = data.get('clean_restarts')
+        unexpected_restarts = data.get('unexpected_restarts')
+        ota_count = data.get('ota_count')
+        ota_last_timestamp = data.get('ota_last_timestamp')
+        # Boot info - important for debugging battery/crash issues
+        boot_type = data.get('boot_type')
+        reset_reason = data.get('reset_reason')
 
-        # Only update if at least one field is present and non-empty
-        if device_name or location or room or wifi_scan_interval or esp32_total_water is not None or esp32_total_runtime is not None:
-            # Find user_id for this device (scan the table)
-            try:
-                scan_response = devices_table.scan(
-                    FilterExpression='device_id = :device',
-                    ExpressionAttributeValues={':device': device_id}
-                )
+        # Find user_id for this device (scan the table)
+        try:
+            scan_response = devices_table.scan(
+                FilterExpression='device_id = :device',
+                ExpressionAttributeValues={':device': device_id}
+            )
 
-                if scan_response['Items'] and len(scan_response['Items']) > 0:
-                    user_id = scan_response['Items'][0]['user_id']
+            if scan_response['Items'] and len(scan_response['Items']) > 0:
+                user_id = scan_response['Items'][0]['user_id']
 
-                    update_expr_parts = []
-                    expr_attr_values = {}
+                update_expr_parts = ['last_update = :ts']  # Always update last_update
+                expr_attr_values = {':ts': timestamp}
+                expr_attr_names = {}  # For reserved words
 
-                    if device_name:
-                        update_expr_parts.append('device_name = :name')
-                        expr_attr_values[':name'] = device_name
-                    if location:
-                        update_expr_parts.append('location = :loc')
-                        expr_attr_values[':loc'] = location
-                    if room:
-                        update_expr_parts.append('room = :room')
-                        expr_attr_values[':room'] = room
-                    if wifi_scan_interval:
-                        update_expr_parts.append('wifi_scan_interval_hours = :wifi_scan')
-                        expr_attr_values[':wifi_scan'] = wifi_scan_interval
+                # Device info (location is reserved word in DynamoDB!)
+                if device_name:
+                    update_expr_parts.append('device_name = :name')
+                    expr_attr_values[':name'] = device_name
+                if location:
+                    update_expr_parts.append('#loc = :loc')
+                    expr_attr_names['#loc'] = 'location'
+                    expr_attr_values[':loc'] = location
+                if room:
+                    update_expr_parts.append('room = :room')
+                    expr_attr_values[':room'] = room
+                if wifi_scan_interval is not None:
+                    update_expr_parts.append('wifi_scan_interval_hours = :wifi_scan')
+                    expr_attr_values[':wifi_scan'] = wifi_scan_interval
 
-                    # Pump stats from ESP32 NVS (ESP32 is source of truth)
-                    # This syncs offline watering events to DynamoDB
-                    if esp32_total_water is not None:
-                        update_expr_parts.append('total_water_ml = :water')
-                        expr_attr_values[':water'] = int(esp32_total_water)
-                    if esp32_total_runtime is not None:
-                        update_expr_parts.append('pump_runtime_sec = :runtime')
-                        expr_attr_values[':runtime'] = int(esp32_total_runtime)
+                # Get current item for comparison
+                current_item = scan_response['Items'][0]
+                current_firmware = current_item.get('firmware_version', '')
+                firmware_changed = firmware_version and firmware_version != current_firmware
 
-                    devices_table.update_item(
-                        Key={'user_id': user_id, 'device_id': device_id},
-                        UpdateExpression='SET ' + ', '.join(update_expr_parts),
-                        ExpressionAttributeValues=expr_attr_values
-                    )
-                    print(f"Updated device info for {device_id}: name={device_name}, location={location}, room={room}, wifi_scan={wifi_scan_interval}, total_water={esp32_total_water}, runtime={esp32_total_runtime}")
-                else:
-                    print(f"Device {device_id} not found in devices table")
-            except Exception as e:
-                print(f"Error updating device info: {e}")
-                # Don't fail the whole Lambda - telemetry is already saved
+                # Firmware version (always update)
+                if firmware_version:
+                    update_expr_parts.append('firmware_version = :fw')
+                    expr_attr_values[':fw'] = firmware_version
+                    if firmware_changed:
+                        print(f"Firmware version changed: {current_firmware} -> {firmware_version} for {device_id}")
+
+                # COUNTERS: Only update if new value >= old value (prevent data loss)
+                # NO automatic reset on firmware change - counters are reset manually by admin only
+                # reboot_count - total reboots (always update from ESP32 - source of truth)
+                if reboot_count is not None:
+                    update_expr_parts.append('reboot_count = :reboot')
+                    expr_attr_values[':reboot'] = reboot_count
+
+                # clean_restarts and unexpected_restarts - PROTECTED counters
+                # Allow update if:
+                # 1. Value increased (normal operation)
+                # 2. Admin manual reset (new value < 20 and is a decrease)
+                if clean_restarts is not None:
+                    current_clean = current_item.get('clean_restarts', 0)
+                    is_admin_reset = clean_restarts < 20 and current_clean > clean_restarts
+                    if clean_restarts >= current_clean or is_admin_reset:
+                        update_expr_parts.append('clean_restarts = :clean')
+                        expr_attr_values[':clean'] = clean_restarts
+                        if clean_restarts < current_clean:
+                            print(f"Admin counter reset - clean_restarts: {current_clean} -> {clean_restarts} for {device_id}")
+                    else:
+                        print(f"WARN: Ignoring clean_restarts decrease {current_clean} -> {clean_restarts} for {device_id}")
+
+                if unexpected_restarts is not None:
+                    current_unexpected = current_item.get('unexpected_restarts', 0)
+                    is_admin_reset = unexpected_restarts < 20 and current_unexpected > unexpected_restarts
+                    if unexpected_restarts >= current_unexpected or is_admin_reset:
+                        update_expr_parts.append('unexpected_restarts = :unexpected')
+                        expr_attr_values[':unexpected'] = unexpected_restarts
+                        if unexpected_restarts < current_unexpected:
+                            print(f"Admin counter reset - unexpected_restarts: {current_unexpected} -> {unexpected_restarts} for {device_id}")
+                    else:
+                        print(f"WARN: Ignoring unexpected_restarts decrease {current_unexpected} -> {unexpected_restarts} for {device_id}")
+
+                # OTA stats - also protected (only increase)
+                if ota_count is not None:
+                    current_item = scan_response['Items'][0]
+                    current_ota = current_item.get('ota_count', 0)
+                    if ota_count >= current_ota:
+                        update_expr_parts.append('ota_count = :ota_count')
+                        expr_attr_values[':ota_count'] = ota_count
+                    else:
+                        print(f"WARN: Ignoring ota_count decrease {current_ota} -> {ota_count} for {device_id}")
+                if ota_last_timestamp is not None:
+                    update_expr_parts.append('ota_last_timestamp = :ota_ts')
+                    expr_attr_values[':ota_ts'] = ota_last_timestamp
+
+                # Boot info - always update (useful for debugging battery/crash issues)
+                if boot_type:
+                    update_expr_parts.append('boot_type = :boot_type')
+                    expr_attr_values[':boot_type'] = boot_type
+                if reset_reason:
+                    update_expr_parts.append('reset_reason = :reset_reason')
+                    expr_attr_values[':reset_reason'] = reset_reason
+
+                update_kwargs = {
+                    'Key': {'user_id': user_id, 'device_id': device_id},
+                    'UpdateExpression': 'SET ' + ', '.join(update_expr_parts),
+                    'ExpressionAttributeValues': expr_attr_values
+                }
+                if expr_attr_names:
+                    update_kwargs['ExpressionAttributeNames'] = expr_attr_names
+
+                devices_table.update_item(**update_kwargs)
+                print(f"Updated device stats for {device_id}: fw={firmware_version}, clean={clean_restarts}, unexpected={unexpected_restarts}, ota={ota_count}, boot={boot_type}")
+            else:
+                print(f"Device {device_id} not found in devices table")
+        except Exception as e:
+            print(f"Error updating device info: {e}")
+            # Don't fail the whole Lambda - telemetry is already saved
 
     # If pump event, update devices table (last_watering, speed, calibration)
     if data_type == 'pump':
@@ -231,38 +271,17 @@ def lambda_handler(event, context):
                         expr_values[':dur'] = int(duration_sec)
                         expr_values[':zero2'] = 0
 
-                # Admin reset: reset stats by group
-                # group='restarts' → only restart counters
-                # group='pump' → only pump stats
-                # group='all' or no group → all stats (backward compat)
+                # Admin reset: reset all pump stats and restart counters to 0
                 elif action == 'admin_reset':
-                    group = data.get('group', 'all')
-
-                    if group == 'restarts':
-                        update_expr_parts = [
-                            'reboot_count = :zero',
-                            'clean_restarts = :zero',
-                            'unexpected_restarts = :zero'
-                        ]
-                        print(f"ADMIN RESET for {device_id}: resetting restart counters only")
-                    elif group == 'pump':
-                        update_expr_parts = [
-                            'total_water_ml = :zero',
-                            'pump_runtime_sec = :zero'
-                        ]
-                        print(f"ADMIN RESET for {device_id}: resetting pump stats only")
-                    else:
-                        # 'all' or backward compatibility
-                        update_expr_parts = [
-                            'total_water_ml = :zero',
-                            'pump_runtime_sec = :zero',
-                            'reboot_count = :zero',
-                            'clean_restarts = :zero',
-                            'unexpected_restarts = :zero'
-                        ]
-                        print(f"ADMIN RESET for {device_id}: resetting ALL stats")
-
+                    update_expr_parts = [
+                        'total_water_ml = :zero',
+                        'pump_runtime_sec = :zero',
+                        'reboot_count = :zero',
+                        'clean_restarts = :zero',
+                        'unexpected_restarts = :zero'
+                    ]
                     expr_values = {':zero': 0}
+                    print(f"ADMIN RESET for {device_id}: resetting pump stats and restart counters")
 
                 # Update pump_speed if present
                 if pump_speed is not None:

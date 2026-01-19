@@ -725,25 +725,27 @@ function updateStats() {
 
 // Export CSV
 function exportCSV() {
-  let csv = 'timestamp,type,moisture_cap_pct,moisture_res_pct,adc_capacitive,adc_resistive,battery_percent,battery_voltage,charging,message\n';
+  let csv = 'timestamp,type,moisture_cap_pct,moisture_res_pct,adc_capacitive,adc_resistive,battery_percent,battery_voltage,charging,boot_type,reset_reason,message\n';
 
   // Add sensor data
   for (const d of sensorData) {
     const time = new Date(d.timestamp * 1000).toISOString();
-    csv += `${time},sensor,${d.moisture_percent || ''},${d.sensor2_percent || ''},${d.adc_raw || ''},${d.sensor2_adc || ''},,,,\n`;
+    csv += `${time},sensor,${d.moisture_percent || ''},${d.sensor2_percent || ''},${d.adc_raw || ''},${d.sensor2_adc || ''},,,,,,""\n`;
   }
 
   // Add battery data
   for (const d of batteryData) {
     const time = new Date(d.timestamp * 1000).toISOString();
-    csv += `${time},battery,,,,${d.percent || ''},${d.voltage || ''},${d.charging || ''},\n`;
+    csv += `${time},battery,,,,,${d.percent || ''},${d.voltage || ''},${d.charging || ''},,,\n`;
   }
 
-  // Add activity
+  // Add activity (includes boot events with boot_type and reset_reason)
   for (const a of activityData) {
     const time = new Date(a.timestamp * 1000).toISOString();
     const msg = (a.message || '').replace(/,/g, ';').replace(/\n/g, ' ');
-    csv += `${time},${a.type},,,,,,,,${msg}\n`;
+    const bootType = a.boot_type || '';
+    const resetReason = a.reset_reason || '';
+    csv += `${time},${a.type},,,,,,,,${bootType},${resetReason},"${msg}"\n`;
   }
 
   // Download

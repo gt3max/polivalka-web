@@ -103,7 +103,14 @@ def get_user_from_event(event):
     if not payload or payload.get('type') != 'access':
         return None
 
-    return payload.get('email')
+    email = payload.get('email')
+
+    # Admin email maps to 'admin' user_id (consistent with auto-registration)
+    ADMIN_EMAILS = ['mrmaximshurigin@gmail.com']
+    if email in ADMIN_EMAILS:
+        return 'admin'
+
+    return email
 
 
 # ============ End JWT ============
@@ -188,145 +195,6 @@ PLANTNET_API_KEY = os.environ.get('PLANTNET_API_KEY', '')
 PERENUAL_API_KEY = os.environ.get('PERENUAL_API_KEY', '')
 PLANTNET_URL = 'https://my-api.plantnet.org/v2/identify/all'
 PERENUAL_URL = 'https://perenual.com/api/species-list'
-PERENUAL_DETAILS_URL = 'https://perenual.com/api/species/details'
-
-
-def get_perenual_details(scientific_name):
-    """
-    Get detailed plant data from Perenual API by scientific name.
-    Returns toxicity, hardiness, size, care level, propagation, etc.
-    """
-    if not PERENUAL_API_KEY:
-        return None
-
-    try:
-        # Search by scientific name
-        search_params = urllib.parse.urlencode({
-            'key': PERENUAL_API_KEY,
-            'q': scientific_name
-        })
-        search_url = f'{PERENUAL_URL}?{search_params}'
-
-        req = urllib.request.Request(search_url, headers={'Accept': 'application/json'})
-        with urllib.request.urlopen(req, timeout=10) as response:
-            search_data = json.loads(response.read().decode('utf-8'))
-
-        # Get first matching result
-        plants = search_data.get('data', [])
-        if not plants:
-            return None
-
-        plant_id = plants[0].get('id')
-        if not plant_id:
-            return None
-
-        # Get detailed info
-        details_url = f'{PERENUAL_DETAILS_URL}/{plant_id}?key={PERENUAL_API_KEY}'
-        req = urllib.request.Request(details_url, headers={'Accept': 'application/json'})
-        with urllib.request.urlopen(req, timeout=10) as response:
-            details = json.loads(response.read().decode('utf-8'))
-
-        # Extract relevant fields
-        return {
-            'poisonous_to_humans': details.get('poisonous_to_humans', None),
-            'poisonous_to_pets': details.get('poisonous_to_pets', None),
-            'hardiness': details.get('hardiness', {}),
-            'hardiness_min': details.get('hardiness', {}).get('min', ''),
-            'hardiness_max': details.get('hardiness', {}).get('max', ''),
-            'dimension': details.get('dimension', ''),
-            'growth_rate': details.get('growth_rate', ''),
-            'care_level': details.get('care_level', ''),
-            'maintenance': details.get('maintenance', ''),
-            'propagation': details.get('propagation', []),
-            'pruning_month': details.get('pruning_month', []),
-            'pest_susceptibility': details.get('pest_susceptibility', ''),
-            'flowering_season': details.get('flowering_season', ''),
-            'soil': details.get('soil', []),
-            'drought_tolerant': details.get('drought_tolerant', False),
-            'indoor': details.get('indoor', False),
-            'cycle': details.get('cycle', ''),
-            'edible_fruit': details.get('edible_fruit', False),
-            'medicinal': details.get('medicinal', False),
-            'invasive': details.get('invasive', False),
-            'rare': details.get('rare', False)
-        }
-    except Exception as e:
-        print(f"[Perenual] Error getting details for {scientific_name}: {e}")
-        return None
-
-
-# ============ Global Plant Cache (shared knowledge base) ============
-
-def normalize_scientific_name(name):
-    """Normalize scientific name for cache key."""
-    return name.lower().strip().replace(' ', '_')
-
-
-def deterministic_hash(s):
-    """Deterministic hash that's consistent across Lambda invocations."""
-    return int(hashlib.md5(s.encode()).hexdigest()[:10], 16)
-
-
-def get_cached_plant(scientific_name):
-    """
-    Get plant data from global cache.
-    PK: "plantcache", SK: deterministic hash of scientific name
-    """
-    try:
-        cache_key = normalize_scientific_name(scientific_name)
-        response = telemetry_table.get_item(
-            Key={'device_id': 'plantcache', 'timestamp': deterministic_hash(cache_key)}
-        )
-        item = response.get('Item')
-        if item and item.get('scientific_key') == cache_key:
-            print(f"[Cache] HIT for {scientific_name}")
-            return item
-        return None
-    except Exception as e:
-        print(f"[Cache] Error getting {scientific_name}: {e}")
-        return None
-
-
-def save_to_plant_cache(scientific_name, plant_data):
-    """
-    Save plant data to global cache for future use.
-    """
-    try:
-        cache_key = normalize_scientific_name(scientific_name)
-        cache_record = {
-            'device_id': 'plantcache',  # Special PK for cache
-            'timestamp': deterministic_hash(cache_key),  # Deterministic SK from name
-            'scientific_key': cache_key,
-            'scientific': scientific_name,
-            'updated_at': int(time.time()),
-            **plant_data
-        }
-        # Remove None values
-        cache_record = {k: v for k, v in cache_record.items() if v is not None}
-        telemetry_table.put_item(Item=cache_record)
-        print(f"[Cache] Saved {scientific_name}")
-        return True
-    except Exception as e:
-        print(f"[Cache] Error saving {scientific_name}: {e}")
-        return False
-
-
-def merge_plant_data(cached, new_data):
-    """
-    Merge cached data with new data. New data fills gaps, doesn't overwrite existing.
-    """
-    if not cached:
-        return new_data
-    if not new_data:
-        return cached
-
-    merged = dict(cached)
-    for key, value in new_data.items():
-        # Only fill if cached value is empty/None
-        if key not in merged or merged.get(key) in [None, '', [], {}]:
-            merged[key] = value
-
-    return merged
 
 
 def identify_plant_handler(event, origin):
@@ -416,65 +284,19 @@ def identify_plant_handler(event, origin):
 
         # Transform PlantNet response to our format
         results = []
-        plantnet_results = plantnet_data.get('results', [])[:5]  # Top 5 results
-
-        for idx, r in enumerate(plantnet_results):
+        for r in plantnet_data.get('results', [])[:5]:  # Top 5 results
             species = r.get('species', {})
             family_info = species.get('family', {})
             genus_info = species.get('genus', {})
-            scientific_name = species.get('scientificNameWithoutAuthor', '')
 
             # Get preset based on family
             family_name = family_info.get('scientificNameWithoutAuthor', '')
             preset_key = FAMILY_PRESETS.get(family_name, 'standard')
             preset = PRESET_DETAILS.get(preset_key, PRESET_DETAILS['standard'])
 
-            # === SMART CACHE: Check our database first, then external APIs ===
-            cached_data = None
-            perenual_data = None
-            final_details = None
-
-            if idx < 2 and scientific_name:  # Only for top 2 results
-                # Step 1: Check our cache
-                cached_data = get_cached_plant(scientific_name)
-
-                # Step 2: If no cache or missing critical fields, try Perenual
-                needs_perenual = not cached_data or cached_data.get('poisonous_to_pets') is None
-
-                if needs_perenual:
-                    perenual_data = get_perenual_details(scientific_name)
-                    if perenual_data:
-                        print(f"[Perenual] Got NEW details for {scientific_name}")
-
-                # Step 3: Merge data (cached + new from Perenual)
-                if cached_data or perenual_data:
-                    final_details = merge_plant_data(cached_data, perenual_data or {})
-
-                # Step 3.5: Family-based toxicity fallback (ASPCA data)
-                # If no toxicity info from Perenual, use family data
-                if family_name and (not final_details or final_details.get('poisonous_to_pets') is None):
-                    family_toxicity = TOXIC_FAMILIES.get(family_name)
-                    if family_toxicity:
-                        if not final_details:
-                            final_details = {}
-                        final_details['poisonous_to_pets'] = family_toxicity['pets']
-                        final_details['poisonous_to_humans'] = family_toxicity['humans']
-                        final_details['toxicity_source'] = 'family'
-                        final_details['toxicity_note'] = family_toxicity['note']
-                        print(f"[Toxicity] Using family fallback for {scientific_name} ({family_name})")
-
-                # Step 4: Save to cache if we have data
-                if final_details and (perenual_data or family_name in TOXIC_FAMILIES):
-                    save_to_plant_cache(scientific_name, {
-                        'common_name': species.get('commonNames', [''])[0],
-                        'family': family_name,
-                        **final_details
-                    })
-
-            # Build result object
-            result = {
-                'id': scientific_name.lower().replace(' ', '_'),
-                'scientific': scientific_name,
+            results.append({
+                'id': species.get('scientificNameWithoutAuthor', '').lower().replace(' ', '_'),
+                'scientific': species.get('scientificNameWithoutAuthor', ''),
                 'commonNames': species.get('commonNames', [])[:3],
                 'family': family_name,
                 'genus': genus_info.get('scientificNameWithoutAuthor', ''),
@@ -490,43 +312,7 @@ def identify_plant_handler(event, origin):
                     'humidity': preset['humidity'],
                     'tips': preset['tips']
                 }
-            }
-
-            # Enrich with details (from cache or Perenual)
-            if final_details:
-                result['details'] = {
-                    # Safety info (CRITICAL)
-                    'poisonous_to_humans': final_details.get('poisonous_to_humans'),
-                    'poisonous_to_pets': final_details.get('poisonous_to_pets'),
-                    'toxicity_source': final_details.get('toxicity_source'),
-                    'toxicity_note': final_details.get('toxicity_note'),
-                    # Size & Growth
-                    'dimension': final_details.get('dimension', ''),
-                    'growth_rate': final_details.get('growth_rate', ''),
-                    'cycle': final_details.get('cycle', ''),
-                    # Care info
-                    'care_level': final_details.get('care_level', ''),
-                    'maintenance': final_details.get('maintenance', ''),
-                    'indoor': final_details.get('indoor', False),
-                    'drought_tolerant': final_details.get('drought_tolerant', False),
-                    # Hardiness
-                    'hardiness_min': final_details.get('hardiness_min', ''),
-                    'hardiness_max': final_details.get('hardiness_max', ''),
-                    # Propagation & Maintenance
-                    'propagation': final_details.get('propagation', []),
-                    'pruning_month': final_details.get('pruning_month', []),
-                    'soil': final_details.get('soil', []),
-                    # Other
-                    'pest_susceptibility': final_details.get('pest_susceptibility', ''),
-                    'flowering_season': final_details.get('flowering_season', ''),
-                    'edible_fruit': final_details.get('edible_fruit', False),
-                    'medicinal': final_details.get('medicinal', False),
-                    'invasive': final_details.get('invasive', False),
-                    'rare': final_details.get('rare', False)
-                }
-                result['cache_source'] = 'cache' if cached_data else 'perenual'
-
-            results.append(result)
+            })
 
         return {
             'statusCode': 200,
@@ -548,372 +334,6 @@ def identify_plant_handler(event, origin):
         }
     except Exception as e:
         print(f"Plant identification error: {e}")
-        return {
-            'statusCode': 500,
-            'headers': cors_headers(origin),
-            'body': json.dumps({'error': str(e)})
-        }
-
-
-# ============ Plant Card CRUD (DynamoDB storage) ============
-
-MAX_PLANTS_PER_DEVICE = 20  # Reasonable limit for houseplants
-MAX_SAVES_PER_HOUR = 10     # Rate limit: prevent garden walk spam
-
-def save_plant_handler(event, origin):
-    """
-    POST /plants/save
-    Save a plant card to DynamoDB.
-    ONE plant per device - new plant REPLACES the old one.
-    """
-    try:
-        body = json.loads(event.get('body', '{}'))
-        device_id = body.get('device_id')
-        plant_data = body.get('plant', {})
-
-        if not device_id or not plant_data:
-            return {
-                'statusCode': 400,
-                'headers': cors_headers(origin),
-                'body': json.dumps({'error': 'Missing device_id or plant data'})
-            }
-
-        scientific = plant_data.get('scientific', 'unknown')
-        plants_pk = f"plants#{device_id}"
-
-        # Get existing plants for this device
-        existing = telemetry_table.query(
-            KeyConditionExpression=Key('device_id').eq(plants_pk)
-        )
-        plants = existing.get('Items', [])
-
-        # Delete ALL existing plants (one device = one plant)
-        for p in plants:
-            try:
-                telemetry_table.delete_item(
-                    Key={'device_id': plants_pk, 'timestamp': p['timestamp']}
-                )
-                print(f"[Plants] Deleted old plant: {p.get('scientific')}")
-            except Exception as e:
-                print(f"[Plants] Failed to delete old plant: {e}")
-
-        # Rate limit check (max 10 saves per hour) - still useful
-        one_hour_ago = int(time.time()) - 3600
-        recent_saves = len([p for p in plants if p.get('timestamp', 0) > one_hour_ago])
-        if recent_saves >= MAX_SAVES_PER_HOUR:
-            return {
-                'statusCode': 429,
-                'headers': cors_headers(origin),
-                'body': json.dumps({
-                    'error': f'Rate limit: max {MAX_SAVES_PER_HOUR} saves per hour. Please wait.',
-                    'recent_saves': recent_saves,
-                    'limit': MAX_SAVES_PER_HOUR
-                })
-            }
-
-        # Generate plant_id (timestamp-based for SK compatibility)
-        timestamp = int(time.time())
-        plant_id = f"{scientific.lower().replace(' ', '_')}_{timestamp}"
-
-        # Build compact plant record (~500 bytes)
-        # PK: "plants#{device_id}", SK: timestamp (for query compatibility)
-        plant_record = {
-            'device_id': plants_pk,       # PK: "plants#Polivalka-BB00C1"
-            'timestamp': timestamp,        # SK: for DynamoDB sort key
-            'plant_id': plant_id,          # Human-readable ID
-            'real_device_id': device_id,   # Original device ID for lookups
-            'scientific': scientific,
-            'common_name': plant_data.get('common_name', ''),
-            'family': plant_data.get('family', ''),
-            'preset': plant_data.get('preset', 'standard'),
-            'start_pct': int(plant_data.get('start_pct', 35)),
-            'stop_pct': int(plant_data.get('stop_pct', 55)),
-            'poisonous_to_humans': plant_data.get('poisonous_to_humans'),
-            'poisonous_to_pets': plant_data.get('poisonous_to_pets'),
-            'hardiness_zone': plant_data.get('hardiness_zone', ''),
-            'dimension': plant_data.get('dimension', ''),
-            'care_level': plant_data.get('care_level', ''),
-            'indoor': plant_data.get('indoor'),
-            'image_url': plant_data.get('image_url', ''),  # External URL, not stored blob
-            'status': 'active',
-            'archived_at': None,
-            'deleted_at': None
-        }
-
-        # Remove None values to save space
-        plant_record = {k: v for k, v in plant_record.items() if v is not None}
-
-        # Save to telemetry table with plant# prefix in SK
-        telemetry_table.put_item(Item=plant_record)
-
-        # Also update global cache (so other users benefit from this data)
-        cache_data = {
-            'common_name': plant_data.get('common_name', ''),
-            'family': plant_data.get('family', ''),
-            'poisonous_to_humans': plant_data.get('poisonous_to_humans'),
-            'poisonous_to_pets': plant_data.get('poisonous_to_pets'),
-            'hardiness_zone': plant_data.get('hardiness_zone', ''),
-            'dimension': plant_data.get('dimension', ''),
-            'care_level': plant_data.get('care_level', ''),
-            'indoor': plant_data.get('indoor'),
-        }
-        # Only save to cache if we have meaningful data
-        if any(v for v in cache_data.values() if v not in [None, '', False]):
-            save_to_plant_cache(scientific, cache_data)
-
-        print(f"[Plants] Saved plant {plant_id} for device {device_id}")
-
-        return {
-            'statusCode': 200,
-            'headers': cors_headers(origin),
-            'body': json.dumps({
-                'success': True,
-                'plant_id': plant_id,
-                'message': 'Plant saved successfully'
-            })
-        }
-    except Exception as e:
-        print(f"[Plants] Save error: {e}")
-        return {
-            'statusCode': 500,
-            'headers': cors_headers(origin),
-            'body': json.dumps({'error': str(e)})
-        }
-
-
-def list_plants_handler(event, origin):
-    """
-    GET /plants/list?device_id=xxx
-    List all plants for a device (active + archived, not deleted).
-    """
-    try:
-        query_params = event.get('queryStringParameters', {}) or {}
-        device_id = query_params.get('device_id')
-        include_deleted = query_params.get('include_deleted', 'false') == 'true'
-
-        if not device_id:
-            return {
-                'statusCode': 400,
-                'headers': cors_headers(origin),
-                'body': json.dumps({'error': 'Missing device_id parameter'})
-            }
-
-        # Query plants for this device (PK: "plants#{device_id}")
-        plants_pk = f"plants#{device_id}"
-        response = telemetry_table.query(
-            KeyConditionExpression=Key('device_id').eq(plants_pk)
-        )
-
-        plants = response.get('Items', [])
-
-        # Filter out deleted unless admin requests them
-        if not include_deleted:
-            plants = [p for p in plants if p.get('status') != 'deleted']
-
-        # Sort by timestamp descending (newest first)
-        plants.sort(key=lambda x: x.get('timestamp', 0), reverse=True)
-
-        return {
-            'statusCode': 200,
-            'headers': cors_headers(origin),
-            'body': json.dumps({
-                'success': True,
-                'plants': plants,
-                'count': len(plants)
-            }, default=str)
-        }
-    except Exception as e:
-        print(f"[Plants] List error: {e}")
-        return {
-            'statusCode': 500,
-            'headers': cors_headers(origin),
-            'body': json.dumps({'error': str(e)})
-        }
-
-
-def archive_plant_handler(event, origin):
-    """
-    POST /plants/archive
-    Archive a plant (user can still see it, can restore).
-    Body: {device_id, timestamp} - timestamp is the plant's SK
-    """
-    try:
-        body = json.loads(event.get('body', '{}'))
-        device_id = body.get('device_id')
-        timestamp = body.get('timestamp')  # Use timestamp as SK
-
-        if not device_id or not timestamp:
-            return {
-                'statusCode': 400,
-                'headers': cors_headers(origin),
-                'body': json.dumps({'error': 'Missing device_id or timestamp'})
-            }
-
-        plants_pk = f"plants#{device_id}"
-
-        # Update status to archived
-        telemetry_table.update_item(
-            Key={'device_id': plants_pk, 'timestamp': int(timestamp)},
-            UpdateExpression='SET #status = :status, archived_at = :archived_at',
-            ExpressionAttributeNames={'#status': 'status'},
-            ExpressionAttributeValues={
-                ':status': 'archived',
-                ':archived_at': int(time.time())
-            }
-        )
-
-        print(f"[Plants] Archived plant (ts:{timestamp}) for device {device_id}")
-
-        return {
-            'statusCode': 200,
-            'headers': cors_headers(origin),
-            'body': json.dumps({'success': True, 'message': 'Plant archived'})
-        }
-    except Exception as e:
-        print(f"[Plants] Archive error: {e}")
-        return {
-            'statusCode': 500,
-            'headers': cors_headers(origin),
-            'body': json.dumps({'error': str(e)})
-        }
-
-
-def restore_plant_handler(event, origin):
-    """
-    POST /plants/restore
-    Restore a plant from archive or deleted state.
-    Body: {device_id, timestamp}
-    """
-    try:
-        body = json.loads(event.get('body', '{}'))
-        device_id = body.get('device_id')
-        timestamp = body.get('timestamp')
-
-        if not device_id or not timestamp:
-            return {
-                'statusCode': 400,
-                'headers': cors_headers(origin),
-                'body': json.dumps({'error': 'Missing device_id or timestamp'})
-            }
-
-        plants_pk = f"plants#{device_id}"
-
-        # Update status back to active, remove TTL
-        telemetry_table.update_item(
-            Key={'device_id': plants_pk, 'timestamp': int(timestamp)},
-            UpdateExpression='SET #status = :status REMOVE archived_at, deleted_at, #ttl',
-            ExpressionAttributeNames={'#status': 'status', '#ttl': 'ttl'},
-            ExpressionAttributeValues={':status': 'active'}
-        )
-
-        print(f"[Plants] Restored plant (ts:{timestamp}) for device {device_id}")
-
-        return {
-            'statusCode': 200,
-            'headers': cors_headers(origin),
-            'body': json.dumps({'success': True, 'message': 'Plant restored'})
-        }
-    except Exception as e:
-        print(f"[Plants] Restore error: {e}")
-        return {
-            'statusCode': 500,
-            'headers': cors_headers(origin),
-            'body': json.dumps({'error': str(e)})
-        }
-
-
-def delete_plant_handler(event, origin):
-    """
-    POST /plants/delete
-    Soft delete a plant (TTL = 30 days, then auto-purge).
-    Admin can still see it.
-    Body: {device_id, timestamp}
-    """
-    try:
-        body = json.loads(event.get('body', '{}'))
-        device_id = body.get('device_id')
-        timestamp = body.get('timestamp')
-
-        if not device_id or not timestamp:
-            return {
-                'statusCode': 400,
-                'headers': cors_headers(origin),
-                'body': json.dumps({'error': 'Missing device_id or timestamp'})
-            }
-
-        plants_pk = f"plants#{device_id}"
-
-        # Calculate TTL (30 days from now)
-        ttl_timestamp = int(time.time()) + (30 * 24 * 60 * 60)
-
-        # Update status to deleted with TTL
-        telemetry_table.update_item(
-            Key={'device_id': plants_pk, 'timestamp': int(timestamp)},
-            UpdateExpression='SET #status = :status, deleted_at = :deleted_at, #ttl = :ttl',
-            ExpressionAttributeNames={'#status': 'status', '#ttl': 'ttl'},
-            ExpressionAttributeValues={
-                ':status': 'deleted',
-                ':deleted_at': int(time.time()),
-                ':ttl': ttl_timestamp
-            }
-        )
-
-        print(f"[Plants] Soft-deleted plant (ts:{timestamp}) for device {device_id}, TTL: 30 days")
-
-        return {
-            'statusCode': 200,
-            'headers': cors_headers(origin),
-            'body': json.dumps({'success': True, 'message': 'Plant deleted (recoverable for 30 days)'})
-        }
-    except Exception as e:
-        print(f"[Plants] Delete error: {e}")
-        return {
-            'statusCode': 500,
-            'headers': cors_headers(origin),
-            'body': json.dumps({'error': str(e)})
-        }
-
-
-def get_plants_stats_handler(event, origin):
-    """
-    GET /plants/stats (admin only)
-    Get plant statistics for admin dashboard.
-    """
-    try:
-        # Scan all plant records (PK starts with "plants#")
-        response = telemetry_table.scan(
-            FilterExpression='begins_with(device_id, :prefix)',
-            ExpressionAttributeValues={':prefix': 'plants#'}
-        )
-
-        plants = response.get('Items', [])
-
-        # Calculate stats
-        stats = {
-            'total': len(plants),
-            'active': len([p for p in plants if p.get('status') == 'active']),
-            'archived': len([p for p in plants if p.get('status') == 'archived']),
-            'deleted': len([p for p in plants if p.get('status') == 'deleted']),
-            'by_device': {},
-            'estimated_size_kb': round(len(plants) * 0.5, 1),  # ~500 bytes per plant
-            'limit_per_device': MAX_PLANTS_PER_DEVICE
-        }
-
-        # Count by real device (extract from "plants#{device_id}")
-        for p in plants:
-            real_dev = p.get('real_device_id', p.get('device_id', 'unknown').replace('plants#', ''))
-            stats['by_device'][real_dev] = stats['by_device'].get(real_dev, 0) + 1
-
-        return {
-            'statusCode': 200,
-            'headers': cors_headers(origin),
-            'body': json.dumps({
-                'success': True,
-                'stats': stats
-            }, default=str)
-        }
-    except Exception as e:
-        print(f"[Plants] Stats error: {e}")
         return {
             'statusCode': 500,
             'headers': cors_headers(origin),
@@ -952,63 +372,6 @@ FAMILY_PRESETS = {
     'Pteridaceae': 'tropical',    # Ferns
     'Begoniaceae': 'standard',    # Begonias
     'Malvaceae': 'standard',      # Hibiscus
-}
-
-# Family-based toxicity fallback (ASPCA data)
-# Format: CAUSE → EFFECT → ACTION
-TOXIC_FAMILIES = {
-    'Araliaceae': {  # Schefflera, Ivy, Fatsia
-        'pets': True, 'humans': True,
-        'note': 'Sap on skin → rash. Pet eats leaf → vomiting. Wash hands after pruning'
-    },
-    'Araceae': {  # Philodendron, Pothos, Monstera, Dieffenbachia
-        'pets': True, 'humans': True,
-        'note': 'Chewing → mouth/throat swelling, drooling. Severe swelling → vet'
-    },
-    'Liliaceae': {  # Lilies
-        'pets': True, 'humans': False,
-        'note': '🚨 CATS: pollen/leaf contact → kidney failure in 24-72h. Any contact → vet immediately'
-    },
-    'Solanaceae': {  # Tomatoes, Peppers
-        'pets': True, 'humans': False,
-        'note': 'Ripe fruit = safe. Green leaves/stems → pet vomiting. Keep unripe away from pets'
-    },
-    'Amaryllidaceae': {  # Amaryllis, Daffodils
-        'pets': True, 'humans': True,
-        'note': 'Bulb most toxic. Pet chews bulb → vomiting, tremors. Keep bulbs buried or out of reach'
-    },
-    'Apocynaceae': {  # Oleander, Hoya
-        'pets': True, 'humans': True,
-        'note': 'Any part eaten → heart rhythm problems. Even small amount → vet'
-    },
-    'Crassulaceae': {  # Kalanchoe, Sedum
-        'pets': True, 'humans': False,
-        'note': 'Pet eats → vomiting, diarrhea. Humans safe to handle'
-    },
-    'Ericaceae': {  # Azalea, Rhododendron
-        'pets': True, 'humans': True,
-        'note': 'Any part eaten → vomiting, weakness, heart issues. Keep away from pets'
-    },
-    'Euphorbiaceae': {  # Poinsettia, Croton, Euphorbia
-        'pets': True, 'humans': True,
-        'note': 'Milky sap on skin → irritation. In eyes → rinse 15 min. Wear gloves when pruning'
-    },
-    'Cycadaceae': {  # Sago Palm
-        'pets': True, 'humans': True,
-        'note': '🚨 Seeds eaten → liver failure. Dogs love to chew them. Any ingestion → vet immediately'
-    },
-    'Ranunculaceae': {  # Hellebore, Buttercup
-        'pets': True, 'humans': True,
-        'note': 'Sap on skin → blisters. Eaten → mouth pain, vomiting. Wear gloves'
-    },
-    'Plantaginaceae': {  # Foxglove
-        'pets': True, 'humans': True,
-        'note': '🚨 Any amount eaten → heart rhythm problems. Keep away from children and pets'
-    },
-    'Asteraceae': {  # Chrysanthemum, Daisy
-        'pets': True, 'humans': False,
-        'note': 'Pet eats → skin irritation, vomiting. Humans safe'
-    },
 }
 
 PRESET_DETAILS = {
@@ -1233,11 +596,6 @@ def lambda_handler(event, context):
     if path == '/devices' and http_method == 'GET':
         return get_devices(user_id)
 
-    # POST /devices/claim - Claim a device (whitelist check done on client)
-    if path == '/devices/claim' and http_method == 'POST':
-        body = json.loads(event.get('body', '{}'))
-        return claim_device(user_id, body)
-
     # Parse device_id from path /device/{id}/*
     if path.startswith('/device/'):
         parts = path.split('/')
@@ -1270,33 +628,6 @@ def lambda_handler(event, context):
             # Moisture endpoint (alias for sensor - used by calibration.html)
             if len(parts) == 4 and parts[3] == 'moisture' and http_method == 'GET':
                 return get_sensor_realtime(device_id, user_id)
-
-            # Sensor 2 (Resistive) status - returns ADC and percent from latest telemetry
-            if len(parts) == 5 and parts[3] == 'sensor2' and parts[4] == 'status' and http_method == 'GET':
-                latest = get_latest_telemetry(device_id)
-                sensor_data = latest.get('sensor', {})
-                return {
-                    'statusCode': 200,
-                    'headers': cors_headers(),
-                    'body': json.dumps({
-                        'adc': int(sensor_data.get('sensor2_adc', 0) or 0),
-                        'percent': float(sensor_data.get('sensor2_percent', 0) or 0)
-                    })
-                }
-
-            # Sensor 2 (Resistive) settings - returns calibration values
-            if len(parts) == 5 and parts[3] == 'sensor2' and parts[4] == 'settings' and http_method == 'GET':
-                device_info = get_device_info(device_id, user_id)
-                sensor2_calib = device_info.get('sensor2_calibration', {})
-                return {
-                    'statusCode': 200,
-                    'headers': cors_headers(),
-                    'body': json.dumps({
-                        'dry': sensor2_calib.get('dry', 4095),
-                        'wet': sensor2_calib.get('wet', 1000),
-                        'calibrated': bool(sensor2_calib)  # True if any calibration exists
-                    })
-                }
 
             if len(parts) == 5 and parts[3] == 'sensor' and parts[4] == 'history':
                 return get_sensor_history(device_id, user_id)
@@ -1381,21 +712,17 @@ def lambda_handler(event, context):
             if len(parts) == 6 and parts[3] == 'sensor' and parts[4] == 'controller' and parts[5] == 'status':
                 # Get latest telemetry to determine controller state
                 latest = get_latest_telemetry(device_id)
+                mode = latest.get('system', {}).get('mode', 'manual')
                 # Get state from system telemetry (ESP32 now sends it)
-                system_data = latest.get('system', {})
-                state = system_data.get('state', 'DISABLED')
-                # Get warning from system telemetry
-                warning_active = system_data.get('warning_active', False)
-                warning_msg = system_data.get('warning_msg', '')
-                # Get sensor data for moisture display (field is moisture_percent in telemetry)
+                state = latest.get('system', {}).get('state', 'DISABLED')
+                # Get sensor data for moisture display
                 sensor_data = latest.get('sensor', {})
-                moisture_pct = sensor_data.get('moisture_percent', 0) or 0
+                moisture_pct = sensor_data.get('percent', 0) or 0
 
-                # arming_countdown: read from telemetry (v1.0.53+)
-                arming_countdown = system_data.get('sensor_arming_countdown', 0)
+                # arming_countdown: 60 when LAUNCH, 0 otherwise
+                # Frontend will show countdown locally
+                arming_countdown = 60 if state == 'LAUNCH' else 0
 
-                # Read runtime values from system telemetry (ESP32 v1.0.49+)
-                # These are now sent by ESP32, no extra DynamoDB reads needed
                 return {
                     'statusCode': 200,
                     'headers': cors_headers(),
@@ -1403,21 +730,18 @@ def lambda_handler(event, context):
                         'state': state,
                         'arming_countdown': arming_countdown,
                         'moisture_pct': moisture_pct,
-                        'daily_water_ml': system_data.get('daily_water_ml', 0),
-                        'daily_hard_limit_reached': system_data.get('daily_hard_limit_reached', False),
-                        'pulses_delivered': system_data.get('pulses_in_cycle', 0),
-                        'total_water_ml': system_data.get('cycle_water_ml', 0),
-                        'cooldown_remaining': system_data.get('cooldown_remaining_sec', 0),
-                        'warning_active': warning_active,
-                        'warning_msg': warning_msg,
+                        'daily_water_ml': 0,
+                        'daily_hard_limit_reached': False,
+                        'pulses_delivered': 0,
+                        'total_water_ml': 0,
+                        'cooldown_remaining': 0,
+                        'warning_active': False,
+                        'warning_msg': '',
                         'watering': state in ['PULSE', 'SETTLE', 'CHECK'],
-                        'start_threshold': system_data.get('start_pct', 35),
-                        'stop_threshold': system_data.get('stop_pct', 55),
-                        'pulse_duration': system_data.get('pulse_sec', 5),
-                        'retry_interval': system_data.get('wait_sec', 120),
-                        'max_water_day_ml': system_data.get('max_water_day_ml', 400),
-                        'cooldown_min': system_data.get('cooldown_min', 120),
-                        'preset_id': system_data.get('preset_id', 1),
+                        'start_threshold': 35,
+                        'stop_threshold': 55,
+                        'pulse_duration': 32,
+                        'retry_interval': 600,
                         'last_check': None,
                         'last_watering': None,
                         'timestamp': int(time.time())
@@ -1467,27 +791,30 @@ def lambda_handler(event, context):
             if len(parts) == 6 and parts[3] == 'timer' and parts[4] == 'controller' and parts[5] == 'status' and http_method == 'GET':
                 # Get latest telemetry to determine controller state
                 latest = get_latest_telemetry(device_id)
-                system_data = latest.get('system', {})
+                mode = latest.get('system', {}).get('mode', 'manual')
+                # Get state from system telemetry (ESP32 now sends it)
+                state = latest.get('system', {}).get('state', 'DISABLED')
 
-                # Use timer_state specifically for timer controller endpoint (v1.0.53+)
-                # Falls back to DISABLED if not yet available
-                timer_state = system_data.get('timer_state', 'DISABLED')
+                # arming_countdown_sec: 15 when LAUNCH, 0 otherwise (timer uses 15 sec)
+                arming_countdown_sec = 15 if state == 'LAUNCH' else 0
 
-                # Read timer controller values from system telemetry (ESP32 v1.0.53+)
-                # These are now sent by ESP32, no extra DynamoDB reads needed
                 return {
                     'statusCode': 200,
                     'headers': cors_headers(),
                     'body': json.dumps({
-                        'state': timer_state,
-                        'arming_countdown_sec': system_data.get('timer_arming_countdown', 0),
-                        'schedule_exists': system_data.get('timer_schedule_exists', False),
-                        'next_watering_sec': system_data.get('timer_next_watering_sec', 0),
-                        'next_watering_str': system_data.get('timer_next_watering_str', 'No schedules'),
+                        'state': state,
+                        'arming_countdown_sec': arming_countdown_sec,
+                        'schedule_exists': True,
+                        'next_watering_str': 'Not scheduled',
                         'current_duration_sec': 0,
-                        'daily_water_ml': system_data.get('timer_daily_water_ml', 0),
-                        'warning_active': system_data.get('timer_warning_active', False),
-                        'warning_msg': system_data.get('timer_warning_msg', ''),
+                        'daily_water_ml': 0,
+                        'warning_active': False,
+                        'warning_msg': '',
+                        'morning_enabled': True,
+                        'morning_time': '06:00',
+                        'evening_enabled': False,
+                        'evening_time': '20:00',
+                        'duration': 30,
                         'timestamp': int(time.time())
                     })
                 }
@@ -1738,38 +1065,6 @@ def lambda_handler(event, context):
     if path == '/plants/care' and http_method == 'GET':
         return get_plant_care_handler(event, origin)
 
-    # ============ Plant Card Storage Routes ============
-    # POST /plants/save - Save plant to profile
-    if path == '/plants/save' and http_method == 'POST':
-        return save_plant_handler(event, origin)
-
-    # GET /plants/list?device_id=xxx - List plants for device
-    if path == '/plants/list' and http_method == 'GET':
-        return list_plants_handler(event, origin)
-
-    # POST /plants/archive - Archive a plant
-    if path == '/plants/archive' and http_method == 'POST':
-        return archive_plant_handler(event, origin)
-
-    # POST /plants/restore - Restore archived/deleted plant
-    if path == '/plants/restore' and http_method == 'POST':
-        return restore_plant_handler(event, origin)
-
-    # POST /plants/delete - Soft delete plant (30 day TTL)
-    if path == '/plants/delete' and http_method == 'POST':
-        return delete_plant_handler(event, origin)
-
-    # GET /plants/stats - Admin: plant statistics
-    if path == '/plants/stats' and http_method == 'GET':
-        # Admin only
-        if user_id not in ADMIN_EMAILS:
-            return {
-                'statusCode': 403,
-                'headers': cors_headers(origin),
-                'body': json.dumps({'error': 'Admin access required'})
-            }
-        return get_plants_stats_handler(event, origin)
-
     # ============ Admin Device Management Routes (added 2025-12-06) ============
     # These endpoints are admin-only for device lifecycle management
 
@@ -1810,120 +1105,11 @@ def lambda_handler(event, context):
             device_id = path.split('/')[3]  # Already formatted as Polivalka-XXXXXX
             return admin_restore_deleted(device_id)
 
-        # GET /admin/users - List all registered users
-        if path == '/admin/users' and http_method == 'GET':
-            return admin_get_users()
-
-        # POST /admin/user/{email}/delete - Delete unverified user
-        if path.startswith('/admin/user/') and path.endswith('/delete') and http_method == 'POST':
-            # Extract email from path: /admin/user/test@example.com/delete
-            email = path.replace('/admin/user/', '').replace('/delete', '')
-            email = urllib.parse.unquote(email)  # Decode URL-encoded email
-            return admin_delete_user(email)
-
     return {
         'statusCode': 404,
         'headers': cors_headers(origin),
         'body': json.dumps({'error': 'Not found'})
     }
-
-
-def claim_device(user_id, body):
-    """POST /devices/claim - Claim a device for the user.
-    Whitelist check is done on client side. Lambda just assigns the device.
-    """
-    device_id = body.get('device_id', '').strip().upper()
-
-    if not device_id:
-        return {
-            'statusCode': 400,
-            'headers': cors_headers(),
-            'body': json.dumps({'error': 'device_id required'})
-        }
-
-    # Normalize to full format
-    if not device_id.startswith('Polivalka-'):
-        full_device_id = f'Polivalka-{device_id}'
-    else:
-        full_device_id = device_id
-
-    print(f"[Claim] User {user_id} claiming device {full_device_id}")
-
-    try:
-        # Check if device exists in telemetry (has ever connected)
-        # We check polivalka_telemetry for any record
-        telemetry_table = dynamodb.Table('polivalka_telemetry')
-        response = telemetry_table.query(
-            KeyConditionExpression=Key('device_id').eq(full_device_id),
-            Limit=1
-        )
-
-        if not response.get('Items'):
-            return {
-                'statusCode': 404,
-                'headers': cors_headers(),
-                'body': json.dumps({
-                    'success': False,
-                    'message': f'Device {device_id} not found. Make sure it has connected to cloud at least once.'
-                })
-            }
-
-        # Check if device already belongs to someone
-        existing = devices_table.query(
-            IndexName='device_id-index',
-            KeyConditionExpression=Key('device_id').eq(full_device_id)
-        )
-
-        if existing.get('Items'):
-            existing_owner = existing['Items'][0].get('user_id')
-            if existing_owner == user_id:
-                return {
-                    'statusCode': 200,
-                    'headers': cors_headers(),
-                    'body': json.dumps({
-                        'success': True,
-                        'message': 'Device already belongs to you.',
-                        'device_id': device_id
-                    })
-                }
-            else:
-                # Device belongs to someone else
-                return {
-                    'statusCode': 400,
-                    'headers': cors_headers(),
-                    'body': json.dumps({
-                        'success': False,
-                        'message': 'Device is already claimed by another user.'
-                    })
-                }
-
-        # Add device to user's account
-        devices_table.put_item(Item={
-            'user_id': user_id,
-            'device_id': full_device_id,
-            'claimed_at': datetime.utcnow().isoformat(),
-            'name': f'Plant {device_id[-4:]}'  # Default name
-        })
-
-        print(f"[Claim] Device {full_device_id} claimed by {user_id}")
-
-        return {
-            'statusCode': 200,
-            'headers': cors_headers(),
-            'body': json.dumps({
-                'success': True,
-                'message': 'Device claimed successfully!',
-                'device_id': device_id
-            })
-        }
-
-    except Exception as e:
-        print(f"[Claim] Error: {e}")
-        return {
-            'statusCode': 500,
-            'headers': cors_headers(),
-            'body': json.dumps({'error': str(e)})
-        }
 
 
 def get_devices(user_id):
@@ -1997,13 +1183,6 @@ def get_devices(user_id):
                 'air': int(sensor_calib.get('air', 2800)) if sensor_calib else 2800
             }
 
-            # Sensor 2 (Resistive) calibration
-            sensor2_calib = item.get('sensor2_calibration', {})
-            sensor2_calib_dict = {
-                'dry': int(sensor2_calib.get('dry', 4095)) if sensor2_calib else 4095,
-                'wet': int(sensor2_calib.get('wet', 1000)) if sensor2_calib else 1000
-            }
-
             device_data = {
                 'device_id': device_id,
                 'name': device_name,
@@ -2017,10 +1196,13 @@ def get_devices(user_id):
                 'mode': mode,
                 'controller_enabled': controller_enabled,  # True if state != DISABLED (from telemetry)
                 'state': latest.get('system', {}).get('state', 'UNKNOWN'),
-                'firmware_version': latest.get('system', {}).get('firmware_version', 'v1.0.0'),
-                'reboot_count': latest.get('system', {}).get('reboot_count'),
-                'clean_restarts': latest.get('system', {}).get('clean_restarts'),
-                'unexpected_restarts': latest.get('system', {}).get('unexpected_restarts'),
+                # firmware_version: prefer telemetry, fallback to devices table (skip "unknown" from both)
+                'firmware_version': (lambda fw_tel, fw_dev: fw_tel if fw_tel and fw_tel != 'unknown' else (fw_dev if fw_dev and fw_dev != 'unknown' else 'v1.0.0'))(latest.get('system', {}).get('firmware_version'), item.get('firmware_version')),
+                'reboot_count': item.get('reboot_count'),  # From devices table (persistent), not telemetry
+                'clean_restarts': item.get('clean_restarts'),
+                'unexpected_restarts': item.get('unexpected_restarts'),
+                'ota_count': item.get('ota_count'),
+                'ota_last_timestamp': item.get('ota_last_timestamp'),
                 'uptime': format_uptime(latest.get('system', {}).get('uptime_ms')),
                 'last_watering': item.get('last_watering_timestamp'),
                 'last_update': latest.get('last_update'),
@@ -2029,10 +1211,8 @@ def get_devices(user_id):
                 'pump_calibration': pump_calib_float,
                 'pump_speed': pump_speed_int,
                 'sensor_calibration': sensor_calib_dict,
-                'sensor2_calibration': sensor2_calib_dict,
-                # Pump stats (accumulated from telemetry)
-                'total_water_ml': item.get('total_water_ml'),
-                'pump_runtime_sec': item.get('pump_runtime_sec')
+                'total_water_ml': int(item.get('total_water_ml', 0)) if item.get('total_water_ml') else None,
+                'pump_runtime_sec': int(item.get('pump_runtime_sec', 0)) if item.get('pump_runtime_sec') else None
             }
 
             devices.append(device_data)
@@ -2056,10 +1236,12 @@ def get_devices(user_id):
                 'mode': 'manual',
                 'controller_enabled': False,
                 'state': 'UNKNOWN',
-                'firmware_version': 'v1.0.0',
+                'firmware_version': item.get('firmware_version') if item.get('firmware_version') not in [None, '', 'unknown'] else 'v1.0.0',
                 'reboot_count': None,
-                'clean_restarts': None,
-                'unexpected_restarts': None,
+                'clean_restarts': item.get('clean_restarts'),
+                'unexpected_restarts': item.get('unexpected_restarts'),
+                'ota_count': item.get('ota_count'),
+                'ota_last_timestamp': item.get('ota_last_timestamp'),
                 'uptime': None,
                 'last_watering': item.get('last_watering_timestamp'),
                 'last_update': None,
@@ -2067,8 +1249,7 @@ def get_devices(user_id):
                 'warnings': [],
                 'pump_calibration': 2.5,
                 'pump_speed': 100,
-                'sensor_calibration': {'water': 1200, 'dry_soil': 2400, 'air': 2800},
-                'sensor2_calibration': {'dry': 4095, 'wet': 1000}
+                'sensor_calibration': {'water': 1200, 'dry_soil': 2400, 'air': 2800}
             })
 
     print(f"[DEBUG] get_devices: Returning {len(devices)} devices")
@@ -2143,9 +1324,10 @@ def get_device_status(device_id, user_id):
     status = {
         'adc': sensor_data.get('adc_raw'),
         'percent': sensor_data.get('moisture_percent'),
-        # Sensor 2 (Resistive - J7) - include if present in telemetry
-        'sensor2_adc': sensor_data.get('sensor2_adc'),
-        'sensor2_percent': sensor_data.get('sensor2_percent'),
+        'percent_float': sensor_data.get('percent_float'),  # Decimal precision for sensor1
+        'sensor2_adc': sensor_data.get('sensor2_adc'),      # Resistive sensor J7 - ADC
+        'sensor2_percent': sensor_data.get('sensor2_percent'),  # Resistive sensor J7 - %
+        'sensor2_percent_float': sensor_data.get('sensor2_percent_float'),  # Decimal precision
         'calib': calib,
         'sensor_calibrated': sensor_calibrated,
         'system_state': {
@@ -2160,7 +1342,6 @@ def get_device_status(device_id, user_id):
         'pump_running': pump_running,
         'pump_elapsed_ms': pump_elapsed_ms,
         'pump_remaining_ms': pump_remaining_ms,
-        'firmware_version': latest.get('system', {}).get('firmware_version', 'v1.0.0'),
         'timestamp': latest.get('last_update'),
         'online': is_device_online(latest.get('last_update'))  # Add online status
     }
@@ -2184,49 +1365,67 @@ def send_device_command(device_id, user_id, body):
     command = body.get('command')
     params = body.get('params', {})
 
-    # Special handling for reset_stats command
-    # - group='pump' → reset DynamoDB directly (pump stats are NOT on ESP32)
-    # - group='restarts' → send MQTT command to ESP32 (counters ARE on ESP32)
-    if command == 'reset_stats':
-        group = params.get('group', 'all')
-
-        if group == 'pump':
-            # Reset pump stats directly in DynamoDB (no ESP32 involved)
-            try:
-                # Find user_id for this device
-                scan_response = devices_table.scan(
-                    FilterExpression='device_id = :device',
-                    ExpressionAttributeValues={':device': device_id}
-                )
-                if scan_response['Items']:
-                    owner_id = scan_response['Items'][0]['user_id']
-                    devices_table.update_item(
-                        Key={'user_id': owner_id, 'device_id': device_id},
-                        UpdateExpression='SET total_water_ml = :zero, pump_runtime_sec = :zero',
-                        ExpressionAttributeValues={':zero': 0}
-                    )
-                    print(f"[ADMIN] Reset pump stats for {device_id}")
-                    return {
-                        'statusCode': 200,
-                        'headers': cors_headers(),
-                        'body': json.dumps({'success': True, 'message': 'Pump stats reset to 0'})
-                    }
-                else:
-                    return {'statusCode': 404, 'headers': cors_headers(),
-                            'body': json.dumps({'error': 'Device not found'})}
-            except Exception as e:
-                print(f"[ERROR] Failed to reset pump stats: {e}")
-                return {'statusCode': 500, 'headers': cors_headers(),
-                        'body': json.dumps({'error': str(e)})}
-
-        elif group == 'restarts':
-            # Send MQTT command to ESP32 (counters are in ESP32 NVS)
-            command = 'admin_reset_counters'
-            params = {}  # ESP32 handles this without params
-
     if not command:
         return {'statusCode': 400, 'headers': cors_headers(),
                 'body': json.dumps({'error': 'Missing command'})}
+
+    # Special case: reset_stats is DynamoDB-only (no MQTT to ESP32)
+    if command == 'reset_stats':
+        group = params.get('group')
+        if not group:
+            return {'statusCode': 400, 'headers': cors_headers(),
+                    'body': json.dumps({'error': 'Missing group parameter'})}
+
+        try:
+            if group == 'pump':
+                # Reset pump stats in DynamoDB
+                devices_table.update_item(
+                    Key={'user_id': user_id, 'device_id': device_id},
+                    UpdateExpression='SET total_water_ml = :zero, pump_runtime_sec = :zero',
+                    ExpressionAttributeValues={':zero': 0}
+                )
+                return {'statusCode': 200, 'headers': cors_headers(),
+                        'body': json.dumps({'status': 'success', 'message': 'Pump stats reset to 0'})}
+
+            elif group == 'restarts':
+                # Reset ALL restart counters in DynamoDB (reboot_count + clean + unexpected)
+                devices_table.update_item(
+                    Key={'user_id': user_id, 'device_id': device_id},
+                    UpdateExpression='SET reboot_count = :zero, clean_restarts = :zero, unexpected_restarts = :zero',
+                    ExpressionAttributeValues={':zero': 0}
+                )
+
+                # CRITICAL: Also send MQTT command to ESP32 to reset NVS counters
+                # Without this, ESP32 will overwrite DynamoDB values on next telemetry publish
+                mac_address = device_id.replace('Polivalka-', '')
+                topic = f'Polivalka/{mac_address}/command'
+                mqtt_payload = {
+                    'command_id': str(uuid.uuid4()),
+                    'command': 'admin_reset_counters',
+                    'params': {}
+                }
+                try:
+                    iot_client.publish(
+                        topic=topic,
+                        qos=1,
+                        payload=json.dumps(mqtt_payload)
+                    )
+                    print(f"[INFO] Sent admin_reset_counters to {topic}")
+                except Exception as mqtt_err:
+                    print(f"[WARN] MQTT publish failed (device may be offline): {mqtt_err}")
+                    # Don't fail - DynamoDB is already reset, ESP32 will sync eventually
+
+                return {'statusCode': 200, 'headers': cors_headers(),
+                        'body': json.dumps({'status': 'success', 'message': 'All restart counters reset to 0 (ESP32 sync sent)'})}
+
+            else:
+                return {'statusCode': 400, 'headers': cors_headers(),
+                        'body': json.dumps({'error': f'Unknown group: {group}'})}
+
+        except Exception as e:
+            print(f"[ERROR] reset_stats failed: {e}")
+            return {'statusCode': 500, 'headers': cors_headers(),
+                    'body': json.dumps({'error': str(e)})}
 
     # Generate command ID
     command_id = str(uuid.uuid4())
@@ -2700,30 +1899,28 @@ def get_latest_telemetry(device_id):
     """Get latest sensor, battery, system data for device"""
 
     latest = {}
+    telem_device_id = get_telemetry_device_id(device_id)
 
-    # First, get the "latest" record (timestamp=0) which has aggregated data from telemetry
-    # Lambda saves sensor, battery, system to this record for quick access
+    # First, get the "latest" record (timestamp=0) which has last_update from command responses
+    # IMPORTANT: Use telem_device_id (Polivalka-XX) because iot_rule_response.py saves with full ID
     try:
         latest_record = telemetry_table.get_item(
-            Key={'device_id': device_id, 'timestamp': 0}
+            Key={'device_id': telem_device_id, 'timestamp': 0}
         )
         if 'Item' in latest_record:
             item = latest_record['Item']
-            # Use last_update from this record
+            # Use last_update from this record (updated by iot_rule_response.py)
             if 'last_update' in item:
                 latest['last_update'] = int(item['last_update'])
-            # Get all data types from latest record (sensor, battery, system)
-            # These are saved by iot_rule_telemetry.py Lambda
-            for data_type in ['sensor', 'battery', 'system']:
-                if data_type in item:
-                    latest[data_type] = dict(item[data_type])
+            # Also get sensor data if present (from get_status command response)
+            if 'sensor' in item:
+                latest['sensor'] = dict(item['sensor'])
     except Exception as e:
         print(f"Error getting latest record: {e}")
 
     # Query recent records (schema: device_id + timestamp)
     # Data types stored as top-level Maps: system, pump, sensor, battery
     cutoff = int(time.time()) - 86400  # Last 24 hours
-    telem_device_id = get_telemetry_device_id(device_id)
 
     response = telemetry_table.query(
         KeyConditionExpression=Key('device_id').eq(telem_device_id) &
@@ -2738,20 +1935,10 @@ def get_latest_telemetry(device_id):
 
         # Check each data type and keep the latest
         for data_type in ['sensor', 'battery', 'system', 'pump']:
-            if data_type in item:
+            if data_type in item and data_type not in latest:
                 data = dict(item[data_type])  # Copy to avoid mutation
                 data['timestamp'] = timestamp  # Add record timestamp to data
-
-                if data_type not in latest:
-                    # First time seeing this data type
-                    latest[data_type] = data
-                else:
-                    # Merge: add missing fields from telemetry to existing data
-                    # (e.g., sensor2 fields from telemetry when latest record doesn't have them)
-                    for key, value in data.items():
-                        if key not in latest[data_type] or latest[data_type][key] is None:
-                            latest[data_type][key] = value
-
+                latest[data_type] = data
                 # Update last_update if this record is newer
                 if 'last_update' not in latest or timestamp > latest['last_update']:
                     latest['last_update'] = timestamp
@@ -2954,7 +2141,7 @@ def generate_warnings(telemetry):
 
 # ============ Admin Device Management Handlers (added 2025-12-06) ============
 
-# AWS IoT control plane client for certificate management (NOT for publish!)
+# AWS IoT client for certificate management (different from iot-data for MQTT!)
 iot_mgmt_client = boto3.client('iot', region_name='eu-central-1')
 
 
@@ -3228,211 +2415,6 @@ def admin_get_deleted_devices():
         }
 
 
-def admin_get_users():
-    """Get list of registered users (admin only)"""
-    try:
-        # Access polivalka_users table
-        users_table = dynamodb.Table('polivalka_users')
-        response = users_table.scan()
-
-        users = []
-        for item in response.get('Items', []):
-            users.append({
-                'email': item.get('email', '?'),
-                'verified': item.get('verified', False),
-                'is_admin': item.get('is_admin', False),
-                'status': item.get('status', 'active'),  # active, suspended, banned
-                'devices': item.get('devices', []),
-                'created_at': item.get('created_at', ''),
-                'last_login': item.get('last_login', ''),
-                'banned_at': item.get('banned_at', ''),
-                'suspended_at': item.get('suspended_at', '')
-            })
-
-        # Sort by created_at descending (newest first)
-        users.sort(key=lambda x: x.get('created_at', ''), reverse=True)
-
-        return {
-            'statusCode': 200,
-            'headers': cors_headers(),
-            'body': json.dumps(users)
-        }
-    except Exception as e:
-        print(f"[Admin] Error getting users: {e}")
-        return {
-            'statusCode': 500,
-            'headers': cors_headers(),
-            'body': json.dumps({'error': str(e)})
-        }
-
-
-def admin_ban_user(email):
-    """Ban a user (admin only)"""
-    try:
-        users_table = dynamodb.Table('polivalka_users')
-
-        # Update user status to banned
-        response = users_table.update_item(
-            Key={'email': email},
-            UpdateExpression='SET #status = :status, banned_at = :banned_at',
-            ExpressionAttributeNames={'#status': 'status'},
-            ExpressionAttributeValues={
-                ':status': 'banned',
-                ':banned_at': datetime.utcnow().isoformat()
-            },
-            ReturnValues='ALL_NEW'
-        )
-
-        print(f"[Admin] User {email} banned")
-        return {
-            'statusCode': 200,
-            'headers': cors_headers(),
-            'body': json.dumps({'success': True, 'message': f'User {email} banned'})
-        }
-    except Exception as e:
-        print(f"[Admin] Error banning user: {e}")
-        return {
-            'statusCode': 500,
-            'headers': cors_headers(),
-            'body': json.dumps({'error': str(e)})
-        }
-
-
-def admin_unban_user(email):
-    """Unban a user (admin only)"""
-    try:
-        users_table = dynamodb.Table('polivalka_users')
-
-        # Update user status back to active
-        response = users_table.update_item(
-            Key={'email': email},
-            UpdateExpression='SET #status = :status, banned_at = :banned_at',
-            ExpressionAttributeNames={'#status': 'status'},
-            ExpressionAttributeValues={
-                ':status': 'active',
-                ':banned_at': ''
-            },
-            ReturnValues='ALL_NEW'
-        )
-
-        print(f"[Admin] User {email} unbanned")
-        return {
-            'statusCode': 200,
-            'headers': cors_headers(),
-            'body': json.dumps({'success': True, 'message': f'User {email} unbanned'})
-        }
-    except Exception as e:
-        print(f"[Admin] Error unbanning user: {e}")
-        return {
-            'statusCode': 500,
-            'headers': cors_headers(),
-            'body': json.dumps({'error': str(e)})
-        }
-
-
-def admin_delete_user(email):
-    """Delete unverified user (admin only)"""
-    try:
-        users_table = dynamodb.Table('polivalka_users')
-
-        # First check if user exists and is unverified
-        response = users_table.get_item(Key={'email': email})
-        user = response.get('Item')
-
-        if not user:
-            return {
-                'statusCode': 404,
-                'headers': cors_headers(),
-                'body': json.dumps({'error': 'User not found'})
-            }
-
-        if user.get('verified', False):
-            return {
-                'statusCode': 400,
-                'headers': cors_headers(),
-                'body': json.dumps({'error': 'Cannot delete verified user. Use ban instead.'})
-            }
-
-        # Delete unverified user
-        users_table.delete_item(Key={'email': email})
-
-        print(f"[Admin] Unverified user {email} deleted")
-        return {
-            'statusCode': 200,
-            'headers': cors_headers(),
-            'body': json.dumps({'success': True, 'message': f'User {email} deleted'})
-        }
-    except Exception as e:
-        print(f"[Admin] Error deleting user: {e}")
-        return {
-            'statusCode': 500,
-            'headers': cors_headers(),
-            'body': json.dumps({'error': str(e)})
-        }
-
-
-def admin_suspend_user(email):
-    """Suspend a user - limited access (admin only)"""
-    try:
-        users_table = dynamodb.Table('polivalka_users')
-
-        response = users_table.update_item(
-            Key={'email': email},
-            UpdateExpression='SET #status = :status, suspended_at = :suspended_at',
-            ExpressionAttributeNames={'#status': 'status'},
-            ExpressionAttributeValues={
-                ':status': 'suspended',
-                ':suspended_at': datetime.utcnow().isoformat()
-            },
-            ReturnValues='ALL_NEW'
-        )
-
-        print(f"[Admin] User {email} suspended")
-        return {
-            'statusCode': 200,
-            'headers': cors_headers(),
-            'body': json.dumps({'success': True, 'message': f'User {email} suspended'})
-        }
-    except Exception as e:
-        print(f"[Admin] Error suspending user: {e}")
-        return {
-            'statusCode': 500,
-            'headers': cors_headers(),
-            'body': json.dumps({'error': str(e)})
-        }
-
-
-def admin_reactivate_user(email):
-    """Reactivate a suspended user (admin only)"""
-    try:
-        users_table = dynamodb.Table('polivalka_users')
-
-        response = users_table.update_item(
-            Key={'email': email},
-            UpdateExpression='SET #status = :status, suspended_at = :suspended_at',
-            ExpressionAttributeNames={'#status': 'status'},
-            ExpressionAttributeValues={
-                ':status': 'active',
-                ':suspended_at': ''
-            },
-            ReturnValues='ALL_NEW'
-        )
-
-        print(f"[Admin] User {email} reactivated")
-        return {
-            'statusCode': 200,
-            'headers': cors_headers(),
-            'body': json.dumps({'success': True, 'message': f'User {email} reactivated'})
-        }
-    except Exception as e:
-        print(f"[Admin] Error reactivating user: {e}")
-        return {
-            'statusCode': 500,
-            'headers': cors_headers(),
-            'body': json.dumps({'error': str(e)})
-        }
-
-
 # SECURITY: Allowed origins for CORS (updated 2025-12-06)
 ALLOWED_ORIGINS = [
     'https://gt3max.github.io',
@@ -3624,10 +2606,16 @@ def get_ota_upload_url(device_id, user_id):
             ExpiresIn=600  # 10 minutes
         )
 
-        # Use simple S3 URL for download (bucket has public read policy for firmware)
-        # Presigned URL with IAM Role credentials includes Security-Token which makes URL 1300+ chars
-        # ESP32 cannot handle such long URLs - OTA fails!
-        download_url = f"https://{FIRMWARE_BUCKET}.s3.eu-central-1.amazonaws.com/{filename}"
+        # Generate presigned download URL (valid for 1 hour - enough for ESP32 to download)
+        # NOTE: Plain S3 URL doesn't work because bucket is private!
+        download_url = s3_client.generate_presigned_url(
+            'get_object',
+            Params={
+                'Bucket': FIRMWARE_BUCKET,
+                'Key': filename
+            },
+            ExpiresIn=3600  # 1 hour
+        )
 
         return {
             'statusCode': 200,
@@ -3735,74 +2723,42 @@ def get_device_activity(device_id, user_id):
         )
 
         for cmd in cmd_response.get('Items', []):
-            # Generate human-readable message for commands
-            command_name = cmd.get('command', '')
-            params = cmd.get('params', {})
-            status = cmd.get('status', 'pending')
-
-            # Format message based on command type
-            message = cmd.get('message', '')
-            if not message:
-                if command_name == 'calibrate_sensor':
-                    cal_type = params.get('type', '?')
-                    message = f"🎯 Capacitive calibration: {cal_type}"
-                elif command_name == 'sensor2_calibrate_dry':
-                    message = "🎯 Resistive calibration: dry (0%)"
-                elif command_name == 'sensor2_calibrate_wet':
-                    message = "🎯 Resistive calibration: wet (100%)"
-                elif command_name == 'reset_sensor_calibration':
-                    message = "🔄 Capacitive calibration reset"
-                elif command_name == 'reset_sensor2_calibration':
-                    message = "🔄 Resistive calibration reset"
-                elif command_name == 'set_sensor_preset':
-                    message = "⚙️ Capacitive preset updated"
-                elif command_name == 'set_sensor2_preset':
-                    message = "⚙️ Resistive preset updated"
-                elif command_name == 'set_pump_speed':
-                    speed = params.get('speed', '?')
-                    message = f"⚙️ Pump speed set to {speed}%"
-                elif command_name == 'pump_start':
-                    message = "💧 Pump started (manual)"
-                elif command_name == 'pump_stop':
-                    message = "🛑 Pump stopped"
-                elif command_name.startswith('sensor_controller_'):
-                    action = command_name.replace('sensor_controller_', '')
-                    message = f"🌱 Sensor mode: {action}"
-                elif command_name.startswith('timer_controller_'):
-                    action = command_name.replace('timer_controller_', '')
-                    message = f"⏰ Timer mode: {action}"
-                else:
-                    message = f"📡 {command_name}"
-
             activity_items.append({
                 'timestamp': cmd.get('created_at', 0),
                 'type': 'COMMAND',
-                'level': 'ERROR' if status == 'error' else 'INFO',
+                'level': 'ERROR' if cmd.get('status') == 'error' else 'INFO',
                 'component': 'AWS_IOT',
-                'command': command_name,
-                'status': status,
-                'message': message,
-                'params': params,
+                'command': cmd.get('command'),
+                'status': cmd.get('status', 'pending'),
+                'message': cmd.get('message', ''),
+                'params': cmd.get('params', {}),
                 'result': cmd.get('result', {})
             })
 
         # 2. Get telemetry (last 50 system events)
         # Query recent telemetry and filter for system events
-        cutoff = int(time.time()) - 604800  # Last 7 days
+        cutoff = int(time.time()) - 86400  # Last 24 hours
         telem_device_id = get_telemetry_device_id(device_id)
         telem_response = telemetry_table.query(
             KeyConditionExpression=Key('device_id').eq(telem_device_id) & Key('timestamp').gt(cutoff),
-            Limit=500,  # 7 days of data (~3 events/hour × 168 hours)
+            Limit=100,  # Get more to filter for system events
             ScanIndexForward=False  # Sort DESC
         )
 
         # Process all telemetry events (system, pump, sensor, battery)
         event_count = 0
         prev_firmware_version = None
+        # Track reboot info to detect ACTUAL reboots (not just heartbeats)
+        # When iterating DESC: prev = newer record, curr = older record
+        # When reboot_count changes, use prev values (from the NEW boot session)
+        prev_reboot_count = None
+        prev_boot_type = None
+        prev_reset_reason = None
+        prev_timestamp = None
 
         for telem in telem_response.get('Items', []):
             event_count += 1
-            if event_count > 500:  # Limit to 500 events (7 days)
+            if event_count > 100:  # Limit to 100 events total
                 break
 
             ts = int(telem.get('timestamp', 0))
@@ -3838,64 +2794,112 @@ def get_device_activity(device_id, user_id):
                 reset_reason = system_data.get('reset_reason')
                 reboot_count = system_data.get('reboot_count')
 
-                # Check for reboot events (only on FIRST system heartbeat after reboot)
-                if boot_type == 'OTA_BOOT':
-                    # OTA Update reboot
-                    activity_items.append({
-                        'timestamp': ts,
-                        'type': 'OTA',
-                        'level': 'INFO',
-                        'component': 'OTA_UPDATE',
-                        'message': f"🔄 OTA Update completed (reboot #{reboot_count})",
-                        'reset_reason': reset_reason
-                    })
-                    # Don't show normal heartbeat for boot events
-                    continue
+                # Check for reboot events - ONLY when reboot_count CHANGES
+                # (Iterating DESC: newest first, so we detect when count differs from previous)
+                # When detected, use PREV values (from newer record = actual boot info)
+                is_new_reboot = (reboot_count is not None and
+                                 prev_reboot_count is not None and
+                                 reboot_count != prev_reboot_count)
 
-                elif boot_type == 'CRASH_BOOT':
-                    # Watchdog/panic crash reboot
-                    activity_items.append({
-                        'timestamp': ts,
-                        'type': 'REBOOT',
-                        'level': 'WARNING',
-                        'component': 'SYSTEM',
-                        'message': f"⚠️ Device crashed: {reset_reason} reset (reboot #{reboot_count})",
-                        'reset_reason': reset_reason
-                    })
-                    # Don't show normal heartbeat for boot events
-                    continue
+                if is_new_reboot and prev_boot_type and prev_boot_type != 'UNKNOWN':
+                    # This is an ACTUAL reboot (reboot_count changed)
+                    # Use prev values (from the NEWER record = the actual boot)
+                    # prev_reboot_count is the NEW count, reboot_count is the OLD count
+                    use_boot_type = prev_boot_type
+                    use_reset_reason = prev_reset_reason
+                    use_reboot_count = prev_reboot_count
+                    use_timestamp = prev_timestamp if prev_timestamp else ts
 
-                elif boot_type == 'SYSTEM_BOOT' and reset_reason:
-                    # Normal reboot (power loss, manual restart, etc)
-                    if reset_reason == 'POWERON':
-                        msg = f"⚡ Power restored (reboot #{reboot_count})"
-                    elif reset_reason == 'SW_RESTART':
-                        msg = f"🔄 Manual restart (reboot #{reboot_count})"
-                    elif reset_reason == 'BROWNOUT':
-                        msg = f"⚠️ Low voltage restart (reboot #{reboot_count})"
-                    else:
-                        msg = f"🔄 Device rebooted: {reset_reason} (reboot #{reboot_count})"
+                    # Handle all ESP32 boot types
+                    if use_boot_type == 'OTA_BOOT':
+                        activity_items.append({
+                            'timestamp': use_timestamp,
+                            'type': 'OTA',
+                            'level': 'INFO',
+                            'component': 'OTA_UPDATE',
+                            'message': f"🔄 OTA Update completed (reboot #{use_reboot_count})",
+                            'reset_reason': use_reset_reason,
+                            'boot_type': use_boot_type
+                        })
 
-                    activity_items.append({
-                        'timestamp': ts,
-                        'type': 'REBOOT',
-                        'level': 'INFO',
-                        'component': 'SYSTEM',
-                        'message': msg,
-                        'reset_reason': reset_reason
-                    })
-                    # Don't show normal heartbeat for boot events
-                    continue
+                    elif use_boot_type == 'CRASH_BOOT':
+                        activity_items.append({
+                            'timestamp': use_timestamp,
+                            'type': 'REBOOT',
+                            'level': 'WARNING',
+                            'component': 'SYSTEM',
+                            'message': f"💀 Device crashed: {use_reset_reason} (reboot #{use_reboot_count})",
+                            'reset_reason': use_reset_reason,
+                            'boot_type': use_boot_type
+                        })
 
-                # Normal system heartbeat (mode change, etc) - SKIP if boot event was shown
-                activity_items.append({
-                    'timestamp': ts,
-                    'type': 'SYSTEM',
-                    'level': 'INFO',
-                    'component': 'SYSTEM',
-                    'mode': mode,
-                    'message': f"Mode: {mode}"
-                })
+                    elif use_boot_type == 'BROWNOUT_BOOT':
+                        activity_items.append({
+                            'timestamp': use_timestamp,
+                            'type': 'REBOOT',
+                            'level': 'WARNING',
+                            'component': 'BATTERY',
+                            'message': f"🔋 Low battery restart (reboot #{use_reboot_count})",
+                            'reset_reason': use_reset_reason,
+                            'boot_type': use_boot_type
+                        })
+
+                    elif use_boot_type == 'POWER_ON':
+                        activity_items.append({
+                            'timestamp': use_timestamp,
+                            'type': 'REBOOT',
+                            'level': 'INFO',
+                            'component': 'SYSTEM',
+                            'message': f"⚡ Power on (reboot #{use_reboot_count})",
+                            'reset_reason': use_reset_reason,
+                            'boot_type': use_boot_type
+                        })
+
+                    elif use_boot_type == 'REBOOT':
+                        activity_items.append({
+                            'timestamp': use_timestamp,
+                            'type': 'REBOOT',
+                            'level': 'INFO',
+                            'component': 'SYSTEM',
+                            'message': f"🔄 Manual restart (reboot #{use_reboot_count})",
+                            'reset_reason': use_reset_reason,
+                            'boot_type': use_boot_type
+                        })
+
+                    elif use_boot_type == 'DEEPSLEEP':
+                        activity_items.append({
+                            'timestamp': use_timestamp,
+                            'type': 'REBOOT',
+                            'level': 'INFO',
+                            'component': 'SYSTEM',
+                            'message': f"😴 Wake from deep sleep (reboot #{use_reboot_count})",
+                            'reset_reason': use_reset_reason,
+                            'boot_type': use_boot_type
+                        })
+
+                    elif use_boot_type == 'SYSTEM_BOOT':
+                        # Fallback for rare reset reasons (SDIO, EXT, UNKNOWN)
+                        activity_items.append({
+                            'timestamp': use_timestamp,
+                            'type': 'REBOOT',
+                            'level': 'INFO',
+                            'component': 'SYSTEM',
+                            'message': f"🔧 System boot: {use_reset_reason} (reboot #{use_reboot_count})",
+                            'reset_reason': use_reset_reason,
+                            'boot_type': use_boot_type
+                        })
+
+                # Update prev values for next iteration
+                # Save boot_type only if it's meaningful (not UNKNOWN)
+                if reboot_count is not None:
+                    prev_reboot_count = reboot_count
+                if boot_type and boot_type != 'UNKNOWN':
+                    prev_boot_type = boot_type
+                    prev_reset_reason = reset_reason
+                    prev_timestamp = ts
+
+                # Skip normal system heartbeats (no mode change tracking needed)
+                # They just clutter the activity log
 
             # Parse pump events
             if 'pump' in telem:
