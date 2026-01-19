@@ -1107,6 +1107,9 @@ async function readSensor(deviceId) {
 }
 
 async function refreshSensor(deviceId) {
+  // Immediate feedback - show loading toast
+  showToast(`🔄 Refreshing ${deviceId}...`, 'info');
+
   try {
     // Use real-time sensor endpoint (sends MQTT command, waits for device response)
     const result = await API.get(`/device/${deviceId}/sensor`);
@@ -1137,12 +1140,15 @@ async function refreshSensor(deviceId) {
       updateStats(allDevices);
 
       // Show success feedback with updated values
-      showToast(`✅ Refreshed: ${result.moisture_pct}% | ${device.state}`, 'success');
+      showToast(`✅ ${deviceId}: ${result.moisture_pct}% | ${device.state}`, 'success');
     }
 
   } catch(e) {
-    // Show error toast (non-blocking)
-    showToast(`❌ Error: ${e.message}`, 'error');
+    // Show error toast with clear message
+    const errorMsg = e.message.includes('408') || e.message.includes('timeout')
+      ? `⏱️ ${deviceId} не отвечает (offline?)`
+      : `❌ ${deviceId}: ${e.message}`;
+    showToast(errorMsg, 'error');
   }
 }
 
