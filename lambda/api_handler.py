@@ -2530,8 +2530,12 @@ def check_whitelist_status(user_id, event, origin):
                 'body': json.dumps({'error': 'device_id required'})
             }
 
-        # Normalize device_id
-        device_id = device_id.upper().replace('POLIVALKA-', '')
+        # Ensure full device_id format: Polivalka-XXXXXX
+        device_id = device_id.upper()
+        if not device_id.startswith('POLIVALKA-'):
+            device_id = f'Polivalka-{device_id}'
+        else:
+            device_id = f'Polivalka-{device_id[10:]}'  # Normalize case
 
         # Check whitelist for user
         whitelist_table = dynamodb.Table('polivalka_admin_users')
@@ -2610,7 +2614,14 @@ def create_user_claim(user_id, event, origin):
     """POST /claims - Create new claim request"""
     try:
         body = json.loads(event.get('body', '{}'))
-        device_id = body.get('device_id', '').upper().replace('POLIVALKA-', '')
+        # Ensure full device_id format: Polivalka-XXXXXX
+        raw_device_id = body.get('device_id', '').upper()
+        if not raw_device_id:
+            device_id = ''
+        elif raw_device_id.startswith('POLIVALKA-'):
+            device_id = f'Polivalka-{raw_device_id[10:]}'  # Normalize case
+        else:
+            device_id = f'Polivalka-{raw_device_id}'
 
         if not device_id:
             return {
