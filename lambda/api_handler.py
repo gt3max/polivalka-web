@@ -1065,6 +1065,17 @@ def lambda_handler(event, context):
     if path == '/plants/care' and http_method == 'GET':
         return get_plant_care_handler(event, origin)
 
+    # ============ Whitelist Check & Claim Routes (Security Migration 2026-01-20) ============
+    # These are NOT admin-only - any authenticated user can check their whitelist status
+
+    # GET /whitelist/check?device_id=XXX - Check if user can claim device
+    if path == '/whitelist/check' and http_method == 'GET':
+        return check_whitelist_status(user_id, event, origin)
+
+    # POST /claims - Create new claim request (for non-whitelisted users)
+    if path == '/claims' and http_method == 'POST':
+        return create_user_claim(user_id, event, origin)
+
     # ============ Admin Device Management Routes (added 2025-12-06) ============
     # These endpoints are admin-only for device lifecycle management
 
@@ -1108,6 +1119,54 @@ def lambda_handler(event, context):
         # GET /admin/users - List all registered users
         if path == '/admin/users' and http_method == 'GET':
             return admin_get_users()
+
+        # ============ Whitelist Management (Security Migration - 2026-01-20) ============
+        # GET /admin/whitelist - List all whitelisted users
+        if path == '/admin/whitelist' and http_method == 'GET':
+            return admin_get_whitelist()
+
+        # POST /admin/whitelist - Add user to whitelist
+        if path == '/admin/whitelist' and http_method == 'POST':
+            return admin_add_whitelist(event)
+
+        # PUT /admin/whitelist/{email} - Update whitelist user
+        if path.startswith('/admin/whitelist/') and http_method == 'PUT':
+            email = urllib.parse.unquote(path.split('/admin/whitelist/')[1])
+            return admin_update_whitelist(email, event)
+
+        # DELETE /admin/whitelist/{email} - Remove from whitelist
+        if path.startswith('/admin/whitelist/') and http_method == 'DELETE':
+            email = urllib.parse.unquote(path.split('/admin/whitelist/')[1])
+            return admin_delete_whitelist(email)
+
+        # ============ Claims Management ============
+        # GET /admin/claims - List all pending claims
+        if path == '/admin/claims' and http_method == 'GET':
+            return admin_get_claims()
+
+        # POST /admin/claims - Create new claim
+        if path == '/admin/claims' and http_method == 'POST':
+            return admin_create_claim(event)
+
+        # PUT /admin/claims/{id} - Update claim (approve/reject)
+        if path.startswith('/admin/claims/') and http_method == 'PUT':
+            claim_id = path.split('/admin/claims/')[1]
+            return admin_update_claim(claim_id, event)
+
+        # DELETE /admin/claims/{id} - Delete claim
+        if path.startswith('/admin/claims/') and http_method == 'DELETE':
+            claim_id = path.split('/admin/claims/')[1]
+            return admin_delete_claim(claim_id)
+
+        # ============ Device History ============
+        # GET /admin/history/{device_id} - Get device history
+        if path.startswith('/admin/history/') and http_method == 'GET':
+            device_id = path.split('/admin/history/')[1]
+            return admin_get_history(device_id)
+
+        # POST /admin/history - Add history entry
+        if path == '/admin/history' and http_method == 'POST':
+            return admin_add_history(event)
 
     return {
         'statusCode': 404,
@@ -2447,6 +2506,565 @@ def admin_get_users():
         }
     except Exception as e:
         print(f"[Admin] Error getting users: {e}")
+        return {
+            'statusCode': 500,
+            'headers': cors_headers(),
+            'body': json.dumps({'error': str(e)})
+        }
+
+
+# ============ User Whitelist Check Functions (Security Migration - 2026-01-20) ============
+# These are NOT admin-only - any authenticated user can use them
+
+def check_whitelist_status(user_id, event, origin):
+    """GET /whitelist/check?device_id=XXX - Check if user can claim a device"""
+    try:
+        # Get device_id from query params
+        query_params = event.get('queryStringParameters') or {}
+        device_id = query_params.get('device_id', '')
+
+        if not device_id:
+            return {
+                'statusCode': 400,
+                'headers': cors_headers(origin),
+                'body': json.dumps({'error': 'device_id required'})
+            }
+
+        # Normalize device_id
+        device_id = device_id.upper().replace('POLIVALKA-', '')
+
+        # Check whitelist for user
+        whitelist_table = dynamodb.Table('polivalka_admin_users')
+        response = whitelist_table.get_item(Key={'email': user_id})
+
+        if 'Item' not in response:
+            # User not in whitelist
+            return {
+                'statusCode': 200,
+                'headers': cors_headers(origin),
+                'body': json.dumps({
+                    'allowed': False,
+                    'reason': 'not_whitelisted',
+                    'message': 'You are not in the whitelist. Submit a claim request.'
+                })
+            }
+
+        user_data = response['Item']
+        status = user_data.get('status', 'active')
+
+        if status == 'banned':
+            return {
+                'statusCode': 200,
+                'headers': cors_headers(origin),
+                'body': json.dumps({
+                    'allowed': False,
+                    'reason': 'banned',
+                    'message': 'Your account has been banned. Contact admin.'
+                })
+            }
+
+        if status == 'suspended':
+            return {
+                'statusCode': 200,
+                'headers': cors_headers(origin),
+                'body': json.dumps({
+                    'allowed': False,
+                    'reason': 'suspended',
+                    'message': 'Your account is suspended. Contact admin.'
+                })
+            }
+
+        # User is active - check if device is assigned
+        devices = user_data.get('devices', [])
+        if device_id in devices:
+            return {
+                'statusCode': 200,
+                'headers': cors_headers(origin),
+                'body': json.dumps({
+                    'allowed': True,
+                    'reason': 'whitelisted',
+                    'message': 'Device is assigned to you.'
+                })
+            }
+        else:
+            return {
+                'statusCode': 200,
+                'headers': cors_headers(origin),
+                'body': json.dumps({
+                    'allowed': False,
+                    'reason': 'device_not_assigned',
+                    'message': f'Device {device_id} is not assigned to you. Contact admin.'
+                })
+            }
+
+    except Exception as e:
+        print(f"[Whitelist] Error checking status: {e}")
+        return {
+            'statusCode': 500,
+            'headers': cors_headers(origin),
+            'body': json.dumps({'error': str(e)})
+        }
+
+
+def create_user_claim(user_id, event, origin):
+    """POST /claims - Create new claim request"""
+    try:
+        body = json.loads(event.get('body', '{}'))
+        device_id = body.get('device_id', '').upper().replace('POLIVALKA-', '')
+
+        if not device_id:
+            return {
+                'statusCode': 400,
+                'headers': cors_headers(origin),
+                'body': json.dumps({'error': 'device_id required'})
+            }
+
+        claims_table = dynamodb.Table('polivalka_admin_claims')
+
+        # Check if claim already exists
+        response = claims_table.scan(
+            FilterExpression='email = :email AND device_id = :device_id AND #s = :status',
+            ExpressionAttributeNames={'#s': 'status'},
+            ExpressionAttributeValues={
+                ':email': user_id,
+                ':device_id': device_id,
+                ':status': 'pending'
+            }
+        )
+
+        if response.get('Items'):
+            return {
+                'statusCode': 409,
+                'headers': cors_headers(origin),
+                'body': json.dumps({
+                    'success': False,
+                    'message': 'You already have a pending request for this device.'
+                })
+            }
+
+        # Create new claim
+        import datetime
+        claim_id = str(uuid.uuid4())
+
+        claims_table.put_item(Item={
+            'claim_id': claim_id,
+            'email': user_id,
+            'device_id': device_id,
+            'status': 'pending',
+            'created_at': datetime.datetime.now().isoformat()
+        })
+
+        return {
+            'statusCode': 201,
+            'headers': cors_headers(origin),
+            'body': json.dumps({
+                'success': True,
+                'claim_id': claim_id,
+                'message': 'Claim request submitted. Admin will review your request.'
+            })
+        }
+
+    except Exception as e:
+        print(f"[Claims] Error creating claim: {e}")
+        return {
+            'statusCode': 500,
+            'headers': cors_headers(origin),
+            'body': json.dumps({'error': str(e)})
+        }
+
+
+# ============ Whitelist Management Functions (Security Migration - 2026-01-20) ============
+# Data moved from public GitHub JSON files to private DynamoDB
+
+def admin_get_whitelist():
+    """GET /admin/whitelist - List all whitelisted users"""
+    try:
+        whitelist_table = dynamodb.Table('polivalka_admin_users')
+        response = whitelist_table.scan()
+
+        users = {}
+        for item in response.get('Items', []):
+            email = item.get('email')
+            users[email] = {
+                'status': item.get('status', 'active'),
+                'devices': item.get('devices', []),
+                'added_at': item.get('added_at', '')
+            }
+
+        return {
+            'statusCode': 200,
+            'headers': cors_headers(),
+            'body': json.dumps({'users': users})
+        }
+    except Exception as e:
+        print(f"[Admin] Error getting whitelist: {e}")
+        return {
+            'statusCode': 500,
+            'headers': cors_headers(),
+            'body': json.dumps({'error': str(e)})
+        }
+
+
+def admin_add_whitelist(event):
+    """POST /admin/whitelist - Add user to whitelist"""
+    try:
+        body = json.loads(event.get('body', '{}'))
+        email = body.get('email')
+
+        if not email:
+            return {
+                'statusCode': 400,
+                'headers': cors_headers(),
+                'body': json.dumps({'error': 'Email required'})
+            }
+
+        whitelist_table = dynamodb.Table('polivalka_admin_users')
+
+        # Check if already exists
+        existing = whitelist_table.get_item(Key={'email': email})
+        if 'Item' in existing:
+            return {
+                'statusCode': 409,
+                'headers': cors_headers(),
+                'body': json.dumps({'error': 'User already in whitelist'})
+            }
+
+        # Add new user
+        import datetime
+        whitelist_table.put_item(Item={
+            'email': email,
+            'status': body.get('status', 'active'),
+            'devices': body.get('devices', []),
+            'added_at': datetime.datetime.now().strftime('%Y-%m-%d')
+        })
+
+        return {
+            'statusCode': 201,
+            'headers': cors_headers(),
+            'body': json.dumps({'success': True, 'email': email})
+        }
+    except Exception as e:
+        print(f"[Admin] Error adding to whitelist: {e}")
+        return {
+            'statusCode': 500,
+            'headers': cors_headers(),
+            'body': json.dumps({'error': str(e)})
+        }
+
+
+def admin_update_whitelist(email, event):
+    """PUT /admin/whitelist/{email} - Update whitelist user"""
+    try:
+        body = json.loads(event.get('body', '{}'))
+
+        whitelist_table = dynamodb.Table('polivalka_admin_users')
+
+        # Check if exists
+        existing = whitelist_table.get_item(Key={'email': email})
+        if 'Item' not in existing:
+            return {
+                'statusCode': 404,
+                'headers': cors_headers(),
+                'body': json.dumps({'error': 'User not found in whitelist'})
+            }
+
+        # Update fields
+        update_expr = []
+        expr_values = {}
+
+        if 'status' in body:
+            update_expr.append('status = :status')
+            expr_values[':status'] = body['status']
+
+        if 'devices' in body:
+            update_expr.append('devices = :devices')
+            expr_values[':devices'] = body['devices']
+
+        if not update_expr:
+            return {
+                'statusCode': 400,
+                'headers': cors_headers(),
+                'body': json.dumps({'error': 'No fields to update'})
+            }
+
+        whitelist_table.update_item(
+            Key={'email': email},
+            UpdateExpression='SET ' + ', '.join(update_expr),
+            ExpressionAttributeValues=expr_values
+        )
+
+        return {
+            'statusCode': 200,
+            'headers': cors_headers(),
+            'body': json.dumps({'success': True, 'email': email})
+        }
+    except Exception as e:
+        print(f"[Admin] Error updating whitelist: {e}")
+        return {
+            'statusCode': 500,
+            'headers': cors_headers(),
+            'body': json.dumps({'error': str(e)})
+        }
+
+
+def admin_delete_whitelist(email):
+    """DELETE /admin/whitelist/{email} - Remove from whitelist"""
+    try:
+        whitelist_table = dynamodb.Table('polivalka_admin_users')
+
+        # Check if exists
+        existing = whitelist_table.get_item(Key={'email': email})
+        if 'Item' not in existing:
+            return {
+                'statusCode': 404,
+                'headers': cors_headers(),
+                'body': json.dumps({'error': 'User not found in whitelist'})
+            }
+
+        whitelist_table.delete_item(Key={'email': email})
+
+        return {
+            'statusCode': 200,
+            'headers': cors_headers(),
+            'body': json.dumps({'success': True, 'email': email})
+        }
+    except Exception as e:
+        print(f"[Admin] Error deleting from whitelist: {e}")
+        return {
+            'statusCode': 500,
+            'headers': cors_headers(),
+            'body': json.dumps({'error': str(e)})
+        }
+
+
+# ============ Claims Management Functions ============
+
+def admin_get_claims():
+    """GET /admin/claims - List all pending claims"""
+    try:
+        claims_table = dynamodb.Table('polivalka_admin_claims')
+        response = claims_table.scan()
+
+        claims = []
+        for item in response.get('Items', []):
+            claims.append({
+                'claim_id': item.get('claim_id'),
+                'email': item.get('email'),
+                'device_id': item.get('device_id'),
+                'status': item.get('status', 'pending'),
+                'created_at': item.get('created_at', '')
+            })
+
+        # Sort by created_at descending (newest first)
+        claims.sort(key=lambda x: x.get('created_at', ''), reverse=True)
+
+        return {
+            'statusCode': 200,
+            'headers': cors_headers(),
+            'body': json.dumps({'claims': claims})
+        }
+    except Exception as e:
+        print(f"[Admin] Error getting claims: {e}")
+        return {
+            'statusCode': 500,
+            'headers': cors_headers(),
+            'body': json.dumps({'error': str(e)})
+        }
+
+
+def admin_create_claim(event):
+    """POST /admin/claims - Create new claim"""
+    try:
+        body = json.loads(event.get('body', '{}'))
+        email = body.get('email')
+        device_id = body.get('device_id')
+
+        if not email or not device_id:
+            return {
+                'statusCode': 400,
+                'headers': cors_headers(),
+                'body': json.dumps({'error': 'Email and device_id required'})
+            }
+
+        claims_table = dynamodb.Table('polivalka_admin_claims')
+
+        import datetime
+        claim_id = str(uuid.uuid4())
+
+        claims_table.put_item(Item={
+            'claim_id': claim_id,
+            'email': email,
+            'device_id': device_id,
+            'status': 'pending',
+            'created_at': datetime.datetime.now().isoformat()
+        })
+
+        return {
+            'statusCode': 201,
+            'headers': cors_headers(),
+            'body': json.dumps({'success': True, 'claim_id': claim_id})
+        }
+    except Exception as e:
+        print(f"[Admin] Error creating claim: {e}")
+        return {
+            'statusCode': 500,
+            'headers': cors_headers(),
+            'body': json.dumps({'error': str(e)})
+        }
+
+
+def admin_update_claim(claim_id, event):
+    """PUT /admin/claims/{id} - Update claim (approve/reject)"""
+    try:
+        body = json.loads(event.get('body', '{}'))
+        new_status = body.get('status')
+
+        if new_status not in ['approved', 'rejected', 'pending']:
+            return {
+                'statusCode': 400,
+                'headers': cors_headers(),
+                'body': json.dumps({'error': 'Invalid status. Use: approved, rejected, pending'})
+            }
+
+        claims_table = dynamodb.Table('polivalka_admin_claims')
+
+        # Check if exists
+        existing = claims_table.get_item(Key={'claim_id': claim_id})
+        if 'Item' not in existing:
+            return {
+                'statusCode': 404,
+                'headers': cors_headers(),
+                'body': json.dumps({'error': 'Claim not found'})
+            }
+
+        claims_table.update_item(
+            Key={'claim_id': claim_id},
+            UpdateExpression='SET #s = :status',
+            ExpressionAttributeNames={'#s': 'status'},
+            ExpressionAttributeValues={':status': new_status}
+        )
+
+        return {
+            'statusCode': 200,
+            'headers': cors_headers(),
+            'body': json.dumps({'success': True, 'claim_id': claim_id, 'status': new_status})
+        }
+    except Exception as e:
+        print(f"[Admin] Error updating claim: {e}")
+        return {
+            'statusCode': 500,
+            'headers': cors_headers(),
+            'body': json.dumps({'error': str(e)})
+        }
+
+
+def admin_delete_claim(claim_id):
+    """DELETE /admin/claims/{id} - Delete claim"""
+    try:
+        claims_table = dynamodb.Table('polivalka_admin_claims')
+
+        # Check if exists
+        existing = claims_table.get_item(Key={'claim_id': claim_id})
+        if 'Item' not in existing:
+            return {
+                'statusCode': 404,
+                'headers': cors_headers(),
+                'body': json.dumps({'error': 'Claim not found'})
+            }
+
+        claims_table.delete_item(Key={'claim_id': claim_id})
+
+        return {
+            'statusCode': 200,
+            'headers': cors_headers(),
+            'body': json.dumps({'success': True, 'claim_id': claim_id})
+        }
+    except Exception as e:
+        print(f"[Admin] Error deleting claim: {e}")
+        return {
+            'statusCode': 500,
+            'headers': cors_headers(),
+            'body': json.dumps({'error': str(e)})
+        }
+
+
+# ============ Device History Functions ============
+
+def admin_get_history(device_id):
+    """GET /admin/history/{device_id} - Get device history"""
+    try:
+        # Normalize device_id (remove Polivalka- prefix if present)
+        device_id = device_id.upper().replace('POLIVALKA-', '')
+
+        history_table = dynamodb.Table('polivalka_admin_history')
+
+        # Query all events for this device
+        response = history_table.query(
+            KeyConditionExpression=Key('device_id').eq(device_id)
+        )
+
+        events = []
+        for item in response.get('Items', []):
+            events.append({
+                'timestamp': item.get('timestamp'),
+                'event': item.get('event'),
+                'user_email': item.get('user_email')
+            })
+
+        # Sort by timestamp ascending (oldest first)
+        events.sort(key=lambda x: x.get('timestamp', ''))
+
+        return {
+            'statusCode': 200,
+            'headers': cors_headers(),
+            'body': json.dumps({'device_id': device_id, 'events': events})
+        }
+    except Exception as e:
+        print(f"[Admin] Error getting history: {e}")
+        return {
+            'statusCode': 500,
+            'headers': cors_headers(),
+            'body': json.dumps({'error': str(e)})
+        }
+
+
+def admin_add_history(event):
+    """POST /admin/history - Add history entry"""
+    try:
+        body = json.loads(event.get('body', '{}'))
+        device_id = body.get('device_id', '').upper().replace('POLIVALKA-', '')
+        event_type = body.get('event')
+        user_email = body.get('user_email')
+
+        if not device_id or not event_type:
+            return {
+                'statusCode': 400,
+                'headers': cors_headers(),
+                'body': json.dumps({'error': 'device_id and event required'})
+            }
+
+        history_table = dynamodb.Table('polivalka_admin_history')
+
+        import datetime
+        timestamp = datetime.datetime.now().isoformat()
+
+        item = {
+            'device_id': device_id,
+            'timestamp': timestamp,
+            'event': event_type
+        }
+        if user_email:
+            item['user_email'] = user_email
+
+        history_table.put_item(Item=item)
+
+        return {
+            'statusCode': 201,
+            'headers': cors_headers(),
+            'body': json.dumps({'success': True, 'device_id': device_id, 'timestamp': timestamp})
+        }
+    except Exception as e:
+        print(f"[Admin] Error adding history: {e}")
         return {
             'statusCode': 500,
             'headers': cors_headers(),
