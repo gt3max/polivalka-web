@@ -622,9 +622,8 @@ async function loadDeviceHistoryUI(deviceId) {
   card.style.display = 'block';
   container.innerHTML = '<div class="muted">Loading...</div>';
 
-  await loadDeviceHistory();
-
-  const events = historyData?.devices?.[shortId] || [];
+  // Load history from Lambda API (not from old GitHub JSON)
+  const events = await loadDeviceHistoryFor(deviceId);
 
   if (events.length === 0) {
     container.innerHTML = '<div class="muted">No history for this device</div>';
@@ -640,15 +639,17 @@ async function loadDeviceHistoryUI(deviceId) {
     const dateStr = date.toLocaleDateString() + ' ' + date.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
     let icon = '📝';
     let text = e.event;
+    // Lambda returns user_email, old format used to/from/by
+    const email = e.user_email || e.to || e.from || e.by || 'unknown';
     if (e.event === 'assigned') {
       icon = '✅';
-      text = `Assigned to <span style="color:#4caf50">${e.to}</span>`;
+      text = `Assigned to <span style="color:#4caf50">${email}</span>`;
     } else if (e.event === 'unassigned') {
       icon = '❌';
-      text = `Unassigned from <span style="color:#ff9800">${e.from}</span>`;
+      text = `Unassigned from <span style="color:#ff9800">${email}</span>`;
     } else if (e.event === 'claimed') {
       icon = '🔗';
-      text = `Claimed by <span style="color:#4caf50">${e.by}</span>`;
+      text = `Claimed by <span style="color:#4caf50">${email}</span>`;
     } else if (e.event === 'provisioned') {
       icon = '🏭';
       text = 'Provisioned';
@@ -732,7 +733,8 @@ async function loadPendingClaimsUI() {
   }
 
   container.innerHTML = claims.map((c, idx) => {
-    const date = new Date(c.timestamp);
+    // Lambda returns created_at, old format used timestamp
+    const date = new Date(c.created_at || c.timestamp);
     const dateStr = date.toLocaleDateString() + ' ' + date.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
 
     return `
