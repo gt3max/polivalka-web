@@ -1105,6 +1105,10 @@ def lambda_handler(event, context):
             device_id = path.split('/')[3]  # Already formatted as Polivalka-XXXXXX
             return admin_restore_deleted(device_id)
 
+        # GET /admin/users - List all registered users
+        if path == '/admin/users' and http_method == 'GET':
+            return admin_get_users()
+
     return {
         'statusCode': 404,
         'headers': cors_headers(origin),
@@ -2408,6 +2412,41 @@ def admin_get_deleted_devices():
             'body': json.dumps(devices, cls=DecimalEncoder)
         }
     except Exception as e:
+        return {
+            'statusCode': 500,
+            'headers': cors_headers(),
+            'body': json.dumps({'error': str(e)})
+        }
+
+
+def admin_get_users():
+    """Get list of registered users (admin only)"""
+    try:
+        # Access polivalka_users table
+        users_table = dynamodb.Table('polivalka_users')
+        response = users_table.scan()
+
+        users = []
+        for item in response.get('Items', []):
+            users.append({
+                'email': item.get('email', '?'),
+                'verified': item.get('verified', False),
+                'is_admin': item.get('is_admin', False),
+                'devices': item.get('devices', []),
+                'created_at': item.get('created_at', ''),
+                'last_login': item.get('last_login', '')
+            })
+
+        # Sort by created_at descending (newest first)
+        users.sort(key=lambda x: x.get('created_at', ''), reverse=True)
+
+        return {
+            'statusCode': 200,
+            'headers': cors_headers(),
+            'body': json.dumps(users)
+        }
+    except Exception as e:
+        print(f"[Admin] Error getting users: {e}")
         return {
             'statusCode': 500,
             'headers': cors_headers(),
