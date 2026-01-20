@@ -402,8 +402,8 @@ async function loadDeviceHistory() {
 
 async function loadDeviceHistoryFor(deviceId) {
   try {
-    const shortId = deviceId.replace('Polivalka-', '');
-    const res = await fetch(`${API.cloudBase}/admin/history/${shortId}`, {
+    // Use full device_id format (Polivalka-BC67E9) - standardized everywhere
+    const res = await fetch(`${API.cloudBase}/admin/history/${deviceId}`, {
       headers: API.getAuthHeaders(),
       cache: 'no-store'
     });
@@ -418,12 +418,12 @@ async function loadDeviceHistoryFor(deviceId) {
 
 async function addDeviceHistoryEntry(deviceId, event) {
   try {
-    const shortId = deviceId.replace('Polivalka-', '');
+    // Use full device_id format (Polivalka-BC67E9) - standardized everywhere
     const res = await fetch(`${API.cloudBase}/admin/history`, {
       method: 'POST',
       headers: { ...API.getAuthHeaders(), 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        device_id: shortId,
+        device_id: deviceId,
         event: event.event,
         user_email: event.to || event.from || event.by
       })
@@ -1382,8 +1382,8 @@ function showAssignDeviceDialog(email) {
   });
 
   const availableDevices = allDevicesData.filter(d => {
-    const shortId = d.device_id.replace('Polivalka-', '');
-    return !assignedDevices.has(shortId);
+    // Compare using full device_id format (Polivalka-BC67E9)
+    return !assignedDevices.has(d.device_id);
   });
 
   if (availableDevices.length === 0) {
@@ -1401,7 +1401,8 @@ function showAssignDeviceDialog(email) {
   const options = availableDevices.map(d => {
     const shortId = d.device_id.replace('Polivalka-', '');
     const name = d.device_name && d.device_name !== d.device_id ? ` (${d.device_name})` : '';
-    return `<option value="${shortId}">${shortId}${name}</option>`;
+    // Value uses full format, display uses short
+    return `<option value="${d.device_id}">${shortId}${name}</option>`;
   }).join('');
 
   modal.innerHTML = `
@@ -1438,7 +1439,9 @@ async function confirmAssignDevice() {
 }
 
 async function assignDevice(email, deviceId) {
-  const shortId = deviceId.replace('Polivalka-', '');
+  // Use full device_id format: Polivalka-BC67E9 (standardized everywhere)
+  const fullId = deviceId.startsWith('Polivalka-') ? deviceId : `Polivalka-${deviceId}`;
+  const shortId = fullId.replace('Polivalka-', ''); // For display only
 
   // Ensure whitelist is loaded
   if (!whitelistData || !whitelistData.users) {
@@ -1448,13 +1451,13 @@ async function assignDevice(email, deviceId) {
   const existingUser = whitelistData.users?.[email];
   const devices = existingUser?.devices || [];
 
-  if (devices.includes(shortId)) {
+  if (devices.includes(fullId)) {
     alert('Device already assigned to this user');
     return;
   }
 
-  // Add device to user's list
-  devices.push(shortId);
+  // Add device to user's list (full format)
+  devices.push(fullId);
 
   let success;
   if (existingUser) {
@@ -1474,8 +1477,8 @@ async function assignDevice(email, deviceId) {
   }
 
   if (success) {
-    // Add to device history
-    await addDeviceHistoryEntry(shortId, {
+    // Add to device history (full format)
+    await addDeviceHistoryEntry(fullId, {
       event: 'assigned',
       to: email
     });
