@@ -2993,9 +2993,7 @@ def admin_delete_claim(claim_id):
 def admin_get_history(device_id):
     """GET /admin/history/{device_id} - Get device history"""
     try:
-        # Normalize device_id (remove Polivalka- prefix if present)
-        device_id = device_id.upper().replace('POLIVALKA-', '')
-
+        # device_id format: "Polivalka-BC67E9" (standardized everywhere)
         history_table = dynamodb.Table('polivalka_admin_history')
 
         # Query all events for this device
@@ -3032,7 +3030,8 @@ def admin_add_history(event):
     """POST /admin/history - Add history entry"""
     try:
         body = json.loads(event.get('body', '{}'))
-        device_id = body.get('device_id', '').upper().replace('POLIVALKA-', '')
+        # device_id format: "Polivalka-BC67E9" (standardized everywhere)
+        device_id = body.get('device_id', '')
         event_type = body.get('event')
         user_email = body.get('user_email')
 
