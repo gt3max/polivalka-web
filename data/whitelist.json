@@ -1,16 +1,0 @@
-{
-  "_comment": "Whitelist - Ð´Ð¾Ð²ÐµÑÐµÐ½Ð½ÑÐµ Ð¿Ð¾Ð»ÑÐ·Ð¾Ð²Ð°ÑÐµÐ»Ð¸ Ð¸ Ð¸Ñ ÑÑÑÑÐ¾Ð¹ÑÑÐ²Ð°. Ð£Ð¿ÑÐ°Ð²Ð»ÑÐµÑÑÑ ÑÐµÑÐµÐ· Admin Panel.",
-  "_updated": "2026-01-06",
-  "users": {
-    "mahin84@gmail.com": {
-      "status": "active",
-      "devices": [],
-      "added_at": "2025-12-07"
-    },
-    "tomeshkov@gmail.com": {
-      "status": "active",
-      "devices": [],
-      "added_at": "2026-01-06"
-    }
-  }
-}

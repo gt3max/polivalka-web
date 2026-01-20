@@ -314,181 +314,166 @@
 <script>
 let selectedDeviceId = null;
 
-// ============ GitHub API для работы с JSON файлами ============
-const GITHUB_REPO = 'gt3max/polivalka-web';
-const GITHUB_BRANCH = 'main';
+// ============ Lambda API для работы с данными (Security Migration 2026-01-20) ============
+// Данные теперь хранятся в DynamoDB, доступ через Lambda API с JWT авторизацией
 
-// Получить токен из localStorage или запросить
-function getGitHubToken() {
-  let token = localStorage.getItem('github_token');
-  if (!token) {
-    token = prompt('Enter GitHub Personal Access Token (for Admin Panel):');
-    if (token) {
-      localStorage.setItem('github_token', token);
-    }
-  }
-  return token;
-}
-
-// Прочитать JSON файл из GitHub
-async function readGitHubFile(path) {
-  try {
-    const res = await fetch(`https://api.github.com/repos/${GITHUB_REPO}/contents/${path}?ref=${GITHUB_BRANCH}`, {
-      headers: { 'Accept': 'application/vnd.github.v3+json' },
-      cache: 'no-store'
-    });
-    if (!res.ok) {
-      if (res.status === 404) return null;
-      throw new Error(`GitHub API error: ${res.status}`);
-    }
-    const data = await res.json();
-    const content = atob(data.content);
-    return { content: JSON.parse(content), sha: data.sha };
-  } catch (e) {
-    console.error('[GitHub] Read error:', e);
-    return null;
-  }
-}
-
-// Записать JSON файл в GitHub
-async function writeGitHubFile(path, content, sha, message) {
-  const token = getGitHubToken();
-  if (!token) {
-    alert('GitHub token required for write operations');
-    return false;
-  }
-
-  try {
-    // Use TextEncoder for proper UTF-8 support (btoa fails with non-ASCII)
-    const jsonStr = JSON.stringify(content, null, 2);
-    const utf8Bytes = new TextEncoder().encode(jsonStr);
-    const base64 = btoa(String.fromCharCode(...utf8Bytes));
-
-    const body = {
-      message: message || `Update ${path}`,
-      content: base64,
-      branch: GITHUB_BRANCH
-    };
-    if (sha) body.sha = sha;
-
-    const res = await fetch(`https://api.github.com/repos/${GITHUB_REPO}/contents/${path}`, {
-      method: 'PUT',
-      headers: {
-        'Authorization': `token ${token}`,
-        'Accept': 'application/vnd.github.v3+json',
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify(body)
-    });
-
-    if (!res.ok) {
-      const err = await res.json();
-      if (res.status === 401) {
-        localStorage.removeItem('github_token');
-        alert('Invalid GitHub token. Please reload and enter a valid token.');
-      } else {
-        alert(`GitHub write error: ${err.message || res.status}`);
-      }
-      return false;
-    }
-
-    console.log('[GitHub] File updated:', path);
-    return true;
-  } catch (e) {
-    console.error('[GitHub] Write error:', e);
-    alert('GitHub write failed: ' + e.message);
-    return false;
-  }
-}
-
-// ============ Whitelist операции ============
+// ============ Whitelist операции (через Lambda API) ============
 let whitelistData = null;
-let whitelistSha = null;
 
 async function loadWhitelist() {
-  const result = await readGitHubFile('data/whitelist.json');
-  if (result) {
-    whitelistData = result.content;
-    whitelistSha = result.sha;
-  } else {
+  try {
+    const res = await fetch(`${API.cloudBase}/admin/whitelist`, {
+      headers: API.getAuthHeaders(),
+      cache: 'no-store'
+    });
+    if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || res.status);
+    whitelistData = await res.json();
+    return whitelistData;
+  } catch (e) {
+    console.error('[Admin] Error loading whitelist:', e);
     whitelistData = { users: {} };
-    whitelistSha = null;
+    return whitelistData;
   }
-  return whitelistData;
 }
 
 async function saveWhitelist(message) {
-  whitelistData._updated = new Date().toISOString().split('T')[0];
-  const success = await writeGitHubFile('data/whitelist.json', whitelistData, whitelistSha, message);
-  if (success) {
-    // Reload to get new SHA
-    await loadWhitelist();
-  }
-  return success;
+  // saveWhitelist теперь не нужен - каждая операция делается отдельным API запросом
+  // Этот метод оставлен для совместимости, но теперь просто перезагружает данные
+  console.log('[Admin] saveWhitelist called (now uses individual API calls):', message);
+  await loadWhitelist();
+  return true;
 }
 
-// ============ Device History операции ============
+async function addUserToWhitelist(email, data) {
+  try {
+    const res = await fetch(`${API.cloudBase}/admin/whitelist`, {
+      method: 'POST',
+      headers: { ...API.getAuthHeaders(), 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, status: data.status || 'active', devices: data.devices || [] })
+    });
+    if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || res.status);
+    return true;
+  } catch (e) {
+    console.error('[Admin] Error adding to whitelist:', e);
+    alert('Error: ' + e.message);
+    return false;
+  }
+}
+
+async function updateUserInWhitelist(email, data) {
+  try {
+    const res = await fetch(`${API.cloudBase}/admin/whitelist/${encodeURIComponent(email)}`, {
+      method: 'PUT',
+      headers: { ...API.getAuthHeaders(), 'Content-Type': 'application/json' },
+      body: JSON.stringify(data)
+    });
+    if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || res.status);
+    return true;
+  } catch (e) {
+    console.error('[Admin] Error updating whitelist:', e);
+    alert('Error: ' + e.message);
+    return false;
+  }
+}
+
+async function removeUserFromWhitelist(email) {
+  try {
+    const res = await fetch(`${API.cloudBase}/admin/whitelist/${encodeURIComponent(email)}`, {
+      method: 'DELETE',
+      headers: API.getAuthHeaders()
+    });
+    if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || res.status);
+    return true;
+  } catch (e) {
+    console.error('[Admin] Error removing from whitelist:', e);
+    alert('Error: ' + e.message);
+    return false;
+  }
+}
+
+// ============ Device History операции (через Lambda API) ============
 let historyData = null;
-let historySha = null;
 
 async function loadDeviceHistory() {
-  const result = await readGitHubFile('data/device_history.json');
-  if (result) {
-    historyData = result.content;
-    historySha = result.sha;
-  } else {
-    historyData = { devices: {} };
-    historySha = null;
-  }
+  // Теперь загружается per-device через API
+  historyData = { devices: {} };
   return historyData;
 }
 
-async function addDeviceHistoryEntry(deviceId, event) {
-  // Always reload to get fresh SHA (avoids conflicts after whitelist save)
-  await loadDeviceHistory();
-
-  const shortId = deviceId.replace('Polivalka-', '');
-  if (!historyData.devices[shortId]) {
-    historyData.devices[shortId] = [];
+async function loadDeviceHistoryFor(deviceId) {
+  try {
+    const shortId = deviceId.replace('Polivalka-', '');
+    const res = await fetch(`${API.cloudBase}/admin/history/${shortId}`, {
+      headers: API.getAuthHeaders(),
+      cache: 'no-store'
+    });
+    if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || res.status);
+    const data = await res.json();
+    return data.events || [];
+  } catch (e) {
+    console.error('[Admin] Error loading device history:', e);
+    return [];
   }
-
-  historyData.devices[shortId].push({
-    ...event,
-    timestamp: new Date().toISOString()
-  });
-
-  historyData._updated = new Date().toISOString().split('T')[0];
-  const success = await writeGitHubFile('data/device_history.json', historyData, historySha,
-    `History: ${event.event} for ${shortId}`);
-
-  // Reload to get new SHA for next write
-  if (success) await loadDeviceHistory();
-  return success;
 }
 
-// ============ Pending Claims операции ============
+async function addDeviceHistoryEntry(deviceId, event) {
+  try {
+    const shortId = deviceId.replace('Polivalka-', '');
+    const res = await fetch(`${API.cloudBase}/admin/history`, {
+      method: 'POST',
+      headers: { ...API.getAuthHeaders(), 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        device_id: shortId,
+        event: event.event,
+        user_email: event.to || event.from || event.by
+      })
+    });
+    if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || res.status);
+    return true;
+  } catch (e) {
+    console.error('[Admin] Error adding history:', e);
+    return false;
+  }
+}
+
+// ============ Pending Claims операции (через Lambda API) ============
 let pendingData = null;
-let pendingSha = null;
 
 async function loadPendingClaims() {
-  const result = await readGitHubFile('data/pending_claims.json');
-  if (result) {
-    pendingData = result.content;
-    pendingSha = result.sha;
-  } else {
+  try {
+    const res = await fetch(`${API.cloudBase}/admin/claims`, {
+      headers: API.getAuthHeaders(),
+      cache: 'no-store'
+    });
+    if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || res.status);
+    pendingData = await res.json();
+    return pendingData;
+  } catch (e) {
+    console.error('[Admin] Error loading claims:', e);
     pendingData = { claims: [] };
-    pendingSha = null;
+    return pendingData;
   }
-  return pendingData;
 }
 
 async function savePendingClaims(message) {
-  pendingData._updated = new Date().toISOString().split('T')[0];
-  const success = await writeGitHubFile('data/pending_claims.json', pendingData, pendingSha, message);
-  if (success) {
-    await loadPendingClaims();
+  // Теперь не нужен - каждая операция делается отдельным API запросом
+  console.log('[Admin] savePendingClaims called (now uses individual API calls):', message);
+  await loadPendingClaims();
+  return true;
+}
+
+async function deleteClaim(claimId) {
+  try {
+    const res = await fetch(`${API.cloudBase}/admin/claims/${claimId}`, {
+      method: 'DELETE',
+      headers: API.getAuthHeaders()
+    });
+    if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || res.status);
+    return true;
+  } catch (e) {
+    console.error('[Admin] Error deleting claim:', e);
+    return false;
   }
-  return success;
 }
 
 // Load device list - call /devices directly (no device prefix!)
@@ -774,41 +759,39 @@ async function approveClaim(index) {
 
   if (!confirm(`Approve claim?\n\nDevice: ${claim.device_id}\nUser: ${claim.email}\n\nThis will add user to whitelist and assign the device.`)) return;
 
-  // 1. Add user to whitelist if not there
-  if (!whitelistData.users[claim.email]) {
-    whitelistData.users[claim.email] = {
-      status: 'active',
-      devices: [],
-      added_at: new Date().toISOString().split('T')[0]
-    };
+  // 1. Add/update user in whitelist with the device
+  const existingUser = whitelistData.users?.[claim.email];
+  if (existingUser) {
+    // User exists - add device to their list
+    const devices = existingUser.devices || [];
+    if (!devices.includes(claim.device_id)) {
+      devices.push(claim.device_id);
+    }
+    await updateUserInWhitelist(claim.email, { devices });
+  } else {
+    // New user - add to whitelist with device
+    await addUserToWhitelist(claim.email, { devices: [claim.device_id] });
   }
 
-  // 2. Assign device to user
-  if (!whitelistData.users[claim.email].devices) {
-    whitelistData.users[claim.email].devices = [];
-  }
-  if (!whitelistData.users[claim.email].devices.includes(claim.device_id)) {
-    whitelistData.users[claim.email].devices.push(claim.device_id);
+  // 2. Delete the claim
+  const claimId = claim.claim_id;
+  if (claimId) {
+    await deleteClaim(claimId);
   }
 
-  // 3. Remove from pending
-  pendingData.claims.splice(index, 1);
+  // 3. Add to device history
+  await addDeviceHistoryEntry(claim.device_id, {
+    event: 'claimed',
+    by: claim.email
+  });
 
-  // 4. Save both
-  const wlSuccess = await saveWhitelist(`Approve claim: ${claim.device_id} for ${claim.email}`);
-  const pcSuccess = await savePendingClaims(`Remove approved claim: ${claim.device_id}`);
+  showToast(`Claim approved! ${claim.device_id} assigned to ${claim.email}`, 'success');
 
-  if (wlSuccess && pcSuccess) {
-    // 5. Add to device history
-    await addDeviceHistoryEntry(claim.device_id, {
-      event: 'claimed',
-      by: claim.email
-    });
-
-    showToast(`Claim approved! ${claim.device_id} assigned to ${claim.email}`, 'success');
-    loadPendingClaimsUI();
-    renderUsersList();
-  }
+  // Reload data
+  await loadWhitelist();
+  await loadPendingClaims();
+  loadPendingClaimsUI();
+  renderUsersList();
 }
 
 async function rejectClaim(index) {
@@ -817,13 +800,15 @@ async function rejectClaim(index) {
 
   if (!confirm(`Reject claim?\n\nDevice: ${claim.device_id}\nUser: ${claim.email}`)) return;
 
-  // Remove from pending
-  pendingData.claims.splice(index, 1);
-
-  const success = await savePendingClaims(`Reject claim: ${claim.device_id} by ${claim.email}`);
-  if (success) {
-    showToast(`Claim rejected`, 'warning');
-    loadPendingClaimsUI();
+  // Delete the claim
+  const claimId = claim.claim_id;
+  if (claimId) {
+    const success = await deleteClaim(claimId);
+    if (success) {
+      showToast(`Claim rejected`, 'warning');
+      await loadPendingClaims();
+      loadPendingClaimsUI();
+    }
   }
 }
 
@@ -1291,22 +1276,16 @@ function restoreExpandedUsers() {
 async function addToWhitelist(email) {
   if (!confirm(`Add ${email} to whitelist?`)) return;
 
-  if (!whitelistData.users) whitelistData.users = {};
-  whitelistData.users[email] = {
-    status: 'active',
-    devices: [],
-    added_at: new Date().toISOString().split('T')[0]
-  };
-
-  const success = await saveWhitelist(`Add ${email} to whitelist`);
+  const success = await addUserToWhitelist(email, { status: 'active', devices: [] });
   if (success) {
     showToast(`${email} added to whitelist`, 'success');
+    await loadWhitelist();
     renderUsersList();
   }
 }
 
 async function removeFromWhitelist(email) {
-  const userData = whitelistData.users[email];
+  const userData = whitelistData.users?.[email];
   const deviceCount = userData?.devices?.length || 0;
 
   let msg = `Remove ${email} from whitelist?`;
@@ -1316,11 +1295,10 @@ async function removeFromWhitelist(email) {
 
   if (!confirm(msg)) return;
 
-  delete whitelistData.users[email];
-
-  const success = await saveWhitelist(`Remove ${email} from whitelist`);
+  const success = await removeUserFromWhitelist(email);
   if (success) {
     showToast(`${email} removed from whitelist`, 'success');
+    await loadWhitelist();
     renderUsersList();
   }
 }
@@ -1328,38 +1306,30 @@ async function removeFromWhitelist(email) {
 async function suspendUser(email) {
   if (!confirm(`Suspend ${email}? They will not be able to use their devices.`)) return;
 
-  whitelistData.users[email].status = 'suspended';
-
-  const success = await saveWhitelist(`Suspend ${email}`);
+  const success = await updateUserInWhitelist(email, { status: 'suspended' });
   if (success) {
     showToast(`${email} suspended`, 'warning');
+    await loadWhitelist();
     renderUsersList();
   }
 }
 
 async function unsuspendUser(email) {
-  whitelistData.users[email].status = 'active';
-
-  const success = await saveWhitelist(`Unsuspend ${email}`);
+  const success = await updateUserInWhitelist(email, { status: 'active' });
   if (success) {
     showToast(`${email} unsuspended`, 'success');
+    await loadWhitelist();
     renderUsersList();
   }
 }
 
 async function banUser(email) {
-  if (!confirm(`BAN ${email}?\n\nThis will remove them from whitelist and mark as banned.`)) return;
+  if (!confirm(`BAN ${email}?\n\nThis will mark them as banned.`)) return;
 
-  if (!whitelistData.users) whitelistData.users = {};
-  whitelistData.users[email] = {
-    status: 'banned',
-    devices: [],
-    banned_at: new Date().toISOString().split('T')[0]
-  };
-
-  const success = await saveWhitelist(`Ban ${email}`);
+  const success = await updateUserInWhitelist(email, { status: 'banned', devices: [] });
   if (success) {
     showToast(`${email} banned`, 'error');
+    await loadWhitelist();
     renderUsersList();
   }
 }
@@ -1367,11 +1337,10 @@ async function banUser(email) {
 async function unbanUser(email) {
   if (!confirm(`Unban ${email}?`)) return;
 
-  delete whitelistData.users[email];
-
-  const success = await saveWhitelist(`Unban ${email}`);
+  const success = await removeUserFromWhitelist(email);
   if (success) {
     showToast(`${email} unbanned`, 'success');
+    await loadWhitelist();
     renderUsersList();
   }
 }
@@ -1474,35 +1443,34 @@ async function assignDevice(email, deviceId) {
     await loadWhitelist();
   }
 
-  // Auto-add admin to whitelist if not there
-  if (!whitelistData.users[email]) {
+  const existingUser = whitelistData.users?.[email];
+  const devices = existingUser?.devices || [];
+
+  if (devices.includes(shortId)) {
+    alert('Device already assigned to this user');
+    return;
+  }
+
+  // Add device to user's list
+  devices.push(shortId);
+
+  let success;
+  if (existingUser) {
+    // Update existing user
+    success = await updateUserInWhitelist(email, { devices });
+  } else {
+    // Auto-add admin to whitelist if not there
     const isAdminEmail = ADMIN_EMAILS.includes(email.toLowerCase());
     if (isAdminEmail) {
-      whitelistData.users[email] = {
-        status: 'active',
-        devices: [],
-        added_at: new Date().toISOString().split('T')[0]
-      };
+      success = await addUserToWhitelist(email, { status: 'active', devices });
       console.log('[Admin] Auto-added admin to whitelist:', email);
     } else {
-      console.error('[Admin] User not in whitelist:', email, 'whitelist:', whitelistData);
+      console.error('[Admin] User not in whitelist:', email);
       alert('User not in whitelist');
       return;
     }
   }
 
-  if (!whitelistData.users[email].devices) {
-    whitelistData.users[email].devices = [];
-  }
-
-  if (whitelistData.users[email].devices.includes(shortId)) {
-    alert('Device already assigned to this user');
-    return;
-  }
-
-  whitelistData.users[email].devices.push(shortId);
-
-  const success = await saveWhitelist(`Assign ${shortId} to ${email}`);
   if (success) {
     // Add to device history
     await addDeviceHistoryEntry(shortId, {
@@ -1511,6 +1479,7 @@ async function assignDevice(email, deviceId) {
     });
 
     showToast(`${shortId} assigned to ${email}`, 'success');
+    await loadWhitelist();
     renderUsersList();
   }
 }
@@ -1518,10 +1487,10 @@ async function assignDevice(email, deviceId) {
 async function unassignDevice(email, deviceId) {
   if (!confirm(`Unassign ${deviceId} from ${email}?`)) return;
 
-  const devices = whitelistData.users[email]?.devices || [];
-  whitelistData.users[email].devices = devices.filter(d => d !== deviceId);
+  const devices = whitelistData.users?.[email]?.devices || [];
+  const newDevices = devices.filter(d => d !== deviceId);
 
-  const success = await saveWhitelist(`Unassign ${deviceId} from ${email}`);
+  const success = await updateUserInWhitelist(email, { devices: newDevices });
   if (success) {
     // Add to device history
     await addDeviceHistoryEntry(deviceId, {
@@ -1530,6 +1499,7 @@ async function unassignDevice(email, deviceId) {
     });
 
     showToast(`${deviceId} unassigned`, 'success');
+    await loadWhitelist();
     renderUsersList();
   }
 }
