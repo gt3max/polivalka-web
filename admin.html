@@ -1205,12 +1205,14 @@ function renderUsersList() {
     } else if (canHaveDevices && userDevices.length > 0) {
       devicesSection = `
         <div id="devices-${email.replace(/[@.]/g, '_')}" style="display:none;margin-top:8px;padding:8px;background:#1a1a2e;border-radius:8px">
-          ${userDevices.map(devId => `
+          ${userDevices.map(devId => {
+            const shortId = devId.replace('Polivalka-', '');
+            return `
             <div style="display:flex;justify-content:space-between;align-items:center;padding:4px 0">
-              <span class="mono" style="color:#4caf50">📱 ${devId}</span>
+              <span class="mono" style="color:#4caf50">📱 ${shortId}</span>
               <button onclick="unassignDevice('${email}', '${devId}')" style="font-size:10px;padding:2px 6px">Unassign</button>
             </div>
-          `).join('')}
+          `}).join('')}
           <button onclick="showAssignDeviceDialog('${email}')" style="font-size:11px;padding:4px 8px;margin-top:8px">+ Assign device</button>
         </div>
       `;
