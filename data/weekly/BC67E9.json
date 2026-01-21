@@ -1,17 +1,17 @@
 {
   "device_id": "BC67E9",
-  "last_updated": "2026-01-21T21:36:53.258900Z",
+  "last_updated": "2026-01-21T22:30:09.514415Z",
   "summaries": [
     {
       "week": "2026-W04",
       "start_date": "2026-01-19",
       "end_date": "2026-01-25",
-      "generated_at": "2026-01-21T21:36:53.053523Z",
+      "generated_at": "2026-01-21T22:30:09.291165Z",
       "moisture": {
         "avg_percent": 72.3,
         "min_percent": 64.0,
         "max_percent": 81.3,
-        "readings_count": 92
+        "readings_count": 93
       },
       "battery": {
         "avg_percent": 92.7,
@@ -26,7 +26,7 @@
         "manual_events": 3
       },
       "system": {
-        "online_hours": 153.0,
+        "online_hours": 155.0,
         "offline_hours": 0.0,
         "restarts": 0,
         "firmware_version": "v1.0.33"
