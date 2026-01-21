@@ -190,36 +190,39 @@
       <button onclick="exportLongTermCSV()" style="padding:6px 10px;font-size:13px">Export</button>
     </div>
 
-    <!-- Long-term Moisture -->
-    <div id="lt-tab-moisture" class="tab-content active">
-      <div class="card">
-        <h3 style="margin-top:0">💧 Weekly Avg Moisture</h3>
-        <div class="chart-container" style="height:280px">
-          <canvas id="lt-moisture-chart"></canvas>
+    <!-- Long-term Tab Contents Container -->
+    <div id="lt-tabs-container">
+      <!-- Long-term Moisture -->
+      <div id="lt-tab-moisture" class="lt-tab-content" style="display:block">
+        <div class="card">
+          <h3 style="margin-top:0">💧 Weekly Avg Moisture</h3>
+          <div class="chart-container" style="height:280px">
+            <canvas id="lt-moisture-chart"></canvas>
+          </div>
+          <div id="lt-moisture-nodata" class="muted" style="display:none;text-align:center;padding:40px">No moisture data</div>
         </div>
-        <div id="lt-moisture-nodata" class="muted" style="display:none;text-align:center;padding:40px">No moisture data</div>
       </div>
-    </div>
 
-    <!-- Long-term Battery -->
-    <div id="lt-tab-battery" class="tab-content">
-      <div class="card">
-        <h3 style="margin-top:0">🔋 Weekly Avg Battery</h3>
-        <div class="chart-container" style="height:280px">
-          <canvas id="lt-battery-chart"></canvas>
+      <!-- Long-term Battery -->
+      <div id="lt-tab-battery" class="lt-tab-content" style="display:none">
+        <div class="card">
+          <h3 style="margin-top:0">🔋 Weekly Avg Battery</h3>
+          <div class="chart-container" style="height:280px">
+            <canvas id="lt-battery-chart"></canvas>
+          </div>
+          <div id="lt-battery-nodata" class="muted" style="display:none;text-align:center;padding:40px">No battery data</div>
         </div>
-        <div id="lt-battery-nodata" class="muted" style="display:none;text-align:center;padding:40px">No battery data</div>
       </div>
-    </div>
 
-    <!-- Long-term Watering -->
-    <div id="lt-tab-watering" class="tab-content">
-      <div class="card">
-        <h3 style="margin-top:0">🚿 Weekly Watering</h3>
-        <div class="chart-container" style="height:280px">
-          <canvas id="lt-watering-chart"></canvas>
+      <!-- Long-term Watering -->
+      <div id="lt-tab-watering" class="lt-tab-content" style="display:none">
+        <div class="card">
+          <h3 style="margin-top:0">🚿 Weekly Watering</h3>
+          <div class="chart-container" style="height:280px">
+            <canvas id="lt-watering-chart"></canvas>
+          </div>
+          <div id="lt-watering-nodata" class="muted" style="display:none;text-align:center;padding:40px">No watering data</div>
         </div>
-        <div id="lt-watering-nodata" class="muted" style="display:none;text-align:center;padding:40px">No watering data</div>
       </div>
     </div>
 
@@ -1014,9 +1017,13 @@ let ltWateringChart = null;
 
 // Long-term tab switching
 function showLtTab(name) {
-  document.querySelectorAll('#lt-tab-buttons + .row ~ .tab-content').forEach(t => t.classList.remove('active'));
+  // Hide all long-term tabs
+  document.querySelectorAll('.lt-tab-content').forEach(t => t.style.display = 'none');
+  // Remove active from all buttons
   document.querySelectorAll('#lt-tab-buttons button').forEach(b => b.classList.remove('active'));
-  document.getElementById('lt-tab-' + name).classList.add('active');
+  // Show selected tab
+  document.getElementById('lt-tab-' + name).style.display = 'block';
+  // Mark button as active
   event.target.classList.add('active');
 }
 
