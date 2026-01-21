@@ -1,0 +1,36 @@
+{
+  "device_id": "EC7239",
+  "last_updated": "2026-01-21T21:36:50.464789Z",
+  "summaries": [
+    {
+      "week": "2026-W04",
+      "start_date": "2026-01-19",
+      "end_date": "2026-01-25",
+      "generated_at": "2026-01-21T21:36:49.972003Z",
+      "moisture": {
+        "avg_percent": 9.7,
+        "min_percent": 0.7,
+        "max_percent": 26.5,
+        "readings_count": 31
+      },
+      "battery": {
+        "avg_percent": 31.1,
+        "min_percent": 1.2,
+        "max_percent": 100.0,
+        "charging_hours": 0.9
+      },
+      "watering": {
+        "events_count": 0,
+        "total_ml": 0,
+        "auto_events": 0,
+        "manual_events": 0
+      },
+      "system": {
+        "online_hours": 136.0,
+        "offline_hours": 0.0,
+        "restarts": 0,
+        "firmware_version": "v1.0.71"
+      }
+    }
+  ]
+}
