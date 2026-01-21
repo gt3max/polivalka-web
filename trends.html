@@ -163,7 +163,7 @@
 
     <!-- Long-term Tabs (same style as short-term) -->
     <div class="tab-buttons" id="lt-tab-buttons">
-      <button class="active" onclick="showLtTab('moisture')">💧 Capacitive (J6)</button>
+      <button class="active" onclick="showLtTab('moisture')">💧 Moisture</button>
       <button onclick="showLtTab('battery')">🔋 Battery</button>
       <button onclick="showLtTab('watering')">🚿 Watering</button>
     </div>
@@ -190,6 +190,13 @@
           <canvas id="lt-moisture-chart"></canvas>
         </div>
         <div id="lt-moisture-nodata" class="muted" style="display:none;text-align:center;padding:40px">No moisture data for this period</div>
+
+        <div id="lt-sensor2-section" style="margin-top:16px;display:none">
+          <h4 style="margin:0 0 8px 0;color:#9c27b0">🌡️ Resistive Sensor (J7)</h4>
+          <div class="chart-container" style="height:250px">
+            <canvas id="lt-sensor2-chart"></canvas>
+          </div>
+        </div>
       </div>
 
       <!-- Long-term Battery -->
@@ -977,6 +984,7 @@ function setLongTermPeriod(weeks) {
 
 // Long-term chart instances
 let ltMoistureChart = null;
+let ltSensor2Chart = null;
 let ltBatteryChart = null;
 let ltWateringChart = null;
 
@@ -1022,6 +1030,44 @@ function renderLtMoistureChart(data) {
         { label: 'Avg %', data: avgValues, borderColor: '#1976d2', backgroundColor: 'rgba(25,118,210,0.1)', fill: true, tension: 0.3 },
         { label: 'Min %', data: minValues, borderColor: '#90caf9', borderDash: [3,3], fill: false, tension: 0.3, pointRadius: 2 },
         { label: 'Max %', data: maxValues, borderColor: '#1565c0', borderDash: [3,3], fill: false, tension: 0.3, pointRadius: 2 }
+      ]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { position: 'top' } },
+      scales: { x: { grid: { display: false } }, y: { min: 0, max: 100, ticks: { callback: v => v + '%' } } }
+    }
+  });
+}
+
+// Render long-term sensor2 (J7) chart
+function renderLtSensor2Chart(data) {
+  const canvas = document.getElementById('lt-sensor2-chart');
+  const section = document.getElementById('lt-sensor2-section');
+
+  if (ltSensor2Chart) { ltSensor2Chart.destroy(); ltSensor2Chart = null; }
+
+  const hasData = data.some(d => d.sensor2?.avg_percent != null);
+  if (!hasData) {
+    section.style.display = 'none';
+    return;
+  }
+
+  section.style.display = 'block';
+
+  const labels = data.map(d => d.week);
+  const avgValues = data.map(d => d.sensor2?.avg_percent || null);
+  const minValues = data.map(d => d.sensor2?.min_percent || null);
+  const maxValues = data.map(d => d.sensor2?.max_percent || null);
+
+  ltSensor2Chart = new Chart(canvas.getContext('2d'), {
+    type: 'line',
+    data: {
+      labels: labels,
+      datasets: [
+        { label: 'Avg %', data: avgValues, borderColor: '#9c27b0', backgroundColor: 'rgba(156,39,176,0.1)', fill: true, tension: 0.3 },
+        { label: 'Min %', data: minValues, borderColor: '#ce93d8', borderDash: [3,3], fill: false, tension: 0.3, pointRadius: 2 },
+        { label: 'Max %', data: maxValues, borderColor: '#7b1fa2', borderDash: [3,3], fill: false, tension: 0.3, pointRadius: 2 }
       ]
     },
     options: {
@@ -1115,6 +1161,7 @@ function renderLtWateringChart(data) {
 // Render all long-term charts
 function renderAllLtCharts(data) {
   renderLtMoistureChart(data);
+  renderLtSensor2Chart(data);
   renderLtBatteryChart(data);
   renderLtWateringChart(data);
 }
