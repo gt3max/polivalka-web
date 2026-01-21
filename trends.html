@@ -137,19 +137,13 @@
   <div id="tab-watering" class="tab-content">
     <div class="card">
       <h3 style="margin-top:0">🚿 Watering Events</h3>
-      <div class="chart-container">
-        <canvas id="watering-chart"></canvas>
+      <div id="watering-summary" class="stats-grid" style="margin-bottom:16px">
+        <div class="stat-box"><div class="stat-value" id="watering-count">—</div><div class="stat-label">Events</div></div>
+        <div class="stat-box"><div class="stat-value" id="watering-total-ml">—</div><div class="stat-label">Total ml</div></div>
+        <div class="stat-box"><div class="stat-value" id="watering-total-sec">—</div><div class="stat-label">Total sec</div></div>
       </div>
-      <div style="display:flex;gap:16px;justify-content:center;margin-top:8px;font-size:12px">
-        <span><span style="display:inline-block;width:12px;height:12px;background:#4caf50;border-radius:2px;margin-right:4px"></span>Normal</span>
-        <span><span style="display:inline-block;width:12px;height:12px;background:#2196f3;border-radius:2px;margin-right:4px"></span>Microprime</span>
-        <span><span style="display:inline-block;width:12px;height:12px;background:#ff9800;border-radius:2px;margin-right:4px"></span>Manual</span>
-      </div>
-      <div id="watering-nodata" class="muted" style="display:none;text-align:center;padding:20px">No watering events in this period</div>
-    </div>
-    <div class="card">
-      <h3 style="margin-top:0">📋 Event List</h3>
       <div id="watering-list"></div>
+      <div id="watering-nodata" class="muted" style="display:none;text-align:center;padding:20px">No watering events in this period</div>
       <div id="watering-loading" class="loading">Loading watering events...</div>
     </div>
   </div>
@@ -415,7 +409,7 @@ async function loadActivity() {
 
     const pumpEvents = filtered.filter(a => a.type === 'PUMP');
     renderActivityList(filtered);
-    renderWateringChart(pumpEvents);
+    renderWateringSummary(pumpEvents);
     renderWateringList(pumpEvents);
     updateStats();
   } catch(e) {
@@ -720,107 +714,87 @@ function renderBatteryChart(data) {
   });
 }
 
-// Watering chart instance
-let wateringChart = null;
-
-// Render watering chart (bar chart of pump events)
-function renderWateringChart(events) {
-  const canvas = document.getElementById('watering-chart');
+// Render watering summary and list
+function renderWateringSummary(events) {
   const nodata = document.getElementById('watering-nodata');
+  const summary = document.getElementById('watering-summary');
 
-  if (wateringChart) { wateringChart.destroy(); wateringChart = null; }
-
-  // Filter to only start events (stop events have the same volume info)
+  // Filter to start events only (they have duration/volume info)
   const startEvents = events.filter(e => e.message && e.message.toLowerCase().includes('start'));
 
   if (startEvents.length === 0) {
-    canvas.style.display = 'none';
     nodata.style.display = 'block';
+    summary.style.display = 'none';
     return;
   }
 
-  canvas.style.display = 'block';
   nodata.style.display = 'none';
+  summary.style.display = 'grid';
 
-  // Sort by timestamp
-  startEvents.sort((a, b) => a.timestamp - b.timestamp);
+  // Calculate totals
+  let totalMl = 0;
+  let totalSec = 0;
 
-  // Create labels (timestamps) and data
-  const labels = startEvents.map(e => new Date(e.timestamp * 1000));
-  const volumes = startEvents.map(e => {
+  for (const e of startEvents) {
     const volMatch = e.message.match(/(\d+)\s*ml/i);
-    return volMatch ? parseInt(volMatch[1]) : 50;
-  });
+    const secMatch = e.message.match(/(\d+)\s*s[,\)]/i);
+    if (volMatch) totalMl += parseInt(volMatch[1]);
+    if (secMatch) totalSec += parseInt(secMatch[1]);
+  }
 
-  // Color bars by type
-  const colors = startEvents.map(e => {
-    const msg = (e.message || '').toLowerCase();
-    if (msg.includes('microprime')) return '#2196f3'; // blue
-    if (msg.includes('manual')) return '#ff9800'; // orange
-    return '#4caf50'; // green - normal
-  });
-
-  wateringChart = new Chart(canvas.getContext('2d'), {
-    type: 'bar',
-    data: {
-      labels: labels,
-      datasets: [{
-        label: 'Water Volume (ml)',
-        data: volumes,
-        backgroundColor: colors,
-        borderColor: colors,
-        borderWidth: 1,
-        barThickness: 'flex',
-        maxBarThickness: 30
-      }]
-    },
-    options: {
-      responsive: true,
-      maintainAspectRatio: false,
-      plugins: {
-        legend: { display: false },
-        tooltip: {
-          callbacks: {
-            title: (items) => new Date(items[0].parsed.x).toLocaleString(),
-            label: (item) => {
-              const event = startEvents[item.dataIndex];
-              const msg = (event?.message || '').toLowerCase();
-              let type = 'Normal';
-              if (msg.includes('microprime')) type = 'Microprime';
-              else if (msg.includes('manual')) type = 'Manual';
-              return `${type}: ${item.parsed.y}ml`;
-            }
-          }
-        }
-      },
-      scales: {
-        x: {
-          type: 'time',
-          time: { unit: currentPeriod === 1 ? 'hour' : 'day', displayFormats: { hour: 'HH:mm', day: 'MMM d' } },
-          grid: { display: false }
-        },
-        y: { min: 0, title: { display: true, text: 'ml' } }
-      }
-    }
-  });
+  document.getElementById('watering-count').textContent = startEvents.length;
+  document.getElementById('watering-total-ml').textContent = totalMl > 0 ? totalMl + 'ml' : '—';
+  document.getElementById('watering-total-sec').textContent = totalSec > 0 ? totalSec + 's' : '—';
 }
 
-// Render watering list
+// Render watering list with clear info
 function renderWateringList(events) {
   const container = document.getElementById('watering-list');
 
-  if (events.length === 0) {
-    container.innerHTML = '<div class="muted">No watering events in this period</div>';
+  // Filter to start events (they have the key info)
+  const startEvents = events.filter(e => e.message && e.message.toLowerCase().includes('start'));
+
+  if (startEvents.length === 0) {
+    container.innerHTML = '';
     return;
   }
 
+  // Sort by timestamp DESC (newest first)
+  startEvents.sort((a, b) => b.timestamp - a.timestamp);
+
   let html = '';
-  for (const e of events) {
-    const time = new Date(e.timestamp * 1000).toLocaleString();
-    const icon = e.message.includes('started') ? '💧' : '🛑';
-    html += `<div class="event-row event-pump">
-      <div>${icon} ${e.message}</div>
-      <div class="muted">${time}</div>
+  for (const e of startEvents) {
+    const date = new Date(e.timestamp * 1000);
+    const timeStr = date.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
+    const dateStr = date.toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit' });
+
+    // Parse duration and volume from message
+    const msg = e.message || '';
+    const secMatch = msg.match(/(\d+)\s*s[,\)]/i);
+    const volMatch = msg.match(/(\d+)\s*ml/i);
+    const duration = secMatch ? secMatch[1] + 's' : '—';
+    const volume = volMatch ? volMatch[1] + 'ml' : '—';
+
+    // Determine type
+    const msgLower = msg.toLowerCase();
+    let type = 'Normal';
+    let typeColor = '#4caf50';
+    let icon = '💧';
+    if (msgLower.includes('microprime')) { type = 'Microprime'; typeColor = '#2196f3'; icon = '💦'; }
+    else if (msgLower.includes('manual')) { type = 'Manual'; typeColor = '#ff9800'; icon = '✋'; }
+
+    html += `<div class="event-row event-pump" style="border-left-color:${typeColor}">
+      <div style="display:flex;align-items:center;gap:8px">
+        <span style="font-size:18px">${icon}</span>
+        <div>
+          <div style="font-weight:500">${type}</div>
+          <div class="muted" style="font-size:12px">${duration} · ${volume}</div>
+        </div>
+      </div>
+      <div style="text-align:right">
+        <div style="font-weight:500">${timeStr}</div>
+        <div class="muted" style="font-size:12px">${dateStr}</div>
+      </div>
     </div>`;
   }
   container.innerHTML = html;
