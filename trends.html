@@ -140,6 +140,11 @@
       <div class="chart-container">
         <canvas id="watering-chart"></canvas>
       </div>
+      <div style="display:flex;gap:16px;justify-content:center;margin-top:8px;font-size:12px">
+        <span><span style="display:inline-block;width:12px;height:12px;background:#4caf50;border-radius:2px;margin-right:4px"></span>Normal</span>
+        <span><span style="display:inline-block;width:12px;height:12px;background:#2196f3;border-radius:2px;margin-right:4px"></span>Microprime</span>
+        <span><span style="display:inline-block;width:12px;height:12px;background:#ff9800;border-radius:2px;margin-right:4px"></span>Manual</span>
+      </div>
       <div id="watering-nodata" class="muted" style="display:none;text-align:center;padding:20px">No watering events in this period</div>
     </div>
     <div class="card">
@@ -715,14 +720,14 @@ function renderBatteryChart(data) {
 // Watering chart instance
 let wateringChart = null;
 
-// Render watering chart (timeline of pump events)
+// Render watering chart (bar chart of pump events)
 function renderWateringChart(events) {
   const canvas = document.getElementById('watering-chart');
   const nodata = document.getElementById('watering-nodata');
 
   if (wateringChart) { wateringChart.destroy(); wateringChart = null; }
 
-  // Filter to only start events
+  // Filter to only start events (stop events have the same volume info)
   const startEvents = events.filter(e => e.message && e.message.toLowerCase().includes('start'));
 
   if (startEvents.length === 0) {
@@ -734,43 +739,54 @@ function renderWateringChart(events) {
   canvas.style.display = 'block';
   nodata.style.display = 'none';
 
-  // Parse event types and create data points
-  const dataPoints = startEvents.map(e => {
-    const msg = (e.message || '').toLowerCase();
-    let type = 'normal';
-    let color = '#4caf50'; // green
-    if (msg.includes('microprime')) { type = 'microprime'; color = '#2196f3'; } // blue
-    else if (msg.includes('manual')) { type = 'manual'; color = '#ff9800'; } // orange
+  // Sort by timestamp
+  startEvents.sort((a, b) => a.timestamp - b.timestamp);
 
-    // Try to parse volume from message
+  // Create labels (timestamps) and data
+  const labels = startEvents.map(e => new Date(e.timestamp * 1000));
+  const volumes = startEvents.map(e => {
     const volMatch = e.message.match(/(\d+)\s*ml/i);
-    const volume = volMatch ? parseInt(volMatch[1]) : 50; // default 50ml
-
-    return { x: new Date(e.timestamp * 1000), y: volume, type, color };
+    return volMatch ? parseInt(volMatch[1]) : 50;
   });
 
-  // Group by type for datasets
-  const normalData = dataPoints.filter(p => p.type === 'normal').map(p => ({ x: p.x, y: p.y }));
-  const microprimeData = dataPoints.filter(p => p.type === 'microprime').map(p => ({ x: p.x, y: p.y }));
-  const manualData = dataPoints.filter(p => p.type === 'manual').map(p => ({ x: p.x, y: p.y }));
-
-  const datasets = [];
-  if (normalData.length > 0) datasets.push({ label: '💧 Normal', data: normalData, backgroundColor: '#4caf50', borderColor: '#4caf50', pointRadius: 8 });
-  if (microprimeData.length > 0) datasets.push({ label: '💦 Microprime', data: microprimeData, backgroundColor: '#2196f3', borderColor: '#2196f3', pointRadius: 6 });
-  if (manualData.length > 0) datasets.push({ label: '✋ Manual', data: manualData, backgroundColor: '#ff9800', borderColor: '#ff9800', pointRadius: 8 });
+  // Color bars by type
+  const colors = startEvents.map(e => {
+    const msg = (e.message || '').toLowerCase();
+    if (msg.includes('microprime')) return '#2196f3'; // blue
+    if (msg.includes('manual')) return '#ff9800'; // orange
+    return '#4caf50'; // green - normal
+  });
 
   wateringChart = new Chart(canvas.getContext('2d'), {
-    type: 'scatter',
-    data: { datasets },
+    type: 'bar',
+    data: {
+      labels: labels,
+      datasets: [{
+        label: 'Water Volume (ml)',
+        data: volumes,
+        backgroundColor: colors,
+        borderColor: colors,
+        borderWidth: 1,
+        barThickness: 'flex',
+        maxBarThickness: 30
+      }]
+    },
     options: {
       responsive: true,
       maintainAspectRatio: false,
       plugins: {
-        legend: { position: 'top' },
+        legend: { display: false },
         tooltip: {
           callbacks: {
             title: (items) => new Date(items[0].parsed.x).toLocaleString(),
-            label: (item) => `${item.dataset.label}: ${item.parsed.y}ml`
+            label: (item) => {
+              const event = startEvents[item.dataIndex];
+              const msg = (event?.message || '').toLowerCase();
+              let type = 'Normal';
+              if (msg.includes('microprime')) type = 'Microprime';
+              else if (msg.includes('manual')) type = 'Manual';
+              return `${type}: ${item.parsed.y}ml`;
+            }
           }
         }
       },
@@ -780,7 +796,7 @@ function renderWateringChart(events) {
           time: { unit: currentPeriod === 1 ? 'hour' : 'day', displayFormats: { hour: 'HH:mm', day: 'MMM d' } },
           grid: { display: false }
         },
-        y: { min: 0, title: { display: true, text: 'Volume (ml)' } }
+        y: { min: 0, title: { display: true, text: 'ml' } }
       }
     }
   });
