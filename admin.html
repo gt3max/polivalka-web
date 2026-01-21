@@ -1492,20 +1492,25 @@ async function assignDevice(email, deviceId) {
 }
 
 async function unassignDevice(email, deviceId) {
-  if (!confirm(`Unassign ${deviceId} from ${email}?`)) return;
+  // Normalize device_id format: Polivalka-BC67E9 (standardized everywhere)
+  const fullId = deviceId.startsWith('Polivalka-') ? deviceId : `Polivalka-${deviceId}`;
+  const shortId = fullId.replace('Polivalka-', '');
+
+  if (!confirm(`Unassign ${shortId} from ${email}?`)) return;
 
   const devices = whitelistData.users?.[email]?.devices || [];
-  const newDevices = devices.filter(d => d !== deviceId);
+  // Filter using full format for comparison
+  const newDevices = devices.filter(d => d !== fullId);
 
   const success = await updateUserInWhitelist(email, { devices: newDevices });
   if (success) {
-    // Add to device history
-    await addDeviceHistoryEntry(deviceId, {
+    // Add to device history (full format)
+    await addDeviceHistoryEntry(fullId, {
       event: 'unassigned',
       from: email
     });
 
-    showToast(`${deviceId} unassigned`, 'success');
+    showToast(`${shortId} unassigned`, 'success');
     await loadWhitelist();
     renderUsersList();
   }
