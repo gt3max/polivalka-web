@@ -137,6 +137,13 @@
   <div id="tab-watering" class="tab-content">
     <div class="card">
       <h3 style="margin-top:0">🚿 Watering Events</h3>
+      <div class="chart-container">
+        <canvas id="watering-chart"></canvas>
+      </div>
+      <div id="watering-nodata" class="muted" style="display:none;text-align:center;padding:20px">No watering events in this period</div>
+    </div>
+    <div class="card">
+      <h3 style="margin-top:0">📋 Event List</h3>
       <div id="watering-list"></div>
       <div id="watering-loading" class="loading">Loading watering events...</div>
     </div>
@@ -152,21 +159,65 @@
   </div>
 
   <!-- Long-term Trends (from GitHub JSON) -->
-  <div class="card" style="margin-top:24px;border-top:3px solid #2c5f2d">
-    <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
+  <div style="margin-top:24px;border-top:3px solid #2c5f2d;padding-top:16px">
+    <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:12px">
       <h3 style="margin:0">📈 Long-term (<span id="longterm-period-label">3 months</span>)</h3>
+      <p class="muted" style="margin:0">Weekly summaries from GitHub</p>
+    </div>
+
+    <!-- Long-term Tabs -->
+    <div class="tab-buttons" id="lt-tab-buttons">
+      <button class="active" onclick="showLtTab('moisture')">💧 Moisture</button>
+      <button onclick="showLtTab('battery')">🔋 Battery</button>
+      <button onclick="showLtTab('watering')">🚿 Watering</button>
+    </div>
+
+    <!-- Long-term Period & Export -->
+    <div class="row" style="justify-content:space-between;flex-wrap:wrap;gap:8px;margin:12px 0">
       <div class="longterm-period-selector" style="display:flex;gap:4px">
         <button onclick="setLongTermPeriod(4)" id="btn-lt-4w">1mo</button>
         <button onclick="setLongTermPeriod(12)" id="btn-lt-12w" class="active">3mo</button>
         <button onclick="setLongTermPeriod(26)" id="btn-lt-26w">6mo</button>
         <button onclick="setLongTermPeriod(52)" id="btn-lt-52w">1y</button>
+        <button onclick="setLongTermPeriod(104)" id="btn-lt-104w">2y</button>
+        <button onclick="setLongTermPeriod(156)" id="btn-lt-156w">3y</button>
+      </div>
+      <button onclick="exportLongTermCSV()" style="padding:6px 10px;font-size:13px">Export</button>
+    </div>
+
+    <!-- Long-term Moisture -->
+    <div id="lt-tab-moisture" class="tab-content active">
+      <div class="card">
+        <h3 style="margin-top:0">💧 Weekly Avg Moisture</h3>
+        <div class="chart-container" style="height:280px">
+          <canvas id="lt-moisture-chart"></canvas>
+        </div>
+        <div id="lt-moisture-nodata" class="muted" style="display:none;text-align:center;padding:40px">No moisture data</div>
       </div>
     </div>
-    <p class="muted" style="margin:8px 0">Weekly summaries stored in GitHub (unlimited history)</p>
-    <div class="chart-container" style="height:300px">
-      <canvas id="longterm-chart"></canvas>
+
+    <!-- Long-term Battery -->
+    <div id="lt-tab-battery" class="tab-content">
+      <div class="card">
+        <h3 style="margin-top:0">🔋 Weekly Avg Battery</h3>
+        <div class="chart-container" style="height:280px">
+          <canvas id="lt-battery-chart"></canvas>
+        </div>
+        <div id="lt-battery-nodata" class="muted" style="display:none;text-align:center;padding:40px">No battery data</div>
+      </div>
     </div>
-    <div id="longterm-nodata" class="muted" style="display:none;text-align:center;padding:40px">No long-term data available yet. Data will appear after the first week.</div>
+
+    <!-- Long-term Watering -->
+    <div id="lt-tab-watering" class="tab-content">
+      <div class="card">
+        <h3 style="margin-top:0">🚿 Weekly Watering</h3>
+        <div class="chart-container" style="height:280px">
+          <canvas id="lt-watering-chart"></canvas>
+        </div>
+        <div id="lt-watering-nodata" class="muted" style="display:none;text-align:center;padding:40px">No watering data</div>
+      </div>
+    </div>
+
     <div id="longterm-loading" class="loading">Loading long-term data...</div>
     <div id="longterm-error" class="error-msg" style="display:none"></div>
   </div>
@@ -354,8 +405,10 @@ async function loadActivity() {
     loading.style.display = 'none';
     wateringLoading.style.display = 'none';
 
+    const pumpEvents = filtered.filter(a => a.type === 'PUMP');
     renderActivityList(filtered);
-    renderWateringList(filtered.filter(a => a.type === 'PUMP'));
+    renderWateringChart(pumpEvents);
+    renderWateringList(pumpEvents);
     updateStats();
   } catch(e) {
     loading.style.display = 'none';
@@ -392,29 +445,47 @@ function renderMoistureChart(data) {
   const labels = data.map(d => new Date(d.timestamp * 1000));
   const values = data.map(d => d.moisture_percent);
 
-  // Create pump event annotations (vertical lines)
+  // Create pump event annotations (vertical lines) from activityData
   const cutoff = Date.now() - (currentPeriod * 24 * 60 * 60 * 1000);
   const pumpAnnotations = {};
 
-  pumpData
-    .filter(p => p.timestamp * 1000 > cutoff && p.action === 'start')
-    .forEach((p, i) => {
-      pumpAnnotations['pump' + i] = {
-        type: 'line',
-        xMin: new Date(p.timestamp * 1000),
-        xMax: new Date(p.timestamp * 1000),
-        borderColor: 'rgba(76, 175, 80, 0.7)',
-        borderWidth: 2,
-        borderDash: [5, 5],
-        label: {
-          display: true,
-          content: '💧',
-          position: 'start',
-          backgroundColor: 'transparent',
-          font: { size: 14 }
-        }
-      };
-    });
+  // Filter pump events from activity (type=PUMP, message includes 'started')
+  const pumpEvents = activityData.filter(a =>
+    a.type === 'PUMP' &&
+    a.timestamp * 1000 > cutoff &&
+    a.message && a.message.toLowerCase().includes('start')
+  );
+
+  pumpEvents.forEach((p, i) => {
+    // Determine pump type: microprime, manual, or normal watering
+    const msg = (p.message || '').toLowerCase();
+    let icon = '💧'; // Normal watering
+    let color = 'rgba(76, 175, 80, 0.7)'; // Green
+
+    if (msg.includes('microprime')) {
+      icon = '💦'; // Microprime
+      color = 'rgba(33, 150, 243, 0.7)'; // Blue
+    } else if (msg.includes('manual')) {
+      icon = '✋'; // Manual
+      color = 'rgba(255, 152, 0, 0.7)'; // Orange
+    }
+
+    pumpAnnotations['pump' + i] = {
+      type: 'line',
+      xMin: new Date(p.timestamp * 1000),
+      xMax: new Date(p.timestamp * 1000),
+      borderColor: color,
+      borderWidth: 2,
+      borderDash: [5, 5],
+      label: {
+        display: true,
+        content: icon,
+        position: 'start',
+        backgroundColor: 'transparent',
+        font: { size: 14 }
+      }
+    };
+  });
 
   // Chart type settings
   const isScatter = chartType === 'scatter';
@@ -641,6 +712,80 @@ function renderBatteryChart(data) {
   });
 }
 
+// Watering chart instance
+let wateringChart = null;
+
+// Render watering chart (timeline of pump events)
+function renderWateringChart(events) {
+  const canvas = document.getElementById('watering-chart');
+  const nodata = document.getElementById('watering-nodata');
+
+  if (wateringChart) { wateringChart.destroy(); wateringChart = null; }
+
+  // Filter to only start events
+  const startEvents = events.filter(e => e.message && e.message.toLowerCase().includes('start'));
+
+  if (startEvents.length === 0) {
+    canvas.style.display = 'none';
+    nodata.style.display = 'block';
+    return;
+  }
+
+  canvas.style.display = 'block';
+  nodata.style.display = 'none';
+
+  // Parse event types and create data points
+  const dataPoints = startEvents.map(e => {
+    const msg = (e.message || '').toLowerCase();
+    let type = 'normal';
+    let color = '#4caf50'; // green
+    if (msg.includes('microprime')) { type = 'microprime'; color = '#2196f3'; } // blue
+    else if (msg.includes('manual')) { type = 'manual'; color = '#ff9800'; } // orange
+
+    // Try to parse volume from message
+    const volMatch = e.message.match(/(\d+)\s*ml/i);
+    const volume = volMatch ? parseInt(volMatch[1]) : 50; // default 50ml
+
+    return { x: new Date(e.timestamp * 1000), y: volume, type, color };
+  });
+
+  // Group by type for datasets
+  const normalData = dataPoints.filter(p => p.type === 'normal').map(p => ({ x: p.x, y: p.y }));
+  const microprimeData = dataPoints.filter(p => p.type === 'microprime').map(p => ({ x: p.x, y: p.y }));
+  const manualData = dataPoints.filter(p => p.type === 'manual').map(p => ({ x: p.x, y: p.y }));
+
+  const datasets = [];
+  if (normalData.length > 0) datasets.push({ label: '💧 Normal', data: normalData, backgroundColor: '#4caf50', borderColor: '#4caf50', pointRadius: 8 });
+  if (microprimeData.length > 0) datasets.push({ label: '💦 Microprime', data: microprimeData, backgroundColor: '#2196f3', borderColor: '#2196f3', pointRadius: 6 });
+  if (manualData.length > 0) datasets.push({ label: '✋ Manual', data: manualData, backgroundColor: '#ff9800', borderColor: '#ff9800', pointRadius: 8 });
+
+  wateringChart = new Chart(canvas.getContext('2d'), {
+    type: 'scatter',
+    data: { datasets },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: { position: 'top' },
+        tooltip: {
+          callbacks: {
+            title: (items) => new Date(items[0].parsed.x).toLocaleString(),
+            label: (item) => `${item.dataset.label}: ${item.parsed.y}ml`
+          }
+        }
+      },
+      scales: {
+        x: {
+          type: 'time',
+          time: { unit: currentPeriod === 1 ? 'hour' : 'day', displayFormats: { hour: 'HH:mm', day: 'MMM d' } },
+          grid: { display: false }
+        },
+        y: { min: 0, title: { display: true, text: 'Volume (ml)' } }
+      }
+    }
+  });
+}
+
 // Render watering list
 function renderWateringList(events) {
   const container = document.getElementById('watering-list');
@@ -780,11 +925,9 @@ let longTermData = []; // Weekly summaries from GitHub
 async function loadLongTermData() {
   const loading = document.getElementById('longterm-loading');
   const error = document.getElementById('longterm-error');
-  const nodata = document.getElementById('longterm-nodata');
 
   loading.style.display = 'block';
   error.style.display = 'none';
-  nodata.style.display = 'none';
 
   try {
     // Extract short device ID (BB00C1) from DEVICE_ID (Polivalka-BB00C1 or BB00C1)
@@ -795,9 +938,8 @@ async function loadLongTermData() {
     if (!response.ok) {
       if (response.status === 404) {
         loading.style.display = 'none';
-        nodata.style.display = 'block';
         longTermData = [];
-        renderLongTermChart([]);
+        renderAllLtCharts([]);
         renderHistoryList([]);
         return;
       }
@@ -811,7 +953,7 @@ async function loadLongTermData() {
 
     // Filter and render based on selected period
     const filtered = filterLongTermData(longTermPeriod);
-    renderLongTermChart(filtered);
+    renderAllLtCharts(filtered);
     renderHistoryList(longTermData); // History shows all data
 
   } catch(e) {
@@ -842,27 +984,35 @@ function setLongTermPeriod(weeks) {
   document.querySelectorAll('.longterm-period-selector button').forEach(b => b.classList.remove('active'));
   document.getElementById('btn-lt-' + weeks + 'w').classList.add('active');
 
-  const labels = { 4: '1 month', 12: '3 months', 26: '6 months', 52: '1 year' };
+  const labels = { 4: '1 month', 12: '3 months', 26: '6 months', 52: '1 year', 104: '2 years', 156: '3 years' };
   document.getElementById('longterm-period-label').textContent = labels[weeks] || weeks + ' weeks';
 
   const filtered = filterLongTermData(weeks);
-  renderLongTermChart(filtered);
+  renderAllLtCharts(filtered);
 }
 
-// Long-term chart instance
-let longTermChart = null;
+// Long-term chart instances
+let ltMoistureChart = null;
+let ltBatteryChart = null;
+let ltWateringChart = null;
 
-// Render long-term chart
-function renderLongTermChart(data) {
-  const canvas = document.getElementById('longterm-chart');
-  const nodata = document.getElementById('longterm-nodata');
+// Long-term tab switching
+function showLtTab(name) {
+  document.querySelectorAll('#lt-tab-buttons + .row ~ .tab-content').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('#lt-tab-buttons button').forEach(b => b.classList.remove('active'));
+  document.getElementById('lt-tab-' + name).classList.add('active');
+  event.target.classList.add('active');
+}
 
-  if (longTermChart) {
-    longTermChart.destroy();
-    longTermChart = null;
-  }
+// Render long-term moisture chart
+function renderLtMoistureChart(data) {
+  const canvas = document.getElementById('lt-moisture-chart');
+  const nodata = document.getElementById('lt-moisture-nodata');
 
-  if (data.length === 0) {
+  if (ltMoistureChart) { ltMoistureChart.destroy(); ltMoistureChart = null; }
+
+  const hasData = data.some(d => d.moisture?.avg_percent != null);
+  if (!hasData) {
     canvas.style.display = 'none';
     nodata.style.display = 'block';
     return;
@@ -871,83 +1021,114 @@ function renderLongTermChart(data) {
   canvas.style.display = 'block';
   nodata.style.display = 'none';
 
-  const ctx = canvas.getContext('2d');
-
-  // Prepare data
   const labels = data.map(d => d.week);
-  const moistureAvg = data.map(d => d.moisture?.avg_percent || null);
-  const batteryAvg = data.map(d => d.battery?.avg_percent || null);
-  const wateringMl = data.map(d => d.watering?.total_ml || 0);
+  const avgValues = data.map(d => d.moisture?.avg_percent || null);
+  const minValues = data.map(d => d.moisture?.min_percent || null);
+  const maxValues = data.map(d => d.moisture?.max_percent || null);
 
-  longTermChart = new Chart(ctx, {
+  ltMoistureChart = new Chart(canvas.getContext('2d'), {
     type: 'line',
     data: {
       labels: labels,
       datasets: [
-        {
-          label: 'Avg Moisture %',
-          data: moistureAvg,
-          borderColor: '#1976d2',
-          backgroundColor: 'rgba(25, 118, 210, 0.1)',
-          fill: true,
-          tension: 0.3,
-          yAxisID: 'y'
-        },
-        {
-          label: 'Avg Battery %',
-          data: batteryAvg,
-          borderColor: '#4caf50',
-          borderDash: [5, 5],
-          fill: false,
-          tension: 0.3,
-          yAxisID: 'y'
-        },
-        {
-          label: 'Water ml',
-          data: wateringMl,
-          type: 'bar',
-          backgroundColor: 'rgba(33, 150, 243, 0.5)',
-          borderColor: '#2196f3',
-          borderWidth: 1,
-          yAxisID: 'y1'
-        }
+        { label: 'Avg %', data: avgValues, borderColor: '#1976d2', backgroundColor: 'rgba(25,118,210,0.1)', fill: true, tension: 0.3 },
+        { label: 'Min %', data: minValues, borderColor: '#90caf9', borderDash: [3,3], fill: false, tension: 0.3, pointRadius: 2 },
+        { label: 'Max %', data: maxValues, borderColor: '#1565c0', borderDash: [3,3], fill: false, tension: 0.3, pointRadius: 2 }
       ]
     },
     options: {
-      responsive: true,
-      maintainAspectRatio: false,
-      interaction: { mode: 'index', intersect: false },
-      plugins: {
-        legend: { position: 'top' },
-        tooltip: {
-          callbacks: {
-            title: (items) => {
-              const week = items[0].label;
-              const weekData = data.find(d => d.week === week);
-              return `Week ${week} (${weekData?.start_date || ''} - ${weekData?.end_date || ''})`;
-            }
-          }
-        }
-      },
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { position: 'top' } },
+      scales: { x: { grid: { display: false } }, y: { min: 0, max: 100, ticks: { callback: v => v + '%' } } }
+    }
+  });
+}
+
+// Render long-term battery chart
+function renderLtBatteryChart(data) {
+  const canvas = document.getElementById('lt-battery-chart');
+  const nodata = document.getElementById('lt-battery-nodata');
+
+  if (ltBatteryChart) { ltBatteryChart.destroy(); ltBatteryChart = null; }
+
+  const hasData = data.some(d => d.battery?.avg_percent != null);
+  if (!hasData) {
+    canvas.style.display = 'none';
+    nodata.style.display = 'block';
+    return;
+  }
+
+  canvas.style.display = 'block';
+  nodata.style.display = 'none';
+
+  const labels = data.map(d => d.week);
+  const avgValues = data.map(d => d.battery?.avg_percent || null);
+  const minValues = data.map(d => d.battery?.min_percent || null);
+
+  ltBatteryChart = new Chart(canvas.getContext('2d'), {
+    type: 'line',
+    data: {
+      labels: labels,
+      datasets: [
+        { label: 'Avg %', data: avgValues, borderColor: '#4caf50', backgroundColor: 'rgba(76,175,80,0.1)', fill: true, tension: 0.3 },
+        { label: 'Min %', data: minValues, borderColor: '#81c784', borderDash: [3,3], fill: false, tension: 0.3, pointRadius: 2 }
+      ]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { position: 'top' } },
+      scales: { x: { grid: { display: false } }, y: { min: 0, max: 100, ticks: { callback: v => v + '%' } } }
+    }
+  });
+}
+
+// Render long-term watering chart
+function renderLtWateringChart(data) {
+  const canvas = document.getElementById('lt-watering-chart');
+  const nodata = document.getElementById('lt-watering-nodata');
+
+  if (ltWateringChart) { ltWateringChart.destroy(); ltWateringChart = null; }
+
+  const hasData = data.some(d => (d.watering?.events_count || 0) > 0);
+  if (!hasData) {
+    canvas.style.display = 'none';
+    nodata.style.display = 'block';
+    return;
+  }
+
+  canvas.style.display = 'block';
+  nodata.style.display = 'none';
+
+  const labels = data.map(d => d.week);
+  const countValues = data.map(d => d.watering?.events_count || 0);
+  const mlValues = data.map(d => d.watering?.total_ml || 0);
+
+  ltWateringChart = new Chart(canvas.getContext('2d'), {
+    type: 'bar',
+    data: {
+      labels: labels,
+      datasets: [
+        { label: 'Waterings', data: countValues, backgroundColor: 'rgba(33,150,243,0.7)', borderColor: '#2196f3', borderWidth: 1, yAxisID: 'y' },
+        { label: 'Volume ml', data: mlValues, type: 'line', borderColor: '#ff9800', fill: false, tension: 0.3, yAxisID: 'y1' }
+      ]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { position: 'top' } },
       scales: {
         x: { grid: { display: false } },
-        y: {
-          type: 'linear',
-          position: 'left',
-          min: 0,
-          max: 100,
-          ticks: { callback: v => v + '%' }
-        },
-        y1: {
-          type: 'linear',
-          position: 'right',
-          min: 0,
-          grid: { drawOnChartArea: false },
-          ticks: { callback: v => v + 'ml' }
-        }
+        y: { type: 'linear', position: 'left', min: 0, title: { display: true, text: 'Count' } },
+        y1: { type: 'linear', position: 'right', min: 0, grid: { drawOnChartArea: false }, ticks: { callback: v => v + 'ml' } }
       }
     }
   });
+}
+
+// Render all long-term charts
+function renderAllLtCharts(data) {
+  renderLtMoistureChart(data);
+  renderLtBatteryChart(data);
+  renderLtWateringChart(data);
 }
 
 // Render history list
