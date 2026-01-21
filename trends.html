@@ -158,22 +158,19 @@
   </div>
 
   <!-- Long-term Trends (from GitHub JSON) -->
-  <div style="margin-top:24px;border-top:3px solid #2c5f2d;padding-top:16px">
-    <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:12px">
-      <h3 style="margin:0">📈 Long-term (<span id="longterm-period-label">3 months</span>)</h3>
-      <p class="muted" style="margin:0">Weekly summaries from GitHub</p>
-    </div>
+  <div class="card" style="margin-top:24px;border-top:3px solid #2c5f2d">
+    <h3 style="margin-top:0">📈 Long-term (<span id="longterm-period-label">3 months</span>)</h3>
 
-    <!-- Long-term Tabs -->
+    <!-- Long-term Tabs (same style as short-term) -->
     <div class="tab-buttons" id="lt-tab-buttons">
       <button class="active" onclick="showLtTab('moisture')">💧 Moisture</button>
       <button onclick="showLtTab('battery')">🔋 Battery</button>
       <button onclick="showLtTab('watering')">🚿 Watering</button>
     </div>
 
-    <!-- Long-term Period & Export -->
+    <!-- Long-term Period & Export (same layout as short-term) -->
     <div class="row" style="justify-content:space-between;flex-wrap:wrap;gap:8px;margin:12px 0">
-      <div class="longterm-period-selector" style="display:flex;gap:4px">
+      <div class="period-selector">
         <button onclick="setLongTermPeriod(4)" id="btn-lt-4w">1mo</button>
         <button onclick="setLongTermPeriod(12)" id="btn-lt-12w" class="active">3mo</button>
         <button onclick="setLongTermPeriod(26)" id="btn-lt-26w">6mo</button>
@@ -184,39 +181,30 @@
       <button onclick="exportLongTermCSV()" style="padding:6px 10px;font-size:13px">Export</button>
     </div>
 
-    <!-- Long-term Tab Contents Container -->
+    <!-- Long-term Tab Contents -->
     <div id="lt-tabs-container">
       <!-- Long-term Moisture -->
       <div id="lt-tab-moisture" class="lt-tab-content" style="display:block">
-        <div class="card">
-          <h3 style="margin-top:0">💧 Weekly Avg Moisture</h3>
-          <div class="chart-container" style="height:280px">
-            <canvas id="lt-moisture-chart"></canvas>
-          </div>
-          <div id="lt-moisture-nodata" class="muted" style="display:none;text-align:center;padding:40px">No moisture data</div>
+        <div class="chart-container" style="height:280px">
+          <canvas id="lt-moisture-chart"></canvas>
         </div>
+        <div id="lt-moisture-nodata" class="muted" style="display:none;text-align:center;padding:40px">No moisture data</div>
       </div>
 
       <!-- Long-term Battery -->
       <div id="lt-tab-battery" class="lt-tab-content" style="display:none">
-        <div class="card">
-          <h3 style="margin-top:0">🔋 Weekly Avg Battery</h3>
-          <div class="chart-container" style="height:280px">
-            <canvas id="lt-battery-chart"></canvas>
-          </div>
-          <div id="lt-battery-nodata" class="muted" style="display:none;text-align:center;padding:40px">No battery data</div>
+        <div class="chart-container" style="height:280px">
+          <canvas id="lt-battery-chart"></canvas>
         </div>
+        <div id="lt-battery-nodata" class="muted" style="display:none;text-align:center;padding:40px">No battery data</div>
       </div>
 
       <!-- Long-term Watering -->
       <div id="lt-tab-watering" class="lt-tab-content" style="display:none">
-        <div class="card">
-          <h3 style="margin-top:0">🚿 Weekly Watering</h3>
-          <div class="chart-container" style="height:280px">
-            <canvas id="lt-watering-chart"></canvas>
-          </div>
-          <div id="lt-watering-nodata" class="muted" style="display:none;text-align:center;padding:40px">No watering data</div>
+        <div class="chart-container" style="height:280px">
+          <canvas id="lt-watering-chart"></canvas>
         </div>
+        <div id="lt-watering-nodata" class="muted" style="display:none;text-align:center;padding:40px">No watering data</div>
       </div>
     </div>
 
