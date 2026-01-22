@@ -159,7 +159,7 @@
 
   <!-- Long-term Trends (from GitHub JSON) -->
   <div class="card" style="margin-top:24px;border-top:3px solid #2c5f2d">
-    <h3 style="margin-top:0">📈 Long-term (<span id="longterm-period-label">3 months</span>)</h3>
+    <h3 style="margin-top:0">📈 Long-term (<span id="longterm-period-label">6 months</span>)</h3>
 
     <!-- Long-term Tabs (same style as short-term) -->
     <div class="tab-buttons" id="lt-tab-buttons">
@@ -172,8 +172,7 @@
     <div class="row" style="justify-content:space-between;flex-wrap:wrap;gap:8px;margin:12px 0">
       <div class="period-selector">
         <button onclick="setLongTermPeriod(4)" id="btn-lt-4w">1mo</button>
-        <button onclick="setLongTermPeriod(12)" id="btn-lt-12w" class="active">3mo</button>
-        <button onclick="setLongTermPeriod(26)" id="btn-lt-26w">6mo</button>
+        <button onclick="setLongTermPeriod(26)" id="btn-lt-26w" class="active">6mo</button>
         <button onclick="setLongTermPeriod(52)" id="btn-lt-52w">1y</button>
         <button onclick="setLongTermPeriod(104)" id="btn-lt-104w">2y</button>
         <button onclick="setLongTermPeriod(156)" id="btn-lt-156w">3y</button>
@@ -884,12 +883,14 @@ function exportCSV() {
     csv += `${time},${a.type},,,,,,,,${bootType},${resetReason},"${msg}"\n`;
   }
 
-  // Download
+  // Download with standardized filename: DeviceID_date_type-period.csv
   const blob = new Blob([csv], { type: 'text/csv' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
-  a.download = `polivalka-${DEVICE_ID}-${new Date().toISOString().split('T')[0]}.csv`;
+  const date = new Date().toISOString().split('T')[0];
+  const periodLabel = currentPeriod === 1 ? '24h' : currentPeriod + 'd';
+  a.download = `${DEVICE_ID}_${date}_trends-${periodLabel}.csv`;
   a.click();
   URL.revokeObjectURL(url);
 }
@@ -956,7 +957,7 @@ async function loadLongTermData() {
 }
 
 // Current long-term period (weeks)
-let longTermPeriod = 12; // 3 months by default
+let longTermPeriod = 26; // 6 months by default
 
 // Filter data by period
 function filterLongTermData(weeks) {
@@ -972,10 +973,15 @@ function filterLongTermData(weeks) {
 // Set long-term period
 function setLongTermPeriod(weeks) {
   longTermPeriod = weeks;
-  document.querySelectorAll('.longterm-period-selector button').forEach(b => b.classList.remove('active'));
-  document.getElementById('btn-lt-' + weeks + 'w').classList.add('active');
+  // Find period-selector inside long-term card (not the short-term one)
+  const ltCard = document.querySelector('.card[style*="border-top:3px"]');
+  if (ltCard) {
+    ltCard.querySelectorAll('.period-selector button').forEach(b => b.classList.remove('active'));
+  }
+  const btn = document.getElementById('btn-lt-' + weeks + 'w');
+  if (btn) btn.classList.add('active');
 
-  const labels = { 4: '1 month', 12: '3 months', 26: '6 months', 52: '1 year', 104: '2 years', 156: '3 years' };
+  const labels = { 4: '1 month', 26: '6 months', 52: '1 year', 104: '2 years', 156: '3 years' };
   document.getElementById('longterm-period-label').textContent = labels[weeks] || weeks + ' weeks';
 
   const filtered = filterLongTermData(weeks);
@@ -1220,12 +1226,15 @@ function exportLongTermCSV() {
     csv += `${w.system?.online_hours || ''},${w.system?.offline_hours || ''},${w.system?.restarts || 0},${w.system?.firmware_version || ''}\n`;
   }
 
+  // Download with standardized filename: DeviceID_date_type-period.csv
   const blob = new Blob([csv], { type: 'text/csv' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
-  const shortId = DEVICE_ID.replace('Polivalka-', '');
-  a.download = `polivalka-${shortId}-longterm-${new Date().toISOString().split('T')[0]}.csv`;
+  const date = new Date().toISOString().split('T')[0];
+  const periodLabels = { 4: '1mo', 26: '6mo', 52: '1y', 104: '2y', 156: '3y' };
+  const periodLabel = periodLabels[longTermPeriod] || longTermPeriod + 'w';
+  a.download = `${DEVICE_ID}_${date}_longterm-${periodLabel}.csv`;
   a.click();
   URL.revokeObjectURL(url);
 }

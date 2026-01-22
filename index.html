@@ -1597,10 +1597,12 @@ function closeLogsModal() {
 
 // Global variable to store current device ID for logs modal
 let currentLogsDeviceId = null;
+let currentLogsTab = 'activity'; // 'activity' or 'device'
 
 // Switch between Activity and Device logs tabs
 async function switchLogsTab(tab) {
   if (!currentLogsDeviceId) return;
+  currentLogsTab = tab;
 
   // Update tab button styles
   const activityBtn = document.getElementById('logsTabActivity');
@@ -1748,9 +1750,11 @@ function downloadLogsCSV() {
   const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
   const url = URL.createObjectURL(blob);
 
+  // Standardized filename: DeviceID_date_type.csv
   const deviceId = currentLogsDeviceId || 'device';
   const date = new Date().toISOString().split('T')[0];
-  const filename = `${deviceId}-logs-${date}.csv`;
+  const logType = currentLogsTab === 'device' ? 'logs-device' : 'logs-activity';
+  const filename = `${deviceId}_${date}_${logType}.csv`;
 
   const link = document.createElement('a');
   link.href = url;
