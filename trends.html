@@ -1086,7 +1086,11 @@ function renderLtMoistureChart(data) {
     options: {
       responsive: true, maintainAspectRatio: false,
       plugins: { legend: { position: 'top' } },
-      scales: { x: { grid: { display: false } }, y: { min: 0, max: 100, ticks: { callback: v => v + '%' } } }
+      scales: {
+        x: { grid: { display: false } },
+        y: { type: 'linear', position: 'left', min: 0, max: 100, ticks: { callback: v => v + '%' } },
+        y1: { type: 'linear', position: 'right', min: 0, max: 4095, grid: { drawOnChartArea: false } }
+      }
     }
   });
 }
@@ -1124,7 +1128,11 @@ function renderLtSensor2Chart(data) {
     options: {
       responsive: true, maintainAspectRatio: false,
       plugins: { legend: { position: 'top' } },
-      scales: { x: { grid: { display: false } }, y: { min: 0, max: 100, ticks: { callback: v => v + '%' } } }
+      scales: {
+        x: { grid: { display: false } },
+        y: { type: 'linear', position: 'left', min: 0, max: 100, ticks: { callback: v => v + '%' } },
+        y1: { type: 'linear', position: 'right', min: 0, max: 4095, grid: { drawOnChartArea: false } }
+      }
     }
   });
 }
