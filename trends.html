@@ -637,7 +637,36 @@ function renderBatteryChart(data) {
 
   const labels = withBattery.map(d => new Date(d.timestamp * 1000));
   const percentValues = withBattery.map(d => d.percent);
-  const voltageValues = withBattery.map(d => d.voltage);
+  // Li-Po discharge curve: voltage → equivalent percent
+  // Based on real MAX17043 data from device logs
+  const lipoCurve = [
+    { v: 4.20, p: 100 },
+    { v: 4.00, p: 80 },
+    { v: 3.85, p: 60 },
+    { v: 3.75, p: 40 },
+    { v: 3.65, p: 15 },
+    { v: 3.55, p: 7 },
+    { v: 3.45, p: 4 },
+    { v: 3.35, p: 2 },
+    { v: 3.00, p: 0 }
+  ];
+
+  function voltageToPercent(voltage) {
+    if (voltage >= 4.20) return 100;
+    if (voltage <= 3.00) return 0;
+    // Find surrounding points and interpolate
+    for (let i = 0; i < lipoCurve.length - 1; i++) {
+      if (voltage <= lipoCurve[i].v && voltage > lipoCurve[i + 1].v) {
+        const v1 = lipoCurve[i].v, p1 = lipoCurve[i].p;
+        const v2 = lipoCurve[i + 1].v, p2 = lipoCurve[i + 1].p;
+        return p1 + (p2 - p1) * (voltage - v1) / (v2 - v1);
+      }
+    }
+    return 0;
+  }
+
+  // Convert voltage to equivalent % for aligned display
+  const voltageAsPercent = withBattery.map(d => voltageToPercent(d.voltage));
 
   // Chart type settings
   const isScatter = chartType === 'scatter';
@@ -655,19 +684,19 @@ function renderBatteryChart(data) {
           fill: !isScatter,
           tension: isScatter ? 0 : 0.3,
           pointRadius: isScatter ? 4 : 2,
-          showLine: !isScatter,
-          yAxisID: 'y'
+          showLine: !isScatter
         },
         {
           label: 'Voltage V',
-          data: isScatter ? withBattery.map(d => ({ x: new Date(d.timestamp * 1000), y: d.voltage })) : voltageValues,
+          data: isScatter ? withBattery.map((d, i) => ({ x: new Date(d.timestamp * 1000), y: voltageAsPercent[i], voltage: d.voltage })) : voltageAsPercent,
           borderColor: '#ff9800',
           borderDash: isScatter ? [] : [5, 5],
           fill: false,
           tension: isScatter ? 0 : 0.3,
           pointRadius: isScatter ? 3 : 1,
           showLine: !isScatter,
-          yAxisID: 'y1'
+          // Store original voltage for tooltip
+          voltageData: withBattery.map(d => d.voltage)
         }
       ]
     },
@@ -678,7 +707,15 @@ function renderBatteryChart(data) {
         legend: { position: 'top' },
         tooltip: {
           callbacks: {
-            title: (items) => new Date(items[0].parsed.x).toLocaleString()
+            title: (items) => new Date(items[0].parsed.x).toLocaleString(),
+            label: (ctx) => {
+              if (ctx.datasetIndex === 1) {
+                // Voltage dataset - show real voltage
+                const voltage = ctx.dataset.voltageData ? ctx.dataset.voltageData[ctx.dataIndex] : null;
+                return voltage ? `Voltage: ${voltage.toFixed(2)}V` : ctx.formattedValue;
+              }
+              return `${ctx.dataset.label}: ${ctx.parsed.y.toFixed(1)}%`;
+            }
           }
         }
       },
@@ -697,14 +734,6 @@ function renderBatteryChart(data) {
           min: 0,
           max: 100,
           ticks: { callback: v => v + '%' }
-        },
-        y1: {
-          type: 'linear',
-          position: 'right',
-          min: 3.0,
-          max: 4.2,
-          grid: { drawOnChartArea: false },
-          ticks: { callback: v => v.toFixed(1) + 'V' }
         }
       }
     }
