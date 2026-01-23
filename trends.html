@@ -637,8 +637,29 @@ function renderBatteryChart(data) {
 
   const labels = withBattery.map(d => new Date(d.timestamp * 1000));
   const percentValues = withBattery.map(d => d.percent);
-  // Real voltage values for right axis
-  const voltageValues = withBattery.map(d => d.voltage);
+
+  // Li-Po discharge curve: voltage → percent
+  const lipoCurve = [
+    { v: 4.20, p: 100 }, { v: 4.00, p: 80 }, { v: 3.85, p: 60 },
+    { v: 3.75, p: 40 }, { v: 3.65, p: 15 }, { v: 3.55, p: 7 },
+    { v: 3.45, p: 4 }, { v: 3.35, p: 2 }, { v: 3.00, p: 0 }
+  ];
+
+  function voltageToPercent(voltage) {
+    if (voltage >= 4.20) return 100;
+    if (voltage <= 3.00) return 0;
+    for (let i = 0; i < lipoCurve.length - 1; i++) {
+      if (voltage <= lipoCurve[i].v && voltage > lipoCurve[i + 1].v) {
+        const v1 = lipoCurve[i].v, p1 = lipoCurve[i].p;
+        const v2 = lipoCurve[i + 1].v, p2 = lipoCurve[i + 1].p;
+        return p1 + (p2 - p1) * (voltage - v1) / (v2 - v1);
+      }
+    }
+    return 0;
+  }
+
+  // Convert voltage to equivalent % (for same Y scale)
+  const voltageAsPercent = withBattery.map(d => voltageToPercent(d.voltage));
 
   // Chart type settings
   const isScatter = chartType === 'scatter';
@@ -660,14 +681,14 @@ function renderBatteryChart(data) {
         },
         {
           label: 'Voltage V',
-          data: isScatter ? withBattery.map(d => ({ x: new Date(d.timestamp * 1000), y: d.voltage })) : voltageValues,
+          data: isScatter ? withBattery.map((d, i) => ({ x: new Date(d.timestamp * 1000), y: voltageAsPercent[i] })) : voltageAsPercent,
           borderColor: '#ff9800',
           borderDash: isScatter ? [] : [5, 5],
           fill: false,
           tension: isScatter ? 0 : 0.3,
           pointRadius: isScatter ? 3 : 1,
           showLine: !isScatter,
-          yAxisID: 'y1'
+          voltageData: withBattery.map(d => d.voltage)
         }
       ]
     },
@@ -685,7 +706,8 @@ function renderBatteryChart(data) {
               if (ctx.datasetIndex === 0) {
                 return `Battery: ${ctx.parsed.y.toFixed(1)}%`;
               } else {
-                return `Voltage: ${ctx.parsed.y.toFixed(2)}V`;
+                const voltage = ctx.dataset.voltageData[ctx.dataIndex];
+                return `Voltage: ${voltage.toFixed(2)}V`;
               }
             }
           }
@@ -710,13 +732,23 @@ function renderBatteryChart(data) {
         y1: {
           type: 'linear',
           position: 'right',
-          min: 3.0,
-          max: 4.2,
+          min: 0,
+          max: 100,
           grid: { drawOnChartArea: false },
-          ticks: {
-            stepSize: 0.2,
-            callback: v => v.toFixed(1) + 'V'
-          }
+          afterBuildTicks: (axis) => {
+            // Round voltages at correct % positions (Li-Po curve)
+            axis.ticks = [
+              { value: 100, label: '4.2V' },
+              { value: 80, label: '4.0V' },
+              { value: 50, label: '3.8V' },
+              { value: 28, label: '3.7V' },
+              { value: 11, label: '3.6V' },
+              { value: 6, label: '3.5V' },
+              { value: 3, label: '3.4V' },
+              { value: 0, label: '3.0V' }
+            ];
+          },
+          ticks: { callback: (v, i, ticks) => ticks[i]?.label || '' }
         }
       }
     }
