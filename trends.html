@@ -637,36 +637,8 @@ function renderBatteryChart(data) {
 
   const labels = withBattery.map(d => new Date(d.timestamp * 1000));
   const percentValues = withBattery.map(d => d.percent);
-  // Li-Po discharge curve: voltage → equivalent percent
-  // Based on real MAX17043 data from device logs
-  const lipoCurve = [
-    { v: 4.20, p: 100 },
-    { v: 4.00, p: 80 },
-    { v: 3.85, p: 60 },
-    { v: 3.75, p: 40 },
-    { v: 3.65, p: 15 },
-    { v: 3.55, p: 7 },
-    { v: 3.45, p: 4 },
-    { v: 3.35, p: 2 },
-    { v: 3.00, p: 0 }
-  ];
-
-  function voltageToPercent(voltage) {
-    if (voltage >= 4.20) return 100;
-    if (voltage <= 3.00) return 0;
-    // Find surrounding points and interpolate
-    for (let i = 0; i < lipoCurve.length - 1; i++) {
-      if (voltage <= lipoCurve[i].v && voltage > lipoCurve[i + 1].v) {
-        const v1 = lipoCurve[i].v, p1 = lipoCurve[i].p;
-        const v2 = lipoCurve[i + 1].v, p2 = lipoCurve[i + 1].p;
-        return p1 + (p2 - p1) * (voltage - v1) / (v2 - v1);
-      }
-    }
-    return 0;
-  }
-
-  // Convert voltage to equivalent % for aligned display
-  const voltageAsPercent = withBattery.map(d => voltageToPercent(d.voltage));
+  // Real voltage values for right axis
+  const voltageValues = withBattery.map(d => d.voltage);
 
   // Chart type settings
   const isScatter = chartType === 'scatter';
@@ -688,15 +660,14 @@ function renderBatteryChart(data) {
         },
         {
           label: 'Voltage V',
-          data: isScatter ? withBattery.map((d, i) => ({ x: new Date(d.timestamp * 1000), y: voltageAsPercent[i], voltage: d.voltage })) : voltageAsPercent,
+          data: isScatter ? withBattery.map(d => ({ x: new Date(d.timestamp * 1000), y: d.voltage })) : voltageValues,
           borderColor: '#ff9800',
           borderDash: isScatter ? [] : [5, 5],
           fill: false,
           tension: isScatter ? 0 : 0.3,
           pointRadius: isScatter ? 3 : 1,
           showLine: !isScatter,
-          // Store original voltage for tooltip
-          voltageData: withBattery.map(d => d.voltage)
+          yAxisID: 'y1'
         }
       ]
     },
@@ -706,18 +677,15 @@ function renderBatteryChart(data) {
       plugins: {
         legend: { position: 'top' },
         tooltip: {
-          mode: 'index',  // Show all datasets at this x position
-          intersect: false,  // Don't require exact point hover
+          mode: 'index',
+          intersect: false,
           callbacks: {
             title: (items) => new Date(items[0].parsed.x).toLocaleString(),
             label: (ctx) => {
               if (ctx.datasetIndex === 0) {
-                // Battery % dataset
                 return `Battery: ${ctx.parsed.y.toFixed(1)}%`;
               } else {
-                // Voltage dataset - show real voltage
-                const voltage = ctx.dataset.voltageData ? ctx.dataset.voltageData[ctx.dataIndex] : null;
-                return voltage ? `Voltage: ${voltage.toFixed(2)}V` : '';
+                return `Voltage: ${ctx.parsed.y.toFixed(2)}V`;
               }
             }
           }
@@ -742,24 +710,13 @@ function renderBatteryChart(data) {
         y1: {
           type: 'linear',
           position: 'right',
-          min: 0,
-          max: 100,
+          min: 3.0,
+          max: 4.2,
           grid: { drawOnChartArea: false },
-          // Non-linear voltage labels matching Li-Po curve
-          afterBuildTicks: (axis) => {
-            axis.ticks = [
-              { value: 100, label: '4.2V' },
-              { value: 80, label: '4.0V' },
-              { value: 67, label: '3.9V' },
-              { value: 50, label: '3.8V' },
-              { value: 27, label: '3.7V' },
-              { value: 11, label: '3.6V' },
-              { value: 6, label: '3.5V' },
-              { value: 3, label: '3.4V' },
-              { value: 0, label: '3.0V' }
-            ];
-          },
-          ticks: { callback: (v, i, ticks) => ticks[i]?.label || '' }
+          ticks: {
+            stepSize: 0.2,
+            callback: v => v.toFixed(1) + 'V'
+          }
         }
       }
     }
