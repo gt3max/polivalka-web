@@ -1162,7 +1162,31 @@ function renderLtBatteryChart(data) {
     options: {
       responsive: true, maintainAspectRatio: false,
       plugins: { legend: { position: 'top' } },
-      scales: { x: { grid: { display: false } }, y: { min: 0, max: 100, ticks: { callback: v => v + '%' } } }
+      scales: {
+        x: { grid: { display: false } },
+        y: { min: 0, max: 100, ticks: { callback: v => v + '%' } },
+        y1: {
+          type: 'linear',
+          position: 'right',
+          min: 0,
+          max: 100,
+          grid: { drawOnChartArea: false },
+          afterBuildTicks: (axis) => {
+            axis.ticks = [
+              { value: 100, label: '4.2V' },
+              { value: 90, label: '4.1V' },
+              { value: 80, label: '4.0V' },
+              { value: 67, label: '3.9V' },
+              { value: 50, label: '3.8V' },
+              { value: 28, label: '3.7V' },
+              { value: 11, label: '3.6V' },
+              { value: 6, label: '3.5V' },
+              { value: 0, label: '3.0V' }
+            ];
+          },
+          ticks: { callback: (v, i, ticks) => ticks[i]?.label || '' }
+        }
+      }
     }
   });
 }
