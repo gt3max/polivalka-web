@@ -736,10 +736,11 @@ function renderBatteryChart(data) {
           max: 100,
           grid: { drawOnChartArea: false },
           afterBuildTicks: (axis) => {
-            // Round voltages at correct % positions (Li-Po curve)
+            // Voltages at correct % positions (Li-Po curve)
             axis.ticks = [
               { value: 100, label: '4.2V' },
               { value: 80, label: '4.0V' },
+              { value: 67, label: '3.9V' },
               { value: 50, label: '3.8V' },
               { value: 28, label: '3.7V' },
               { value: 11, label: '3.6V' },
