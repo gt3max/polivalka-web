@@ -168,7 +168,7 @@
       <button onclick="showLtTab('watering')">🚿 Watering</button>
     </div>
 
-    <!-- Long-term Period & Export (same layout as short-term) -->
+    <!-- Long-term Period & Chart Controls (same layout as short-term) -->
     <div class="row" style="justify-content:space-between;flex-wrap:wrap;gap:8px;margin:12px 0">
       <div class="period-selector">
         <button onclick="setLongTermPeriod(4)" id="btn-lt-4w">1mo</button>
@@ -177,7 +177,13 @@
         <button onclick="setLongTermPeriod(104)" id="btn-lt-104w">2y</button>
         <button onclick="setLongTermPeriod(156)" id="btn-lt-156w">3y</button>
       </div>
-      <button onclick="exportLongTermCSV()" style="padding:6px 10px;font-size:13px">Export</button>
+      <div class="row" style="gap:8px">
+        <div class="chart-type-selector" style="display:flex;gap:2px;border:1px solid #ddd;border-radius:8px;overflow:hidden">
+          <button onclick="setLtChartType('line')" id="btn-lt-line" class="active" style="border:none;border-radius:0;padding:6px 10px;font-size:13px">Line</button>
+          <button onclick="setLtChartType('scatter')" id="btn-lt-scatter" style="border:none;border-radius:0;padding:6px 10px;font-size:13px">Dots</button>
+        </div>
+        <button onclick="exportLongTermCSV()" style="padding:6px 10px;font-size:13px">Export</button>
+      </div>
     </div>
 
     <!-- Long-term Tab Contents -->
@@ -235,6 +241,7 @@
 // State
 let currentPeriod = 7; // days
 let chartType = 'line'; // 'line' (connected) or 'scatter' (points only)
+let ltChartType = 'line'; // Long-term chart type
 let sensorData = [];
 let batteryData = [];
 let activityData = [];
@@ -1033,6 +1040,15 @@ function setLongTermPeriod(weeks) {
   renderAllLtCharts(filtered);
 }
 
+// Long-term chart type selector
+function setLtChartType(type) {
+  ltChartType = type;
+  document.getElementById('btn-lt-line').classList.toggle('active', type === 'line');
+  document.getElementById('btn-lt-scatter').classList.toggle('active', type === 'scatter');
+  const filtered = filterLongTermData(longTermPeriod);
+  renderAllLtCharts(filtered);
+}
+
 // Long-term chart instances
 let ltMoistureChart = null;
 let ltSensor2Chart = null;
@@ -1073,14 +1089,16 @@ function renderLtMoistureChart(data) {
   const minValues = data.map(d => d.moisture?.min_percent || null);
   const maxValues = data.map(d => d.moisture?.max_percent || null);
 
+  const isScatter = ltChartType === 'scatter';
+
   ltMoistureChart = new Chart(canvas.getContext('2d'), {
-    type: 'line',
+    type: isScatter ? 'scatter' : 'line',
     data: {
       labels: labels,
       datasets: [
-        { label: 'Avg %', data: avgValues, borderColor: '#1976d2', backgroundColor: 'rgba(25,118,210,0.1)', fill: true, tension: 0.3 },
-        { label: 'Min %', data: minValues, borderColor: '#90caf9', borderDash: [3,3], fill: false, tension: 0.3, pointRadius: 2 },
-        { label: 'Max %', data: maxValues, borderColor: '#1565c0', borderDash: [3,3], fill: false, tension: 0.3, pointRadius: 2 }
+        { label: 'Avg %', data: avgValues, borderColor: '#1976d2', backgroundColor: isScatter ? '#1976d2' : 'rgba(25,118,210,0.1)', fill: !isScatter, tension: 0.3, pointRadius: isScatter ? 5 : 3, showLine: !isScatter },
+        { label: 'Min %', data: minValues, borderColor: '#90caf9', borderDash: [3,3], fill: false, tension: 0.3, pointRadius: isScatter ? 4 : 2, showLine: !isScatter },
+        { label: 'Max %', data: maxValues, borderColor: '#1565c0', borderDash: [3,3], fill: false, tension: 0.3, pointRadius: isScatter ? 4 : 2, showLine: !isScatter }
       ]
     },
     options: {
@@ -1115,14 +1133,16 @@ function renderLtSensor2Chart(data) {
   const minValues = data.map(d => d.sensor2?.min_percent || null);
   const maxValues = data.map(d => d.sensor2?.max_percent || null);
 
+  const isScatter = ltChartType === 'scatter';
+
   ltSensor2Chart = new Chart(canvas.getContext('2d'), {
-    type: 'line',
+    type: isScatter ? 'scatter' : 'line',
     data: {
       labels: labels,
       datasets: [
-        { label: 'Avg %', data: avgValues, borderColor: '#9c27b0', backgroundColor: 'rgba(156,39,176,0.1)', fill: true, tension: 0.3 },
-        { label: 'Min %', data: minValues, borderColor: '#ce93d8', borderDash: [3,3], fill: false, tension: 0.3, pointRadius: 2 },
-        { label: 'Max %', data: maxValues, borderColor: '#7b1fa2', borderDash: [3,3], fill: false, tension: 0.3, pointRadius: 2 }
+        { label: 'Avg %', data: avgValues, borderColor: '#9c27b0', backgroundColor: isScatter ? '#9c27b0' : 'rgba(156,39,176,0.1)', fill: !isScatter, tension: 0.3, pointRadius: isScatter ? 5 : 3, showLine: !isScatter },
+        { label: 'Min %', data: minValues, borderColor: '#ce93d8', borderDash: [3,3], fill: false, tension: 0.3, pointRadius: isScatter ? 4 : 2, showLine: !isScatter },
+        { label: 'Max %', data: maxValues, borderColor: '#7b1fa2', borderDash: [3,3], fill: false, tension: 0.3, pointRadius: isScatter ? 4 : 2, showLine: !isScatter }
       ]
     },
     options: {
@@ -1158,13 +1178,15 @@ function renderLtBatteryChart(data) {
   const avgValues = data.map(d => d.battery?.avg_percent || null);
   const minValues = data.map(d => d.battery?.min_percent || null);
 
+  const isScatter = ltChartType === 'scatter';
+
   ltBatteryChart = new Chart(canvas.getContext('2d'), {
-    type: 'line',
+    type: isScatter ? 'scatter' : 'line',
     data: {
       labels: labels,
       datasets: [
-        { label: 'Avg %', data: avgValues, borderColor: '#4caf50', backgroundColor: 'rgba(76,175,80,0.1)', fill: true, tension: 0.3 },
-        { label: 'Min %', data: minValues, borderColor: '#81c784', borderDash: [3,3], fill: false, tension: 0.3, pointRadius: 2 }
+        { label: 'Avg %', data: avgValues, borderColor: '#4caf50', backgroundColor: isScatter ? '#4caf50' : 'rgba(76,175,80,0.1)', fill: !isScatter, tension: 0.3, pointRadius: isScatter ? 5 : 3, showLine: !isScatter },
+        { label: 'Min %', data: minValues, borderColor: '#81c784', borderDash: [3,3], fill: false, tension: 0.3, pointRadius: isScatter ? 4 : 2, showLine: !isScatter }
       ]
     },
     options: {
