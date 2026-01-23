@@ -706,15 +706,19 @@ function renderBatteryChart(data) {
       plugins: {
         legend: { position: 'top' },
         tooltip: {
+          mode: 'index',  // Show all datasets at this x position
+          intersect: false,  // Don't require exact point hover
           callbacks: {
             title: (items) => new Date(items[0].parsed.x).toLocaleString(),
             label: (ctx) => {
-              if (ctx.datasetIndex === 1) {
+              if (ctx.datasetIndex === 0) {
+                // Battery % dataset
+                return `Battery: ${ctx.parsed.y.toFixed(1)}%`;
+              } else {
                 // Voltage dataset - show real voltage
                 const voltage = ctx.dataset.voltageData ? ctx.dataset.voltageData[ctx.dataIndex] : null;
-                return voltage ? `Voltage: ${voltage.toFixed(2)}V` : ctx.formattedValue;
+                return voltage ? `Voltage: ${voltage.toFixed(2)}V` : '';
               }
-              return `${ctx.dataset.label}: ${ctx.parsed.y.toFixed(1)}%`;
             }
           }
         }
