@@ -335,45 +335,78 @@ async function monitorWiFiMode() {
 
 // ============ Device ID Persistence ============
 /**
- * Save device_id to localStorage and update navigation links
- * This ensures identify.html and other pages can access the current device
+ * Save device_id to localStorage (with user email for security)
+ * and update navigation links IMMEDIATELY (not deferred)
+ *
+ * Security: Device ID stored per-user to prevent cross-user access
+ * Performance: Links updated synchronously to prevent race condition
  */
 function initDevicePersistence() {
   const params = new URLSearchParams(window.location.search);
   const deviceFromUrl = params.get('device');
+  const userEmail = localStorage.getItem('user_email') || 'anonymous';
+
+  // Security: Store device ID per user (prevents BUG #10 - device collision)
+  const storageKey = `selected_device_${userEmail}`;
 
   // Save to localStorage if present in URL
   if (deviceFromUrl) {
+    localStorage.setItem(storageKey, deviceFromUrl);
+    // Also keep legacy key for backwards compatibility
     localStorage.setItem('selected_device_id', deviceFromUrl);
-    console.log('[Common] Saved device to localStorage:', deviceFromUrl);
+    console.log('[Common] Saved device to localStorage:', deviceFromUrl, 'for user:', userEmail);
   }
 
-  // Get current device (from URL or localStorage)
-  const currentDevice = deviceFromUrl || localStorage.getItem('selected_device_id');
+  // Get current device - URL takes priority, then user-specific, then legacy
+  const currentDevice = deviceFromUrl ||
+                        localStorage.getItem(storageKey) ||
+                        localStorage.getItem('selected_device_id');
 
   // Update navigation links to include device parameter
   if (currentDevice) {
-    document.querySelectorAll('.nav a, a[href*=".html"]').forEach(link => {
-      const href = link.getAttribute('href');
-      if (href && href.endsWith('.html') && !href.includes('index.html') && href !== '/') {
-        // Don't add device to index.html or root (Fleet page shows all devices)
-        const url = new URL(href, window.location.origin);
-        if (!url.searchParams.has('device')) {
-          url.searchParams.set('device', currentDevice);
-          link.setAttribute('href', url.pathname + url.search);
-        }
-      }
-    });
-    console.log('[Common] Updated nav links with device:', currentDevice);
+    updateNavLinksWithDevice(currentDevice);
   }
 }
 
-// ============ Init ============
-// Show admin link on page load
-document.addEventListener('DOMContentLoaded', showAdminNavLink);
+/**
+ * Update all navigation links with device parameter
+ * Called immediately AND on DOMContentLoaded (for dynamic content)
+ */
+function updateNavLinksWithDevice(deviceId) {
+  if (!deviceId) return;
 
-// Initialize device persistence (save to localStorage, update nav links)
-document.addEventListener('DOMContentLoaded', initDevicePersistence);
+  document.querySelectorAll('.nav a, a[href*=".html"]').forEach(link => {
+    const href = link.getAttribute('href');
+    if (href && href.endsWith('.html') && !href.includes('index.html') && href !== '/') {
+      // Don't add device to index.html or root (Fleet page shows all devices)
+      try {
+        const url = new URL(href, window.location.origin);
+        url.searchParams.set('device', deviceId);  // Always set (not just if missing)
+        link.setAttribute('href', url.pathname + url.search);
+      } catch (e) {
+        // Invalid URL, skip
+      }
+    }
+  });
+  console.log('[Common] Updated nav links with device:', deviceId);
+}
+
+// ============ Init ============
+// CRITICAL: Initialize device persistence IMMEDIATELY (not deferred!)
+// This prevents BUG #1 where user clicks nav before DOMContentLoaded
+(function() {
+  try {
+    initDevicePersistence();
+  } catch (e) {
+    console.error('[Common] initDevicePersistence failed:', e);
+  }
+})();
+
+// Also run on DOMContentLoaded for dynamically added links
+document.addEventListener('DOMContentLoaded', function() {
+  showAdminNavLink();
+  initDevicePersistence();  // Re-run for any dynamic content
+});
 
 // Set device ID in header for Cloud mode
 if (typeof IS_CLOUD !== 'undefined' && IS_CLOUD && typeof DEVICE_ID !== 'undefined' && DEVICE_ID) {

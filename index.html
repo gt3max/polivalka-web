@@ -635,32 +635,9 @@ function initUserDisplay() {
 initUserDisplay();
 
 async function loadDevices() {
-  // Load devices from API
-  console.log('[Fleet] loadDevices() called');
-
-  // Check for fresh cached data first (from Refresh All)
-  const cached = sessionStorage.getItem('fleet_devices_cache');
-  const cacheTime = sessionStorage.getItem('fleet_devices_cache_time');
-  const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
-
-  if (cached && cacheTime) {
-    const age = Date.now() - parseInt(cacheTime);
-    if (age < CACHE_TTL) {
-      try {
-        allDevices = JSON.parse(cached);
-        console.log('[Fleet] ✅ Using cached data (age: ' + Math.round(age/1000) + 's)');
-        renderDevices(allDevices);
-        updateStats(allDevices);
-        return;
-      } catch (e) {
-        console.log('[Fleet] Cache parse failed, fetching fresh');
-      }
-    } else {
-      console.log('[Fleet] Cache expired (age: ' + Math.round(age/1000) + 's)');
-      sessionStorage.removeItem('fleet_devices_cache');
-      sessionStorage.removeItem('fleet_devices_cache_time');
-    }
-  }
+  // Load devices from API - ALWAYS fetch fresh data
+  // No caching on page load to prevent stale data (BUG #8)
+  console.log('[Fleet] loadDevices() called - fetching fresh data');
 
   try {
     console.log('[Fleet] Calling API.get(/devices)...');
@@ -1164,9 +1141,6 @@ async function refreshSensor(deviceId) {
       renderDevices(allDevices);
       updateStats(allDevices);
 
-      // Update cache with new data
-      updateDeviceCache();
-
       // Show success feedback with updated values
       showToast(`✅ ${deviceId}: ${result.moisture_pct}% | ${device.state}`, 'success');
     }
@@ -1177,16 +1151,6 @@ async function refreshSensor(deviceId) {
       ? `⏱️ ${deviceId} не отвечает (offline?)`
       : `❌ ${deviceId}: ${e.message}`;
     showToast(errorMsg, 'error');
-  }
-}
-
-// Helper: update device cache in sessionStorage
-function updateDeviceCache() {
-  try {
-    sessionStorage.setItem('fleet_devices_cache', JSON.stringify(allDevices));
-    sessionStorage.setItem('fleet_devices_cache_time', Date.now().toString());
-  } catch (e) {
-    console.warn('[Fleet] Failed to update cache:', e);
   }
 }
 
@@ -1220,7 +1184,6 @@ async function refreshSensorSilent(deviceId) {
       // Re-render devices (will preserve expanded state)
       renderDevices(allDevices);
       updateStats(allDevices);
-      updateDeviceCache();
     }
 
     // Silent success - no toasts, no button updates
@@ -1233,7 +1196,6 @@ async function refreshSensorSilent(deviceId) {
       device.online = false;
       renderDevices(allDevices);
       updateStats(allDevices);
-      updateDeviceCache();
     }
 
     // Only show error toast if request fails
@@ -1422,10 +1384,6 @@ function deviceUpdate(deviceId) {
 // Admin actions
 async function bulkAction(action) {
   if (action === 'refresh') {
-    // Clear cache first - force fresh load from API
-    sessionStorage.removeItem('fleet_devices_cache');
-    sessionStorage.removeItem('fleet_devices_cache_time');
-
     // Step 1: Reload all data from DynamoDB (name, location, calibration, last_watering, etc.)
     showToast(`🔄 Loading device data...`, 'info');
 
@@ -1482,10 +1440,6 @@ async function bulkAction(action) {
     // Re-render with updated data
     renderDevices(allDevices);
     updateStats(allDevices);
-
-    // Cache the refreshed data (persists when navigating away and back)
-    updateDeviceCache();
-    console.log('[Fleet] Cached refreshed data to sessionStorage');
 
     // Update last refresh timestamp
     const now = new Date();
