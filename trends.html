@@ -533,51 +533,6 @@ function renderMoistureChart(data) {
     };
   });
 
-  // Add sensor disconnect/error annotations (warning events)
-  const sensorWarnings = activityData.filter(a =>
-    a.type === 'SENSOR' &&
-    a.timestamp * 1000 > cutoff &&
-    a.message && (
-      a.message.toLowerCase().includes('disconnect') ||
-      a.message.toLowerCase().includes('error') ||
-      a.message.toLowerCase().includes('fail') ||
-      a.message.toLowerCase().includes('invalid') ||
-      a.message.toLowerCase().includes('out of range') ||
-      a.message.toLowerCase().includes('threshold') ||
-      a.message.toLowerCase().includes('emergency')
-    )
-  );
-
-  sensorWarnings.forEach((s, i) => {
-    const msg = (s.message || '').toLowerCase();
-    let icon = '⚠️'; // Default warning
-    let color = 'rgba(255, 152, 0, 0.8)'; // Orange
-
-    if (msg.includes('disconnect')) {
-      icon = '🔌'; // Disconnected
-      color = 'rgba(244, 67, 54, 0.8)'; // Red
-    } else if (msg.includes('emergency') || msg.includes('fail')) {
-      icon = '🚨'; // Emergency/failure
-      color = 'rgba(244, 67, 54, 0.8)'; // Red
-    }
-
-    pumpAnnotations['sensor_warn' + i] = {
-      type: 'line',
-      xMin: new Date(s.timestamp * 1000),
-      xMax: new Date(s.timestamp * 1000),
-      borderColor: color,
-      borderWidth: 2,
-      borderDash: [3, 3],
-      label: {
-        display: true,
-        content: icon,
-        position: 'end',  // Put at top (opposite to pump icons)
-        backgroundColor: 'transparent',
-        font: { size: 14 }
-      }
-    };
-  });
-
   // Chart type settings
   const isScatter = chartType === 'scatter';
 
