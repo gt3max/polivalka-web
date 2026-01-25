@@ -3544,6 +3544,19 @@ def get_device_activity(device_id, user_id):
                             'boot_type': use_boot_type
                         })
 
+                    elif use_boot_type == 'LOW_POWER_WAKE':
+                        # Device was in Low Power Mode (battery < 10%) and woke up
+                        # Either battery charged to 20%+ or charger was connected
+                        activity_items.append({
+                            'timestamp': use_timestamp,
+                            'type': 'REBOOT',
+                            'level': 'WARNING',
+                            'component': 'BATTERY',
+                            'message': f"🔋 Exited Low Power Mode (reboot #{use_reboot_count})",
+                            'reset_reason': use_reset_reason,
+                            'boot_type': use_boot_type
+                        })
+
                     elif use_boot_type == 'SYSTEM_BOOT':
                         # Fallback for rare reset reasons (SDIO, EXT, UNKNOWN)
                         activity_items.append({
