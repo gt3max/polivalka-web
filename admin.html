@@ -206,6 +206,24 @@
 </div>
 </div>
 
+<!-- Low Power Mode Settings -->
+<div class="card">
+<h3>🔋 Low Power Mode</h3>
+<p class="muted">When battery drops to 10%, device enters deep sleep to protect battery.</p>
+
+<div class="toggle-row">
+<div><div class="toggle-label">Wake Interval</div><div class="toggle-desc">How often to wake up and check battery <span class="mono">(lpm_wake_interval_hours)</span></div></div>
+<div class="row"><input type="number" id="lpm-wake-interval" min="1" max="168" value="4" style="width:80px"><span class="muted">hours</span></div>
+</div>
+<div class="row" style="margin-top:8px">
+<button onclick="saveLpmSettings()">Set LPM Settings</button>
+</div>
+<div class="muted" style="margin-top:12px;font-size:12px">
+💡 Device also wakes immediately when charger is connected<br>
+💡 Longer interval = more battery life in low power mode
+</div>
+</div>
+
 <!-- Microprime Settings -->
 <div class="card">
 <h3>💧 Microprime (Maintenance Pulse)</h3>
@@ -950,6 +968,41 @@ async function saveWifiSettings() {
 
     if (res.ok) {
       alert(`✓ WiFi settings saved: scan every ${scanInterval} hours`);
+    } else {
+      const err = await res.json().catch(() => ({}));
+      alert('Failed: ' + (err.error || res.status));
+    }
+  } catch(e) {
+    alert('Error: ' + e.message);
+  }
+}
+
+// Low Power Mode settings
+async function saveLpmSettings() {
+  if (!selectedDeviceId) {
+    alert('Select a device first');
+    return;
+  }
+
+  const wakeInterval = parseInt(document.getElementById('lpm-wake-interval').value);
+
+  if (isNaN(wakeInterval) || wakeInterval < 1 || wakeInterval > 168) {
+    alert('Wake interval must be between 1 and 168 hours');
+    return;
+  }
+
+  try {
+    const res = await fetch(`${API.cloudBase}/device/${selectedDeviceId}/command`, {
+      method: 'POST',
+      headers: { ...API.getAuthHeaders(), 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        command: 'set_lpm_config',
+        params: { lpm_wake_interval_hours: wakeInterval }
+      })
+    });
+
+    if (res.ok) {
+      alert(`✓ LPM settings saved: wake every ${wakeInterval} hours`);
     } else {
       const err = await res.json().catch(() => ({}));
       alert('Failed: ' + (err.error || res.status));
