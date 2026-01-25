@@ -136,7 +136,14 @@
   <!-- Watering Events -->
   <div id="tab-watering" class="tab-content">
     <div class="card">
-      <h3 style="margin-top:0">🚿 Watering Events</h3>
+      <h3 style="margin-top:0">🚿 Pump Activity</h3>
+      <div class="chart-container">
+        <canvas id="pump-chart"></canvas>
+      </div>
+      <div id="pump-nodata" class="muted" style="display:none;text-align:center;padding:40px">No pump activity in this period</div>
+    </div>
+    <div class="card">
+      <h3 style="margin-top:0">📋 Watering Events</h3>
       <div id="watering-summary" class="stats-grid" style="margin-bottom:16px">
         <div class="stat-box"><div class="stat-value" id="watering-count">—</div><div class="stat-label">Events</div></div>
         <div class="stat-box"><div class="stat-value" id="watering-total-ml">—</div><div class="stat-label">Total ml</div></div>
@@ -248,6 +255,7 @@ let activityData = [];
 let pumpData = []; // Pump events for chart annotations
 let moistureChart = null;
 let batteryChart = null;
+let pumpChart = null;
 
 // Gap detection for blackout/offline periods
 // If gap between data points > threshold, insert null to break the line
@@ -451,6 +459,7 @@ async function loadActivity() {
 
     const pumpEvents = filtered.filter(a => a.type === 'PUMP');
     renderActivityList(filtered);
+    renderPumpChart(filtered);  // Timeline chart for pump activity
     renderWateringSummary(pumpEvents);
     renderWateringList(pumpEvents);
     updateStats();
@@ -834,6 +843,186 @@ function renderBatteryChart(data) {
   });
 }
 
+// Render pump timeline chart (similar to battery/sensor)
+function renderPumpChart(events) {
+  const canvas = document.getElementById('pump-chart');
+  const nodata = document.getElementById('pump-nodata');
+
+  if (pumpChart) {
+    pumpChart.destroy();
+    pumpChart = null;
+  }
+
+  // Filter to pump start events (they have duration/volume info)
+  const pumpEvents = events.filter(e =>
+    e.type === 'PUMP' &&
+    e.message &&
+    e.message.toLowerCase().includes('start')
+  );
+
+  if (pumpEvents.length === 0) {
+    canvas.style.display = 'none';
+    nodata.style.display = 'block';
+    return;
+  }
+
+  canvas.style.display = 'block';
+  nodata.style.display = 'none';
+
+  // Parse pump events for chart data
+  const chartData = pumpEvents.map(e => {
+    const msg = e.message || '';
+    const secMatch = msg.match(/(\d+)\s*s[,\)]/i);
+    const volMatch = msg.match(/(\d+)\s*ml/i);
+    const duration = secMatch ? parseInt(secMatch[1]) : 0;
+    const volume = volMatch ? parseInt(volMatch[1]) : 0;
+
+    // Determine type
+    const msgLower = msg.toLowerCase();
+    let type = 'normal';
+    if (msgLower.includes('microprime')) type = 'microprime';
+    else if (msgLower.includes('manual')) type = 'manual';
+
+    return {
+      timestamp: e.timestamp,
+      duration: duration,
+      volume: volume,
+      type: type
+    };
+  });
+
+  // Sort by timestamp
+  chartData.sort((a, b) => a.timestamp - b.timestamp);
+
+  // Insert gaps for offline periods (same as battery/sensor)
+  const labels = [];
+  const volumeValues = [];
+  const durationValues = [];
+  const colors = [];
+  const GAP_THRESHOLD = 7200; // 2 hours
+
+  for (let i = 0; i < chartData.length; i++) {
+    const current = chartData[i];
+
+    // Check gap with previous point
+    if (i > 0) {
+      const prev = chartData[i - 1];
+      const gap = current.timestamp - prev.timestamp;
+      if (gap > GAP_THRESHOLD) {
+        // Insert null point to break line
+        const midTime = prev.timestamp + gap / 2;
+        labels.push(new Date(midTime * 1000));
+        volumeValues.push(null);
+        durationValues.push(null);
+        colors.push('transparent');
+      }
+    }
+
+    labels.push(new Date(current.timestamp * 1000));
+    volumeValues.push(current.volume);
+    durationValues.push(current.duration);
+
+    // Color by type
+    if (current.type === 'microprime') {
+      colors.push('#2196f3'); // Blue for microprime
+    } else if (current.type === 'manual') {
+      colors.push('#ff9800'); // Orange for manual
+    } else {
+      colors.push('#4caf50'); // Green for normal watering
+    }
+  }
+
+  const ctx = canvas.getContext('2d');
+
+  pumpChart = new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels: labels,
+      datasets: [
+        {
+          label: 'Volume (ml)',
+          data: volumeValues,
+          backgroundColor: colors,
+          borderColor: colors,
+          borderWidth: 1,
+          yAxisID: 'y',
+          barThickness: 8,
+          maxBarThickness: 12
+        },
+        {
+          label: 'Duration (s)',
+          data: durationValues,
+          type: 'line',
+          borderColor: '#9c27b0',
+          backgroundColor: 'transparent',
+          borderDash: [3, 3],
+          fill: false,
+          tension: 0,
+          pointRadius: 4,
+          pointBackgroundColor: '#9c27b0',
+          yAxisID: 'y1',
+          spanGaps: false
+        }
+      ]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: { position: 'top' },
+        tooltip: {
+          filter: (item) => item.parsed.y !== null,
+          callbacks: {
+            title: (items) => items.length > 0 ? new Date(items[0].parsed.x).toLocaleString() : '',
+            label: (ctx) => {
+              if (ctx.parsed.y === null) return null;
+              if (ctx.datasetIndex === 0) {
+                return `Volume: ${ctx.parsed.y}ml`;
+              } else {
+                return `Duration: ${ctx.parsed.y}s`;
+              }
+            },
+            afterBody: (items) => {
+              if (items.length === 0) return '';
+              const idx = items[0].dataIndex;
+              // Find type from colors
+              const color = colors[idx];
+              if (color === '#2196f3') return 'Type: Microprime';
+              if (color === '#ff9800') return 'Type: Manual';
+              if (color === '#4caf50') return 'Type: Auto watering';
+              return '';
+            }
+          }
+        }
+      },
+      scales: {
+        x: {
+          type: 'time',
+          time: {
+            unit: currentPeriod === 1 ? 'hour' : 'day',
+            displayFormats: { hour: 'HH:mm', day: 'MMM d' }
+          },
+          grid: { display: false }
+        },
+        y: {
+          type: 'linear',
+          position: 'left',
+          min: 0,
+          title: { display: true, text: 'ml' },
+          grid: { color: 'rgba(0,0,0,0.05)' }
+        },
+        y1: {
+          type: 'linear',
+          position: 'right',
+          min: 0,
+          title: { display: true, text: 'sec' },
+          grid: { drawOnChartArea: false }
+        }
+      }
+    }
+  });
+}
+
 // Render watering summary and list
 function renderWateringSummary(events) {
   const nodata = document.getElementById('watering-nodata');
@@ -1126,6 +1315,15 @@ let ltSensor2Chart = null;
 let ltBatteryChart = null;
 let ltWateringChart = null;
 
+// Helper: Format week data to readable date labels
+function formatWeekLabel(weekData) {
+  if (weekData.start_date) {
+    const date = new Date(weekData.start_date);
+    return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  }
+  return weekData.week;
+}
+
 // Long-term tab switching
 function showLtTab(name) {
   // Hide all long-term tabs
@@ -1155,7 +1353,7 @@ function renderLtMoistureChart(data) {
   canvas.style.display = 'block';
   nodata.style.display = 'none';
 
-  const labels = data.map(d => d.week);
+  const labels = data.map(formatWeekLabel);
   const avgValues = data.map(d => d.moisture?.avg_percent || null);
   const minValues = data.map(d => d.moisture?.min_percent || null);
   const maxValues = data.map(d => d.moisture?.max_percent || null);
@@ -1199,7 +1397,7 @@ function renderLtSensor2Chart(data) {
 
   section.style.display = 'block';
 
-  const labels = data.map(d => d.week);
+  const labels = data.map(formatWeekLabel);
   const avgValues = data.map(d => d.sensor2?.avg_percent || null);
   const minValues = data.map(d => d.sensor2?.min_percent || null);
   const maxValues = data.map(d => d.sensor2?.max_percent || null);
@@ -1245,7 +1443,7 @@ function renderLtBatteryChart(data) {
   canvas.style.display = 'block';
   nodata.style.display = 'none';
 
-  const labels = data.map(d => d.week);
+  const labels = data.map(formatWeekLabel);
   const avgValues = data.map(d => d.battery?.avg_percent || null);
   const minValues = data.map(d => d.battery?.min_percent || null);
 
@@ -1299,7 +1497,7 @@ function renderLtWateringChart(data) {
 
   if (ltWateringChart) { ltWateringChart.destroy(); ltWateringChart = null; }
 
-  const hasData = data.some(d => (d.watering?.events_count || 0) > 0);
+  const hasData = data.some(d => (d.watering?.events_count || 0) > 0 || (d.watering?.total_ml || 0) > 0);
   if (!hasData) {
     canvas.style.display = 'none';
     nodata.style.display = 'block';
@@ -1309,7 +1507,7 @@ function renderLtWateringChart(data) {
   canvas.style.display = 'block';
   nodata.style.display = 'none';
 
-  const labels = data.map(d => d.week);
+  const labels = data.map(formatWeekLabel);
   const countValues = data.map(d => d.watering?.events_count || 0);
   const mlValues = data.map(d => d.watering?.total_ml || 0);
 
@@ -1318,17 +1516,47 @@ function renderLtWateringChart(data) {
     data: {
       labels: labels,
       datasets: [
-        { label: 'Waterings', data: countValues, backgroundColor: 'rgba(33,150,243,0.7)', borderColor: '#2196f3', borderWidth: 1, yAxisID: 'y' },
-        { label: 'Volume ml', data: mlValues, type: 'line', borderColor: '#ff9800', fill: false, tension: 0.3, yAxisID: 'y1' }
+        {
+          label: 'Volume (ml)',
+          data: mlValues,
+          backgroundColor: 'rgba(76, 175, 80, 0.7)',
+          borderColor: '#4caf50',
+          borderWidth: 1,
+          yAxisID: 'y'
+        },
+        {
+          label: 'Count',
+          data: countValues,
+          type: 'line',
+          borderColor: '#2196f3',
+          backgroundColor: '#2196f3',
+          fill: false,
+          tension: 0.3,
+          pointRadius: 4,
+          yAxisID: 'y1'
+        }
       ]
     },
     options: {
       responsive: true, maintainAspectRatio: false,
-      plugins: { legend: { position: 'top' } },
+      plugins: {
+        legend: { position: 'top' },
+        tooltip: {
+          callbacks: {
+            title: (items) => {
+              const idx = items[0]?.dataIndex;
+              if (idx !== undefined && data[idx]) {
+                return `${data[idx].start_date} — ${data[idx].end_date}`;
+              }
+              return '';
+            }
+          }
+        }
+      },
       scales: {
         x: { grid: { display: false } },
-        y: { type: 'linear', position: 'left', min: 0, title: { display: true, text: 'Count' } },
-        y1: { type: 'linear', position: 'right', min: 0, grid: { drawOnChartArea: false }, ticks: { callback: v => v + 'ml' } }
+        y: { type: 'linear', position: 'left', min: 0, title: { display: true, text: 'ml' } },
+        y1: { type: 'linear', position: 'right', min: 0, grid: { drawOnChartArea: false }, title: { display: true, text: 'count' } }
       }
     }
   });
