@@ -249,6 +249,44 @@ let pumpData = []; // Pump events for chart annotations
 let moistureChart = null;
 let batteryChart = null;
 
+// Gap detection for blackout/offline periods
+// If gap between data points > threshold, insert null to break the line
+const GAP_THRESHOLD_SECONDS = 7200; // 2 hours
+
+function insertGapsForTimeSeries(sortedData, valueExtractor) {
+  if (sortedData.length < 2) {
+    return {
+      labels: sortedData.map(d => new Date(d.timestamp * 1000)),
+      values: sortedData.map(valueExtractor)
+    };
+  }
+
+  const labels = [];
+  const values = [];
+
+  for (let i = 0; i < sortedData.length; i++) {
+    const current = sortedData[i];
+
+    // Check gap with previous point
+    if (i > 0) {
+      const prev = sortedData[i - 1];
+      const gap = current.timestamp - prev.timestamp;
+
+      if (gap > GAP_THRESHOLD_SECONDS) {
+        // Insert null point in the middle of the gap to break the line
+        const midTime = prev.timestamp + gap / 2;
+        labels.push(new Date(midTime * 1000));
+        values.push(null);
+      }
+    }
+
+    labels.push(new Date(current.timestamp * 1000));
+    values.push(valueExtractor(current));
+  }
+
+  return { labels, values };
+}
+
 // mapStateToDisplay() - moved to common.js
 
 // Header updates
@@ -448,8 +486,10 @@ function renderMoistureChart(data) {
   // Sort by timestamp ascending
   data.sort((a, b) => a.timestamp - b.timestamp);
 
-  const labels = data.map(d => new Date(d.timestamp * 1000));
-  const values = data.map(d => d.moisture_percent);
+  // Insert gaps for blackout/offline periods (breaks line when device was off)
+  const moistureWithGaps = insertGapsForTimeSeries(data, d => d.moisture_percent);
+  const labels = moistureWithGaps.labels;
+  const values = moistureWithGaps.values;
 
   // Create pump event annotations (vertical lines) from activityData
   const cutoff = Date.now() - (currentPeriod * 24 * 60 * 60 * 1000);
@@ -515,9 +555,11 @@ function renderMoistureChart(data) {
       tooltip: {
         enabled: true,
         position: 'nearest',
+        filter: (item) => item.parsed.y !== null,  // Hide tooltip for gap markers
         callbacks: {
-          title: (items) => new Date(items[0].parsed.x).toLocaleString(),
+          title: (items) => items.length > 0 ? new Date(items[0].parsed.x).toLocaleString() : '',
           label: (item) => {
+            if (item.parsed.y === null) return null;  // Skip gap markers
             const label = item.dataset.label;
             if (label.includes('%')) return `${label}: ${item.parsed.y}%`;
             return `${label}: ${item.parsed.y}`;
@@ -554,18 +596,20 @@ function renderMoistureChart(data) {
           fill: !isScatter,
           tension: 0.3,
           pointRadius: isScatter ? 6 : 3,
-          yAxisID: 'y'
+          yAxisID: 'y',
+          spanGaps: false  // Break line at null (blackout/offline periods)
         },
         {
           label: 'ADC',
-          data: isScatter ? data.map(d => ({ x: new Date(d.timestamp * 1000), y: d.adc_raw })) : adcValues,
+          data: isScatter ? data.map(d => ({ x: new Date(d.timestamp * 1000), y: d.adc_raw })) : insertGapsForTimeSeries(data, d => d.adc_raw).values,
           borderColor: '#ff9800',
           borderDash: [5, 5],
           fill: false,
           tension: 0.3,
           pointRadius: isScatter ? 5 : 2,
           yAxisID: 'y1',
-          hidden: !hasAdc
+          hidden: !hasAdc,
+          spanGaps: false  // Break line at null (blackout/offline periods)
         }
       ]
     },
@@ -581,6 +625,10 @@ function renderMoistureChart(data) {
     // Destroy existing chart if any
     if (window.sensor2Chart) window.sensor2Chart.destroy();
 
+    // Insert gaps for sensor2 data (same as primary sensor)
+    const sensor2PctWithGaps = insertGapsForTimeSeries(data, d => d.sensor2_percent);
+    const sensor2AdcWithGaps = insertGapsForTimeSeries(data, d => d.sensor2_adc);
+
     window.sensor2Chart = new Chart(ctx2, {
       type: isScatter ? 'scatter' : 'line',
       data: {
@@ -588,23 +636,25 @@ function renderMoistureChart(data) {
         datasets: [
           {
             label: 'Moisture %',
-            data: isScatter ? data.map(d => ({ x: new Date(d.timestamp * 1000), y: d.sensor2_percent })) : sensor2PctValues,
+            data: isScatter ? data.map(d => ({ x: new Date(d.timestamp * 1000), y: d.sensor2_percent })) : sensor2PctWithGaps.values,
             borderColor: '#9c27b0',
             backgroundColor: isScatter ? '#9c27b0' : 'rgba(156, 39, 176, 0.1)',
             fill: !isScatter,
             tension: 0.3,
             pointRadius: isScatter ? 6 : 3,
-            yAxisID: 'y'
+            yAxisID: 'y',
+            spanGaps: false  // Break line at null (blackout/offline periods)
           },
           {
             label: 'ADC',
-            data: isScatter ? data.map(d => ({ x: new Date(d.timestamp * 1000), y: d.sensor2_adc })) : sensor2AdcValues,
+            data: isScatter ? data.map(d => ({ x: new Date(d.timestamp * 1000), y: d.sensor2_adc })) : sensor2AdcWithGaps.values,
             borderColor: '#e91e63',
             borderDash: [5, 5],
             fill: false,
             tension: 0.3,
             pointRadius: isScatter ? 5 : 2,
-            yAxisID: 'y1'
+            yAxisID: 'y1',
+            spanGaps: false  // Break line at null (blackout/offline periods)
           }
         ]
       },
@@ -642,9 +692,6 @@ function renderBatteryChart(data) {
 
   withBattery.sort((a, b) => a.timestamp - b.timestamp);
 
-  const labels = withBattery.map(d => new Date(d.timestamp * 1000));
-  const percentValues = withBattery.map(d => d.percent);
-
   // Li-Po discharge curve: voltage → percent
   const lipoCurve = [
     { v: 4.20, p: 100 }, { v: 4.00, p: 80 }, { v: 3.85, p: 60 },
@@ -665,8 +712,25 @@ function renderBatteryChart(data) {
     return 0;
   }
 
-  // Convert voltage to equivalent % (for same Y scale)
-  const voltageAsPercent = withBattery.map(d => voltageToPercent(d.voltage));
+  // Insert gaps for blackout/offline periods (breaks line when device was off)
+  const batteryWithGaps = insertGapsForTimeSeries(withBattery, d => d.percent);
+  const voltageWithGaps = insertGapsForTimeSeries(withBattery, d => voltageToPercent(d.voltage));
+
+  const labels = batteryWithGaps.labels;
+  const percentValues = batteryWithGaps.values;
+  const voltageAsPercent = voltageWithGaps.values;
+
+  // Build voltage lookup for tooltips (only real data points, not gap markers)
+  const voltageData = [];
+  let realDataIndex = 0;
+  for (let i = 0; i < percentValues.length; i++) {
+    if (percentValues[i] !== null) {
+      voltageData.push(withBattery[realDataIndex].voltage);
+      realDataIndex++;
+    } else {
+      voltageData.push(null);
+    }
+  }
 
   // Chart type settings
   const isScatter = chartType === 'scatter';
@@ -684,18 +748,20 @@ function renderBatteryChart(data) {
           fill: !isScatter,
           tension: isScatter ? 0 : 0.3,
           pointRadius: isScatter ? 4 : 2,
-          showLine: !isScatter
+          showLine: !isScatter,
+          spanGaps: false  // Break line at null (blackout/offline periods)
         },
         {
           label: 'Voltage V',
-          data: isScatter ? withBattery.map((d, i) => ({ x: new Date(d.timestamp * 1000), y: voltageAsPercent[i] })) : voltageAsPercent,
+          data: isScatter ? withBattery.map((d, i) => ({ x: new Date(d.timestamp * 1000), y: voltageToPercent(d.voltage) })) : voltageAsPercent,
           borderColor: '#ff9800',
           borderDash: isScatter ? [] : [5, 5],
           fill: false,
           tension: isScatter ? 0 : 0.3,
           pointRadius: isScatter ? 3 : 1,
           showLine: !isScatter,
-          voltageData: withBattery.map(d => d.voltage)
+          spanGaps: false,  // Break line at null (blackout/offline periods)
+          voltageData: voltageData  // Use new voltageData with nulls for gaps
         }
       ]
     },
@@ -707,13 +773,16 @@ function renderBatteryChart(data) {
         tooltip: {
           mode: 'index',
           intersect: false,
+          filter: (item) => item.parsed.y !== null,  // Hide tooltip for gap markers
           callbacks: {
-            title: (items) => new Date(items[0].parsed.x).toLocaleString(),
+            title: (items) => items.length > 0 ? new Date(items[0].parsed.x).toLocaleString() : '',
             label: (ctx) => {
+              if (ctx.parsed.y === null) return null;  // Skip gap markers
               if (ctx.datasetIndex === 0) {
                 return `Battery: ${ctx.parsed.y.toFixed(1)}%`;
               } else {
                 const voltage = ctx.dataset.voltageData[ctx.dataIndex];
+                if (voltage === null) return null;
                 return `Voltage: ${voltage.toFixed(2)}V`;
               }
             }
