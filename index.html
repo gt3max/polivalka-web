@@ -1993,6 +1993,15 @@ async function claimDevice() {
 window.addEventListener('DOMContentLoaded', () => {
   logToConsole('Fleet Management Console initialized', 'success');
 });
+
+// Handle bfcache (back-forward cache) - refresh data when page restored from cache
+// This fixes stale data when user navigates back to Fleet
+window.addEventListener('pageshow', (event) => {
+  if (event.persisted) {
+    console.log('[Fleet] Page restored from bfcache - refreshing data');
+    loadDevices();
+  }
+});
 </script>
 
 <!-- Claim Device Modal -->

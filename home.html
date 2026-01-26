@@ -1137,4 +1137,13 @@ function togglePlantExpand() {
   }
 }
 
+// Handle bfcache (back-forward cache) - refresh data when page restored from cache
+// This fixes stale data when user navigates back
+window.addEventListener('pageshow', (event) => {
+  if (event.persisted) {
+    console.log('[Home] Page restored from bfcache - refreshing data');
+    updateStatus();
+  }
+});
+
 </script> </body></html>
