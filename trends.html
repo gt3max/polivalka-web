@@ -586,8 +586,8 @@ function renderMoistureChart(data) {
         },
         grid: { display: false }
       },
-      y: { type: 'linear', position: 'left', min: 0, max: 100, ticks: { callback: v => v + '%' } },
-      y1: { type: 'linear', position: 'right', min: 0, max: 4095, grid: { drawOnChartArea: false } }
+      y: { type: 'linear', position: 'left', min: 0, max: 100, title: { display: true, text: 'Moisture %' }, ticks: { callback: v => v + '%' } },
+      y1: { type: 'linear', position: 'right', min: 0, max: 4095, title: { display: true, text: 'ADC' }, grid: { drawOnChartArea: false } }
     }
   });
 
@@ -812,7 +812,8 @@ function renderBatteryChart(data) {
           position: 'left',
           min: 0,
           max: 100,
-          grace: '5%',  // Add padding at top so 100% isn't cut off
+          grace: '5%',
+          title: { display: true, text: 'Charge %' },
           ticks: { callback: v => v + '%' }
         },
         y1: {
@@ -820,7 +821,8 @@ function renderBatteryChart(data) {
           position: 'right',
           min: 0,
           max: 100,
-          grace: '5%',  // Add padding at top
+          grace: '5%',
+          title: { display: true, text: 'Voltage' },
           grid: { drawOnChartArea: false },
           afterBuildTicks: (axis) => {
             // Voltages at correct % positions (Li-Po curve)
@@ -1354,9 +1356,7 @@ function renderLtMoistureChart(data) {
   nodata.style.display = 'none';
 
   const labels = data.map(formatWeekLabel);
-  const avgValues = data.map(d => d.moisture?.avg_percent || null);
-  const minValues = data.map(d => d.moisture?.min_percent || null);
-  const maxValues = data.map(d => d.moisture?.max_percent || null);
+  const moistureValues = data.map(d => d.moisture?.avg_percent || null);
 
   const isScatter = ltChartType === 'scatter';
 
@@ -1365,18 +1365,37 @@ function renderLtMoistureChart(data) {
     data: {
       labels: labels,
       datasets: [
-        { label: 'Avg %', data: avgValues, borderColor: '#1976d2', backgroundColor: isScatter ? '#1976d2' : 'rgba(25,118,210,0.1)', fill: !isScatter, tension: 0.3, pointRadius: isScatter ? 5 : 3, showLine: !isScatter },
-        { label: 'Min %', data: minValues, borderColor: '#90caf9', borderDash: [3,3], fill: false, tension: 0.3, pointRadius: isScatter ? 4 : 2, showLine: !isScatter },
-        { label: 'Max %', data: maxValues, borderColor: '#1565c0', borderDash: [3,3], fill: false, tension: 0.3, pointRadius: isScatter ? 4 : 2, showLine: !isScatter }
+        {
+          label: 'Moisture %',
+          data: moistureValues,
+          borderColor: '#1976d2',
+          backgroundColor: isScatter ? '#1976d2' : 'rgba(25,118,210,0.1)',
+          fill: !isScatter,
+          tension: 0.3,
+          pointRadius: isScatter ? 5 : 3,
+          showLine: !isScatter
+        }
       ]
     },
     options: {
       responsive: true, maintainAspectRatio: false,
-      plugins: { legend: { position: 'top' } },
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          callbacks: {
+            title: (items) => {
+              const idx = items[0]?.dataIndex;
+              if (idx !== undefined && data[idx]) {
+                return `${data[idx].start_date} — ${data[idx].end_date}`;
+              }
+              return '';
+            }
+          }
+        }
+      },
       scales: {
         x: { grid: { display: false } },
-        y: { type: 'linear', position: 'left', min: 0, max: 100, ticks: { callback: v => v + '%' } },
-        y1: { type: 'linear', position: 'right', min: 0, max: 4095, grid: { drawOnChartArea: false } }
+        y: { type: 'linear', position: 'left', min: 0, max: 100, title: { display: true, text: 'Moisture %' }, ticks: { callback: v => v + '%' } }
       }
     }
   });
@@ -1398,9 +1417,7 @@ function renderLtSensor2Chart(data) {
   section.style.display = 'block';
 
   const labels = data.map(formatWeekLabel);
-  const avgValues = data.map(d => d.sensor2?.avg_percent || null);
-  const minValues = data.map(d => d.sensor2?.min_percent || null);
-  const maxValues = data.map(d => d.sensor2?.max_percent || null);
+  const moistureValues = data.map(d => d.sensor2?.avg_percent || null);
 
   const isScatter = ltChartType === 'scatter';
 
@@ -1409,18 +1426,37 @@ function renderLtSensor2Chart(data) {
     data: {
       labels: labels,
       datasets: [
-        { label: 'Avg %', data: avgValues, borderColor: '#9c27b0', backgroundColor: isScatter ? '#9c27b0' : 'rgba(156,39,176,0.1)', fill: !isScatter, tension: 0.3, pointRadius: isScatter ? 5 : 3, showLine: !isScatter },
-        { label: 'Min %', data: minValues, borderColor: '#ce93d8', borderDash: [3,3], fill: false, tension: 0.3, pointRadius: isScatter ? 4 : 2, showLine: !isScatter },
-        { label: 'Max %', data: maxValues, borderColor: '#7b1fa2', borderDash: [3,3], fill: false, tension: 0.3, pointRadius: isScatter ? 4 : 2, showLine: !isScatter }
+        {
+          label: 'Moisture %',
+          data: moistureValues,
+          borderColor: '#9c27b0',
+          backgroundColor: isScatter ? '#9c27b0' : 'rgba(156,39,176,0.1)',
+          fill: !isScatter,
+          tension: 0.3,
+          pointRadius: isScatter ? 5 : 3,
+          showLine: !isScatter
+        }
       ]
     },
     options: {
       responsive: true, maintainAspectRatio: false,
-      plugins: { legend: { position: 'top' } },
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          callbacks: {
+            title: (items) => {
+              const idx = items[0]?.dataIndex;
+              if (idx !== undefined && data[idx]) {
+                return `${data[idx].start_date} — ${data[idx].end_date}`;
+              }
+              return '';
+            }
+          }
+        }
+      },
       scales: {
         x: { grid: { display: false } },
-        y: { type: 'linear', position: 'left', min: 0, max: 100, ticks: { callback: v => v + '%' } },
-        y1: { type: 'linear', position: 'right', min: 0, max: 4095, grid: { drawOnChartArea: false } }
+        y: { type: 'linear', position: 'left', min: 0, max: 100, title: { display: true, text: 'Moisture %' }, ticks: { callback: v => v + '%' } }
       }
     }
   });
@@ -1444,8 +1480,7 @@ function renderLtBatteryChart(data) {
   nodata.style.display = 'none';
 
   const labels = data.map(formatWeekLabel);
-  const avgValues = data.map(d => d.battery?.avg_percent || null);
-  const minValues = data.map(d => d.battery?.min_percent || null);
+  const batteryValues = data.map(d => d.battery?.avg_percent || null);
 
   const isScatter = ltChartType === 'scatter';
 
@@ -1454,21 +1489,50 @@ function renderLtBatteryChart(data) {
     data: {
       labels: labels,
       datasets: [
-        { label: 'Avg %', data: avgValues, borderColor: '#4caf50', backgroundColor: isScatter ? '#4caf50' : 'rgba(76,175,80,0.1)', fill: !isScatter, tension: 0.3, pointRadius: isScatter ? 5 : 3, showLine: !isScatter },
-        { label: 'Min %', data: minValues, borderColor: '#81c784', borderDash: [3,3], fill: false, tension: 0.3, pointRadius: isScatter ? 4 : 2, showLine: !isScatter }
+        {
+          label: 'Charge %',
+          data: batteryValues,
+          borderColor: '#4caf50',
+          backgroundColor: isScatter ? '#4caf50' : 'rgba(76,175,80,0.1)',
+          fill: !isScatter,
+          tension: 0.3,
+          pointRadius: isScatter ? 5 : 3,
+          showLine: !isScatter
+        }
       ]
     },
     options: {
       responsive: true, maintainAspectRatio: false,
-      plugins: { legend: { position: 'top' } },
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          callbacks: {
+            title: (items) => {
+              const idx = items[0]?.dataIndex;
+              if (idx !== undefined && data[idx]) {
+                return `${data[idx].start_date} — ${data[idx].end_date}`;
+              }
+              return '';
+            }
+          }
+        }
+      },
       scales: {
         x: { grid: { display: false } },
-        y: { min: 0, max: 100, ticks: { callback: v => v + '%' } },
+        y: {
+          type: 'linear',
+          position: 'left',
+          min: 0,
+          max: 100,
+          title: { display: true, text: 'Charge %' },
+          ticks: { callback: v => v + '%' }
+        },
         y1: {
           type: 'linear',
           position: 'right',
           min: 0,
           max: 100,
+          title: { display: true, text: 'Voltage' },
           grid: { drawOnChartArea: false },
           afterBuildTicks: (axis) => {
             axis.ticks = [
@@ -1508,7 +1572,6 @@ function renderLtWateringChart(data) {
   nodata.style.display = 'none';
 
   const labels = data.map(formatWeekLabel);
-  const countValues = data.map(d => d.watering?.events_count || 0);
   const mlValues = data.map(d => d.watering?.total_ml || 0);
 
   ltWateringChart = new Chart(canvas.getContext('2d'), {
@@ -1517,30 +1580,18 @@ function renderLtWateringChart(data) {
       labels: labels,
       datasets: [
         {
-          label: 'Volume (ml)',
+          label: 'Volume',
           data: mlValues,
           backgroundColor: 'rgba(76, 175, 80, 0.7)',
           borderColor: '#4caf50',
-          borderWidth: 1,
-          yAxisID: 'y'
-        },
-        {
-          label: 'Count',
-          data: countValues,
-          type: 'line',
-          borderColor: '#2196f3',
-          backgroundColor: '#2196f3',
-          fill: false,
-          tension: 0.3,
-          pointRadius: 4,
-          yAxisID: 'y1'
+          borderWidth: 1
         }
       ]
     },
     options: {
       responsive: true, maintainAspectRatio: false,
       plugins: {
-        legend: { position: 'top' },
+        legend: { display: false },
         tooltip: {
           callbacks: {
             title: (items) => {
@@ -1549,14 +1600,18 @@ function renderLtWateringChart(data) {
                 return `${data[idx].start_date} — ${data[idx].end_date}`;
               }
               return '';
+            },
+            label: (ctx) => {
+              const idx = ctx.dataIndex;
+              const count = data[idx]?.watering?.events_count || 0;
+              return [`Volume: ${ctx.parsed.y} ml`, `Events: ${count}`];
             }
           }
         }
       },
       scales: {
         x: { grid: { display: false } },
-        y: { type: 'linear', position: 'left', min: 0, title: { display: true, text: 'ml' } },
-        y1: { type: 'linear', position: 'right', min: 0, grid: { drawOnChartArea: false }, title: { display: true, text: 'count' } }
+        y: { type: 'linear', position: 'left', min: 0, title: { display: true, text: 'Volume (ml)' } }
       }
     }
   });
