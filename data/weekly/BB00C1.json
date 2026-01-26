@@ -1,17 +1,20 @@
 {
   "device_id": "BB00C1",
-  "last_updated": "2026-01-26T00:30:36.206488Z",
+  "last_updated": "2026-01-26T00:33:58.805328Z",
   "summaries": [
     {
       "week": "2026-W05",
       "start_date": "2026-01-26",
       "end_date": "2026-02-01",
-      "generated_at": "2026-01-26T00:30:36.036754Z",
+      "generated_at": "2026-01-26T00:33:58.490388Z",
       "moisture": {
         "avg_percent": 100.0,
         "min_percent": 100.0,
         "max_percent": 100.0,
-        "readings_count": 1
+        "readings_count": 1,
+        "avg_adc": 0,
+        "min_adc": 0,
+        "max_adc": 0
       },
       "battery": {
         "avg_percent": 2.6,
