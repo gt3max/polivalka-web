@@ -1,12 +1,12 @@
 {
   "device_id": "BC67E9",
-  "last_updated": "2026-01-26T00:30:35.566646Z",
+  "last_updated": "2026-01-26T00:34:00.491289Z",
   "summaries": [
     {
       "week": "2026-W05",
       "start_date": "2026-01-26",
       "end_date": "2026-02-01",
-      "generated_at": "2026-01-26T00:30:35.165562Z",
+      "generated_at": "2026-01-26T00:34:00.331326Z",
       "moisture": {
         "avg_percent": 47.0,
         "min_percent": 47.0,
