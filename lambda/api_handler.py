@@ -931,8 +931,9 @@ def lambda_handler(event, context):
                     calibrated = pump_calib.get('calibrated', False)
                 elif pump_calib is not None:
                     ml_per_sec = float(pump_calib)
-                    # Sanity check: values < 0.5 or > 20 are invalid (data corruption)
-                    if ml_per_sec < 0.5 or ml_per_sec > 20:
+                    # Sanity check: values < 1.5 or > 20 are invalid (data corruption)
+                    # 1.0 is suspicious - likely boolean True converted to int
+                    if ml_per_sec < 1.5 or ml_per_sec > 20:
                         ml_per_sec = 2.5
                         calibrated = False
                     else:
