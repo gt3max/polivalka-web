@@ -146,8 +146,15 @@ def aggregate_device_data(device_id, start_ts, end_ts):
 
     for item in items:
         sensor = item.get('sensor', {})
-        pct = sensor.get('moisture_percent') or sensor.get('percent')
-        adc = sensor.get('adc_raw') or sensor.get('adc')
+        # Handle multiple field names; use explicit None checks (0 is valid value)
+        pct = sensor.get('moisture_percent')
+        if pct is None:
+            pct = sensor.get('percent')
+        if pct is None:
+            pct = sensor.get('moisture')
+        adc = sensor.get('adc_raw')
+        if adc is None:
+            adc = sensor.get('adc')
         if pct is not None:
             moisture_pct_values.append(float(pct))
         if adc is not None:
