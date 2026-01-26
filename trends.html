@@ -500,48 +500,6 @@ function renderMoistureChart(data) {
   const labels = moistureWithGaps.labels;
   const values = moistureWithGaps.values;
 
-  // Create pump event annotations (vertical lines) from activityData
-  const cutoff = Date.now() - (currentPeriod * 24 * 60 * 60 * 1000);
-  const pumpAnnotations = {};
-
-  // Filter pump events from activity (type=PUMP, message includes 'started')
-  const pumpEvents = activityData.filter(a =>
-    a.type === 'PUMP' &&
-    a.timestamp * 1000 > cutoff &&
-    a.message && a.message.toLowerCase().includes('start')
-  );
-
-  pumpEvents.forEach((p, i) => {
-    // Determine pump type: microprime, manual, or normal watering
-    const msg = (p.message || '').toLowerCase();
-    let icon = '💧'; // Normal watering
-    let color = 'rgba(76, 175, 80, 0.7)'; // Green
-
-    if (msg.includes('microprime')) {
-      icon = '💦'; // Microprime
-      color = 'rgba(33, 150, 243, 0.7)'; // Blue
-    } else if (msg.includes('manual')) {
-      icon = '✋'; // Manual
-      color = 'rgba(255, 152, 0, 0.7)'; // Orange
-    }
-
-    pumpAnnotations['pump' + i] = {
-      type: 'line',
-      xMin: new Date(p.timestamp * 1000),
-      xMax: new Date(p.timestamp * 1000),
-      borderColor: color,
-      borderWidth: 2,
-      borderDash: [5, 5],
-      label: {
-        display: true,
-        content: icon,
-        position: 'start',
-        backgroundColor: 'transparent',
-        font: { size: 14 }
-      }
-    };
-  });
-
   // Chart type settings
   const isScatter = chartType === 'scatter';
 
@@ -555,7 +513,7 @@ function renderMoistureChart(data) {
   const hasSensor2 = sensor2AdcValues.some(v => v != null && v !== undefined);
 
   // Chart options template
-  const chartOptions = (annotations) => ({
+  const chartOptions = () => ({
     responsive: true,
     maintainAspectRatio: false,
     interaction: { mode: 'nearest', axis: 'x', intersect: false },
@@ -574,8 +532,7 @@ function renderMoistureChart(data) {
             return `${label}: ${item.parsed.y}`;
           }
         }
-      },
-      annotation: { annotations: annotations || {} }
+      }
     },
     scales: {
       x: {
@@ -622,7 +579,7 @@ function renderMoistureChart(data) {
         }
       ]
     },
-    options: chartOptions(pumpAnnotations)
+    options: chartOptions()
   });
 
   // === Chart 2: Resistive Sensor (J7) - only if data exists ===
@@ -667,7 +624,7 @@ function renderMoistureChart(data) {
           }
         ]
       },
-      options: chartOptions({})
+      options: chartOptions()
     });
   } else {
     sensor2Card.style.display = 'none';
@@ -1357,6 +1314,8 @@ function renderLtMoistureChart(data) {
 
   const labels = data.map(formatWeekLabel);
   const moistureValues = data.map(d => d.moisture?.avg_percent || null);
+  const adcValues = data.map(d => d.moisture?.avg_adc || null);
+  const hasAdc = adcValues.some(v => v != null);
 
   const isScatter = ltChartType === 'scatter';
 
@@ -1373,14 +1332,27 @@ function renderLtMoistureChart(data) {
           fill: !isScatter,
           tension: 0.3,
           pointRadius: isScatter ? 5 : 3,
-          showLine: !isScatter
+          showLine: !isScatter,
+          yAxisID: 'y'
+        },
+        {
+          label: 'ADC',
+          data: adcValues,
+          borderColor: '#ff9800',
+          borderDash: [5, 5],
+          fill: false,
+          tension: 0.3,
+          pointRadius: isScatter ? 4 : 2,
+          showLine: !isScatter,
+          yAxisID: 'y1',
+          hidden: !hasAdc
         }
       ]
     },
     options: {
       responsive: true, maintainAspectRatio: false,
       plugins: {
-        legend: { display: false },
+        legend: { position: 'top' },
         tooltip: {
           callbacks: {
             title: (items) => {
@@ -1389,13 +1361,19 @@ function renderLtMoistureChart(data) {
                 return `${data[idx].start_date} — ${data[idx].end_date}`;
               }
               return '';
+            },
+            label: (item) => {
+              const label = item.dataset.label;
+              if (label.includes('%')) return `${label}: ${item.parsed.y}%`;
+              return `${label}: ${item.parsed.y}`;
             }
           }
         }
       },
       scales: {
         x: { grid: { display: false } },
-        y: { type: 'linear', position: 'left', min: 0, max: 100, title: { display: true, text: 'Moisture %' }, ticks: { callback: v => v + '%' } }
+        y: { type: 'linear', position: 'left', min: 0, max: 100, title: { display: true, text: 'Moisture %' }, ticks: { callback: v => v + '%' } },
+        y1: { type: 'linear', position: 'right', min: 0, max: 4095, title: { display: true, text: 'ADC' }, grid: { drawOnChartArea: false } }
       }
     }
   });
@@ -1418,6 +1396,8 @@ function renderLtSensor2Chart(data) {
 
   const labels = data.map(formatWeekLabel);
   const moistureValues = data.map(d => d.sensor2?.avg_percent || null);
+  const adcValues = data.map(d => d.sensor2?.avg_adc || null);
+  const hasAdc = adcValues.some(v => v != null);
 
   const isScatter = ltChartType === 'scatter';
 
@@ -1434,14 +1414,27 @@ function renderLtSensor2Chart(data) {
           fill: !isScatter,
           tension: 0.3,
           pointRadius: isScatter ? 5 : 3,
-          showLine: !isScatter
+          showLine: !isScatter,
+          yAxisID: 'y'
+        },
+        {
+          label: 'ADC',
+          data: adcValues,
+          borderColor: '#e91e63',
+          borderDash: [5, 5],
+          fill: false,
+          tension: 0.3,
+          pointRadius: isScatter ? 4 : 2,
+          showLine: !isScatter,
+          yAxisID: 'y1',
+          hidden: !hasAdc
         }
       ]
     },
     options: {
       responsive: true, maintainAspectRatio: false,
       plugins: {
-        legend: { display: false },
+        legend: { position: 'top' },
         tooltip: {
           callbacks: {
             title: (items) => {
@@ -1450,13 +1443,19 @@ function renderLtSensor2Chart(data) {
                 return `${data[idx].start_date} — ${data[idx].end_date}`;
               }
               return '';
+            },
+            label: (item) => {
+              const label = item.dataset.label;
+              if (label.includes('%')) return `${label}: ${item.parsed.y}%`;
+              return `${label}: ${item.parsed.y}`;
             }
           }
         }
       },
       scales: {
         x: { grid: { display: false } },
-        y: { type: 'linear', position: 'left', min: 0, max: 100, title: { display: true, text: 'Moisture %' }, ticks: { callback: v => v + '%' } }
+        y: { type: 'linear', position: 'left', min: 0, max: 100, title: { display: true, text: 'Moisture %' }, ticks: { callback: v => v + '%' } },
+        y1: { type: 'linear', position: 'right', min: 0, max: 4095, title: { display: true, text: 'ADC' }, grid: { drawOnChartArea: false } }
       }
     }
   });
@@ -1479,8 +1478,31 @@ function renderLtBatteryChart(data) {
   canvas.style.display = 'block';
   nodata.style.display = 'none';
 
+  // Li-Po discharge curve: voltage → percent (for plotting voltage on same scale)
+  function voltageToPercent(voltage) {
+    if (voltage == null) return null;
+    if (voltage >= 4.20) return 100;
+    if (voltage <= 3.00) return 0;
+    const lipoCurve = [
+      { v: 4.20, p: 100 }, { v: 4.00, p: 80 }, { v: 3.85, p: 60 },
+      { v: 3.75, p: 40 }, { v: 3.65, p: 15 }, { v: 3.55, p: 7 },
+      { v: 3.45, p: 4 }, { v: 3.35, p: 2 }, { v: 3.00, p: 0 }
+    ];
+    for (let i = 0; i < lipoCurve.length - 1; i++) {
+      if (voltage <= lipoCurve[i].v && voltage > lipoCurve[i + 1].v) {
+        const v1 = lipoCurve[i].v, p1 = lipoCurve[i].p;
+        const v2 = lipoCurve[i + 1].v, p2 = lipoCurve[i + 1].p;
+        return p1 + (p2 - p1) * (voltage - v1) / (v2 - v1);
+      }
+    }
+    return 0;
+  }
+
   const labels = data.map(formatWeekLabel);
   const batteryValues = data.map(d => d.battery?.avg_percent || null);
+  const voltageValues = data.map(d => voltageToPercent(d.battery?.avg_voltage));
+  const voltageRaw = data.map(d => d.battery?.avg_voltage || null);
+  const hasVoltage = voltageRaw.some(v => v != null);
 
   const isScatter = ltChartType === 'scatter';
 
@@ -1497,14 +1519,28 @@ function renderLtBatteryChart(data) {
           fill: !isScatter,
           tension: 0.3,
           pointRadius: isScatter ? 5 : 3,
-          showLine: !isScatter
+          showLine: !isScatter,
+          yAxisID: 'y'
+        },
+        {
+          label: 'Voltage V',
+          data: voltageValues,
+          borderColor: '#ff9800',
+          borderDash: [5, 5],
+          fill: false,
+          tension: 0.3,
+          pointRadius: isScatter ? 4 : 2,
+          showLine: !isScatter,
+          yAxisID: 'y1',
+          hidden: !hasVoltage,
+          voltageRaw: voltageRaw  // Store raw values for tooltip
         }
       ]
     },
     options: {
       responsive: true, maintainAspectRatio: false,
       plugins: {
-        legend: { display: false },
+        legend: { position: 'top' },
         tooltip: {
           callbacks: {
             title: (items) => {
@@ -1513,6 +1549,17 @@ function renderLtBatteryChart(data) {
                 return `${data[idx].start_date} — ${data[idx].end_date}`;
               }
               return '';
+            },
+            label: (ctx) => {
+              if (ctx.datasetIndex === 0) {
+                return `Charge: ${ctx.parsed.y?.toFixed(1)}%`;
+              } else {
+                const voltage = ctx.dataset.voltageRaw[ctx.dataIndex];
+                if (voltage != null) {
+                  return `Voltage: ${voltage.toFixed(2)}V`;
+                }
+                return '';
+              }
             }
           }
         }
@@ -1524,6 +1571,7 @@ function renderLtBatteryChart(data) {
           position: 'left',
           min: 0,
           max: 100,
+          grace: '5%',
           title: { display: true, text: 'Charge %' },
           ticks: { callback: v => v + '%' }
         },
@@ -1532,6 +1580,7 @@ function renderLtBatteryChart(data) {
           position: 'right',
           min: 0,
           max: 100,
+          grace: '5%',
           title: { display: true, text: 'Voltage' },
           grid: { drawOnChartArea: false },
           afterBuildTicks: (axis) => {

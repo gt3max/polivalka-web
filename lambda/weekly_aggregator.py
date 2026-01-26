@@ -138,33 +138,69 @@ def aggregate_device_data(device_id, start_ts, end_ts):
     if not items:
         return None
 
-    # Aggregate moisture
-    moisture_values = []
+    # Aggregate moisture (percent + ADC)
+    moisture_pct_values = []
+    moisture_adc_values = []
+    sensor2_pct_values = []
+    sensor2_adc_values = []
+
     for item in items:
         sensor = item.get('sensor', {})
         pct = sensor.get('moisture_percent') or sensor.get('percent')
+        adc = sensor.get('adc_raw') or sensor.get('adc')
         if pct is not None:
-            moisture_values.append(float(pct))
+            moisture_pct_values.append(float(pct))
+        if adc is not None:
+            moisture_adc_values.append(int(adc))
+
+        # Sensor 2 (J7)
+        s2_pct = sensor.get('sensor2_percent')
+        s2_adc = sensor.get('sensor2_adc')
+        if s2_pct is not None:
+            sensor2_pct_values.append(float(s2_pct))
+        if s2_adc is not None:
+            sensor2_adc_values.append(int(s2_adc))
 
     moisture_stats = None
-    if moisture_values:
+    if moisture_pct_values:
         moisture_stats = {
-            'avg_percent': round(sum(moisture_values) / len(moisture_values), 1),
-            'min_percent': round(min(moisture_values), 1),
-            'max_percent': round(max(moisture_values), 1),
-            'readings_count': len(moisture_values)
+            'avg_percent': round(sum(moisture_pct_values) / len(moisture_pct_values), 1),
+            'min_percent': round(min(moisture_pct_values), 1),
+            'max_percent': round(max(moisture_pct_values), 1),
+            'readings_count': len(moisture_pct_values)
         }
+        if moisture_adc_values:
+            moisture_stats['avg_adc'] = round(sum(moisture_adc_values) / len(moisture_adc_values))
+            moisture_stats['min_adc'] = min(moisture_adc_values)
+            moisture_stats['max_adc'] = max(moisture_adc_values)
 
-    # Aggregate battery
-    battery_values = []
+    sensor2_stats = None
+    if sensor2_pct_values:
+        sensor2_stats = {
+            'avg_percent': round(sum(sensor2_pct_values) / len(sensor2_pct_values), 1),
+            'min_percent': round(min(sensor2_pct_values), 1),
+            'max_percent': round(max(sensor2_pct_values), 1),
+            'readings_count': len(sensor2_pct_values)
+        }
+        if sensor2_adc_values:
+            sensor2_stats['avg_adc'] = round(sum(sensor2_adc_values) / len(sensor2_adc_values))
+            sensor2_stats['min_adc'] = min(sensor2_adc_values)
+            sensor2_stats['max_adc'] = max(sensor2_adc_values)
+
+    # Aggregate battery (percent + voltage)
+    battery_pct_values = []
+    battery_voltage_values = []
     charging_hours = 0
     last_charging_ts = None
 
     for item in items:
         battery = item.get('battery', {})
         pct = battery.get('percent')
+        voltage = battery.get('voltage')
         if pct is not None:
-            battery_values.append(float(pct))
+            battery_pct_values.append(float(pct))
+        if voltage is not None:
+            battery_voltage_values.append(float(voltage))
 
         # Track charging time
         charging = battery.get('charging', False)
@@ -177,13 +213,17 @@ def aggregate_device_data(device_id, start_ts, end_ts):
             last_charging_ts = None
 
     battery_stats = None
-    if battery_values:
+    if battery_pct_values:
         battery_stats = {
-            'avg_percent': round(sum(battery_values) / len(battery_values), 1),
-            'min_percent': round(min(battery_values), 1),
-            'max_percent': round(max(battery_values), 1),
+            'avg_percent': round(sum(battery_pct_values) / len(battery_pct_values), 1),
+            'min_percent': round(min(battery_pct_values), 1),
+            'max_percent': round(max(battery_pct_values), 1),
             'charging_hours': round(charging_hours, 1)
         }
+        if battery_voltage_values:
+            battery_stats['avg_voltage'] = round(sum(battery_voltage_values) / len(battery_voltage_values), 2)
+            battery_stats['min_voltage'] = round(min(battery_voltage_values), 2)
+            battery_stats['max_voltage'] = round(max(battery_voltage_values), 2)
 
     # Aggregate watering events
     watering_events = 0
@@ -254,12 +294,18 @@ def aggregate_device_data(device_id, start_ts, end_ts):
         'firmware_version': firmware_version
     }
 
-    return {
+    result = {
         'moisture': moisture_stats,
         'battery': battery_stats,
         'watering': watering_stats,
         'system': system_stats
     }
+
+    # Add sensor2 if present
+    if sensor2_stats:
+        result['sensor2'] = sensor2_stats
+
+    return result
 
 
 def github_api_request(method, path, data=None):
