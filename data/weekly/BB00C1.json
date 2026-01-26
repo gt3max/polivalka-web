@@ -1,7 +1,49 @@
 {
   "device_id": "BB00C1",
-  "last_updated": "2026-01-25T23:59:24.525225Z",
+  "last_updated": "2026-01-26T00:29:11.883187Z",
   "summaries": [
+    {
+      "week": "2026-W05",
+      "start_date": "2026-01-26",
+      "end_date": "2026-02-01",
+      "generated_at": "2026-01-26T00:29:11.726445Z",
+      "moisture": {
+        "avg_percent": 100.0,
+        "min_percent": 100.0,
+        "max_percent": 100.0,
+        "readings_count": 1
+      },
+      "battery": {
+        "avg_percent": 2.6,
+        "min_percent": 2.6,
+        "max_percent": 2.6,
+        "charging_hours": 0,
+        "avg_voltage": 3.67,
+        "min_voltage": 3.67,
+        "max_voltage": 3.67
+      },
+      "watering": {
+        "events_count": 0,
+        "total_ml": 0,
+        "auto_events": 0,
+        "manual_events": 0
+      },
+      "system": {
+        "online_hours": 0.5,
+        "offline_hours": 0.0,
+        "restarts": 0,
+        "firmware_version": null
+      },
+      "sensor2": {
+        "avg_percent": 100.0,
+        "min_percent": 100.0,
+        "max_percent": 100.0,
+        "readings_count": 1,
+        "avg_adc": 0,
+        "min_adc": 0,
+        "max_adc": 0
+      }
+    },
     {
       "week": "2026-W04",
       "start_date": "2026-01-19",
