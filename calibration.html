@@ -67,6 +67,12 @@ if(s.sensor2_adc!==undefined&&s.sensor2_adc!==null){
 const s2pct=(s.sensor2_percent_float!==undefined&&s.sensor2_percent_float!==null)?s.sensor2_percent_float.toFixed(1):(s.sensor2_percent!==null&&s.sensor2_percent!==undefined?s.sensor2_percent:'—');
 document.getElementById('s2-live-adc').textContent='ADC: '+s.sensor2_adc;
 document.getElementById('s2-live-moisture').textContent=s2pct+'%';}
+// Sensor2 calibration (Cloud mode)
+if(s.sensor2_calib){
+document.getElementById('s2-calib').textContent='adc_dry='+s.sensor2_calib.dry+'  adc_wet='+s.sensor2_calib.wet;
+const s2badge=document.getElementById('sensor2-cal-badge');
+if(s.sensor2_calibrated){s2badge.textContent='✓ Calibrated';s2badge.style.background='#e8f5e9';s2badge.style.color='#2e7d32';}
+else{s2badge.textContent='⚠️ Presets';s2badge.style.background='#fff3e0';s2badge.style.color='#f57c00';}}
 const air=s.calib.adc_air;const water=s.calib.adc_water;const soil=s.calib.adc_dry_soil;
 document.getElementById('calib').textContent=`adc_air=${air}  adc_water=${water}  adc_dry_soil=${soil||'—'}`;
 const sensorBadge=document.getElementById('sensor-cal-badge');

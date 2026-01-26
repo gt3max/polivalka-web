@@ -931,7 +931,12 @@ def lambda_handler(event, context):
                     calibrated = pump_calib.get('calibrated', False)
                 elif pump_calib is not None:
                     ml_per_sec = float(pump_calib)
-                    calibrated = abs(ml_per_sec - 2.5) > 0.01  # Calibrated if not default
+                    # Sanity check: values < 0.5 or > 20 are invalid (data corruption)
+                    if ml_per_sec < 0.5 or ml_per_sec > 20:
+                        ml_per_sec = 2.5
+                        calibrated = False
+                    else:
+                        calibrated = abs(ml_per_sec - 2.5) > 0.01  # Calibrated if not default
                 else:
                     ml_per_sec = 2.5
                     calibrated = False
@@ -1382,6 +1387,17 @@ def get_device_status(device_id, user_id):
         calib['adc_dry_soil'] != 2400
     )
 
+    # Sensor 2 (Resistive J7) calibration - defaults: dry=100, wet=3000
+    sensor2_calib = device_meta.get('sensor2_calibration', {})
+    sensor2_calib_data = {
+        'dry': int(sensor2_calib.get('dry', 100)) if sensor2_calib else 100,
+        'wet': int(sensor2_calib.get('wet', 3000)) if sensor2_calib else 3000
+    }
+    sensor2_calibrated = bool(sensor2_calib) and (
+        sensor2_calib_data['dry'] != 100 or
+        sensor2_calib_data['wet'] != 3000
+    )
+
     # Format response matching ESP32 /api/status structure
     sensor_data = latest.get('sensor', {})
     status = {
@@ -1393,6 +1409,8 @@ def get_device_status(device_id, user_id):
         'sensor2_percent_float': sensor_data.get('sensor2_percent_float'),  # Decimal precision
         'calib': calib,
         'sensor_calibrated': sensor_calibrated,
+        'sensor2_calib': sensor2_calib_data,
+        'sensor2_calibrated': sensor2_calibrated,
         'system_state': {
             'device_name': device_name,
             'location': device_location,
