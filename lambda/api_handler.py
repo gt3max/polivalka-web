@@ -1959,9 +1959,18 @@ def get_battery_history(device_id, user_id, days=7):
 # === Helper Functions ===
 
 def get_latest_telemetry(device_id):
-    """Get latest sensor, battery, system data for device"""
+    """Get latest sensor, battery, system data for device.
+
+    Merges data from two sources:
+    1. timestamp=0 record - updated by command responses (iot_rule_response.py)
+    2. Recent telemetry records - periodic publishes from ESP32
+
+    For each data type (sensor, battery, system, pump), uses the NEWEST data
+    based on timestamp comparison.
+    """
 
     latest = {}
+    latest_timestamps = {}  # Track timestamps for each data type
     telem_device_id = get_telemetry_device_id(device_id)
 
     # First, get the "latest" record (timestamp=0) which has last_update from command responses
@@ -1972,12 +1981,15 @@ def get_latest_telemetry(device_id):
         )
         if 'Item' in latest_record:
             item = latest_record['Item']
-            # Use last_update from this record (updated by iot_rule_response.py)
-            if 'last_update' in item:
-                latest['last_update'] = int(item['last_update'])
-            # Also get sensor data if present (from get_status command response)
+            # Use last_update from this record as the sensor data timestamp
+            record_timestamp = int(item.get('last_update', 0))
+            if record_timestamp > 0:
+                latest['last_update'] = record_timestamp
+            # Get sensor data if present (from get_status command response)
             if 'sensor' in item:
                 latest['sensor'] = dict(item['sensor'])
+                latest['sensor']['timestamp'] = record_timestamp
+                latest_timestamps['sensor'] = record_timestamp
     except Exception as e:
         print(f"Error getting latest record: {e}")
 
@@ -1992,19 +2004,23 @@ def get_latest_telemetry(device_id):
         Limit=100  # Get recent records to find latest of each type
     )
 
-    # Extract latest of each data type
+    # Extract latest of each data type - compare timestamps to use NEWEST data
     for item in response.get('Items', []):
         timestamp = int(item.get('timestamp', 0))
 
-        # Check each data type and keep the latest
+        # Check each data type and keep the NEWEST (by timestamp)
         for data_type in ['sensor', 'battery', 'system', 'pump']:
-            if data_type in item and data_type not in latest:
-                data = dict(item[data_type])  # Copy to avoid mutation
-                data['timestamp'] = timestamp  # Add record timestamp to data
-                latest[data_type] = data
-                # Update last_update if this record is newer
-                if 'last_update' not in latest or timestamp > latest['last_update']:
-                    latest['last_update'] = timestamp
+            if data_type in item:
+                existing_ts = latest_timestamps.get(data_type, 0)
+                # Use this record if it's NEWER than existing data
+                if timestamp > existing_ts:
+                    data = dict(item[data_type])  # Copy to avoid mutation
+                    data['timestamp'] = timestamp  # Add record timestamp to data
+                    latest[data_type] = data
+                    latest_timestamps[data_type] = timestamp
+                    # Update last_update if this record is newer
+                    if 'last_update' not in latest or timestamp > latest['last_update']:
+                        latest['last_update'] = timestamp
 
     return latest
 
