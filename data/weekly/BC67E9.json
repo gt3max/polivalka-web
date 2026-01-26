@@ -1,7 +1,27 @@
 {
   "device_id": "BC67E9",
-  "last_updated": "2026-01-25T23:59:25.769425Z",
+  "last_updated": "2026-01-26T00:27:19.183984Z",
   "summaries": [
+    {
+      "week": "2026-W05",
+      "start_date": "2026-01-26",
+      "end_date": "2026-02-01",
+      "generated_at": "2026-01-26T00:27:19.016438Z",
+      "moisture": null,
+      "battery": null,
+      "watering": {
+        "events_count": 0,
+        "total_ml": 0,
+        "auto_events": 0,
+        "manual_events": 0
+      },
+      "system": {
+        "online_hours": 0.5,
+        "offline_hours": 0.0,
+        "restarts": 0,
+        "firmware_version": "v1.0.33"
+      }
+    },
     {
       "week": "2026-W04",
       "start_date": "2026-01-19",
