@@ -125,7 +125,7 @@
   <div class="header-info">
     <div id="header-time" class="mono" style="font-size:11px">--:--</div>
     <div style="font-size:11px" id="header-mode"><span id="mode-badge" class="status-badge">—</span></div>
-    <div style="font-size:11px" id="header-conn">📡 <span id="conn-text">Offline</span></div>
+    <div style="font-size:11px" id="header-conn">📡 <span id="conn-text" style="transition:color 0.3s">...</span></div>
   </div>
 </div>
 <div class="nav">
@@ -422,7 +422,7 @@ async function updateStatus() {
     // Connection
     const connText = document.getElementById('conn-text');
     connText.textContent = s.online ? 'Online' : 'Offline';
-    connText.style.color = s.online ? '#0a0' : '#999';
+    connText.style.color = s.online ? '#fff' : '#999';
 
   } catch (e) {
     console.error('[Identify] Status error:', e);
