@@ -34,7 +34,7 @@ async function updateBattery(){
   try {
     const b = await API.get('/battery/status');
     const el = document.getElementById('battery-status');
-    if (b.percent !== null && b.percent !== undefined) {
+    if (b.percent !== null && b.percent !== undefined && b.percent >= 0) {
       el.textContent = `🔋 ${Math.round(b.percent)}%${b.charging ? ' ⚡' : ''}`;
     } else {
       el.textContent = '⚡ AC';
@@ -42,22 +42,34 @@ async function updateBattery(){
   } catch(e) { document.getElementById('battery-status').textContent = '⚡ AC'; }
 }
 
-async function loadAllData(){
+async function updateHeader(){
 try {
 const s=await API.get('/status');
-// Battery (Cloud mode)
+// Battery
 const batteryStatus=document.getElementById('battery-status');
-if(s.battery&&s.battery.percent!==null&&s.battery.percent!==undefined){batteryStatus.textContent=`🔋 ${Math.round(s.battery.percent)}%${s.battery.charging?' ⚡':''}`;}else{batteryStatus.textContent='⚡ AC';}
-if(s.system_state?.location){document.getElementById('location-text').textContent=s.system_state.location;}
-if(s.system_state?.room){document.getElementById('room-text').textContent=s.system_state.room;}
+if(s.battery&&s.battery.percent!==null&&s.battery.percent!==undefined&&s.battery.percent>=0){batteryStatus.textContent=`🔋 ${Math.round(s.battery.percent)}%${s.battery.charging?' ⚡':''}`;}else{batteryStatus.textContent='⚡ AC';}
+// Location, Room, Custom Name
+if(s.system_state?.location)document.getElementById('location-text').textContent=s.system_state.location;
+if(s.system_state?.room)document.getElementById('room-text').textContent=s.system_state.room;
 let customName=s.system_state?.device_name||'Plant';
 if(customName==='Polivalka'||customName.toLowerCase().startsWith('polivalka-'))customName='Plant';
 document.getElementById('custom-name-suffix').textContent=' / '+customName;
-const mode=s.system_state?.mode||'off';const modeBadge=document.getElementById('mode-badge');
-const modeText=mode.charAt(0).toUpperCase()+mode.slice(1);
-modeBadge.textContent=modeText;modeBadge.className='status-badge status-'+mode;
-const connText=document.getElementById('conn-text');
-if(s.wifi_connected){connText.textContent='Online';connText.style.color='#0a0';}else{connText.textContent='Offline';connText.style.color='#999';}
+// Mode badge
+const mode=s.system_state?.mode||'off';const mb=document.getElementById('mode-badge');
+mb.textContent=mode.charAt(0).toUpperCase()+mode.slice(1);mb.className='status-badge status-'+mode;
+// Connection
+const ct=document.getElementById('conn-text');
+if(s.wifi_connected){ct.textContent='Online';ct.style.color='#fff';}else{ct.textContent='Offline';ct.style.color='#999';}
+// Header state
+const rawState=s.system_state?.state||'OFF';const displayState=mapStateToDisplay(rawState,s.pump_running);
+const headerStateEl=document.getElementById('header-state');if(headerStateEl)headerStateEl.textContent=`${displayState.emoji} ${displayState.text}`;
+return s;
+}catch(e){return null;}}
+
+async function loadAllData(){
+const s=await updateHeader();
+if(!s)return;
+try{
 document.getElementById('live-adc').textContent=`ADC: ${s.adc}`;
 const moistureEl=document.getElementById('live-moisture');
 const pctVal=(s.percent_float!==undefined&&s.percent_float!==null)?s.percent_float.toFixed(1):(s.percent!==null&&s.percent!==undefined?s.percent:'—');
@@ -83,9 +95,6 @@ const diff=Math.abs(air-soil);const warningDiv=document.getElementById('calib-wa
 const warningText=document.getElementById('warning-text');
 if(diff>200){warningText.textContent=`Air (${air}) vs Soil (${soil}) >200! Dry soil first`;warningDiv.style.display='block';}
 else{warningDiv.style.display='none';}}
-// Header state
-const rawState=s.system_state?.state||'OFF';const displayState=mapStateToDisplay(rawState,s.pump_running);
-const headerStateEl=document.getElementById('header-state');if(headerStateEl)headerStateEl.textContent=`${displayState.emoji} ${displayState.text}`;
 }catch(e){}}
 async function updateCalibration(){
 const btn=event?event.target:document.querySelector('button[onclick*="updateCalibration"]');
@@ -291,6 +300,9 @@ if (IS_CLOUD) {
 
 loadAllData();loadSensor2Data();loadPumpCalibration();
 
+// Header update interval
+setInterval(updateHeader, 30000);
+
 // Time from common.js universal clock, battery/wifi separate
 setInterval(updateBattery, 60000);
 updateBattery();
@@ -300,5 +312,10 @@ if (!IS_CLOUD) {
   setInterval(monitorWiFiMode, 5000);
   monitorWiFiMode();
 }
+
+// Refresh on tab return
+document.addEventListener('visibilitychange', () => {
+  if (!document.hidden) { updateHeader(); }
+});
 </script>
 </body></html>

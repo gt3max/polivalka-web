@@ -71,7 +71,7 @@ async function updateBattery(){
   try {
     const b = await API.get('/battery/status');
     const el = document.getElementById('battery-status');
-    if (b.percent !== null && b.percent !== undefined) {
+    if (b.percent !== null && b.percent !== undefined && b.percent >= 0) {
       el.textContent = `🔋 ${Math.round(b.percent)}%${b.charging ? ' ⚡' : ''}`;
     } else {
       el.textContent = '⚡ AC';
@@ -79,13 +79,13 @@ async function updateBattery(){
   } catch(e) { document.getElementById('battery-status').textContent = '⚡ AC'; }
 }
 
-async function updateStatus(){
+async function updateHeader(){
   try {
     const s = await API.get('/status');
 
     // Battery (Cloud mode)
     const batteryStatus = document.getElementById('battery-status');
-    if (s.battery && s.battery.percent !== null && s.battery.percent !== undefined) {
+    if (s.battery && s.battery.percent !== null && s.battery.percent !== undefined && s.battery.percent >= 0) {
       batteryStatus.textContent = `🔋 ${Math.round(s.battery.percent)}%${s.battery.charging ? ' ⚡' : ''}`;
     } else {
       batteryStatus.textContent = '⚡ AC';
@@ -112,21 +112,10 @@ async function updateStatus(){
     modeBadge.textContent = modeText;
     modeBadge.className = 'status-badge status-' + mode;
 
-    // Connection status
-    const connText = document.getElementById('conn-text');
-    if (s.wifi_connected) {
-      connText.textContent = 'Online';
-      connText.style.color = '#fff';
-    } else {
-      connText.textContent = 'Offline';
-      connText.style.color = '#999';
-    }
-
-    // Pump calibration for ml hint
-    if (s.pump?.calibration_ml_per_sec) {
-      pumpCalibration = s.pump.calibration_ml_per_sec;
-      updatePulseHint();
-    }
+    // Connection
+    const ct = document.getElementById('conn-text');
+    if (s.wifi_connected) { ct.textContent = 'Online'; ct.style.color = '#fff'; }
+    else { ct.textContent = 'Offline'; ct.style.color = '#999'; }
 
     // Header state
     const rawState = s.system_state?.state || 'OFF';
@@ -330,6 +319,16 @@ async function loadSensorSettings(){
   }
 }
 
+async function loadPumpCalibration(){
+  try {
+    const s = await API.get('/status');
+    if (s.pump?.calibration_ml_per_sec) {
+      pumpCalibration = s.pump.calibration_ml_per_sec;
+      updatePulseHint();
+    }
+  } catch(e) {}
+}
+
 // monitorWiFiMode() - moved to common.js
 
 // Cloud mode: показать device ID в header сразу
@@ -344,7 +343,7 @@ let statusIntervalId = null;
 
 function startPolling() {
   if (statusIntervalId) return;
-  statusIntervalId = setInterval(updateStatus, STATUS_INTERVAL);
+  statusIntervalId = setInterval(updateHeader, STATUS_INTERVAL);
 }
 
 function stopPolling() {
@@ -358,7 +357,7 @@ document.addEventListener('visibilitychange', () => {
   if (document.hidden) {
     stopPolling();
   } else {
-    updateStatus();
+    updateHeader();
     startPolling();
   }
 });
@@ -371,9 +370,10 @@ if (!IS_CLOUD) {
   updateTime();
   monitorWiFiMode();
 }
-updateStatus();
+updateHeader();
 startPolling();
 loadSensorSettings();
+loadPumpCalibration();
 
 // Cloud mode: show info notice (editing via MQTT is now supported!)
 if (IS_CLOUD) {

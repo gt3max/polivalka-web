@@ -392,7 +392,7 @@ async function updateBattery(){
   try {
     const b = await API.get('/battery/status');
     const el = document.getElementById('battery-status');
-    if (b.percent !== null && b.percent !== undefined) {
+    if (b.percent !== null && b.percent !== undefined && b.percent >= 0) {
       el.textContent = `🔋 ${Math.round(b.percent)}%${b.charging ? ' ⚡' : ''}`;
     } else {
       el.textContent = '⚡ AC';
@@ -400,13 +400,13 @@ async function updateBattery(){
   } catch(e) { document.getElementById('battery-status').textContent = '⚡ AC'; }
 }
 
-async function updateMode(){
+async function updateHeader(){
   try {
     const s = await API.get('/status');
 
     // Battery (Cloud mode)
     const batteryStatus = document.getElementById('battery-status');
-    if (s.battery && s.battery.percent !== null && s.battery.percent !== undefined) {
+    if (s.battery && s.battery.percent !== null && s.battery.percent !== undefined && s.battery.percent >= 0) {
       batteryStatus.textContent = `🔋 ${Math.round(s.battery.percent)}%${s.battery.charging ? ' ⚡' : ''}`;
     } else {
       batteryStatus.textContent = '⚡ AC';
@@ -434,14 +434,9 @@ async function updateMode(){
     modeBadge.className = 'status-badge status-' + mode;
 
     // Connection status
-    const connText = document.getElementById('conn-text');
-    if (s.wifi_connected) {
-      connText.textContent = 'Online';
-      connText.style.color = '#fff';
-    } else {
-      connText.textContent = 'Offline';
-      connText.style.color = '#999';
-    }
+    const ct = document.getElementById('conn-text');
+    if (s.wifi_connected) { ct.textContent = 'Online'; ct.style.color = '#fff'; }
+    else { ct.textContent = 'Offline'; ct.style.color = '#999'; }
 
     // Header state
     const rawState = s.system_state?.state || 'OFF';
@@ -465,7 +460,7 @@ let modeIntervalId = null;
 
 function startPolling() {
   if (modeIntervalId) return;
-  modeIntervalId = setInterval(updateMode, MODE_INTERVAL);
+  modeIntervalId = setInterval(updateHeader, MODE_INTERVAL);
 }
 
 function stopPolling() {
@@ -479,7 +474,7 @@ document.addEventListener('visibilitychange', () => {
   if (document.hidden) {
     stopPolling();
   } else {
-    updateMode();
+    updateHeader();
     startPolling();
   }
 });
@@ -494,7 +489,7 @@ if (!IS_CLOUD) {
 }
 
 // Initial load
-updateMode();
+updateHeader();
 startPolling();
 loadSchedules();
 </script>

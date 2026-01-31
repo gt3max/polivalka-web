@@ -304,7 +304,7 @@ async function updateHeader() {
 
     // Battery (Cloud mode)
     const batteryStatus = document.getElementById('battery-status');
-    if (s.battery && s.battery.percent !== null && s.battery.percent !== undefined) {
+    if (s.battery && s.battery.percent !== null && s.battery.percent !== undefined && s.battery.percent >= 0) {
       batteryStatus.textContent = `🔋 ${Math.round(s.battery.percent)}%${s.battery.charging ? ' ⚡' : ''}`;
     } else {
       batteryStatus.textContent = '⚡ AC';
@@ -320,19 +320,23 @@ async function updateHeader() {
     modeBadge.textContent = mode.charAt(0).toUpperCase() + mode.slice(1);
     modeBadge.className = 'status-badge status-' + mode;
 
-    document.getElementById('conn-text').textContent = s.wifi_connected ? 'Online' : 'Offline';
-    document.getElementById('conn-text').style.color = s.wifi_connected ? '#0a0' : '#999';
+    const ct = document.getElementById('conn-text');
+    if (s.wifi_connected) { ct.textContent = 'Online'; ct.style.color = '#fff'; }
+    else { ct.textContent = 'Offline'; ct.style.color = '#999'; }
 
-    const displayState = mapStateToDisplay(s.system_state?.state, s.pump_running);
-    document.getElementById('header-state').textContent = `${displayState.emoji} ${displayState.text}`;
-  } catch(e) { console.error('Header update failed:', e); }
+    // Header state
+    const rawState = s.system_state?.state || 'OFF';
+    const displayState = mapStateToDisplay(rawState, s.pump_running);
+    const headerStateEl = document.getElementById('header-state');
+    if (headerStateEl) headerStateEl.textContent = `${displayState.emoji} ${displayState.text}`;
+  } catch(e) {}
 }
 
 async function updateBattery() {
   try {
     const b = await API.get('/battery/status');
     const el = document.getElementById('battery-status');
-    if (b.percent !== null && b.percent !== undefined) {
+    if (b.percent !== null && b.percent !== undefined && b.percent >= 0) {
       el.textContent = `🔋 ${Math.round(b.percent)}%${b.charging ? ' ⚡' : ''}`;
     } else {
       el.textContent = '⚡ AC';
@@ -1757,6 +1761,10 @@ if (IS_CLOUD && DEVICE_ID) {
   setInterval(updateHeader, 30000);
   setInterval(updateBattery, 60000);
   setInterval(loadLongTermData, 3600000); // Refresh long-term data every hour
+  // Refresh on tab return
+  document.addEventListener('visibilitychange', () => {
+    if (!document.hidden) { updateHeader(); refreshAll(); }
+  });
 } else {
   // AP mode - show message
   document.querySelector('.container').innerHTML = `

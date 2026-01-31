@@ -156,54 +156,59 @@ if (IS_CLOUD) {
   }, 1000);
 }
 
-async function updateStatus(){
+async function updateHeader(){
   try {
     const s = await API.get('/status');
 
-    // Cloud mode: update battery from /status (time handled by common.js)
+    // Battery (Cloud mode: from /status, AP mode: separate updateBattery())
     if (IS_CLOUD) {
-      // Time is handled by universal clock in common.js
-
-      // Battery: from /status response (3 states only)
-      // 1. 🔋 XX% - battery, not charging
-      // 2. 🔋 XX% ⚡ - battery, charging
-      // 3. ⚡ AC - no battery, AC power
-      // percent < 0 means "no battery detected" (ESP32 returns -1.0)
       const batteryStatus = document.getElementById('battery-status');
       if (s.battery && s.battery.percent !== null && s.battery.percent !== undefined && s.battery.percent >= 0) {
-        const percent = Math.round(s.battery.percent);
-        const charging = s.battery.charging ? ' ⚡' : '';
-        batteryStatus.textContent = `🔋 ${percent}%${charging}`;
+        batteryStatus.textContent = `🔋 ${Math.round(s.battery.percent)}%${s.battery.charging ? ' ⚡' : ''}`;
       } else {
         batteryStatus.textContent = '⚡ AC';
       }
     }
 
-    // Device ID header (first line) - show full device ID from DEVICE_ID or ESP32
-    // Custom name goes in second line suffix if different from device_id
+    // Device ID header
     if (IS_CLOUD && DEVICE_ID) {
       document.getElementById('device-id-header').textContent = '🌱 ' + DEVICE_ID;
     } else if (s.system_state?.device_name) {
-      // AP mode - use device name from ESP32
       document.getElementById('device-id-header').textContent = '🌱 ' + s.system_state.device_name;
     }
 
-    // Location and Room
-    if (s.system_state?.location) {
-      document.getElementById('location-text').textContent = s.system_state.location;
-    }
-    if (s.system_state?.room) {
-      document.getElementById('room-text').textContent = s.system_state.room;
-    }
-
-    // Custom name suffix (always show device name, default to Plant)
+    // Location, Room, Custom Name
+    if (s.system_state?.location) document.getElementById('location-text').textContent = s.system_state.location;
+    if (s.system_state?.room) document.getElementById('room-text').textContent = s.system_state.room;
     let customName = s.system_state?.device_name || 'Plant';
-    // Replace default names with "Plant"
-    if (customName === 'Polivalka' || customName.toLowerCase().startsWith('polivalka-')) {
-      customName = 'Plant';
-    }
+    if (customName === 'Polivalka' || customName.toLowerCase().startsWith('polivalka-')) customName = 'Plant';
     document.getElementById('custom-name-suffix').textContent = ' / ' + customName;
 
+    // Mode badge
+    const mode = s.system_state?.mode || 'off';
+    const mb = document.getElementById('mode-badge');
+    mb.textContent = mode.charAt(0).toUpperCase() + mode.slice(1);
+    mb.className = 'status-badge status-' + mode;
+
+    // Connection
+    const ct = document.getElementById('conn-text');
+    if (s.wifi_connected) { ct.textContent = 'Online'; ct.style.color = '#fff'; }
+    else { ct.textContent = 'Offline'; ct.style.color = '#999'; }
+
+    // Header state
+    const rawState = s.system_state?.state || 'OFF';
+    const displayState = mapStateToDisplay(rawState, s.pump_running);
+    const headerStateEl = document.getElementById('header-state');
+    if (headerStateEl) headerStateEl.textContent = `${displayState.emoji} ${displayState.text}`;
+
+    return s;
+  } catch(e) { return null; }
+}
+
+async function updateStatus(){
+  const s = await updateHeader();
+  if (!s) return;
+  try {
     // Sensor data (Capacitive - primary sensor) - use float for 0.1% precision
     // Check both undefined AND null (API returns null when data missing in DynamoDB)
     const moisturePct = (s.percent_float !== undefined && s.percent_float !== null)
@@ -238,21 +243,14 @@ async function updateStatus(){
       document.getElementById('sensor2-vals').innerHTML = 'ADC: —<br>Moisture: — %<br><span style="color:#e65100;font-size:12px">⚠️ Sensor not connected</span>';
     }
 
-    // System State (в System Status card, не в header!)
-    // Map internal state to user-friendly: Standby/Watering/Emergency
+    // System State (в System Status card)
     const rawState = s.system_state?.state || 'OFF';
     const displayState = mapStateToDisplay(rawState, s.pump_running);
     const stateEl = document.getElementById('current-state');
     stateEl.innerHTML = `${displayState.emoji} ${displayState.text}`;
     stateEl.style.color = displayState.color;
 
-    // Update header state (alongside battery)
-    const headerStateEl = document.getElementById('header-state');
-    if (headerStateEl) {
-      headerStateEl.textContent = `${displayState.emoji} ${displayState.text}`;
-    }
-
-    // Mode badge с учётом state контроллера
+    // Mode badge с учётом state контроллера (enhanced badge overrides basic one from updateHeader)
     const mode = s.system_state?.mode || 'off';
     const modeBadge = document.getElementById('mode-badge');
     const modeText = mode.charAt(0).toUpperCase() + mode.slice(1);
@@ -282,16 +280,6 @@ async function updateStatus(){
     modeBadge.className = badgeClass;
 
     document.getElementById('current-mode').textContent = modeText;
-
-    // Connection status
-    const connText = document.getElementById('conn-text');
-    if (s.wifi_connected) {
-      connText.textContent = 'Online';
-      connText.style.color = '#fff';
-    } else {
-      connText.textContent = 'Offline';
-      connText.style.color = '#999';
-    }
 
     // Mode selector - highlight current mode
     document.querySelectorAll('.mode-btn').forEach(btn => {
