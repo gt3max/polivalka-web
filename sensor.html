@@ -37,7 +37,8 @@
 </head><body><div class="header"><div><h1 id="device-id-header" style="margin:0;font-size:15px">🌱 Polivalka</h1><div style="font-size:13px">📍 <span id="location-text">—</span> / <span id="room-text">—</span><span id="custom-name-suffix"></span></div><div style="font-size:11px;margin-top:4px"><span id="battery-status">🔋 —</span> · <span id="header-state">💤 Standby</span></div></div><div class="header-info"><div id="header-time" class="mono" style="font-size:11px">--:--</div><div style="font-size:11px" id="header-mode"><span id="mode-badge" class="status-badge">—</span></div><div style="font-size:11px" id="header-conn">📡 <span id="conn-text" style="transition:color 0.3s">...</span></div></div></div></div><div class="nav"><a href="/">Fleet</a><a href="home.html">Home</a><a href="identify.html" style="background:#e8f5e9">🌱 Plant</a><a href="timer.html">Timer</a><a href="sensor.html" class="active">Sensor</a><a href="settings.html">Settings</a><a href="calibration.html">Calibration</a><a href="online.html">Online</a><a href="trends.html">Trends</a><a href="ota.html">Update</a><a href="admin.html" id="admin-nav-link" style="display:none">Admin</a></div><div class="container"><div class="card"><h3>Sensor Mode Settings<br>(Capacitive) <span id="autosave-indicator" class="autosave-indicator"></span></h3><p class="muted">Automatic watering based on soil moisture level with pulsed delivery</p><p class="muted">See current moisture on <a href="home.html">Home</a> page or <a href="calibration.html">Calibration</a> page (Measure button)</p><div style="margin-top:16px"><label><b>Plant Type (preset)</b></label><br><select id="plant-preset" onchange="applyPreset()" style="width:100%;max-width:400px;padding:8px;font-size:14px"><option value="Succulents">Succulents/Cacti (15→25%)</option><option value="Standard">Standard houseplants (35→55%)</option><option value="Tropical">Tropical/Moisture-loving (55→75%)</option><option value="Herbs">Herbs/Seedlings (30→45%)</option><option value="Custom">— Custom (manually adjusted) —</option></select></div><div style="margin-top:12px"><label>Start Watering at (%)</label><br><input id="start-moisture-pct" type="number" min="5" max="90" value="30" style="width:80px" onchange="autoSave()"> %<br>
 <span class="muted" style="font-size:12px">Lower threshold to begin watering cycle</span></div><div style="margin-top:12px"><label>Stop Watering at (%)</label><br><input id="stop-moisture-pct" type="number" min="10" max="100" value="60" style="width:80px" onchange="autoSave()"> %<br>
 <span class="muted" style="font-size:12px">Target moisture level (≥ Start + 10pp recommended)</span></div><div style="margin-top:12px"><label>Pulse sec</label><br><input id="pulse-sec" type="number" min="1" max="60" value="5" style="width:80px" onchange="autoSave()"> sec <span id="pulse-ml-hint" class="muted" style="font-size:12px">(≈ 5.0 ml)</span>
-<br><span class="muted" style="font-size:12px">Duration of each pump pulse</span></div><div class="advanced-toggle" onclick="toggleAdvanced()"><b>▶ Advanced Parameters</b> (fine-tuning for experts)</div><div id="advanced-section" class="advanced-section"><div style="margin-top:12px"><label>Wait sec</label><br><input id="wait-sec" type="number" min="30" max="1200" value="120" style="width:80px" onchange="autoSave()"> sec<br>
+<br><span class="muted" style="font-size:12px">Duration of each pump pulse</span></div><div style="margin-top:12px"><label>Deep watering interval</label><br><input id="deep-watering-interval" type="number" min="0" max="10" value="4" style="width:80px" onchange="onDeepIntervalChange()"> cycles <label style="margin-left:12px;cursor:pointer"><input type="checkbox" id="deep-watering-toggle" onchange="onDeepToggleChange()" style="vertical-align:middle"> Enable</label><br>
+<span class="muted" style="font-size:12px">Every Nth cycle is deep (salt flush). 0 = disabled</span></div><div id="deep-watering-warning" style="margin-top:12px;padding:10px;background:#fff8e1;border-left:4px solid #ff9800;border-radius:4px;display:none"><span id="deep-warning-text" style="color:#e65100"></span><button id="deep-mark-done-btn" onclick="markDeepWateringDone()" style="margin-left:12px;padding:4px 10px;font-size:12px">Mark as done</button></div><div class="advanced-toggle" onclick="toggleAdvanced()"><b>▶ Advanced Parameters</b> (fine-tuning for experts)</div><div id="advanced-section" class="advanced-section"><div style="margin-top:12px"><label>Wait sec</label><br><input id="wait-sec" type="number" min="30" max="1200" value="120" style="width:80px" onchange="autoSave()"> sec<br>
 <span class="muted" style="font-size:12px">Pause after pulse for water absorption + sensor settling</span></div><div style="margin-top:12px"><label>Max water/cycle (ml)</label><br><input id="max-water-cycle-ml" type="number" min="50" max="1000" value="300" style="width:80px" onchange="autoSave()"> ml<br>
 <span class="muted" style="font-size:12px">Maximum water per watering cycle (safety limit)</span></div><div style="margin-top:12px"><label>Cooldown (min)</label><br><input id="cooldown-min" type="number" min="10" max="1440" value="120" style="width:80px" onchange="autoSave()"> min<br>
 <span class="muted" style="font-size:12px">Minimum pause after completed cycle</span></div><div style="margin-top:12px"><label>Max water/day (ml)</label><br><input id="max-water-day-ml" type="number" min="50" max="2000" value="400" style="width:80px" onchange="autoSave()"> ml<br>
@@ -55,7 +56,7 @@
 &nbsp;&nbsp;• <b>SETTLE:</b> Wait <b>Wait sec</b> for soil absorption + sensor stabilization<br>
 &nbsp;&nbsp;• <b>CHECK:</b> Measure moisture<br>
 &nbsp;&nbsp;• If moisture < <b>Stop Watering at %</b> → next pulse<br>
-&nbsp;&nbsp;• Repeat until: target reached OR <b>Max pulses</b> exceeded<br>
+&nbsp;&nbsp;• Repeat until: target reached OR <b>Max water/cycle</b> exceeded<br>
 <b>4. COOLDOWN:</b> Rest for <b>Cooldown min</b> before next check<br>
 <b>5. Return to STANDBY</b><br><br><b>Safety:</b> No-rise detection, daily limits, global 2000ml hard cap, preflight checks
 </div></div></div></div>
@@ -64,6 +65,64 @@
 
 var pumpCalibration = 1.0;  // ml/sec, will be loaded from API
 var autoSaveTimer = null;   // Debounce timer for auto-save
+var lastDeepInterval = 4;   // Store last non-zero interval for toggle restore
+
+function onDeepIntervalChange(){
+  const interval = parseInt(document.getElementById('deep-watering-interval').value) || 0;
+  document.getElementById('deep-watering-toggle').checked = interval > 0;
+  if (interval > 0) lastDeepInterval = interval;
+  autoSave();
+}
+
+function onDeepToggleChange(){
+  const toggle = document.getElementById('deep-watering-toggle');
+  const input = document.getElementById('deep-watering-interval');
+  if (toggle.checked) {
+    input.value = lastDeepInterval || 4;
+  } else {
+    lastDeepInterval = parseInt(input.value) || 4;
+    input.value = 0;
+  }
+  autoSave();
+}
+
+function updateDeepWateringWarning(interval, lastTs, cyclesSince){
+  const warning = document.getElementById('deep-watering-warning');
+  const text = document.getElementById('deep-warning-text');
+  const btn = document.getElementById('deep-mark-done-btn');
+
+  if (interval === 0) {
+    warning.style.display = 'block';
+    text.textContent = 'Deep watering disabled (salt may accumulate)';
+    btn.style.display = 'inline-block';
+    return;
+  }
+
+  // Calculate time since last deep watering
+  if (lastTs > 0) {
+    const now = Math.floor(Date.now() / 1000);
+    const days = Math.floor((now - lastTs) / 86400);
+    if (days >= 42) {  // 6 weeks
+      warning.style.display = 'block';
+      text.textContent = 'Last deep watering: ' + (days >= 7 ? Math.floor(days/7) + ' weeks ago' : days + ' days ago');
+      btn.style.display = 'inline-block';
+      return;
+    }
+  }
+
+  warning.style.display = 'none';
+}
+
+async function markDeepWateringDone(){
+  try {
+    const resp = await API.post('/sensor/deep_watering_confirm');
+    if (resp.success) {
+      document.getElementById('deep-watering-warning').style.display = 'none';
+    }
+  } catch(e) {
+    console.error('Deep watering confirm error:', e);
+  }
+}
 
 // mapStateToDisplay() - moved to common.js
 
@@ -213,6 +272,7 @@ async function saveSettings(){
   const microprimeHours = parseInt(document.getElementById('microprime-interval-hours').value);
   const microprimePulseSec = parseInt(document.getElementById('microprime-pulse-sec').value);
   const microprimeSettleSec = parseInt(document.getElementById('microprime-settle-sec').value);
+  const deepWateringInterval = parseInt(document.getElementById('deep-watering-interval').value) || 0;
 
   // Validation
   if (stopPct <= startPct) {
@@ -240,7 +300,8 @@ async function saveSettings(){
       '&idle_check_interval_min=' + idleCheckMin +
       '&microprime_interval_hours=' + microprimeHours +
       '&microprime_pulse_sec=' + microprimePulseSec +
-      '&microprime_settle_sec=' + microprimeSettleSec;
+      '&microprime_settle_sec=' + microprimeSettleSec +
+      '&deep_watering_interval=' + deepWateringInterval;
 
     const resp = await API.post('/sensor/preset/custom?' + query);
 
@@ -309,6 +370,15 @@ async function loadSensorSettings(){
     document.getElementById('microprime-pulse-sec').value = config.microprime_pulse_sec || 4;
     document.getElementById('microprime-settle-sec').value = config.microprime_settle_sec || 90;
     document.getElementById('baseline-delta').value = (config.baseline_delta_pct_per_ml || 0).toFixed(4);
+
+    // Deep watering interval
+    const deepInterval = config.deep_watering_interval || 0;
+    document.getElementById('deep-watering-interval').value = deepInterval;
+    document.getElementById('deep-watering-toggle').checked = deepInterval > 0;
+    if (deepInterval > 0) lastDeepInterval = deepInterval;
+
+    // Update deep watering warning
+    updateDeepWateringWarning(deepInterval, config.last_deep_watering_ts || 0, config.cycles_since_deep || 0);
 
     // Update ml hint
     updatePulseHint();
