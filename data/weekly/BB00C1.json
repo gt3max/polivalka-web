@@ -1,50 +1,50 @@
 {
   "device_id": "BB00C1",
-  "last_updated": "2026-01-26T00:33:58.805328Z",
+  "last_updated": "2026-02-01T23:59:24.863204Z",
   "summaries": [
     {
       "week": "2026-W05",
       "start_date": "2026-01-26",
       "end_date": "2026-02-01",
-      "generated_at": "2026-01-26T00:33:58.490388Z",
+      "generated_at": "2026-02-01T23:59:24.552762Z",
       "moisture": {
-        "avg_percent": 100.0,
-        "min_percent": 100.0,
+        "avg_percent": 92.1,
+        "min_percent": 0.0,
         "max_percent": 100.0,
-        "readings_count": 1,
-        "avg_adc": 0,
+        "readings_count": 184,
+        "avg_adc": 1216,
         "min_adc": 0,
-        "max_adc": 0
+        "max_adc": 2875
       },
       "battery": {
-        "avg_percent": 2.6,
-        "min_percent": 2.6,
-        "max_percent": 2.6,
-        "charging_hours": 0,
-        "avg_voltage": 3.67,
-        "min_voltage": 3.67,
-        "max_voltage": 3.67
+        "avg_percent": 86.4,
+        "min_percent": 0.0,
+        "max_percent": 100.0,
+        "charging_hours": 0.2,
+        "avg_voltage": 4.09,
+        "min_voltage": 3.24,
+        "max_voltage": 4.2
       },
       "watering": {
-        "events_count": 0,
-        "total_ml": 0,
+        "events_count": 11,
+        "total_ml": 175,
         "auto_events": 0,
-        "manual_events": 0
+        "manual_events": 11
       },
       "system": {
-        "online_hours": 0.5,
+        "online_hours": 348.0,
         "offline_hours": 0.0,
         "restarts": 0,
-        "firmware_version": null
+        "firmware_version": "v1.0.102"
       },
       "sensor2": {
-        "avg_percent": 100.0,
-        "min_percent": 100.0,
+        "avg_percent": 76.0,
+        "min_percent": 0.0,
         "max_percent": 100.0,
-        "readings_count": 1,
-        "avg_adc": 0,
+        "readings_count": 169,
+        "avg_adc": 2327,
         "min_adc": 0,
-        "max_adc": 0
+        "max_adc": 4095
       }
     },
     {
