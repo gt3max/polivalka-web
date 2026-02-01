@@ -3459,6 +3459,8 @@ def get_device_activity(device_id, user_id):
         # When reboot_count changes, use prev values (from the NEW boot session)
         prev_reboot_count = None
         prev_boot_type = None
+        prev_previous_version = None
+        prev_firmware_version = None
         prev_reset_reason = None
         prev_timestamp = None
 
@@ -3499,6 +3501,8 @@ def get_device_activity(device_id, user_id):
                 boot_type = system_data.get('boot_type')
                 reset_reason = system_data.get('reset_reason')
                 reboot_count = system_data.get('reboot_count')
+                previous_version = system_data.get('previous_version')
+                firmware_version = system_data.get('firmware_version')
 
                 # Check for reboot events - ONLY when reboot_count CHANGES
                 # (Iterating DESC: newest first, so we detect when count differs from previous)
@@ -3518,12 +3522,18 @@ def get_device_activity(device_id, user_id):
 
                     # Handle all ESP32 boot types
                     if use_boot_type == 'OTA_BOOT':
+                        # Include version transition if available
+                        ver_info = ""
+                        if prev_previous_version and prev_firmware_version:
+                            ver_info = f" ({prev_previous_version} → {prev_firmware_version})"
+                        elif prev_firmware_version:
+                            ver_info = f" → {prev_firmware_version}"
                         activity_items.append({
                             'timestamp': use_timestamp,
                             'type': 'OTA',
                             'level': 'INFO',
                             'component': 'OTA_UPDATE',
-                            'message': f"🔄 OTA Update completed (reboot #{use_reboot_count})",
+                            'message': f"🔄 OTA Update completed{ver_info} (reboot #{use_reboot_count})",
                             'reset_reason': use_reset_reason,
                             'boot_type': use_boot_type
                         })
@@ -3616,6 +3626,10 @@ def get_device_activity(device_id, user_id):
                     prev_boot_type = boot_type
                     prev_reset_reason = reset_reason
                     prev_timestamp = ts
+                if previous_version:
+                    prev_previous_version = previous_version
+                if firmware_version:
+                    prev_firmware_version = firmware_version
 
                 # Skip normal system heartbeats (no mode change tracking needed)
                 # They just clutter the activity log
