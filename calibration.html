@@ -184,7 +184,7 @@ else{await fetch('/api/sensor2/reset',{cache:'no-store'});}
 loadSensor2Data();}
 async function loadPumpCalibration(){
 try{const s=await API.get('/pump/status');
-const ml=s.ml_per_sec||10.0;document.getElementById('current-ml-per-sec').textContent=ml.toFixed(2)+' ml/sec';
+const ml=s.ml_per_sec||1.0;document.getElementById('current-ml-per-sec').textContent=ml.toFixed(2)+' ml/sec';
 const pumpBadge=document.getElementById('pump-cal-badge');
 if(s.calibrated){pumpBadge.textContent='✓ Calibrated';pumpBadge.style.background='#e8f5e9';pumpBadge.style.color='#2e7d32';}
 else{pumpBadge.textContent='⚠️ Presets';pumpBadge.style.background='#fff3e0';pumpBadge.style.color='#f57c00';}

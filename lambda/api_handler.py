@@ -926,20 +926,20 @@ def lambda_handler(event, context):
                 pump_speed = device_info.get('pump_speed', 100)
 
                 # Handle both number (from iot_rule_response) and dict formats
+                # ESP32 firmware default = 1.0 ml/sec (CALIBRATION_DEFAULT in pump.c)
                 if isinstance(pump_calib, dict):
-                    ml_per_sec = float(pump_calib.get('ml_per_sec', 2.5))
+                    ml_per_sec = float(pump_calib.get('ml_per_sec', 1.0))
                     calibrated = pump_calib.get('calibrated', False)
                 elif pump_calib is not None:
                     ml_per_sec = float(pump_calib)
-                    # Sanity check: values < 1.5 or > 20 are invalid (data corruption)
-                    # 1.0 is suspicious - likely boolean True converted to int
-                    if ml_per_sec < 1.5 or ml_per_sec > 20:
-                        ml_per_sec = 2.5
+                    # Sanity check: values <= 0 or > 20 are invalid (data corruption)
+                    if ml_per_sec <= 0 or ml_per_sec > 20:
+                        ml_per_sec = 1.0
                         calibrated = False
                     else:
-                        calibrated = abs(ml_per_sec - 2.5) > 0.01  # Calibrated if not default
+                        calibrated = abs(ml_per_sec - 1.0) > 0.01  # Calibrated if not default (1.0)
                 else:
-                    ml_per_sec = 2.5
+                    ml_per_sec = 1.0
                     calibrated = False
 
                 return {

@@ -230,11 +230,9 @@ async function updateStatus(){
       const pct2 = (s.sensor2_percent_float !== undefined && s.sensor2_percent_float !== null)
         ? s.sensor2_percent_float.toFixed(1)
         : (s.sensor2_percent !== undefined && s.sensor2_percent !== null ? s.sensor2_percent : '—');
-      // Resistive sensor (DFRobot SEN0114) disconnection detection:
-      // -1 = ESP32 marker for disconnected sensor
-      // ADC < 3 = GPIO floating/grounded (disconnected) - low threshold because dry air reads near 0
-      // ADC > 3900 = shorted to VCC (invalid)
-      sensor2Disconnected = (s.sensor2_adc === -1 || s.sensor2_adc < 3 || s.sensor2_adc > 3900);
+      // Disconnection: ESP32 sends -1 when sensor not connected (server-side detection)
+      // Trust ESP32 decision — it uses variance + all-zero + shorted checks
+      sensor2Disconnected = (s.sensor2_adc === -1 || s.sensor2_adc === null);
       const sensor2Warning = sensor2Disconnected ? '<br><span style="color:#e65100;font-size:12px">⚠️ Sensor not connected</span>' : '';
       document.getElementById('sensor2-vals').innerHTML = `ADC: ${s.sensor2_adc}<br>Moisture: ${pct2} %${sensor2Warning}`;
     } else {
