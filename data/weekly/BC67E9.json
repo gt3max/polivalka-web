@@ -1,38 +1,38 @@
 {
   "device_id": "BC67E9",
-  "last_updated": "2026-01-26T00:34:00.491289Z",
+  "last_updated": "2026-02-01T23:59:27.935792Z",
   "summaries": [
     {
       "week": "2026-W05",
       "start_date": "2026-01-26",
       "end_date": "2026-02-01",
-      "generated_at": "2026-01-26T00:34:00.331326Z",
+      "generated_at": "2026-02-01T23:59:27.734218Z",
       "moisture": {
-        "avg_percent": 47.0,
-        "min_percent": 47.0,
-        "max_percent": 47.0,
-        "readings_count": 1,
-        "avg_adc": 1784,
-        "min_adc": 1784,
-        "max_adc": 1784
+        "avg_percent": 44.6,
+        "min_percent": 35.5,
+        "max_percent": 89.1,
+        "readings_count": 183,
+        "avg_adc": 1831,
+        "min_adc": 1164,
+        "max_adc": 1967
       },
       "battery": {
-        "avg_percent": 98.6,
-        "min_percent": 98.6,
-        "max_percent": 98.6,
-        "charging_hours": 0,
-        "avg_voltage": 4.17,
-        "min_voltage": 4.17,
-        "max_voltage": 4.17
+        "avg_percent": 93.7,
+        "min_percent": 88.5,
+        "max_percent": 100.0,
+        "charging_hours": 2.0,
+        "avg_voltage": 4.14,
+        "min_voltage": 4.09,
+        "max_voltage": 4.21
       },
       "watering": {
-        "events_count": 0,
-        "total_ml": 0,
+        "events_count": 9,
+        "total_ml": 60,
         "auto_events": 0,
-        "manual_events": 0
+        "manual_events": 9
       },
       "system": {
-        "online_hours": 1.0,
+        "online_hours": 368.5,
         "offline_hours": 0.0,
         "restarts": 0,
         "firmware_version": "v1.0.33"
@@ -41,10 +41,10 @@
         "avg_percent": 0.0,
         "min_percent": 0.0,
         "max_percent": 0.0,
-        "readings_count": 1,
-        "avg_adc": 2,
-        "min_adc": 2,
-        "max_adc": 2
+        "readings_count": 183,
+        "avg_adc": 0,
+        "min_adc": 0,
+        "max_adc": 3
       }
     },
     {
