@@ -1531,18 +1531,18 @@ async function massOTAUpdate() {
       const results = [];
       let completed = 0;
 
+      // Send OTA to all devices, then poll results
+      const commandIds = [];
       for (const device of onlineDevices) {
         try {
           console.log('[OTA] Triggering OTA for device:', device.device_id);
-          showToast(`Updating ${device.device_id}... (${completed+1}/${onlineDevices.length})`, 'info');
+          showToast(`Sending to ${device.device_id}... (${completed+1}/${onlineDevices.length})`, 'info');
 
           const otaResult = await API.post(`/device/${device.device_id}/ota`, {
             url: firmwareUrl,
             version: 'cloud-update'
           });
-          console.log('[OTA] OTA trigger result for', device.device_id, ':', otaResult);
-
-          results.push({device_id: device.device_id, success: true});
+          commandIds.push({device_id: device.device_id, command_id: otaResult.command_id});
         } catch(e) {
           console.error('[OTA] OTA trigger failed for', device.device_id, ':', e.message);
           results.push({device_id: device.device_id, success: false, error: e.message});
@@ -1550,11 +1550,35 @@ async function massOTAUpdate() {
         completed++;
       }
 
+      // Poll device responses (up to 20s)
+      showToast('⏳ Waiting for device responses...', 'info');
+      for (let i = 0; i < 10; i++) {
+        await new Promise(r => setTimeout(r, 2000));
+        for (const cmd of commandIds) {
+          if (cmd.done) continue;
+          try {
+            const cmdResult = await API.get(`/device/${cmd.device_id}/command/${cmd.command_id}`);
+            if (cmdResult.status === 'success') {
+              results.push({device_id: cmd.device_id, success: true});
+              cmd.done = true;
+            } else if (cmdResult.status === 'error') {
+              results.push({device_id: cmd.device_id, success: false, error: cmdResult.message || 'Device rejected'});
+              cmd.done = true;
+            }
+          } catch(e) { /* pending */ }
+        }
+        if (commandIds.every(c => c.done)) break;
+      }
+      // Mark remaining as timeout
+      for (const cmd of commandIds) {
+        if (!cmd.done) results.push({device_id: cmd.device_id, success: false, error: 'No response (timeout)'});
+      }
+
       // Step 4: Show results
       const successful = results.filter(r => r.success).length;
       const failed = results.filter(r => !r.success).length;
 
-      let resultMsg = `✅ Update All Online Complete!\n\nSuccessful: ${successful}\nFailed: ${failed}\n\n`;
+      let resultMsg = `📦 OTA Update Results\n\n✅ Accepted: ${successful}\n❌ Failed/Rejected: ${failed}\n\n`;
 
       if (failed > 0) {
         resultMsg += 'Failed devices:\n';
@@ -1565,7 +1589,7 @@ async function massOTAUpdate() {
 
       alert(resultMsg);
 
-      showToast('✅ Mass OTA completed. Devices will restart in ~60 seconds.', 'success');
+      showToast(failed > 0 ? `⚠️ OTA: ${successful} OK, ${failed} failed` : `✅ All ${successful} devices accepted OTA`, failed > 0 ? 'error' : 'success');
 
     } catch(e) {
       console.error('Mass OTA failed:', e);

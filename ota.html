@@ -206,12 +206,45 @@ async function startOTA() {
     const result = await API.post('/ota', { url: firmwareUrl, version: version });
     console.log('[OTA] OTA trigger result:', result);
 
-    updateProgress(100, 'OTA update triggered!');
+    updateProgress(60, 'Waiting for device response...');
 
-    setTimeout(() => {
-      showStatus('✅ OTA update started! Device will restart in ~60 seconds.', 'success');
-      progressSection.style.display = 'none';
-    }, 1000);
+    // Poll command status — device may reject (battery, pump running, etc.)
+    const cmdId = result.command_id;
+    if (cmdId) {
+      let deviceResponse = null;
+      for (let i = 0; i < 15; i++) {
+        await new Promise(r => setTimeout(r, 2000));
+        updateProgress(60 + i * 2, `Waiting for device response... (${i*2}s)`);
+        try {
+          const cmdResult = await API.get(`/command/${cmdId}`);
+          if (cmdResult.status === 'success') {
+            deviceResponse = {ok: true, msg: cmdResult.result || 'OTA started'};
+            break;
+          } else if (cmdResult.status === 'error') {
+            deviceResponse = {ok: false, msg: cmdResult.message || cmdResult.result || 'Device rejected OTA'};
+            break;
+          }
+        } catch(e) { /* pending, keep polling */ }
+      }
+
+      if (deviceResponse && !deviceResponse.ok) {
+        showStatus(`❌ Device rejected OTA: ${deviceResponse.msg}`, 'error');
+        progressSection.style.display = 'none';
+        uploadBtn.disabled = false;
+        return;
+      } else if (deviceResponse && deviceResponse.ok) {
+        updateProgress(100, 'Device accepted OTA!');
+        showStatus('✅ OTA update accepted! Device will restart in ~60 seconds.', 'success');
+        progressSection.style.display = 'none';
+        return;
+      }
+    }
+
+    // Timeout — no response from device
+    updateProgress(100, 'Command sent');
+    showStatus('⚠️ OTA command sent but no response from device. It may be offline or updating.', 'error');
+    progressSection.style.display = 'none';
+    uploadBtn.disabled = false;
 
   } catch(e) {
     console.error('[OTA] OTA failed:', e);

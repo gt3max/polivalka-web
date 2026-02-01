@@ -519,6 +519,7 @@ DEVICES_TABLE = os.environ.get('DEVICES_TABLE', 'polivalka_devices')
 TELEMETRY_TABLE = os.environ.get('TELEMETRY_TABLE', 'polivalka_telemetry')
 COMMANDS_TABLE = os.environ.get('COMMANDS_TABLE', 'polivalka_commands')
 FIRMWARE_BUCKET = os.environ.get('FIRMWARE_BUCKET', 'polivalka-firmware')
+FIRMWARE_CDN_DOMAIN = os.environ.get('FIRMWARE_CDN_DOMAIN', 'dueyl7xkzas7u.cloudfront.net')
 
 # All tables in eu-central-1
 devices_table = dynamodb.Table(DEVICES_TABLE)
@@ -2000,15 +2001,24 @@ def get_latest_telemetry(device_id):
         )
         if 'Item' in latest_record:
             item = latest_record['Item']
-            # Use last_update from this record as the sensor data timestamp
+            # last_update = time of LAST command response (any command type)
             record_timestamp = int(item.get('last_update', 0))
             if record_timestamp > 0:
                 latest['last_update'] = record_timestamp
             # Get sensor data if present (from get_status command response)
+            # BUG FIX: Use per-type 'updated_at' timestamp instead of generic 'last_update'
+            # Without this, a non-sensor command (e.g. stop_pump) bumps last_update
+            # but doesn't update sensor data → stale sensor data appears "newer"
+            # than real periodic telemetry → shows wrong moisture (e.g. 0% instead of 100%)
             if 'sensor' in item:
-                latest['sensor'] = dict(item['sensor'])
-                latest['sensor']['timestamp'] = record_timestamp
-                latest_timestamps['sensor'] = record_timestamp
+                sensor_data = dict(item['sensor'])
+                # Use sensor-specific timestamp if available, fallback to 0
+                # so that real periodic telemetry always takes precedence over
+                # potentially stale timestamp=0 data
+                sensor_ts = int(sensor_data.get('updated_at', 0))
+                latest['sensor'] = sensor_data
+                latest['sensor']['timestamp'] = sensor_ts
+                latest_timestamps['sensor'] = sensor_ts
     except Exception as e:
         print(f"Error getting latest record: {e}")
 
@@ -3172,6 +3182,7 @@ def get_command_result(device_id, user_id, command_id):
             'command': item.get('command'),
             'status': item.get('status', 'pending'),
             'result': item.get('result'),
+            'message': item.get('message'),
             'created_at': item.get('created_at'),
             'completed_at': item.get('completed_at')
         }, cls=DecimalEncoder)
@@ -3308,16 +3319,9 @@ def get_ota_upload_url(device_id, user_id):
             ExpiresIn=600  # 10 minutes
         )
 
-        # Generate presigned download URL (valid for 1 hour - enough for ESP32 to download)
-        # NOTE: Plain S3 URL doesn't work because bucket is private!
-        download_url = s3_client.generate_presigned_url(
-            'get_object',
-            Params={
-                'Bucket': FIRMWARE_BUCKET,
-                'Key': filename
-            },
-            ExpiresIn=3600  # 1 hour
-        )
+        # CloudFront download URL — short and stable (no query params)
+        # S3 stays private, CloudFront OAI provides access
+        download_url = f"https://{FIRMWARE_CDN_DOMAIN}/{filename}"
 
         return {
             'statusCode': 200,

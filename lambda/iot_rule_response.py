@@ -108,12 +108,18 @@ def lambda_handler(event, context):
             expr_values = {':ts': current_time}
 
             # If result has sensor data (from get_status), update telemetry
+            # IMPORTANT: Each data type gets its own 'updated_at' timestamp
+            # so stale data doesn't appear "fresh" when last_update is bumped
+            # by unrelated command responses (e.g. stop_pump bumps last_update
+            # but doesn't update sensor data → old sensor data looked "newer"
+            # than real telemetry, causing 0% moisture bug)
             if isinstance(result, dict) and 'sensor' in result:
                 sensor = result.get('sensor', {})
                 update_expr += ', sensor = :sensor'
                 sensor_data = {
                     'adc_raw': sensor.get('adc'),
-                    'moisture_percent': sensor.get('moisture')
+                    'moisture_percent': sensor.get('moisture'),
+                    'updated_at': current_time  # Per-type timestamp
                 }
                 # Include sensor2 (resistive J7) if present
                 if 'sensor2' in result:
