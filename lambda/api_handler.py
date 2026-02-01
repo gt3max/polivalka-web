@@ -639,6 +639,10 @@ def lambda_handler(event, context):
                 device_info = get_device_info(device_id, user_id)
                 sensor_config = device_info.get('config_sensor', {})
 
+                # Deep watering runtime stats come from system telemetry, not config
+                latest = get_latest_telemetry(device_id)
+                system_data = latest.get('system', {})
+
                 # Return config matching ESP32 /api/sensor/preset format
                 return {
                     'statusCode': 200,
@@ -657,7 +661,10 @@ def lambda_handler(event, context):
                         'microprime_interval_hours': sensor_config.get('microprime_interval_hours', 48),
                         'microprime_pulse_sec': sensor_config.get('microprime_pulse_sec', 4),
                         'microprime_settle_sec': sensor_config.get('microprime_settle_sec', 90),
-                        'baseline_delta_pct_per_ml': sensor_config.get('baseline_delta_pct_per_ml', 0.0)
+                        'baseline_delta_pct_per_ml': sensor_config.get('baseline_delta_pct_per_ml', 0.0),
+                        'deep_watering_interval': sensor_config.get('deep_watering_interval', 0),
+                        'last_deep_watering_ts': int(system_data.get('last_deep_watering_ts', 0)),
+                        'cycles_since_deep': int(system_data.get('cycles_since_deep', 0))
                     }, cls=DecimalEncoder)
                 }
 
@@ -684,7 +691,8 @@ def lambda_handler(event, context):
                     'start_moisture_pct', 'stop_moisture_pct', 'pulse_sec', 'wait_sec',
                     'max_water_cycle_ml', 'cooldown_min', 'max_water_day_ml', 'no_rise_check_ml',
                     'idle_check_interval_min', 'microprime_interval_hours',
-                    'microprime_pulse_sec', 'microprime_settle_sec'
+                    'microprime_pulse_sec', 'microprime_settle_sec',
+                    'deep_watering_interval'
                 ]
                 for param in param_names:
                     if param in query_params:
@@ -708,6 +716,10 @@ def lambda_handler(event, context):
 
             if len(parts) == 6 and parts[3] == 'sensor' and parts[4] == 'controller' and parts[5] == 'cancel' and http_method == 'POST':
                 return send_controller_command(device_id, user_id, 'sensor_controller_cancel', 'Sensor watering cancelled')
+
+            # POST /device/{id}/sensor/deep_watering_confirm - mark deep watering as done
+            if len(parts) == 5 and parts[3] == 'sensor' and parts[4] == 'deep_watering_confirm' and http_method == 'POST':
+                return send_command_with_params(device_id, user_id, 'deep_watering_confirm', {}, 'Deep watering confirmed')
 
             # Sensor controller status endpoint - returns data from telemetry
             if len(parts) == 6 and parts[3] == 'sensor' and parts[4] == 'controller' and parts[5] == 'status':
@@ -2005,20 +2017,33 @@ def get_latest_telemetry(device_id):
             record_timestamp = int(item.get('last_update', 0))
             if record_timestamp > 0:
                 latest['last_update'] = record_timestamp
-            # Get sensor data if present (from get_status command response)
+            # Extract per-type data from timestamp=0 record (saved by iot_rule_response.py)
             # BUG FIX: Use per-type 'updated_at' timestamp instead of generic 'last_update'
             # Without this, a non-sensor command (e.g. stop_pump) bumps last_update
             # but doesn't update sensor data → stale sensor data appears "newer"
             # than real periodic telemetry → shows wrong moisture (e.g. 0% instead of 100%)
             if 'sensor' in item:
                 sensor_data = dict(item['sensor'])
-                # Use sensor-specific timestamp if available, fallback to 0
-                # so that real periodic telemetry always takes precedence over
-                # potentially stale timestamp=0 data
                 sensor_ts = int(sensor_data.get('updated_at', 0))
                 latest['sensor'] = sensor_data
                 latest['sensor']['timestamp'] = sensor_ts
                 latest_timestamps['sensor'] = sensor_ts
+
+            # Battery from command response (was missing → Refresh battery reverted to stale data)
+            if 'battery' in item:
+                battery_data = dict(item['battery'])
+                battery_ts = int(battery_data.get('updated_at', 0))
+                latest['battery'] = battery_data
+                latest['battery']['timestamp'] = battery_ts
+                latest_timestamps['battery'] = battery_ts
+
+            # System from command response (stored as 'system_data' to avoid DynamoDB reserved word)
+            if 'system_data' in item:
+                system_data = dict(item['system_data'])
+                system_ts = int(system_data.get('updated_at', 0))
+                latest['system'] = system_data
+                latest['system']['timestamp'] = system_ts
+                latest_timestamps['system'] = system_ts
     except Exception as e:
         print(f"Error getting latest record: {e}")
 

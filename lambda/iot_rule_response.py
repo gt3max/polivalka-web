@@ -107,27 +107,59 @@ def lambda_handler(event, context):
             update_expr = 'SET last_update = :ts'
             expr_values = {':ts': current_time}
 
-            # If result has sensor data (from get_status), update telemetry
+            # If result has data from get_status, update telemetry (timestamp=0 record)
             # IMPORTANT: Each data type gets its own 'updated_at' timestamp
             # so stale data doesn't appear "fresh" when last_update is bumped
             # by unrelated command responses (e.g. stop_pump bumps last_update
             # but doesn't update sensor data → old sensor data looked "newer"
             # than real telemetry, causing 0% moisture bug)
-            if isinstance(result, dict) and 'sensor' in result:
-                sensor = result.get('sensor', {})
-                update_expr += ', sensor = :sensor'
-                sensor_data = {
-                    'adc_raw': sensor.get('adc'),
-                    'moisture_percent': sensor.get('moisture'),
-                    'updated_at': current_time  # Per-type timestamp
-                }
-                # Include sensor2 (resistive J7) if present
-                if 'sensor2' in result:
-                    sensor2 = result.get('sensor2', {})
-                    sensor_data['sensor2_adc'] = sensor2.get('adc')
-                    sensor_data['sensor2_percent'] = sensor2.get('percent')
-                expr_values[':sensor'] = sensor_data
-                print(f"Updating sensor telemetry: adc={sensor.get('adc')}, moisture={sensor.get('moisture')}, sensor2={result.get('sensor2')}")
+            if isinstance(result, dict):
+                # Sensor data
+                if 'sensor' in result:
+                    sensor = result.get('sensor', {})
+                    update_expr += ', sensor = :sensor'
+                    sensor_data = {
+                        'adc_raw': sensor.get('adc'),
+                        'moisture_percent': sensor.get('moisture'),
+                        'updated_at': current_time  # Per-type timestamp
+                    }
+                    # Include sensor2 (resistive J7) if present
+                    if 'sensor2' in result:
+                        sensor2 = result.get('sensor2', {})
+                        sensor_data['sensor2_adc'] = sensor2.get('adc')
+                        sensor_data['sensor2_percent'] = sensor2.get('percent')
+                    expr_values[':sensor'] = sensor_data
+                    print(f"Updating sensor telemetry: adc={sensor.get('adc')}, moisture={sensor.get('moisture')}, sensor2={result.get('sensor2')}")
+
+                # Battery data (was missing → Refresh showed fresh battery then reverted to stale periodic data)
+                if 'battery' in result:
+                    battery = result.get('battery', {})
+                    update_expr += ', battery = :battery'
+                    expr_values[':battery'] = convert_floats({
+                        'percent': battery.get('percent'),
+                        'voltage': battery.get('voltage'),
+                        'charging': battery.get('charging', False),
+                        'updated_at': current_time
+                    })
+                    print(f"Updating battery telemetry: percent={battery.get('percent')}, voltage={battery.get('voltage')}, charging={battery.get('charging')}")
+
+                # System data (mode, state, firmware)
+                # Note: command response has 'firmware', periodic telemetry has 'firmware_version'
+                # We normalize to 'firmware_version' for consistency with get_latest_telemetry()
+                if 'system' in result:
+                    system = result.get('system', {})
+                    system_save = {
+                        'mode': system.get('mode'),
+                        'state': system.get('state'),
+                        'updated_at': current_time
+                    }
+                    # Normalize firmware field name
+                    fw = system.get('firmware') or system.get('firmware_version')
+                    if fw:
+                        system_save['firmware_version'] = fw
+                    update_expr += ', system_data = :system'
+                    expr_values[':system'] = convert_floats(system_save)
+                    print(f"Updating system telemetry: mode={system.get('mode')}, state={system.get('state')}")
 
             telemetry_table.update_item(
                 Key={'device_id': device_id, 'timestamp': 0},  # timestamp=0 is "latest" record

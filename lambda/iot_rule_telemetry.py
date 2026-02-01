@@ -366,7 +366,10 @@ def handle_config(event, device_id, timestamp):
                 'microprime_interval_hours': event.get('microprime_interval_hours', 48),
                 'microprime_pulse_sec': event.get('microprime_pulse_sec', 4),
                 'microprime_settle_sec': event.get('microprime_settle_sec', 90),
-                'baseline_delta_pct_per_ml': event.get('baseline_delta_pct_per_ml', 0.0)
+                'baseline_delta_pct_per_ml': event.get('baseline_delta_pct_per_ml', 0.0),
+                'deep_watering_interval': event.get('deep_watering_interval', 0),
+                'last_deep_watering_ts': event.get('last_deep_watering_ts', 0),
+                'cycles_since_deep': event.get('cycles_since_deep', 0)
             }
             sensor_config = convert_floats_to_decimal(sensor_config)
             devices_table.update_item(
