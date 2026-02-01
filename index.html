@@ -1242,31 +1242,22 @@ async function startPump(deviceId, event) {
 async function stopPump(deviceId, event) {
   if (event) event.stopPropagation();
 
-  // Prevent multiple clicks - check if pump is NOT running
-  if (!pumpRunningDevices.has(deviceId)) {
-    return; // Ignore click if pump not running
-  }
+  // ALWAYS send stop command — pump may have been started by device itself
+  // (microprime, sensor controller, timer) without Fleet knowing
 
   // Immediate feedback
   showToast(`🛑 Stopping pump on ${deviceId}...`, 'info');
 
-  // Remove from set BEFORE API call to prevent race condition
+  // Clear local tracking state
   pumpRunningDevices.delete(deviceId);
   stopPumpTimer(deviceId);
   updatePumpButton(deviceId, false);
 
   try {
-    // Stop pump immediately (no confirmation for safety - quick action)
     await API.post(`/device/${deviceId}/pump/stop`);
-
-    // Success feedback
     showToast(`✅ Pump stopped`, 'success');
     setTimeout(() => loadDevices(), 1000);
   } catch(e) {
-    // On error, revert state (mark as running again)
-    pumpRunningDevices.add(deviceId);
-    // startPumpTimer will call updatePumpButton internally
-    startPumpTimer(deviceId);
     showToast(`❌ Failed to stop pump: ${e.message}`, 'error');
   }
 }
