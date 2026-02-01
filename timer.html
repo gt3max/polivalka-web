@@ -297,7 +297,7 @@ async function saveSchedule() {
 
   // Calculate total seconds and warn for large volumes
   const totalSec = duration * (unit === 'hr' ? 3600 : unit === 'min' ? 60 : 1);
-  const estimatedMl = totalSec * 2.5;  // ~2.5 ml/sec pump calibration
+  const estimatedMl = totalSec * 1.0;  // ~1.0 ml/sec pump calibration default
 
   if (totalSec > 600 && !confirm(`⚠️ Warning: ${Math.round(totalSec/60)} minutes of watering!\n\nEstimated water: ~${Math.round(estimatedMl)} ml\n\nAre you sure?`)) {
     return;

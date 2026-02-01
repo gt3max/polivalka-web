@@ -404,7 +404,7 @@ let allDevices = [];
 let currentView = 'list'; // 'cards' or 'list' (default: list for mobile-first)
 
 // Pump settings (will be loaded from device status or use defaults)
-let pumpCalibration = 2.5;  // ml/sec default
+let pumpCalibration = 1.0;  // ml/sec default
 let maxWateringTime = 60;   // seconds default
 let pumpRunningDevices = new Set();  // Track which devices have pump running
 let pumpTimers = {};  // Track timers for each device
@@ -1010,7 +1010,7 @@ function createDeviceCard(device) {
     </div>
 
     <div class="muted" style="font-size:12px;margin:8px 0">
-      Water: ≈${((device.watering_duration || 60) * (device.pump_calibration || 2.5) * (device.pump_speed || 100) / 100).toFixed(0)}ml / ${device.watering_duration || 60}s<br>
+      Water: ≈${((device.watering_duration || 60) * (device.pump_calibration || 1.0) * (device.pump_speed || 100) / 100).toFixed(0)}ml / ${device.watering_duration || 60}s<br>
       Last watering: ${lastWateringAgo} | Last update: ${lastUpdateAgo}<br>
       🔧 ${device.firmware_version || 'v1.0.0'} | 🔄 Restarts: ${formatRestarts(device)}${device.sta_rssi ? ` | <span style="color:${getRssiDisplay(device.sta_rssi).color}">📶 ${device.sta_rssi} dBm</span>` : ''}
     </div>

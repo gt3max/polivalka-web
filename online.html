@@ -841,9 +841,9 @@ if (IS_CLOUD) {
       modeBadge.textContent = mode.charAt(0).toUpperCase() + mode.slice(1);
       modeBadge.className = 'status-badge status-' + mode;
 
-      // Connection status in header (Cloud API returns 'online' boolean)
+      // Connection status in header
       const connText = document.getElementById('conn-text');
-      const isOnline = status.online === true;
+      const isOnline = status.wifi_connected === true;
       if (isOnline) {
         connText.textContent = 'Online';
         connText.style.color = '#fff';

@@ -150,7 +150,7 @@
 <div class="section-header">Pump Preset</div>
 <div class="toggle-row">
 <div><div class="toggle-label">Default Flow Rate</div><div class="toggle-desc">Used if pump not calibrated <span class="mono">(ml_per_sec)</span></div></div>
-<div class="row"><input type="number" id="calib-pump-mlsec" min="0.1" max="50" step="0.1" value="2.5" style="width:80px"><span class="muted">ml/sec</span></div>
+<div class="row"><input type="number" id="calib-pump-mlsec" min="0.1" max="50" step="0.1" value="1.0" style="width:80px"><span class="muted">ml/sec</span></div>
 </div>
 <div class="row" style="margin-top:8px">
 <button onclick="savePumpPreset()">Set Pump Preset</button>
@@ -176,11 +176,11 @@
 <div class="section-header" style="margin-top:20px">Resistive Sensor Preset (2-point)</div>
 <div class="toggle-row">
 <div><div class="toggle-label">ADC Dry Soil</div><div class="toggle-desc">Default 0% moisture <span class="mono">(adc_s2_dry)</span></div></div>
-<div class="row"><input type="number" id="calib-s2-dry" min="0" max="4095" value="4095" style="width:80px"></div>
+<div class="row"><input type="number" id="calib-s2-dry" min="0" max="4095" value="100" style="width:80px"></div>
 </div>
 <div class="toggle-row">
 <div><div class="toggle-label">ADC Wet Soil</div><div class="toggle-desc">Default 100% moisture <span class="mono">(adc_s2_wet)</span></div></div>
-<div class="row"><input type="number" id="calib-s2-wet" min="0" max="4095" value="1000" style="width:80px"></div>
+<div class="row"><input type="number" id="calib-s2-wet" min="0" max="4095" value="3000" style="width:80px"></div>
 </div>
 <div class="row" style="margin-top:8px">
 <button onclick="saveSensor2Preset()">Set Resistive Preset</button>
@@ -527,7 +527,7 @@ async function loadDevices() {
     }
 
     // Check AWS connection
-    document.getElementById('aws-status').textContent = 'Connected (' + devices.length + ' devices)';
+    document.getElementById('aws-status').textContent = 'Total devices: ' + devices.length;
     document.getElementById('aws-status-dot').className = 'status-dot online';
   } catch(e) {
     console.error('[Admin] Failed to load devices:', e);
@@ -566,7 +566,7 @@ async function loadDeviceConfig() {
       const device = devices.find(d => d.device_id === deviceId);
       if (device) {
         // Populate pump calibration (from DynamoDB)
-        const pumpCalib = device.pump_calibration || 2.5;
+        const pumpCalib = device.pump_calibration || 1.0;
         document.getElementById('calib-pump-mlsec').value = pumpCalib;
         console.log('[Admin] Loaded pump_calibration:', pumpCalib);
 
@@ -579,8 +579,8 @@ async function loadDeviceConfig() {
 
         // Populate Resistive sensor calibration (from DynamoDB)
         const sensor2Calib = device.sensor2_calibration || {};
-        document.getElementById('calib-s2-dry').value = sensor2Calib.dry || 4095;
-        document.getElementById('calib-s2-wet').value = sensor2Calib.wet || 1000;
+        document.getElementById('calib-s2-dry').value = sensor2Calib.dry || 100;
+        document.getElementById('calib-s2-wet').value = sensor2Calib.wet || 3000;
         console.log('[Admin] Loaded sensor2_calibration:', sensor2Calib);
 
         // Show last seen info

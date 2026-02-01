@@ -421,8 +421,8 @@ async function updateStatus() {
 
     // Connection
     const connText = document.getElementById('conn-text');
-    connText.textContent = s.online ? 'Online' : 'Offline';
-    connText.style.color = s.online ? '#fff' : '#999';
+    if (s.wifi_connected) { connText.textContent = 'Online'; connText.style.color = '#fff'; }
+    else { connText.textContent = 'Offline'; connText.style.color = '#999'; }
 
   } catch (e) {
     console.error('[Identify] Status error:', e);

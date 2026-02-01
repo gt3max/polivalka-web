@@ -277,7 +277,9 @@ try{
   } else {
     await fetch('/api/pump/reset',{cache:'no-store'});
   }
-  alert('Pump calibration reset to default (2.5 ml/sec)');loadPumpCalibration();
+  await loadPumpCalibration();
+  const val=document.getElementById('current-ml-per-sec').textContent;
+  alert('Pump calibration reset to factory preset ('+val+')');
 }catch(e){alert('Reset failed');}}
 // Cloud mode: показать device ID в header сразу
 if (IS_CLOUD && DEVICE_ID) {
