@@ -3667,7 +3667,8 @@ def get_device_activity(device_id, user_id):
                 is_microprime = pump_data.get('is_microprime', False)
 
                 # Build descriptive message
-                if is_microprime:
+                # Microprime = flag + short duration (≤20s). Long pumps with stale flag = normal watering.
+                if is_microprime and duration is not None and int(duration) <= 20:
                     source = 'microprime'
                     emoji_start = '🔧'
                     emoji_stop = '🔧'
