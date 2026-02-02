@@ -933,7 +933,7 @@ function renderPumpChart(events) {
   for (const [type, points] of Object.entries(groups)) {
     const cfg = typeConfig[type] || typeConfig.normal;
     datasets.push({
-      label: cfg.label + ' (ml)',
+      label: cfg.label,
       data: points,
       backgroundColor: cfg.color,
       borderColor: cfg.color,
