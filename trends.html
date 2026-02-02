@@ -911,63 +911,67 @@ function renderPumpChart(events) {
 
   const ctx = canvas.getContext('2d');
 
-  pumpChart = new Chart(ctx, {
-    type: 'bar',
-    data: {
-      labels: labels,
-      datasets: [
-        {
-          label: 'Volume (ml)',
-          data: volumeValues,
-          backgroundColor: colors,
-          borderColor: colors,
-          borderWidth: 1,
-          yAxisID: 'y',
-          barThickness: 8,
-          maxBarThickness: 12
-        },
-        {
-          label: 'Duration (s)',
-          data: durationValues,
-          type: 'line',
-          borderColor: '#9c27b0',
-          backgroundColor: 'transparent',
-          borderDash: [3, 3],
-          fill: false,
-          tension: 0,
-          pointRadius: 4,
-          pointBackgroundColor: '#9c27b0',
-          yAxisID: 'y1',
-          spanGaps: false
+  // Build scatter datasets grouped by source type
+  const typeConfig = {
+    microprime: { label: 'Microprime', color: '#90caf9', symbol: 'circle', radius: 4 },
+    manual:     { label: 'Manual',     color: '#ff9800', symbol: 'rect',   radius: 5 },
+    timer:      { label: 'Timer',      color: '#4caf50', symbol: 'triangle', radius: 5 },
+    sensor:     { label: 'Sensor',     color: '#2196f3', symbol: 'rectRot',  radius: 5 },
+    normal:     { label: 'Watering',   color: '#4caf50', symbol: 'rect',   radius: 5 }
+  };
+
+  // Group data by type
+  const groups = {};
+  for (const d of chartData) {
+    const t = d.type || 'normal';
+    if (!groups[t]) groups[t] = [];
+    groups[t].push({ x: d.timestamp * 1000, y: d.volume, duration: d.duration });
+  }
+
+  // Create one dataset per type (for proper legend)
+  const datasets = [];
+  for (const [type, points] of Object.entries(groups)) {
+    const cfg = typeConfig[type] || typeConfig.normal;
+    datasets.push({
+      label: cfg.label + ' (ml)',
+      data: points,
+      backgroundColor: cfg.color,
+      borderColor: cfg.color,
+      pointStyle: cfg.symbol,
+      pointRadius: cfg.radius,
+      showLine: true,
+      borderWidth: 2,
+      tension: 0,
+      fill: false,
+      yAxisID: 'y',
+      spanGaps: false,
+      segment: {
+        borderColor: ctx => {
+          const gap = ctx.p1.parsed.x - ctx.p0.parsed.x;
+          return gap > 7200000 ? 'transparent' : cfg.color;
         }
-      ]
-    },
+      }
+    });
+  }
+
+  // Time bounds: full period regardless of data
+  const now = Date.now();
+  const periodMs = currentPeriod * 24 * 60 * 60 * 1000;
+
+  pumpChart = new Chart(ctx, {
+    type: 'scatter',
+    data: { datasets: datasets },
     options: {
       responsive: true,
       maintainAspectRatio: false,
       plugins: {
         legend: { position: 'top' },
         tooltip: {
-          filter: (item) => item.parsed.y !== null,
           callbacks: {
             title: (items) => items.length > 0 ? new Date(items[0].parsed.x).toLocaleString() : '',
             label: (ctx) => {
-              if (ctx.parsed.y === null) return null;
-              if (ctx.datasetIndex === 0) {
-                return `Volume: ${ctx.parsed.y}ml`;
-              } else {
-                return `Duration: ${ctx.parsed.y}s`;
-              }
-            },
-            afterBody: (items) => {
-              if (items.length === 0) return '';
-              const idx = items[0].dataIndex;
-              const color = colors[idx];
-              if (color === '#90caf9') return 'Type: Microprime (maintenance)';
-              if (color === '#ff9800') return 'Type: Manual';
-              if (color === '#2196f3') return 'Type: Sensor auto';
-              if (color === '#4caf50') return 'Type: Timer';
-              return '';
+              const p = ctx.raw;
+              return `${ctx.dataset.label}: ${p.y}ml, ${p.duration}s`;
             }
           }
         }
@@ -975,10 +979,13 @@ function renderPumpChart(events) {
       scales: {
         x: {
           type: 'time',
+          min: now - periodMs,
+          max: now,
           time: {
             unit: currentPeriod === 1 ? 'hour' : 'day',
             displayFormats: { hour: 'HH:mm', day: 'MMM d' }
           },
+          ticks: { autoSkip: true, maxTicksLimit: 8 },
           grid: { display: false }
         },
         y: {
@@ -987,13 +994,6 @@ function renderPumpChart(events) {
           min: 0,
           title: { display: true, text: 'ml' },
           grid: { color: 'rgba(0,0,0,0.05)' }
-        },
-        y1: {
-          type: 'linear',
-          position: 'right',
-          min: 0,
-          title: { display: true, text: 'sec' },
-          grid: { drawOnChartArea: false }
         }
       }
     }
