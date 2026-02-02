@@ -211,22 +211,11 @@ def lambda_handler(event, context):
             # but doesn't update sensor data → old sensor data looked "newer"
             # than real telemetry, causing 0% moisture bug)
             if isinstance(result, dict):
-                # Sensor data
-                if 'sensor' in result:
-                    sensor = result.get('sensor', {})
-                    update_expr += ', sensor = :sensor'
-                    sensor_data = {
-                        'adc_raw': sensor.get('adc'),
-                        'moisture_percent': sensor.get('moisture'),
-                        'updated_at': current_time  # Per-type timestamp
-                    }
-                    # Include sensor2 (resistive J7) if present
-                    if 'sensor2' in result:
-                        sensor2 = result.get('sensor2', {})
-                        sensor_data['sensor2_adc'] = sensor2.get('adc')
-                        sensor_data['sensor2_percent'] = sensor2.get('percent')
-                    expr_values[':sensor'] = sensor_data
-                    print(f"Updating sensor telemetry: adc={sensor.get('adc')}, moisture={sensor.get('moisture')}, sensor2={result.get('sensor2')}")
+                # Sensor: DO NOT save from command responses to ts=0 record.
+                # IoT Rule flatten loses sensor2 nested data (resistive J7),
+                # so ts=0 sensor record overwrites periodic telemetry (which has sensor2)
+                # in get_latest_telemetry() — causing "Sensor not connected" for sensor2.
+                # Periodic sensor telemetry is source of truth.
 
                 # Battery: DO NOT save from command responses to ts=0 record.
                 # get_status battery percent is unreliable (v1.0.33: 0% at 4.16V,
