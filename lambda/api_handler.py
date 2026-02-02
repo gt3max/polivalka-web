@@ -3661,8 +3661,28 @@ def get_device_activity(device_id, user_id):
             if 'pump' in telem:
                 pump_data = telem.get('pump', {})
                 action = pump_data.get('action')
-                duration = pump_data.get('duration_sec')
-                volume = pump_data.get('volume_ml')
+                duration = pump_data.get('duration_sec', 0)
+                volume = pump_data.get('volume_ml', 0)
+                mode = pump_data.get('mode', 'manual')
+                is_microprime = pump_data.get('is_microprime', False)
+
+                # Build descriptive message
+                if is_microprime:
+                    source = 'microprime'
+                    emoji_start = '🔧'
+                    emoji_stop = '🔧'
+                elif mode == 'sensor':
+                    source = 'sensor'
+                    emoji_start = '🌱'
+                    emoji_stop = '🌱'
+                elif mode == 'timer':
+                    source = 'timer'
+                    emoji_start = '⏰'
+                    emoji_stop = '⏰'
+                else:
+                    source = 'manual'
+                    emoji_start = '💧'
+                    emoji_stop = '🛑'
 
                 if action == 'start':
                     activity_items.append({
@@ -3670,7 +3690,11 @@ def get_device_activity(device_id, user_id):
                         'type': 'PUMP',
                         'level': 'INFO',
                         'component': 'PUMP',
-                        'message': f"💧 Pump started ({duration}s, {volume}ml)"
+                        'message': f"{emoji_start} Pump started ({duration}s, {volume}ml)",
+                        'duration_sec': duration,
+                        'volume_ml': volume,
+                        'mode': mode,
+                        'source': source
                     })
                 elif action == 'stop':
                     activity_items.append({
@@ -3678,7 +3702,11 @@ def get_device_activity(device_id, user_id):
                         'type': 'PUMP',
                         'level': 'INFO',
                         'component': 'PUMP',
-                        'message': f"🛑 Pump stopped ({duration}s, {volume}ml)"
+                        'message': f"{emoji_stop} Pump stopped ({duration}s, {volume}ml)",
+                        'duration_sec': duration,
+                        'volume_ml': volume,
+                        'mode': mode,
+                        'source': source
                     })
 
             # Parse sensor events

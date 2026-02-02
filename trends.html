@@ -836,24 +836,30 @@ function renderPumpChart(events) {
   canvas.style.display = 'block';
   nodata.style.display = 'none';
 
-  // Parse pump events for chart data
+  // Parse pump events for chart data (prefer structured fields, fallback to regex)
   const chartData = pumpEvents.map(e => {
-    const msg = e.message || '';
-    const secMatch = msg.match(/(\d+)\s*s[,\)]/i);
-    const volMatch = msg.match(/(\d+)\s*ml/i);
-    const duration = secMatch ? parseInt(secMatch[1]) : 0;
-    const volume = volMatch ? parseInt(volMatch[1]) : 0;
+    let duration = e.duration_sec;
+    let volume = e.volume_ml;
+    let type = e.source || 'normal';
 
-    // Determine type
-    const msgLower = msg.toLowerCase();
-    let type = 'normal';
-    if (msgLower.includes('microprime')) type = 'microprime';
-    else if (msgLower.includes('manual')) type = 'manual';
+    // Fallback: parse from message text (for old data without structured fields)
+    if (duration == null || volume == null) {
+      const msg = e.message || '';
+      const secMatch = msg.match(/(\d+)\s*s[,\)]/i);
+      const volMatch = msg.match(/(\d+)\s*ml/i);
+      duration = duration ?? (secMatch ? parseInt(secMatch[1]) : 0);
+      volume = volume ?? (volMatch ? parseInt(volMatch[1]) : 0);
+    }
+    if (type === 'normal' || !type) {
+      const msgLower = (e.message || '').toLowerCase();
+      if (msgLower.includes('microprime')) type = 'microprime';
+      else if (msgLower.includes('manual')) type = 'manual';
+    }
 
     return {
       timestamp: e.timestamp,
-      duration: duration,
-      volume: volume,
+      duration: duration || 0,
+      volume: volume || 0,
       type: type
     };
   });
@@ -889,13 +895,17 @@ function renderPumpChart(events) {
     volumeValues.push(current.volume);
     durationValues.push(current.duration);
 
-    // Color by type
+    // Color by source type
     if (current.type === 'microprime') {
-      colors.push('#2196f3'); // Blue for microprime
+      colors.push('#90caf9'); // Light blue for microprime (maintenance)
     } else if (current.type === 'manual') {
       colors.push('#ff9800'); // Orange for manual
+    } else if (current.type === 'timer') {
+      colors.push('#4caf50'); // Green for timer
+    } else if (current.type === 'sensor') {
+      colors.push('#2196f3'); // Blue for sensor auto
     } else {
-      colors.push('#4caf50'); // Green for normal watering
+      colors.push('#4caf50'); // Green default
     }
   }
 
@@ -952,11 +962,11 @@ function renderPumpChart(events) {
             afterBody: (items) => {
               if (items.length === 0) return '';
               const idx = items[0].dataIndex;
-              // Find type from colors
               const color = colors[idx];
-              if (color === '#2196f3') return 'Type: Microprime';
+              if (color === '#90caf9') return 'Type: Microprime (maintenance)';
               if (color === '#ff9800') return 'Type: Manual';
-              if (color === '#4caf50') return 'Type: Auto watering';
+              if (color === '#2196f3') return 'Type: Sensor auto';
+              if (color === '#4caf50') return 'Type: Timer';
               return '';
             }
           }
