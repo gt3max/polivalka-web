@@ -1291,6 +1291,19 @@ function formatWeekLabel(weekData) {
   return weekData.week;
 }
 
+// Render chart for a specific long-term tab (lazy — only when visible)
+function renderLtTabChart(name) {
+  if (!ltFilteredData.length) return;
+  if (name === 'moisture') {
+    renderLtMoistureChart(ltFilteredData);
+    renderLtSensor2Chart(ltFilteredData);
+  } else if (name === 'battery') {
+    renderLtBatteryChart(ltFilteredData);
+  } else if (name === 'watering') {
+    renderLtWateringChart(ltFilteredData);
+  }
+}
+
 // Long-term tab switching
 function showLtTab(name, fromSync) {
   // Hide all long-term tabs
@@ -1308,15 +1321,8 @@ function showLtTab(name, fromSync) {
   } else {
     event.target.classList.add('active');
   }
-  // Resize charts that were rendered while their tab was hidden (0x0 canvas)
-  requestAnimationFrame(() => {
-    if (name === 'battery' && ltBatteryChart) ltBatteryChart.resize();
-    if (name === 'watering' && ltWateringChart) ltWateringChart.resize();
-    if (name === 'moisture') {
-      if (ltMoistureChart) ltMoistureChart.resize();
-      if (ltSensor2Chart) ltSensor2Chart.resize();
-    }
-  });
+  // Render chart now that tab is visible (lazy rendering — avoids 0x0 canvas)
+  requestAnimationFrame(() => renderLtTabChart(name));
 }
 
 // Render long-term moisture chart
@@ -1690,12 +1696,16 @@ function renderLtWateringChart(data) {
   });
 }
 
-// Render all long-term charts
+// Store filtered data for lazy rendering
+let ltFilteredData = [];
+
+// Render all long-term charts (only visible tab + store data for lazy render)
 function renderAllLtCharts(data) {
-  renderLtMoistureChart(data);
-  renderLtSensor2Chart(data);
-  renderLtBatteryChart(data);
-  renderLtWateringChart(data);
+  ltFilteredData = data;
+  // Only render the currently visible tab
+  const visibleTab = document.querySelector('.lt-tab-content[style*="display: block"], .lt-tab-content[style*="display:block"]');
+  const visibleId = visibleTab ? visibleTab.id : 'lt-tab-moisture';
+  renderLtTabChart(visibleId.replace('lt-tab-', ''));
 }
 
 // Render history list
