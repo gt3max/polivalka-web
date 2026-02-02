@@ -911,67 +911,54 @@ function renderPumpChart(events) {
 
   const ctx = canvas.getContext('2d');
 
-  // Build scatter datasets grouped by source type
-  const typeConfig = {
-    microprime: { label: 'Maintenance',    color: '#90caf9', symbol: 'circle', radius: 4 },
-    manual:     { label: 'Manual pump',    color: '#ff9800', symbol: 'rect',   radius: 5 },
-    timer:      { label: 'Timer watering', color: '#4caf50', symbol: 'triangle', radius: 5 },
-    sensor:     { label: 'Auto watering',  color: '#2196f3', symbol: 'rectRot',  radius: 5 },
-    normal:     { label: 'Watering',       color: '#4caf50', symbol: 'rect',   radius: 5 }
+  // Single dataset — type shown in tooltip on hover
+  const typeLabels = {
+    microprime: 'Maintenance flush',
+    manual: 'Manual pump',
+    timer: 'Timer watering',
+    sensor: 'Auto watering',
+    normal: 'Watering'
   };
 
-  // Group data by type
-  const groups = {};
-  for (const d of chartData) {
-    const t = d.type || 'normal';
-    if (!groups[t]) groups[t] = [];
-    groups[t].push({ x: d.timestamp * 1000, y: d.volume, duration: d.duration });
-  }
+  const points = chartData.map(d => ({
+    x: d.timestamp * 1000,
+    y: d.volume,
+    duration: d.duration,
+    typeLabel: typeLabels[d.type] || typeLabels.normal
+  }));
 
-  // Create one dataset per type (for proper legend)
-  const datasets = [];
-  for (const [type, points] of Object.entries(groups)) {
-    const cfg = typeConfig[type] || typeConfig.normal;
-    datasets.push({
-      label: cfg.label,
-      data: points,
-      backgroundColor: cfg.color,
-      borderColor: cfg.color,
-      pointStyle: cfg.symbol,
-      pointRadius: cfg.radius,
-      showLine: true,
-      borderWidth: 2,
-      tension: 0,
-      fill: false,
-      yAxisID: 'y',
-      spanGaps: false,
-      segment: {
-        borderColor: ctx => {
-          const gap = ctx.p1.parsed.x - ctx.p0.parsed.x;
-          return gap > 7200000 ? 'transparent' : cfg.color;
-        }
-      }
-    });
-  }
-
-  // Time bounds: full period regardless of data
+  // Time bounds: full period
   const now = Date.now();
   const periodMs = currentPeriod * 24 * 60 * 60 * 1000;
 
   pumpChart = new Chart(ctx, {
     type: 'scatter',
-    data: { datasets: datasets },
+    data: {
+      datasets: [{
+        label: 'Pump activity',
+        data: points,
+        backgroundColor: '#4caf50',
+        borderColor: '#4caf50',
+        pointRadius: 6,
+        pointHoverRadius: 8,
+        showLine: false
+      }]
+    },
     options: {
       responsive: true,
       maintainAspectRatio: false,
       plugins: {
-        legend: { position: 'top' },
+        legend: { display: false },
         tooltip: {
           callbacks: {
             title: (items) => items.length > 0 ? new Date(items[0].parsed.x).toLocaleString() : '',
             label: (ctx) => {
               const p = ctx.raw;
-              return `${ctx.dataset.label}: ${p.y}ml, ${p.duration}s`;
+              return [
+                `${p.typeLabel}`,
+                `Volume: ${p.y} ml`,
+                `Duration: ${p.duration}s`
+              ];
             }
           }
         }
