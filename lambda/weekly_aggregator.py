@@ -104,6 +104,81 @@ def get_all_devices():
     return list(devices)
 
 
+def extract_raw_points(items):
+    """Extract individual telemetry readings as compact raw data points.
+
+    Compact field names to minimize JSON size:
+    - Sensor: {ts, pct, adc, s2p, s2a} — timestamp, moisture%, ADC, sensor2%, sensor2ADC
+    - Battery: {ts, pct, v, chg} — timestamp, percent, voltage, charging
+    - Pump: {ts, ml, sec, src} — timestamp, volume_ml, duration_sec, source
+    """
+    sensor_points = []
+    battery_points = []
+    pump_points = []
+
+    for item in items:
+        ts = int(item.get('timestamp', 0))
+        if not ts:
+            continue
+
+        # Sensor raw points
+        sensor = item.get('sensor', {})
+        pct = sensor.get('moisture_percent')
+        if pct is None:
+            pct = sensor.get('percent')
+        if pct is None:
+            pct = sensor.get('moisture')
+        adc = sensor.get('adc_raw')
+        if adc is None:
+            adc = sensor.get('adc')
+
+        if pct is not None:
+            point = {'ts': ts, 'pct': round(float(pct), 1)}
+            if adc is not None:
+                point['adc'] = int(adc)
+            s2p = sensor.get('sensor2_percent')
+            s2a = sensor.get('sensor2_adc')
+            if s2p is not None:
+                point['s2p'] = round(float(s2p), 1)
+            if s2a is not None:
+                point['s2a'] = int(s2a)
+            sensor_points.append(point)
+
+        # Battery raw points
+        battery = item.get('battery', {})
+        b_pct = battery.get('percent')
+        if b_pct is not None:
+            point = {'ts': ts, 'pct': round(float(b_pct), 1)}
+            voltage = battery.get('voltage')
+            if voltage is not None:
+                point['v'] = round(float(voltage), 3)
+            charging = battery.get('charging', False)
+            if charging:
+                point['chg'] = True
+            battery_points.append(point)
+
+        # Pump raw points (only stop events with volume/duration)
+        pump = item.get('pump', {})
+        if pump.get('action') == 'stop':
+            ml = pump.get('volume_ml', 0) or pump.get('ml', 0)
+            sec = pump.get('duration_sec', 0) or pump.get('duration', 0)
+            source = pump.get('source', 'unknown')
+            point = {'ts': ts}
+            if ml:
+                point['ml'] = int(ml)
+            if sec:
+                point['sec'] = int(sec)
+            if source and source != 'unknown':
+                point['src'] = source
+            pump_points.append(point)
+
+    return {
+        'sensor': sensor_points,
+        'battery': battery_points,
+        'pump': pump_points
+    }
+
+
 def aggregate_device_data(device_id, start_ts, end_ts):
     """Aggregate telemetry data for a device within the time range"""
 
@@ -128,6 +203,9 @@ def aggregate_device_data(device_id, start_ts, end_ts):
 
     if not items:
         return None
+
+    # Extract raw data points for long-term charts
+    raw_points = extract_raw_points(items)
 
     # Aggregate moisture (percent + ADC)
     moisture_pct_values = []
@@ -296,7 +374,8 @@ def aggregate_device_data(device_id, start_ts, end_ts):
         'moisture': moisture_stats,
         'battery': battery_stats,
         'watering': watering_stats,
-        'system': system_stats
+        'system': system_stats,
+        'raw': raw_points
     }
 
     # Add sensor2 if present
@@ -348,7 +427,8 @@ def get_github_file(path):
 
 def put_github_file(path, content, sha=None, message=None):
     """Create or update file on GitHub"""
-    encoded_content = base64.b64encode(json.dumps(content, indent=2).encode('utf-8')).decode('utf-8')
+    # Compact JSON (no spaces) to minimize file size — raw points can be large
+    encoded_content = base64.b64encode(json.dumps(content, separators=(',', ':'), default=decimal_default).encode('utf-8')).decode('utf-8')
 
     data = {
         'message': message or f'Update {path}',

@@ -1291,6 +1291,107 @@ function formatWeekLabel(weekData) {
   return weekData.week;
 }
 
+// Build time series from weekly raw data points + current week live data
+function buildLtTimeSeries(weeks) {
+  let sensor = [], battery = [], pump = [];
+
+  for (const w of weeks) {
+    if (w.raw) {
+      // Raw points available — use them directly
+      for (const p of (w.raw.sensor || [])) {
+        sensor.push({ timestamp: p.ts, moisture_percent: p.pct, adc_raw: p.adc ?? null,
+                       sensor2_percent: p.s2p ?? null, sensor2_adc: p.s2a ?? null });
+      }
+      for (const p of (w.raw.battery || [])) {
+        battery.push({ timestamp: p.ts, percent: p.pct, voltage: p.v ?? null, charging: p.chg || false });
+      }
+      for (const p of (w.raw.pump || [])) {
+        pump.push({ timestamp: p.ts, volume: p.ml || 0, duration: p.sec || 0, type: p.src || 'unknown' });
+      }
+    } else {
+      // Old weeks without raw data — create synthetic point at week midpoint
+      const startMs = new Date(w.start_date).getTime();
+      const endMs = new Date(w.end_date).getTime();
+      const midTs = Math.round((startMs + endMs) / 2000); // seconds
+      if (w.moisture?.avg_percent != null) {
+        sensor.push({ timestamp: midTs, moisture_percent: w.moisture.avg_percent,
+                       adc_raw: w.moisture?.avg_adc ?? null,
+                       sensor2_percent: w.sensor2?.avg_percent ?? null,
+                       sensor2_adc: w.sensor2?.avg_adc ?? null });
+      }
+      if (w.battery?.avg_percent != null) {
+        battery.push({ timestamp: midTs, percent: w.battery.avg_percent,
+                        voltage: w.battery?.avg_voltage ?? null, charging: false });
+      }
+    }
+  }
+
+  // Add current week from already-loaded short-term API data
+  if (sensorData.length) sensor.push(...sensorData);
+  if (batteryData.length) battery.push(...batteryData);
+
+  // Pump events from activityData
+  const pumpFromActivity = activityData
+    .filter(a => a.type === 'PUMP' && a.message && a.message.toLowerCase().includes('start'))
+    .map(e => {
+      const msg = e.message || '';
+      const sec = msg.match(/(\d+)\s*s[,)]/i);
+      const vol = msg.match(/(\d+)\s*ml/i);
+      const msgLower = msg.toLowerCase();
+      return { timestamp: e.timestamp, volume: vol ? parseInt(vol[1]) : 0,
+               duration: sec ? parseInt(sec[1]) : 0,
+               type: msgLower.includes('microprime') ? 'microprime' : msgLower.includes('manual') ? 'manual' : 'normal' };
+    });
+  pump.push(...pumpFromActivity);
+
+  // Deduplicate by timestamp (current week may overlap with raw data)
+  const dedup = (arr) => {
+    const seen = new Set();
+    return arr.filter(p => { const k = p.timestamp; if (seen.has(k)) return false; seen.add(k); return true; });
+  };
+  sensor = dedup(sensor);
+  battery = dedup(battery);
+  pump = dedup(pump);
+
+  // Sort by timestamp
+  sensor.sort((a, b) => a.timestamp - b.timestamp);
+  battery.sort((a, b) => a.timestamp - b.timestamp);
+  pump.sort((a, b) => a.timestamp - b.timestamp);
+
+  return { sensor, battery, pump };
+}
+
+// Get week boundary timestamps for annotation lines
+function getWeekBoundaries(weeks) {
+  const boundaries = [];
+  for (const w of weeks) {
+    if (w.start_date) {
+      boundaries.push(new Date(w.start_date).getTime());
+    }
+  }
+  return boundaries;
+}
+
+// Build annotation config for week divider lines
+function buildWeekAnnotations(weeks) {
+  const boundaries = getWeekBoundaries(weeks);
+  const annotations = {};
+  for (let i = 0; i < boundaries.length; i++) {
+    annotations['week' + i] = {
+      type: 'line',
+      xMin: boundaries[i],
+      xMax: boundaries[i],
+      borderColor: 'rgba(0,0,0,0.08)',
+      borderWidth: 1,
+      borderDash: [4, 4]
+    };
+  }
+  return annotations;
+}
+
+// Long-term gap threshold (longer than short-term since data spans weeks)
+const LT_GAP_THRESHOLD_SECONDS = 14400; // 4 hours
+
 // Render chart for a specific long-term tab (lazy — only when visible)
 function renderLtTabChart(name) {
   if (!ltFilteredData.length) return;
@@ -1325,15 +1426,17 @@ function showLtTab(name, fromSync) {
   requestAnimationFrame(() => renderLtTabChart(name));
 }
 
-// Render long-term moisture chart
-function renderLtMoistureChart(data) {
+// Render long-term moisture chart (raw data points with time axis)
+function renderLtMoistureChart(weeks) {
   const canvas = document.getElementById('lt-moisture-chart');
   const nodata = document.getElementById('lt-moisture-nodata');
 
   if (ltMoistureChart) { ltMoistureChart.destroy(); ltMoistureChart = null; }
 
-  const hasData = data.some(d => d.moisture?.avg_percent != null);
-  if (!hasData) {
+  const ts = buildLtTimeSeries(weeks);
+  const data = ts.sensor;
+
+  if (data.length === 0) {
     canvas.style.display = 'none';
     nodata.style.display = 'block';
     return;
@@ -1342,12 +1445,12 @@ function renderLtMoistureChart(data) {
   canvas.style.display = 'block';
   nodata.style.display = 'none';
 
-  const labels = data.map(formatWeekLabel);
-  const moistureValues = data.map(d => d.moisture?.avg_percent || null);
-  const adcValues = data.map(d => d.moisture?.avg_adc || null);
-  const hasAdc = adcValues.some(v => v != null);
-
+  const moistureWithGaps = insertGapsForTimeSeries(data, d => d.moisture_percent);
+  const adcWithGaps = insertGapsForTimeSeries(data, d => d.adc_raw);
+  const labels = moistureWithGaps.labels;
+  const hasAdc = data.some(d => d.adc_raw != null);
   const isScatter = ltChartType === 'scatter';
+  const weekAnnotations = buildWeekAnnotations(weeks);
 
   ltMoistureChart = new Chart(canvas.getContext('2d'), {
     type: isScatter ? 'scatter' : 'line',
@@ -1356,43 +1459,41 @@ function renderLtMoistureChart(data) {
       datasets: [
         {
           label: 'Moisture %',
-          data: moistureValues,
+          data: isScatter ? data.map(d => ({ x: new Date(d.timestamp * 1000), y: d.moisture_percent })) : moistureWithGaps.values,
           borderColor: '#1976d2',
           backgroundColor: isScatter ? '#1976d2' : 'rgba(25,118,210,0.1)',
           fill: !isScatter,
           tension: 0.3,
-          pointRadius: isScatter ? 5 : 3,
-          showLine: !isScatter,
-          yAxisID: 'y'
+          pointRadius: isScatter ? 4 : 1,
+          yAxisID: 'y',
+          spanGaps: false
         },
         {
           label: 'ADC',
-          data: adcValues,
+          data: isScatter ? data.map(d => ({ x: new Date(d.timestamp * 1000), y: d.adc_raw })) : adcWithGaps.values,
           borderColor: '#ff9800',
           borderDash: [5, 5],
           fill: false,
           tension: 0.3,
-          pointRadius: isScatter ? 4 : 2,
-          showLine: !isScatter,
+          pointRadius: isScatter ? 3 : 0,
           yAxisID: 'y1',
-          hidden: !hasAdc
+          hidden: !hasAdc,
+          spanGaps: false
         }
       ]
     },
     options: {
       responsive: true, maintainAspectRatio: false,
+      interaction: { mode: 'nearest', axis: 'x', intersect: false },
       plugins: {
         legend: { position: 'top' },
+        annotation: { annotations: weekAnnotations },
         tooltip: {
+          filter: (item) => item.parsed.y !== null,
           callbacks: {
-            title: (items) => {
-              const idx = items[0]?.dataIndex;
-              if (idx !== undefined && data[idx]) {
-                return `${data[idx].start_date} — ${data[idx].end_date}`;
-              }
-              return '';
-            },
+            title: (items) => items.length > 0 ? new Date(items[0].parsed.x).toLocaleString() : '',
             label: (item) => {
+              if (item.parsed.y === null) return null;
               const label = item.dataset.label;
               if (label.includes('%')) return `${label}: ${item.parsed.y}%`;
               return `${label}: ${item.parsed.y}`;
@@ -1401,7 +1502,11 @@ function renderLtMoistureChart(data) {
         }
       },
       scales: {
-        x: { grid: { display: false } },
+        x: {
+          type: 'time',
+          time: { unit: longTermPeriod <= 4 ? 'day' : 'week', displayFormats: { day: 'MMM d', week: 'MMM d' } },
+          grid: { display: false }
+        },
         y: { type: 'linear', position: 'left', min: 0, max: 100, title: { display: true, text: 'Moisture %' }, ticks: { callback: v => v + '%' } },
         y1: { type: 'linear', position: 'right', min: 0, max: 4095, title: { display: true, text: 'ADC' }, grid: { drawOnChartArea: false } }
       }
@@ -1409,27 +1514,30 @@ function renderLtMoistureChart(data) {
   });
 }
 
-// Render long-term sensor2 (J7) chart
-function renderLtSensor2Chart(data) {
+// Render long-term sensor2 (J7) chart (raw data points with time axis)
+function renderLtSensor2Chart(weeks) {
   const canvas = document.getElementById('lt-sensor2-chart');
   const section = document.getElementById('lt-sensor2-section');
 
   if (ltSensor2Chart) { ltSensor2Chart.destroy(); ltSensor2Chart = null; }
 
-  const hasData = data.some(d => d.sensor2?.avg_percent != null);
-  if (!hasData) {
+  const ts = buildLtTimeSeries(weeks);
+  const data = ts.sensor;
+  const hasSensor2 = data.some(d => d.sensor2_percent != null);
+
+  if (!hasSensor2) {
     section.style.display = 'none';
     return;
   }
 
   section.style.display = 'block';
 
-  const labels = data.map(formatWeekLabel);
-  const moistureValues = data.map(d => d.sensor2?.avg_percent || null);
-  const adcValues = data.map(d => d.sensor2?.avg_adc || null);
-  const hasAdc = adcValues.some(v => v != null);
-
+  const s2PctWithGaps = insertGapsForTimeSeries(data, d => d.sensor2_percent);
+  const s2AdcWithGaps = insertGapsForTimeSeries(data, d => d.sensor2_adc);
+  const labels = s2PctWithGaps.labels;
+  const hasAdc = data.some(d => d.sensor2_adc != null);
   const isScatter = ltChartType === 'scatter';
+  const weekAnnotations = buildWeekAnnotations(weeks);
 
   ltSensor2Chart = new Chart(canvas.getContext('2d'), {
     type: isScatter ? 'scatter' : 'line',
@@ -1438,43 +1546,41 @@ function renderLtSensor2Chart(data) {
       datasets: [
         {
           label: 'Moisture %',
-          data: moistureValues,
+          data: isScatter ? data.filter(d => d.sensor2_percent != null).map(d => ({ x: new Date(d.timestamp * 1000), y: d.sensor2_percent })) : s2PctWithGaps.values,
           borderColor: '#9c27b0',
           backgroundColor: isScatter ? '#9c27b0' : 'rgba(156,39,176,0.1)',
           fill: !isScatter,
           tension: 0.3,
-          pointRadius: isScatter ? 5 : 3,
-          showLine: !isScatter,
-          yAxisID: 'y'
+          pointRadius: isScatter ? 4 : 1,
+          yAxisID: 'y',
+          spanGaps: false
         },
         {
           label: 'ADC',
-          data: adcValues,
+          data: isScatter ? data.filter(d => d.sensor2_adc != null).map(d => ({ x: new Date(d.timestamp * 1000), y: d.sensor2_adc })) : s2AdcWithGaps.values,
           borderColor: '#e91e63',
           borderDash: [5, 5],
           fill: false,
           tension: 0.3,
-          pointRadius: isScatter ? 4 : 2,
-          showLine: !isScatter,
+          pointRadius: isScatter ? 3 : 0,
           yAxisID: 'y1',
-          hidden: !hasAdc
+          hidden: !hasAdc,
+          spanGaps: false
         }
       ]
     },
     options: {
       responsive: true, maintainAspectRatio: false,
+      interaction: { mode: 'nearest', axis: 'x', intersect: false },
       plugins: {
         legend: { position: 'top' },
+        annotation: { annotations: weekAnnotations },
         tooltip: {
+          filter: (item) => item.parsed.y !== null,
           callbacks: {
-            title: (items) => {
-              const idx = items[0]?.dataIndex;
-              if (idx !== undefined && data[idx]) {
-                return `${data[idx].start_date} — ${data[idx].end_date}`;
-              }
-              return '';
-            },
+            title: (items) => items.length > 0 ? new Date(items[0].parsed.x).toLocaleString() : '',
             label: (item) => {
+              if (item.parsed.y === null) return null;
               const label = item.dataset.label;
               if (label.includes('%')) return `${label}: ${item.parsed.y}%`;
               return `${label}: ${item.parsed.y}`;
@@ -1483,7 +1589,11 @@ function renderLtSensor2Chart(data) {
         }
       },
       scales: {
-        x: { grid: { display: false } },
+        x: {
+          type: 'time',
+          time: { unit: longTermPeriod <= 4 ? 'day' : 'week', displayFormats: { day: 'MMM d', week: 'MMM d' } },
+          grid: { display: false }
+        },
         y: { type: 'linear', position: 'left', min: 0, max: 100, title: { display: true, text: 'Moisture %' }, ticks: { callback: v => v + '%' } },
         y1: { type: 'linear', position: 'right', min: 0, max: 4095, title: { display: true, text: 'ADC' }, grid: { drawOnChartArea: false } }
       }
@@ -1491,15 +1601,17 @@ function renderLtSensor2Chart(data) {
   });
 }
 
-// Render long-term battery chart
-function renderLtBatteryChart(data) {
+// Render long-term battery chart (raw data points with time axis)
+function renderLtBatteryChart(weeks) {
   const canvas = document.getElementById('lt-battery-chart');
   const nodata = document.getElementById('lt-battery-nodata');
 
   if (ltBatteryChart) { ltBatteryChart.destroy(); ltBatteryChart = null; }
 
-  const hasData = data.some(d => d.battery?.avg_percent != null);
-  if (!hasData) {
+  const ts = buildLtTimeSeries(weeks);
+  const data = ts.battery.filter(d => d.percent != null);
+
+  if (data.length === 0) {
     canvas.style.display = 'none';
     nodata.style.display = 'block';
     return;
@@ -1508,7 +1620,7 @@ function renderLtBatteryChart(data) {
   canvas.style.display = 'block';
   nodata.style.display = 'none';
 
-  // Li-Po discharge curve: voltage → percent (for plotting voltage on same scale)
+  // Li-Po discharge curve (same as short-term)
   function voltageToPercent(voltage) {
     if (voltage == null) return null;
     if (voltage >= 4.20) return 100;
@@ -1528,13 +1640,25 @@ function renderLtBatteryChart(data) {
     return 0;
   }
 
-  const labels = data.map(formatWeekLabel);
-  const batteryValues = data.map(d => d.battery?.avg_percent || null);
-  const voltageValues = data.map(d => voltageToPercent(d.battery?.avg_voltage));
-  const voltageRaw = data.map(d => d.battery?.avg_voltage || null);
-  const hasVoltage = voltageRaw.some(v => v != null);
+  const batteryWithGaps = insertGapsForTimeSeries(data, d => d.percent);
+  const voltageWithGaps = insertGapsForTimeSeries(data, d => voltageToPercent(d.voltage));
+  const labels = batteryWithGaps.labels;
 
+  // Build voltage lookup for tooltips
+  const voltageData = [];
+  let realIdx = 0;
+  for (let i = 0; i < batteryWithGaps.values.length; i++) {
+    if (batteryWithGaps.values[i] !== null) {
+      voltageData.push(data[realIdx].voltage);
+      realIdx++;
+    } else {
+      voltageData.push(null);
+    }
+  }
+
+  const hasVoltage = data.some(d => d.voltage != null);
   const isScatter = ltChartType === 'scatter';
+  const weekAnnotations = buildWeekAnnotations(weeks);
 
   ltBatteryChart = new Chart(canvas.getContext('2d'), {
     type: isScatter ? 'scatter' : 'line',
@@ -1542,87 +1666,75 @@ function renderLtBatteryChart(data) {
       labels: labels,
       datasets: [
         {
-          label: 'Charge %',
-          data: batteryValues,
+          label: 'Battery %',
+          data: isScatter ? data.map(d => ({ x: new Date(d.timestamp * 1000), y: d.percent })) : batteryWithGaps.values,
           borderColor: '#4caf50',
           backgroundColor: isScatter ? '#4caf50' : 'rgba(76,175,80,0.1)',
           fill: !isScatter,
           tension: 0.3,
-          pointRadius: isScatter ? 5 : 3,
-          showLine: !isScatter,
-          yAxisID: 'y'
+          pointRadius: isScatter ? 4 : 1,
+          yAxisID: 'y',
+          spanGaps: false
         },
         {
           label: 'Voltage V',
-          data: voltageValues,
+          data: isScatter ? data.map(d => ({ x: new Date(d.timestamp * 1000), y: voltageToPercent(d.voltage) })) : voltageWithGaps.values,
           borderColor: '#ff9800',
           borderDash: [5, 5],
           fill: false,
           tension: 0.3,
-          pointRadius: isScatter ? 4 : 2,
-          showLine: !isScatter,
+          pointRadius: isScatter ? 3 : 0,
           yAxisID: 'y1',
           hidden: !hasVoltage,
-          voltageRaw: voltageRaw  // Store raw values for tooltip
+          spanGaps: false,
+          voltageData: voltageData
         }
       ]
     },
     options: {
       responsive: true, maintainAspectRatio: false,
+      interaction: { mode: 'nearest', axis: 'x', intersect: false },
       plugins: {
         legend: { position: 'top' },
+        annotation: { annotations: weekAnnotations },
         tooltip: {
+          filter: (item) => item.parsed.y !== null,
           callbacks: {
-            title: (items) => {
-              const idx = items[0]?.dataIndex;
-              if (idx !== undefined && data[idx]) {
-                return `${data[idx].start_date} — ${data[idx].end_date}`;
-              }
-              return '';
-            },
+            title: (items) => items.length > 0 ? new Date(items[0].parsed.x).toLocaleString() : '',
             label: (ctx) => {
+              if (ctx.parsed.y === null) return null;
               if (ctx.datasetIndex === 0) {
-                return `Charge: ${ctx.parsed.y?.toFixed(1)}%`;
+                return `Battery: ${ctx.parsed.y.toFixed(1)}%`;
               } else {
-                const voltage = ctx.dataset.voltageRaw[ctx.dataIndex];
-                if (voltage != null) {
-                  return `Voltage: ${voltage.toFixed(2)}V`;
-                }
-                return '';
+                const voltage = ctx.dataset.voltageData[ctx.dataIndex];
+                if (voltage == null) return null;
+                return `Voltage: ${voltage.toFixed(2)}V`;
               }
             }
           }
         }
       },
       scales: {
-        x: { grid: { display: false } },
+        x: {
+          type: 'time',
+          time: { unit: longTermPeriod <= 4 ? 'day' : 'week', displayFormats: { day: 'MMM d', week: 'MMM d' } },
+          grid: { display: false }
+        },
         y: {
-          type: 'linear',
-          position: 'left',
-          min: 0,
-          max: 100,
-          grace: '5%',
+          type: 'linear', position: 'left', min: 0, max: 100, grace: '5%',
           title: { display: true, text: 'Charge %' },
           ticks: { callback: v => v + '%' }
         },
         y1: {
-          type: 'linear',
-          position: 'right',
-          min: 0,
-          max: 100,
-          grace: '5%',
+          type: 'linear', position: 'right', min: 0, max: 100, grace: '5%',
           title: { display: true, text: 'Voltage' },
           grid: { drawOnChartArea: false },
           afterBuildTicks: (axis) => {
             axis.ticks = [
-              { value: 100, label: '4.2V' },
-              { value: 90, label: '4.1V' },
-              { value: 80, label: '4.0V' },
-              { value: 67, label: '3.9V' },
-              { value: 50, label: '3.8V' },
-              { value: 28, label: '3.7V' },
-              { value: 11, label: '3.6V' },
-              { value: 6, label: '3.5V' },
+              { value: 100, label: '4.2V' }, { value: 90, label: '4.1V' },
+              { value: 80, label: '4.0V' }, { value: 67, label: '3.9V' },
+              { value: 50, label: '3.8V' }, { value: 28, label: '3.7V' },
+              { value: 11, label: '3.6V' }, { value: 6, label: '3.5V' },
               { value: 0, label: '3.0V' }
             ];
           },
@@ -1633,15 +1745,17 @@ function renderLtBatteryChart(data) {
   });
 }
 
-// Render long-term watering chart
-function renderLtWateringChart(data) {
+// Render long-term watering chart (individual pump events with time axis)
+function renderLtWateringChart(weeks) {
   const canvas = document.getElementById('lt-watering-chart');
   const nodata = document.getElementById('lt-watering-nodata');
 
   if (ltWateringChart) { ltWateringChart.destroy(); ltWateringChart = null; }
 
-  const hasData = data.some(d => (d.watering?.events_count || 0) > 0 || (d.watering?.total_ml || 0) > 0);
-  if (!hasData) {
+  const ts = buildLtTimeSeries(weeks);
+  const data = ts.pump;
+
+  if (data.length === 0) {
     canvas.style.display = 'none';
     nodata.style.display = 'block';
     return;
@@ -1650,8 +1764,36 @@ function renderLtWateringChart(data) {
   canvas.style.display = 'block';
   nodata.style.display = 'none';
 
-  const labels = data.map(formatWeekLabel);
-  const mlValues = data.map(d => d.watering?.total_ml || 0);
+  // Build chart arrays with gap detection
+  const labels = [];
+  const volumeValues = [];
+  const durationValues = [];
+  const colors = [];
+
+  for (let i = 0; i < data.length; i++) {
+    const current = data[i];
+
+    if (i > 0) {
+      const prev = data[i - 1];
+      const gap = current.timestamp - prev.timestamp;
+      if (gap > LT_GAP_THRESHOLD_SECONDS) {
+        labels.push(new Date((prev.timestamp + gap / 2) * 1000));
+        volumeValues.push(null);
+        durationValues.push(null);
+        colors.push('transparent');
+      }
+    }
+
+    labels.push(new Date(current.timestamp * 1000));
+    volumeValues.push(current.volume || 0);
+    durationValues.push(current.duration || 0);
+
+    if (current.type === 'microprime') colors.push('#2196f3');
+    else if (current.type === 'manual') colors.push('#ff9800');
+    else colors.push('#4caf50');
+  }
+
+  const weekAnnotations = buildWeekAnnotations(weeks);
 
   ltWateringChart = new Chart(canvas.getContext('2d'), {
     type: 'bar',
@@ -1659,38 +1801,65 @@ function renderLtWateringChart(data) {
       labels: labels,
       datasets: [
         {
-          label: 'Volume',
-          data: mlValues,
-          backgroundColor: 'rgba(76, 175, 80, 0.7)',
-          borderColor: '#4caf50',
-          borderWidth: 1
+          label: 'Volume (ml)',
+          data: volumeValues,
+          backgroundColor: colors,
+          borderColor: colors,
+          borderWidth: 1,
+          yAxisID: 'y',
+          barThickness: 6,
+          maxBarThickness: 10
+        },
+        {
+          label: 'Duration (s)',
+          data: durationValues,
+          type: 'line',
+          borderColor: '#9c27b0',
+          backgroundColor: 'transparent',
+          borderDash: [3, 3],
+          fill: false,
+          tension: 0,
+          pointRadius: 3,
+          pointBackgroundColor: '#9c27b0',
+          yAxisID: 'y1',
+          spanGaps: false
         }
       ]
     },
     options: {
       responsive: true, maintainAspectRatio: false,
       plugins: {
-        legend: { display: false },
+        legend: { position: 'top' },
+        annotation: { annotations: weekAnnotations },
         tooltip: {
+          filter: (item) => item.parsed.y !== null,
           callbacks: {
-            title: (items) => {
-              const idx = items[0]?.dataIndex;
-              if (idx !== undefined && data[idx]) {
-                return `${data[idx].start_date} — ${data[idx].end_date}`;
-              }
-              return '';
-            },
+            title: (items) => items.length > 0 ? new Date(items[0].parsed.x).toLocaleString() : '',
             label: (ctx) => {
-              const idx = ctx.dataIndex;
-              const count = data[idx]?.watering?.events_count || 0;
-              return [`Volume: ${ctx.parsed.y} ml`, `Events: ${count}`];
+              if (ctx.parsed.y === null) return null;
+              if (ctx.datasetIndex === 0) return `Volume: ${ctx.parsed.y}ml`;
+              return `Duration: ${ctx.parsed.y}s`;
+            },
+            afterBody: (items) => {
+              if (items.length === 0) return '';
+              const idx = items[0].dataIndex;
+              const color = colors[idx];
+              if (color === '#2196f3') return 'Type: Microprime';
+              if (color === '#ff9800') return 'Type: Manual';
+              if (color === '#4caf50') return 'Type: Auto watering';
+              return '';
             }
           }
         }
       },
       scales: {
-        x: { grid: { display: false } },
-        y: { type: 'linear', position: 'left', min: 0, title: { display: true, text: 'Volume (ml)' } }
+        x: {
+          type: 'time',
+          time: { unit: longTermPeriod <= 4 ? 'day' : 'week', displayFormats: { day: 'MMM d', week: 'MMM d' } },
+          grid: { display: false }
+        },
+        y: { type: 'linear', position: 'left', min: 0, title: { display: true, text: 'ml' }, grid: { color: 'rgba(0,0,0,0.05)' } },
+        y1: { type: 'linear', position: 'right', min: 0, title: { display: true, text: 'sec' }, grid: { drawOnChartArea: false } }
       }
     }
   });
