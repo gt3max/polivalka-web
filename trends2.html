@@ -913,11 +913,11 @@ function renderPumpChart(events) {
 
   // Build scatter datasets grouped by source type
   const typeConfig = {
-    microprime: { label: 'Microprime', color: '#90caf9', symbol: 'circle', radius: 4 },
-    manual:     { label: 'Manual',     color: '#ff9800', symbol: 'rect',   radius: 5 },
-    timer:      { label: 'Timer',      color: '#4caf50', symbol: 'triangle', radius: 5 },
-    sensor:     { label: 'Sensor',     color: '#2196f3', symbol: 'rectRot',  radius: 5 },
-    normal:     { label: 'Watering',   color: '#4caf50', symbol: 'rect',   radius: 5 }
+    microprime: { label: 'Maintenance',    color: '#90caf9', symbol: 'circle', radius: 4 },
+    manual:     { label: 'Manual pump',    color: '#ff9800', symbol: 'rect',   radius: 5 },
+    timer:      { label: 'Timer watering', color: '#4caf50', symbol: 'triangle', radius: 5 },
+    sensor:     { label: 'Auto watering',  color: '#2196f3', symbol: 'rectRot',  radius: 5 },
+    normal:     { label: 'Watering',       color: '#4caf50', symbol: 'rect',   radius: 5 }
   };
 
   // Group data by type
