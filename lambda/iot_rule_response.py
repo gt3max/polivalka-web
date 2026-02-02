@@ -228,17 +228,10 @@ def lambda_handler(event, context):
                     expr_values[':sensor'] = sensor_data
                     print(f"Updating sensor telemetry: adc={sensor.get('adc')}, moisture={sensor.get('moisture')}, sensor2={result.get('sensor2')}")
 
-                # Battery data (was missing → Refresh showed fresh battery then reverted to stale periodic data)
-                if 'battery' in result:
-                    battery = result.get('battery', {})
-                    update_expr += ', battery = :battery'
-                    expr_values[':battery'] = convert_floats({
-                        'percent': battery.get('percent'),
-                        'voltage': battery.get('voltage'),
-                        'charging': battery.get('charging', False),
-                        'updated_at': current_time
-                    })
-                    print(f"Updating battery telemetry: percent={battery.get('percent')}, voltage={battery.get('voltage')}, charging={battery.get('charging')}")
+                # Battery: DO NOT save from command responses to ts=0 record.
+                # get_status battery percent is unreliable (v1.0.33: 0% at 4.16V,
+                # v1.0.104: 81% at 4.18V). Periodic battery telemetry is source of truth.
+                # Saving here would override correct periodic data in get_latest_telemetry().
 
                 # System data (mode, state, firmware)
                 # Note: command response has 'firmware', periodic telemetry has 'firmware_version'
