@@ -1,0 +1,1988 @@
+<!doctype html><html><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width, initial-scale=1"><title>PlantApp — Trends</title>
+<link rel="icon" href="favicon.svg" type="image/svg+xml">
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns@3.0.0/dist/chartjs-adapter-date-fns.bundle.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-annotation@3.0.1/dist/chartjs-plugin-annotation.min.js"></script>
+<script src="api-adapter.js"></script>
+<script src="common.js"></script>
+<style>
+    body{font-family:system-ui,Arial;margin:0;padding:0;max-width:100%;background:#fafafa}
+    .header{position:sticky;top:0;z-index:1000;background:#2c5f2d;color:#fff;padding:8px 10px;display:flex;justify-content:space-between;align-items:center;gap:8px}
+    .header h1{margin:0;font-size:18px}
+    .header-info{font-size:12px;text-align:right;line-height:1.3}
+    .nav{position:sticky;top:65px;z-index:999;background:#f0f0f0;padding:5px 8px;display:flex;gap:2px;border-bottom:1px solid #ddd;overflow-x:auto;white-space:nowrap;-webkit-overflow-scrolling:touch}
+    .nav a{text-decoration:none;color:#333;padding:6px 8px;border-radius:6px;font-size:14px;flex-shrink:0}
+    .nav a.active{background:#2c5f2d;color:#fff}
+    .nav a:hover{background:#ddd}
+    .container{padding:12px;max-width:900px;margin:0 auto}
+    .card{border:1px solid #ddd;padding:16px;border-radius:12px;margin:12px 0;background:#fff}
+    .row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+    .mono{font-family:ui-monospace,monospace}
+    button{padding:8px 12px;border-radius:8px;border:1px solid #888;background:#fafafa;cursor:pointer}
+    button.primary{background:#2c5f2d;color:#fff;border-color:#2c5f2d}
+    button.active{background:#2c5f2d;color:#fff}
+    .muted{color:#666;font-size:14px}
+    .danger{color:#b00}
+    .ok{color:#0a0}
+    .status-badge{display:inline-block;padding:4px 10px;border-radius:12px;font-size:13px;font-weight:600}
+    .status-timer{background:#e3f2fd;color:#1976d2}
+    .status-sensor{background:#fff3e0;color:#f57c00}
+    .status-off{background:#fce4ec;color:#c2185b}
+    .status-manual{background:#e0e0e0;color:#616161}
+    .chart-container{position:relative;height:250px;margin:16px 0}
+    .period-selector{display:flex;gap:4px;margin-bottom:12px}
+    .period-selector button{padding:6px 12px;font-size:13px}
+    .stats-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:12px;margin:16px 0}
+    .stat-box{background:#f5f5f5;padding:12px;border-radius:8px;text-align:center}
+    .stat-value{font-size:24px;font-weight:600;color:#2c5f2d}
+    .stat-label{font-size:11px;color:#666;margin-top:4px}
+    .event-row{padding:10px 12px;margin:4px 0;border-radius:6px;font-size:13px;display:flex;justify-content:space-between;align-items:center}
+    .event-pump{background:#e3f2fd;border-left:3px solid #1976d2}
+    .event-sensor{background:#e8f5e9;border-left:3px solid #4caf50}
+    .event-battery{background:#fff3e0;border-left:3px solid #ff9800}
+    .event-system{background:#f5f5f5;border-left:3px solid #9e9e9e}
+    .loading{text-align:center;padding:40px;color:#666}
+    .error-msg{background:#ffebee;color:#c62828;padding:12px;border-radius:8px;margin:12px 0}
+    .tab-buttons{display:flex;gap:4px;margin-bottom:16px;border-bottom:1px solid #ddd;padding-bottom:8px}
+    .tab-buttons button{background:none;border:none;padding:8px 16px;cursor:pointer;border-radius:8px 8px 0 0;color:#666}
+    .tab-buttons button.active{background:#2c5f2d;color:#fff}
+    .tab-content{display:none}
+    .tab-content.active{display:block}
+</style>
+</head><body>
+<div class="header"><div><h1 id="device-id-header" style="margin:0;font-size:15px">🌱 Polivalka</h1><div style="font-size:13px">📍 <span id="location-text">—</span> / <span id="room-text">—</span><span id="custom-name-suffix"></span></div><div style="font-size:11px;margin-top:4px"><span id="battery-status">🔋 —</span> · <span id="header-state">💤 Standby</span></div></div><div class="header-info"><div id="header-time" class="mono" style="font-size:11px">--:--</div><div style="font-size:11px" id="header-mode"><span id="mode-badge" class="status-badge">—</span></div><div style="font-size:11px" id="header-conn">📡 <span id="conn-text" style="transition:color 0.3s">...</span></div></div></div>
+<div class="nav"><a href="/">Fleet</a><a href="home.html">Home</a><a href="identify.html" style="background:#e8f5e9">🌱 Plant</a><a href="timer.html">Timer</a><a href="sensor.html">Sensor</a><a href="settings.html">Settings</a><a href="calibration.html">Calibration</a><a href="online.html">Online</a><a href="trends.html" class="active">Trends</a><a href="ota.html">Update</a><a href="admin.html" id="admin-nav-link" style="display:none">Admin</a></div>
+
+<div class="container">
+  <!-- Stats Summary -->
+  <div class="card">
+    <h3 style="margin-top:0">📊 Summary (<span id="period-label">7 days</span>)</h3>
+    <div class="stats-grid">
+      <div class="stat-box">
+        <div class="stat-value" id="stat-waterings">—</div>
+        <div class="stat-label">Waterings</div>
+      </div>
+      <div class="stat-box">
+        <div class="stat-value" id="stat-volume">—</div>
+        <div class="stat-label">Total ml</div>
+      </div>
+      <div class="stat-box">
+        <div class="stat-value" id="stat-avg-moisture">—</div>
+        <div class="stat-label">Avg Moisture</div>
+      </div>
+      <div class="stat-box">
+        <div class="stat-value" id="stat-min-battery">—</div>
+        <div class="stat-label">Min Battery</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Tabs -->
+  <div class="tab-buttons">
+    <button class="active" onclick="showTab('moisture')">💧 Moisture</button>
+    <button onclick="showTab('battery')">🔋 Battery</button>
+    <button onclick="showTab('watering')">🚿 Watering</button>
+    <button onclick="showTab('activity')">📝 Activity</button>
+  </div>
+
+  <!-- Period & Chart Controls (right above charts) -->
+  <div class="row" style="justify-content:space-between;flex-wrap:wrap;gap:8px;margin:12px 0">
+    <div class="period-selector">
+      <button onclick="setPeriod(1)" id="btn-1d">24h</button>
+      <button onclick="setPeriod(3)" id="btn-3d">3 days</button>
+      <button onclick="setPeriod(7)" id="btn-7d" class="active">7 days</button>
+    </div>
+    <div class="row" style="gap:8px">
+      <div class="chart-type-selector" style="display:flex;gap:2px;border:1px solid #ddd;border-radius:8px;overflow:hidden">
+        <button onclick="setChartType('line')" id="btn-line" class="active" style="border:none;border-radius:0;padding:6px 10px;font-size:13px">Line</button>
+        <button onclick="setChartType('scatter')" id="btn-scatter" style="border:none;border-radius:0;padding:6px 10px;font-size:13px">Dots</button>
+      </div>
+      <button onclick="exportCSV()" style="padding:6px 10px;font-size:13px">Export</button>
+    </div>
+  </div>
+
+  <!-- Moisture Chart -->
+  <div id="tab-moisture" class="tab-content active">
+    <div class="card">
+      <h3 style="margin-top:0">💧 Capacitive Sensor (J6)</h3>
+      <div class="chart-container">
+        <canvas id="moisture-chart"></canvas>
+      </div>
+      <div id="moisture-nodata" class="muted" style="display:none;text-align:center;padding:40px">No moisture data for this period</div>
+    </div>
+    <div class="card" id="sensor2-chart-card" style="display:none">
+      <h3 style="margin-top:0;color:#9c27b0">🌡️ Resistive Sensor (J7)</h3>
+      <div class="chart-container">
+        <canvas id="sensor2-chart"></canvas>
+      </div>
+    </div>
+    <div id="moisture-loading" class="loading">Loading moisture data...</div>
+    <div id="moisture-error" class="error-msg" style="display:none"></div>
+  </div>
+
+  <!-- Battery Chart -->
+  <div id="tab-battery" class="tab-content">
+    <div class="card">
+      <h3 style="margin-top:0">🔋 Battery Trend</h3>
+      <div class="chart-container">
+        <canvas id="battery-chart"></canvas>
+      </div>
+      <div id="battery-nodata" class="muted" style="display:none;text-align:center;padding:40px">No battery data (device on AC power)</div>
+      <div id="battery-loading" class="loading">Loading battery data...</div>
+      <div id="battery-error" class="error-msg" style="display:none"></div>
+    </div>
+  </div>
+
+  <!-- Watering Events -->
+  <div id="tab-watering" class="tab-content">
+    <div class="card">
+      <h3 style="margin-top:0">🚿 Pump Activity</h3>
+      <div class="chart-container">
+        <canvas id="pump-chart"></canvas>
+      </div>
+      <div id="pump-nodata" class="muted" style="display:none;text-align:center;padding:40px">No pump activity in this period</div>
+    </div>
+    <div class="card">
+      <h3 style="margin-top:0">📋 Watering Events</h3>
+      <div id="watering-summary" class="stats-grid" style="margin-bottom:16px">
+        <div class="stat-box"><div class="stat-value" id="watering-count">—</div><div class="stat-label">Events</div></div>
+        <div class="stat-box"><div class="stat-value" id="watering-total-ml">—</div><div class="stat-label">Total ml</div></div>
+        <div class="stat-box"><div class="stat-value" id="watering-total-sec">—</div><div class="stat-label">Total sec</div></div>
+      </div>
+      <div id="watering-list"></div>
+      <div id="watering-nodata" class="muted" style="display:none;text-align:center;padding:20px">No watering events in this period</div>
+      <div id="watering-loading" class="loading">Loading watering events...</div>
+    </div>
+  </div>
+
+  <!-- Activity Log -->
+  <div id="tab-activity" class="tab-content">
+    <div class="card">
+      <h3 style="margin-top:0">📝 Activity Log</h3>
+      <div id="activity-list"></div>
+      <div id="activity-loading" class="loading">Loading activity...</div>
+    </div>
+  </div>
+
+  <!-- Long-term Trends (from GitHub JSON) -->
+  <div class="card" style="margin-top:24px;border-top:3px solid #2c5f2d">
+    <h3 style="margin-top:0">📈 Long-term (<span id="longterm-period-label">6 months</span>)</h3>
+
+    <!-- Long-term Tabs (same style as short-term) -->
+    <div class="tab-buttons" id="lt-tab-buttons">
+      <button class="active" onclick="showLtTab('moisture')">💧 Moisture</button>
+      <button onclick="showLtTab('battery')">🔋 Battery</button>
+      <button onclick="showLtTab('watering')">🚿 Watering</button>
+    </div>
+
+    <!-- Long-term Period & Chart Controls (same layout as short-term) -->
+    <div class="row" style="justify-content:space-between;flex-wrap:wrap;gap:8px;margin:12px 0">
+      <div class="period-selector">
+        <button onclick="setLongTermPeriod(4)" id="btn-lt-4w">1mo</button>
+        <button onclick="setLongTermPeriod(26)" id="btn-lt-26w" class="active">6mo</button>
+        <button onclick="setLongTermPeriod(52)" id="btn-lt-52w">1y</button>
+        <button onclick="setLongTermPeriod(104)" id="btn-lt-104w">2y</button>
+        <button onclick="setLongTermPeriod(156)" id="btn-lt-156w">3y</button>
+      </div>
+      <div class="row" style="gap:8px">
+        <div class="chart-type-selector" style="display:flex;gap:2px;border:1px solid #ddd;border-radius:8px;overflow:hidden">
+          <button onclick="setLtChartType('line')" id="btn-lt-line" class="active" style="border:none;border-radius:0;padding:6px 10px;font-size:13px">Line</button>
+          <button onclick="setLtChartType('scatter')" id="btn-lt-scatter" style="border:none;border-radius:0;padding:6px 10px;font-size:13px">Dots</button>
+        </div>
+        <button onclick="exportLongTermCSV()" style="padding:6px 10px;font-size:13px">Export</button>
+      </div>
+    </div>
+
+    <!-- Long-term Tab Contents -->
+    <div id="lt-tabs-container">
+      <!-- Long-term Moisture -->
+      <div id="lt-tab-moisture" class="lt-tab-content" style="display:block">
+        <h4 style="margin:0 0 8px 0">💧 Capacitive Sensor (J6)</h4>
+        <div class="chart-container" style="height:250px">
+          <canvas id="lt-moisture-chart"></canvas>
+        </div>
+        <div id="lt-moisture-nodata" class="muted" style="display:none;text-align:center;padding:40px">No moisture data for this period</div>
+
+        <div id="lt-sensor2-section" style="margin-top:16px;display:none">
+          <h4 style="margin:0 0 8px 0;color:#9c27b0">🌡️ Resistive Sensor (J7)</h4>
+          <div class="chart-container" style="height:250px">
+            <canvas id="lt-sensor2-chart"></canvas>
+          </div>
+        </div>
+      </div>
+
+      <!-- Long-term Battery -->
+      <div id="lt-tab-battery" class="lt-tab-content" style="display:none">
+        <h4 style="margin:0 0 8px 0">🔋 Battery Trend</h4>
+        <div class="chart-container" style="height:250px">
+          <canvas id="lt-battery-chart"></canvas>
+        </div>
+        <div id="lt-battery-nodata" class="muted" style="display:none;text-align:center;padding:40px">No battery data (device on AC power)</div>
+      </div>
+
+      <!-- Long-term Watering -->
+      <div id="lt-tab-watering" class="lt-tab-content" style="display:none">
+        <h4 style="margin:0 0 8px 0">🚿 Watering Events</h4>
+        <div class="chart-container" style="height:250px">
+          <canvas id="lt-watering-chart"></canvas>
+        </div>
+        <div id="lt-watering-nodata" class="muted" style="display:none;text-align:center;padding:40px">No watering events in this period</div>
+      </div>
+    </div>
+
+    <div id="longterm-loading" class="loading">Loading long-term data...</div>
+    <div id="longterm-error" class="error-msg" style="display:none"></div>
+  </div>
+
+  <!-- History List -->
+  <div class="card">
+    <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
+      <h3 style="margin:0">📋 Weekly History</h3>
+      <button onclick="exportLongTermCSV()" style="padding:6px 10px;font-size:13px">📥 Export CSV</button>
+    </div>
+    <div id="history-list" style="margin-top:12px"></div>
+  </div>
+</div>
+
+<script>
+// State
+let currentPeriod = 7; // days
+let chartType = 'line'; // 'line' (connected) or 'scatter' (points only)
+let ltChartType = 'line'; // Long-term chart type
+let sensorData = [];
+let batteryData = [];
+let activityData = [];
+let pumpData = []; // Pump events for chart annotations
+let moistureChart = null;
+let batteryChart = null;
+let pumpChart = null;
+
+// Gap detection for blackout/offline periods
+// If gap between data points > threshold, insert null to break the line
+const GAP_THRESHOLD_SECONDS = 7200; // 2 hours
+
+function insertGapsForTimeSeries(sortedData, valueExtractor) {
+  if (sortedData.length < 2) {
+    return {
+      labels: sortedData.map(d => new Date(d.timestamp * 1000)),
+      values: sortedData.map(valueExtractor)
+    };
+  }
+
+  const labels = [];
+  const values = [];
+
+  for (let i = 0; i < sortedData.length; i++) {
+    const current = sortedData[i];
+
+    // Check gap with previous point
+    if (i > 0) {
+      const prev = sortedData[i - 1];
+      const gap = current.timestamp - prev.timestamp;
+
+      if (gap > GAP_THRESHOLD_SECONDS) {
+        // Insert null point in the middle of the gap to break the line
+        const midTime = prev.timestamp + gap / 2;
+        labels.push(new Date(midTime * 1000));
+        values.push(null);
+      }
+    }
+
+    labels.push(new Date(current.timestamp * 1000));
+    values.push(valueExtractor(current));
+  }
+
+  return { labels, values };
+}
+
+// mapStateToDisplay() - moved to common.js
+
+// Header updates
+async function updateHeader() {
+  try {
+    const s = await API.get('/status');
+
+    // Battery (Cloud mode)
+    const batteryStatus = document.getElementById('battery-status');
+    if (s.battery && s.battery.percent !== null && s.battery.percent !== undefined && s.battery.percent >= 0) {
+      batteryStatus.textContent = `🔋 ${Math.round(s.battery.percent)}%${s.battery.charging ? ' ⚡' : ''}`;
+    } else {
+      batteryStatus.textContent = '⚡ AC';
+    }
+    if (s.system_state?.location) document.getElementById('location-text').textContent = s.system_state.location;
+    if (s.system_state?.room) document.getElementById('room-text').textContent = s.system_state.room;
+    let customName = s.system_state?.device_name || 'Plant';
+    if (customName === 'Polivalka' || customName.toLowerCase().startsWith('polivalka-')) customName = 'Plant';
+    document.getElementById('custom-name-suffix').textContent = ' / ' + customName;
+
+    const mode = s.system_state?.mode || 'off';
+    const modeBadge = document.getElementById('mode-badge');
+    modeBadge.textContent = mode.charAt(0).toUpperCase() + mode.slice(1);
+    modeBadge.className = 'status-badge status-' + mode;
+
+    const ct = document.getElementById('conn-text');
+    if (s.wifi_connected) { ct.textContent = 'Online'; ct.style.color = '#fff'; }
+    else { ct.textContent = 'Offline'; ct.style.color = '#999'; }
+
+    // Header state
+    const rawState = s.system_state?.state || 'OFF';
+    const displayState = mapStateToDisplay(rawState, s.pump_running);
+    const headerStateEl = document.getElementById('header-state');
+    if (headerStateEl) headerStateEl.textContent = `${displayState.emoji} ${displayState.text}`;
+  } catch(e) {}
+}
+
+async function updateBattery() {
+  try {
+    const b = await API.get('/battery/status');
+    const el = document.getElementById('battery-status');
+    if (b.percent !== null && b.percent !== undefined && b.percent >= 0) {
+      el.textContent = `🔋 ${Math.round(b.percent)}%${b.charging ? ' ⚡' : ''}`;
+    } else {
+      el.textContent = '⚡ AC';
+    }
+  } catch(e) { document.getElementById('battery-status').textContent = '⚡ AC'; }
+}
+
+async function updateTime() {
+  try {
+    const t = await API.get('/time/status');
+    const timeEl = document.getElementById('header-time');
+    if (t.time_set && t.current_time) {
+      timeEl.textContent = t.current_time.substring(11,16);
+      timeEl.className = 'mono';
+    } else {
+      timeEl.textContent = '--:--';
+      timeEl.className = 'mono danger';
+    }
+  } catch(e) {}
+}
+
+// Period selector
+function setPeriod(days) {
+  currentPeriod = days;
+  document.querySelectorAll('.period-selector button').forEach(b => b.classList.remove('active'));
+  document.getElementById('btn-' + days + 'd').classList.add('active');
+  document.getElementById('period-label').textContent = days === 1 ? '24 hours' : days + ' days';
+  refreshAll();
+}
+
+// Chart type selector (line = connected, scatter = points only)
+function setChartType(type) {
+  chartType = type;
+  document.getElementById('btn-line').classList.toggle('active', type === 'line');
+  document.getElementById('btn-scatter').classList.toggle('active', type === 'scatter');
+  // Re-render charts with new type
+  const cutoff = Date.now() - (currentPeriod * 24 * 60 * 60 * 1000);
+  const filteredSensor = sensorData.filter(d => d.timestamp * 1000 > cutoff);
+  const filteredBattery = batteryData.filter(d => d.timestamp * 1000 > cutoff);
+  renderMoistureChart(filteredSensor);
+  renderBatteryChart(filteredBattery);
+}
+
+// Tab switching
+function showTab(name) {
+  document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+  // Only remove active from short-term tab buttons (first .tab-buttons row)
+  document.querySelectorAll('.tab-buttons:not(#lt-tab-buttons) button').forEach(b => b.classList.remove('active'));
+  document.getElementById('tab-' + name).classList.add('active');
+  event.target.classList.add('active');
+  // Sync long-term tab with short-term (moisture/battery/watering map 1:1)
+  const ltTabMap = { moisture: 'moisture', battery: 'battery', watering: 'watering' };
+  if (ltTabMap[name]) showLtTab(ltTabMap[name], true);
+}
+
+// Load sensor history
+async function loadSensorHistory() {
+  const loading = document.getElementById('moisture-loading');
+  const error = document.getElementById('moisture-error');
+  loading.style.display = 'block';
+  error.style.display = 'none';
+
+  try {
+    const data = await API.get('/sensor/history');
+    sensorData = data || [];
+
+    // Filter by period
+    const cutoff = Date.now() - (currentPeriod * 24 * 60 * 60 * 1000);
+    const filtered = sensorData.filter(d => d.timestamp * 1000 > cutoff);
+
+    loading.style.display = 'none';
+    renderMoistureChart(filtered);
+    updateStats();
+  } catch(e) {
+    loading.style.display = 'none';
+    error.style.display = 'block';
+    error.textContent = 'Failed to load sensor data: ' + e.message;
+  }
+}
+
+// Load battery history
+async function loadBatteryHistory() {
+  const loading = document.getElementById('battery-loading');
+  const error = document.getElementById('battery-error');
+  loading.style.display = 'block';
+  error.style.display = 'none';
+
+  try {
+    const data = await API.get('/battery/history');
+    batteryData = data || [];
+
+    const cutoff = Date.now() - (currentPeriod * 24 * 60 * 60 * 1000);
+    const filtered = batteryData.filter(d => d.timestamp * 1000 > cutoff);
+
+    loading.style.display = 'none';
+    renderBatteryChart(filtered);
+    updateStats();
+  } catch(e) {
+    loading.style.display = 'none';
+    error.style.display = 'block';
+    error.textContent = 'Failed to load battery data: ' + e.message;
+  }
+}
+
+// Load pump history (for chart annotations)
+// NOTE: Endpoint not implemented yet - silently skip
+async function loadPumpHistory() {
+  // TODO: Implement /pump/history endpoint when needed
+  pumpData = [];
+}
+
+// Load activity
+async function loadActivity() {
+  const loading = document.getElementById('activity-loading');
+  const wateringLoading = document.getElementById('watering-loading');
+  loading.style.display = 'block';
+  wateringLoading.style.display = 'block';
+
+  try {
+    const data = await API.get('/activity');
+    activityData = data.activity || [];
+
+    const cutoff = Date.now() / 1000 - (currentPeriod * 24 * 60 * 60);
+    const filtered = activityData.filter(a => a.timestamp > cutoff);
+
+    loading.style.display = 'none';
+    wateringLoading.style.display = 'none';
+
+    const pumpEvents = filtered.filter(a => a.type === 'PUMP');
+    renderActivityList(filtered);
+    renderPumpChart(filtered);  // Timeline chart for pump activity
+    renderWateringSummary(pumpEvents);
+    renderWateringList(pumpEvents);
+    updateStats();
+  } catch(e) {
+    loading.style.display = 'none';
+    wateringLoading.style.display = 'none';
+    document.getElementById('activity-list').innerHTML = '<div class="error-msg">Failed to load activity</div>';
+  }
+}
+
+// Render moisture chart
+function renderMoistureChart(data) {
+  const canvas = document.getElementById('moisture-chart');
+  const nodata = document.getElementById('moisture-nodata');
+
+  if (moistureChart) {
+    moistureChart.destroy();
+    moistureChart = null;
+  }
+
+  if (data.length === 0) {
+    canvas.style.display = 'none';
+    nodata.style.display = 'block';
+    return;
+  }
+
+  // Show canvas, hide nodata message
+  canvas.style.display = 'block';
+  nodata.style.display = 'none';
+
+  const ctx = canvas.getContext('2d');
+
+  // Sort by timestamp ascending
+  data.sort((a, b) => a.timestamp - b.timestamp);
+
+  // Insert gaps for blackout/offline periods (breaks line when device was off)
+  const moistureWithGaps = insertGapsForTimeSeries(data, d => d.moisture_percent);
+  const labels = moistureWithGaps.labels;
+  const values = moistureWithGaps.values;
+
+  // Chart type settings
+  const isScatter = chartType === 'scatter';
+
+  // Capacitive sensor data
+  const adcValues = data.map(d => d.adc_raw);
+  const hasAdc = adcValues.some(v => v != null);
+
+  // Sensor 2 data (resistive sensor J7)
+  const sensor2AdcValues = data.map(d => d.sensor2_adc);
+  const sensor2PctValues = data.map(d => d.sensor2_percent);
+  const hasSensor2 = sensor2AdcValues.some(v => v != null && v !== undefined);
+
+  // Chart options template
+  const chartOptions = () => ({
+    responsive: true,
+    maintainAspectRatio: false,
+    interaction: { mode: 'nearest', axis: 'x', intersect: false },
+    plugins: {
+      legend: { position: 'top' },
+      tooltip: {
+        enabled: true,
+        position: 'nearest',
+        filter: (item) => item.parsed.y !== null,  // Hide tooltip for gap markers
+        callbacks: {
+          title: (items) => items.length > 0 ? new Date(items[0].parsed.x).toLocaleString() : '',
+          label: (item) => {
+            if (item.parsed.y === null) return null;  // Skip gap markers
+            const label = item.dataset.label;
+            if (label.includes('%')) return `${label}: ${item.parsed.y}%`;
+            return `${label}: ${item.parsed.y}`;
+          }
+        }
+      }
+    },
+    scales: {
+      x: {
+        type: 'time',
+        time: {
+          unit: currentPeriod === 1 ? 'hour' : 'day',
+          displayFormats: { hour: 'HH:mm', day: 'MMM d' }
+        },
+        grid: { display: false }
+      },
+      y: { type: 'linear', position: 'left', min: 0, max: 100, title: { display: true, text: 'Moisture %' }, ticks: { callback: v => v + '%' } },
+      y1: { type: 'linear', position: 'right', min: 0, max: 4095, title: { display: true, text: 'ADC' }, grid: { drawOnChartArea: false } }
+    }
+  });
+
+  // === Chart 1: Capacitive Sensor (J6) ===
+  moistureChart = new Chart(ctx, {
+    type: isScatter ? 'scatter' : 'line',
+    data: {
+      labels: labels,
+      datasets: [
+        {
+          label: 'Moisture %',
+          data: isScatter ? data.map(d => ({ x: new Date(d.timestamp * 1000), y: d.moisture_percent })) : values,
+          borderColor: '#1976d2',
+          backgroundColor: isScatter ? '#1976d2' : 'rgba(25, 118, 210, 0.1)',
+          fill: !isScatter,
+          tension: 0.3,
+          pointRadius: isScatter ? 6 : 3,
+          yAxisID: 'y',
+          spanGaps: false  // Break line at null (blackout/offline periods)
+        },
+        {
+          label: 'ADC',
+          data: isScatter ? data.map(d => ({ x: new Date(d.timestamp * 1000), y: d.adc_raw })) : insertGapsForTimeSeries(data, d => d.adc_raw).values,
+          borderColor: '#ff9800',
+          borderDash: [5, 5],
+          fill: false,
+          tension: 0.3,
+          pointRadius: isScatter ? 5 : 2,
+          yAxisID: 'y1',
+          hidden: !hasAdc,
+          spanGaps: false  // Break line at null (blackout/offline periods)
+        }
+      ]
+    },
+    options: chartOptions()
+  });
+
+  // === Chart 2: Resistive Sensor (J7) - only if data exists ===
+  const sensor2Card = document.getElementById('sensor2-chart-card');
+  if (hasSensor2) {
+    sensor2Card.style.display = 'block';
+    const ctx2 = document.getElementById('sensor2-chart').getContext('2d');
+
+    // Destroy existing chart if any
+    if (window.sensor2Chart) window.sensor2Chart.destroy();
+
+    // Insert gaps for sensor2 data (same as primary sensor)
+    const sensor2PctWithGaps = insertGapsForTimeSeries(data, d => d.sensor2_percent);
+    const sensor2AdcWithGaps = insertGapsForTimeSeries(data, d => d.sensor2_adc);
+
+    window.sensor2Chart = new Chart(ctx2, {
+      type: isScatter ? 'scatter' : 'line',
+      data: {
+        labels: labels,
+        datasets: [
+          {
+            label: 'Moisture %',
+            data: isScatter ? data.map(d => ({ x: new Date(d.timestamp * 1000), y: d.sensor2_percent })) : sensor2PctWithGaps.values,
+            borderColor: '#9c27b0',
+            backgroundColor: isScatter ? '#9c27b0' : 'rgba(156, 39, 176, 0.1)',
+            fill: !isScatter,
+            tension: 0.3,
+            pointRadius: isScatter ? 6 : 3,
+            yAxisID: 'y',
+            spanGaps: false  // Break line at null (blackout/offline periods)
+          },
+          {
+            label: 'ADC',
+            data: isScatter ? data.map(d => ({ x: new Date(d.timestamp * 1000), y: d.sensor2_adc })) : sensor2AdcWithGaps.values,
+            borderColor: '#e91e63',
+            borderDash: [5, 5],
+            fill: false,
+            tension: 0.3,
+            pointRadius: isScatter ? 5 : 2,
+            yAxisID: 'y1',
+            spanGaps: false  // Break line at null (blackout/offline periods)
+          }
+        ]
+      },
+      options: chartOptions()
+    });
+  } else {
+    sensor2Card.style.display = 'none';
+  }
+}
+
+// Render battery chart
+function renderBatteryChart(data) {
+  const canvas = document.getElementById('battery-chart');
+  const nodata = document.getElementById('battery-nodata');
+
+  if (batteryChart) {
+    batteryChart.destroy();
+    batteryChart = null;
+  }
+
+  // Filter out null percent (AC power)
+  const withBattery = data.filter(d => d.percent !== null);
+
+  if (withBattery.length === 0) {
+    canvas.style.display = 'none';
+    nodata.style.display = 'block';
+    return;
+  }
+
+  // Show canvas, hide nodata message
+  canvas.style.display = 'block';
+  nodata.style.display = 'none';
+
+  const ctx = canvas.getContext('2d');
+
+  withBattery.sort((a, b) => a.timestamp - b.timestamp);
+
+  // Li-Po discharge curve: voltage → percent
+  const lipoCurve = [
+    { v: 4.20, p: 100 }, { v: 4.00, p: 80 }, { v: 3.85, p: 60 },
+    { v: 3.75, p: 40 }, { v: 3.65, p: 15 }, { v: 3.55, p: 7 },
+    { v: 3.45, p: 4 }, { v: 3.35, p: 2 }, { v: 3.00, p: 0 }
+  ];
+
+  function voltageToPercent(voltage) {
+    if (voltage >= 4.20) return 100;
+    if (voltage <= 3.00) return 0;
+    for (let i = 0; i < lipoCurve.length - 1; i++) {
+      if (voltage <= lipoCurve[i].v && voltage > lipoCurve[i + 1].v) {
+        const v1 = lipoCurve[i].v, p1 = lipoCurve[i].p;
+        const v2 = lipoCurve[i + 1].v, p2 = lipoCurve[i + 1].p;
+        return p1 + (p2 - p1) * (voltage - v1) / (v2 - v1);
+      }
+    }
+    return 0;
+  }
+
+  // Insert gaps for blackout/offline periods (breaks line when device was off)
+  const batteryWithGaps = insertGapsForTimeSeries(withBattery, d => d.percent);
+  const voltageWithGaps = insertGapsForTimeSeries(withBattery, d => voltageToPercent(d.voltage));
+
+  const labels = batteryWithGaps.labels;
+  const percentValues = batteryWithGaps.values;
+  const voltageAsPercent = voltageWithGaps.values;
+
+  // Build voltage lookup for tooltips (only real data points, not gap markers)
+  const voltageData = [];
+  let realDataIndex = 0;
+  for (let i = 0; i < percentValues.length; i++) {
+    if (percentValues[i] !== null) {
+      voltageData.push(withBattery[realDataIndex].voltage);
+      realDataIndex++;
+    } else {
+      voltageData.push(null);
+    }
+  }
+
+  // Chart type settings
+  const isScatter = chartType === 'scatter';
+
+  batteryChart = new Chart(ctx, {
+    type: isScatter ? 'scatter' : 'line',
+    data: {
+      labels: labels,
+      datasets: [
+        {
+          label: 'Battery %',
+          data: isScatter ? withBattery.map(d => ({ x: new Date(d.timestamp * 1000), y: d.percent })) : percentValues,
+          borderColor: '#4caf50',
+          backgroundColor: isScatter ? '#4caf50' : 'rgba(76, 175, 80, 0.1)',
+          fill: !isScatter,
+          tension: isScatter ? 0 : 0.3,
+          pointRadius: isScatter ? 4 : 2,
+          showLine: !isScatter,
+          spanGaps: false  // Break line at null (blackout/offline periods)
+        },
+        {
+          label: 'Voltage V',
+          data: isScatter ? withBattery.map((d, i) => ({ x: new Date(d.timestamp * 1000), y: voltageToPercent(d.voltage) })) : voltageAsPercent,
+          borderColor: '#ff9800',
+          borderDash: isScatter ? [] : [5, 5],
+          fill: false,
+          tension: isScatter ? 0 : 0.3,
+          pointRadius: isScatter ? 3 : 1,
+          showLine: !isScatter,
+          spanGaps: false,  // Break line at null (blackout/offline periods)
+          voltageData: voltageData  // Use new voltageData with nulls for gaps
+        }
+      ]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: { position: 'top' },
+        tooltip: {
+          mode: 'index',
+          intersect: false,
+          filter: (item) => item.parsed.y !== null,  // Hide tooltip for gap markers
+          callbacks: {
+            title: (items) => items.length > 0 ? new Date(items[0].parsed.x).toLocaleString() : '',
+            label: (ctx) => {
+              if (ctx.parsed.y === null) return null;  // Skip gap markers
+              if (ctx.datasetIndex === 0) {
+                return `Battery: ${ctx.parsed.y.toFixed(1)}%`;
+              } else {
+                const voltage = ctx.dataset.voltageData[ctx.dataIndex];
+                if (voltage === null) return null;
+                return `Voltage: ${voltage.toFixed(2)}V`;
+              }
+            }
+          }
+        }
+      },
+      scales: {
+        x: {
+          type: 'time',
+          time: {
+            unit: currentPeriod === 1 ? 'hour' : 'day',
+            displayFormats: { hour: 'HH:mm', day: 'MMM d' }
+          },
+          grid: { display: false }
+        },
+        y: {
+          type: 'linear',
+          position: 'left',
+          min: 0,
+          max: 100,
+          grace: '5%',
+          title: { display: true, text: 'Charge %' },
+          ticks: { callback: v => v + '%' }
+        },
+        y1: {
+          type: 'linear',
+          position: 'right',
+          min: 0,
+          max: 100,
+          grace: '5%',
+          title: { display: true, text: 'Voltage' },
+          grid: { drawOnChartArea: false },
+          afterBuildTicks: (axis) => {
+            // Voltages at correct % positions (Li-Po curve)
+            axis.ticks = [
+              { value: 100, label: '4.2V' },
+              { value: 90, label: '4.1V' },
+              { value: 80, label: '4.0V' },
+              { value: 67, label: '3.9V' },
+              { value: 50, label: '3.8V' },
+              { value: 28, label: '3.7V' },
+              { value: 11, label: '3.6V' },
+              { value: 6, label: '3.5V' },
+              { value: 0, label: '3.0V' }
+            ];
+          },
+          ticks: { callback: (v, i, ticks) => ticks[i]?.label || '' }
+        }
+      }
+    }
+  });
+}
+
+// Render pump timeline chart (similar to battery/sensor)
+function renderPumpChart(events) {
+  const canvas = document.getElementById('pump-chart');
+  const nodata = document.getElementById('pump-nodata');
+
+  if (pumpChart) {
+    pumpChart.destroy();
+    pumpChart = null;
+  }
+
+  // Filter to pump start events (they have duration/volume info)
+  const pumpEvents = events.filter(e =>
+    e.type === 'PUMP' &&
+    e.message &&
+    e.message.toLowerCase().includes('start')
+  );
+
+  if (pumpEvents.length === 0) {
+    canvas.style.display = 'none';
+    nodata.style.display = 'block';
+    return;
+  }
+
+  canvas.style.display = 'block';
+  nodata.style.display = 'none';
+
+  // Parse pump events for chart data (prefer structured fields, fallback to regex)
+  const chartData = pumpEvents.map(e => {
+    let duration = e.duration_sec;
+    let volume = e.volume_ml;
+    let type = e.source || 'normal';
+
+    // Fallback: parse from message text (for old data without structured fields)
+    if (duration == null || volume == null) {
+      const msg = e.message || '';
+      const secMatch = msg.match(/(\d+)\s*s[,\)]/i);
+      const volMatch = msg.match(/(\d+)\s*ml/i);
+      duration = duration ?? (secMatch ? parseInt(secMatch[1]) : 0);
+      volume = volume ?? (volMatch ? parseInt(volMatch[1]) : 0);
+    }
+    if (type === 'normal' || !type) {
+      const msgLower = (e.message || '').toLowerCase();
+      if (msgLower.includes('microprime')) type = 'microprime';
+      else if (msgLower.includes('manual')) type = 'manual';
+    }
+
+    return {
+      timestamp: e.timestamp,
+      duration: duration || 0,
+      volume: volume || 0,
+      type: type
+    };
+  });
+
+  // Sort by timestamp
+  chartData.sort((a, b) => a.timestamp - b.timestamp);
+
+  // Insert gaps for offline periods (same as battery/sensor)
+  const labels = [];
+  const volumeValues = [];
+  const durationValues = [];
+  const colors = [];
+  const GAP_THRESHOLD = 7200; // 2 hours
+
+  for (let i = 0; i < chartData.length; i++) {
+    const current = chartData[i];
+
+    // Check gap with previous point
+    if (i > 0) {
+      const prev = chartData[i - 1];
+      const gap = current.timestamp - prev.timestamp;
+      if (gap > GAP_THRESHOLD) {
+        // Insert null point to break line
+        const midTime = prev.timestamp + gap / 2;
+        labels.push(new Date(midTime * 1000));
+        volumeValues.push(null);
+        durationValues.push(null);
+        colors.push('transparent');
+      }
+    }
+
+    labels.push(new Date(current.timestamp * 1000));
+    volumeValues.push(current.volume);
+    durationValues.push(current.duration);
+
+    // Color by source type
+    if (current.type === 'microprime') {
+      colors.push('#90caf9'); // Light blue for microprime (maintenance)
+    } else if (current.type === 'manual') {
+      colors.push('#ff9800'); // Orange for manual
+    } else if (current.type === 'timer') {
+      colors.push('#4caf50'); // Green for timer
+    } else if (current.type === 'sensor') {
+      colors.push('#2196f3'); // Blue for sensor auto
+    } else {
+      colors.push('#4caf50'); // Green default
+    }
+  }
+
+  const ctx = canvas.getContext('2d');
+
+  // Build scatter datasets grouped by source type
+  const typeConfig = {
+    microprime: { label: 'Microprime', color: '#90caf9', symbol: 'circle', radius: 4 },
+    manual:     { label: 'Manual',     color: '#ff9800', symbol: 'rect',   radius: 5 },
+    timer:      { label: 'Timer',      color: '#4caf50', symbol: 'triangle', radius: 5 },
+    sensor:     { label: 'Sensor',     color: '#2196f3', symbol: 'rectRot',  radius: 5 },
+    normal:     { label: 'Watering',   color: '#4caf50', symbol: 'rect',   radius: 5 }
+  };
+
+  // Group data by type
+  const groups = {};
+  for (const d of chartData) {
+    const t = d.type || 'normal';
+    if (!groups[t]) groups[t] = [];
+    groups[t].push({ x: d.timestamp * 1000, y: d.volume, duration: d.duration });
+  }
+
+  // Create one dataset per type (for proper legend)
+  const datasets = [];
+  for (const [type, points] of Object.entries(groups)) {
+    const cfg = typeConfig[type] || typeConfig.normal;
+    datasets.push({
+      label: cfg.label + ' (ml)',
+      data: points,
+      backgroundColor: cfg.color,
+      borderColor: cfg.color,
+      pointStyle: cfg.symbol,
+      pointRadius: cfg.radius,
+      showLine: true,
+      borderWidth: 2,
+      tension: 0,
+      fill: false,
+      yAxisID: 'y',
+      spanGaps: false,
+      segment: {
+        borderColor: ctx => {
+          const gap = ctx.p1.parsed.x - ctx.p0.parsed.x;
+          return gap > 7200000 ? 'transparent' : cfg.color;
+        }
+      }
+    });
+  }
+
+  // Time bounds: full period regardless of data
+  const now = Date.now();
+  const periodMs = currentPeriod * 24 * 60 * 60 * 1000;
+
+  pumpChart = new Chart(ctx, {
+    type: 'scatter',
+    data: { datasets: datasets },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: { position: 'top' },
+        tooltip: {
+          callbacks: {
+            title: (items) => items.length > 0 ? new Date(items[0].parsed.x).toLocaleString() : '',
+            label: (ctx) => {
+              const p = ctx.raw;
+              return `${ctx.dataset.label}: ${p.y}ml, ${p.duration}s`;
+            }
+          }
+        }
+      },
+      scales: {
+        x: {
+          type: 'time',
+          min: now - periodMs,
+          max: now,
+          time: {
+            unit: currentPeriod === 1 ? 'hour' : 'day',
+            displayFormats: { hour: 'HH:mm', day: 'MMM d' }
+          },
+          ticks: { autoSkip: true, maxTicksLimit: 8 },
+          grid: { display: false }
+        },
+        y: {
+          type: 'linear',
+          position: 'left',
+          min: 0,
+          title: { display: true, text: 'ml' },
+          grid: { color: 'rgba(0,0,0,0.05)' }
+        }
+      }
+    }
+  });
+}
+
+// Render watering summary and list
+function renderWateringSummary(events) {
+  const nodata = document.getElementById('watering-nodata');
+  const summary = document.getElementById('watering-summary');
+
+  // Filter to start events only (they have duration/volume info)
+  const startEvents = events.filter(e => e.message && e.message.toLowerCase().includes('start'));
+
+  if (startEvents.length === 0) {
+    nodata.style.display = 'block';
+    summary.style.display = 'none';
+    return;
+  }
+
+  nodata.style.display = 'none';
+  summary.style.display = 'grid';
+
+  // Calculate totals
+  let totalMl = 0;
+  let totalSec = 0;
+
+  for (const e of startEvents) {
+    const volMatch = e.message.match(/(\d+)\s*ml/i);
+    const secMatch = e.message.match(/(\d+)\s*s[,\)]/i);
+    if (volMatch) totalMl += parseInt(volMatch[1]);
+    if (secMatch) totalSec += parseInt(secMatch[1]);
+  }
+
+  document.getElementById('watering-count').textContent = startEvents.length;
+  document.getElementById('watering-total-ml').textContent = totalMl > 0 ? totalMl + 'ml' : '—';
+  document.getElementById('watering-total-sec').textContent = totalSec > 0 ? totalSec + 's' : '—';
+}
+
+// Render watering list with clear info
+function renderWateringList(events) {
+  const container = document.getElementById('watering-list');
+
+  // Filter to start events (they have the key info)
+  const startEvents = events.filter(e => e.message && e.message.toLowerCase().includes('start'));
+
+  if (startEvents.length === 0) {
+    container.innerHTML = '';
+    return;
+  }
+
+  // Sort by timestamp DESC (newest first)
+  startEvents.sort((a, b) => b.timestamp - a.timestamp);
+
+  let html = '';
+  for (const e of startEvents) {
+    const date = new Date(e.timestamp * 1000);
+    const timeStr = date.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
+    const dateStr = date.toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit' });
+
+    // Parse duration and volume from message
+    const msg = e.message || '';
+    const secMatch = msg.match(/(\d+)\s*s[,\)]/i);
+    const volMatch = msg.match(/(\d+)\s*ml/i);
+    const duration = secMatch ? secMatch[1] + 's' : '—';
+    const volume = volMatch ? volMatch[1] + 'ml' : '—';
+
+    // Determine type
+    const msgLower = msg.toLowerCase();
+    let type = 'Normal';
+    let typeColor = '#4caf50';
+    let icon = '💧';
+    if (msgLower.includes('microprime')) { type = 'Microprime'; typeColor = '#2196f3'; icon = '💦'; }
+    else if (msgLower.includes('manual')) { type = 'Manual'; typeColor = '#ff9800'; icon = '✋'; }
+
+    html += `<div class="event-row event-pump" style="border-left-color:${typeColor}">
+      <div style="display:flex;align-items:center;gap:8px">
+        <span style="font-size:18px">${icon}</span>
+        <div>
+          <div style="font-weight:500">${type}</div>
+          <div class="muted" style="font-size:12px">${duration} · ${volume}</div>
+        </div>
+      </div>
+      <div style="text-align:right">
+        <div style="font-weight:500">${timeStr}</div>
+        <div class="muted" style="font-size:12px">${dateStr}</div>
+      </div>
+    </div>`;
+  }
+  container.innerHTML = html;
+}
+
+// Render activity list
+function renderActivityList(events) {
+  const container = document.getElementById('activity-list');
+
+  if (events.length === 0) {
+    container.innerHTML = '<div class="muted">No activity in this period</div>';
+    return;
+  }
+
+  let html = '';
+  // Limit to 50 most recent
+  const recent = events.slice(0, 50);
+
+  for (const e of recent) {
+    const time = new Date(e.timestamp * 1000).toLocaleString();
+    const typeClass = e.type === 'PUMP' ? 'event-pump' :
+                      e.type === 'SENSOR' ? 'event-sensor' :
+                      e.type === 'BATTERY' ? 'event-battery' : 'event-system';
+    html += `<div class="event-row ${typeClass}">
+      <div>${e.message || e.type}</div>
+      <div class="muted">${time}</div>
+    </div>`;
+  }
+  container.innerHTML = html;
+}
+
+// Update summary stats
+function updateStats() {
+  const cutoff = Date.now() / 1000 - (currentPeriod * 24 * 60 * 60);
+
+  // Watering count and volume from activity
+  const pumpEvents = activityData.filter(a => a.type === 'PUMP' && a.timestamp > cutoff && a.message.includes('started'));
+  document.getElementById('stat-waterings').textContent = pumpEvents.length;
+
+  // Estimate volume (parse from message or count * avg)
+  let totalVolume = 0;
+  for (const e of pumpEvents) {
+    const match = e.message.match(/(\d+)ml/);
+    if (match) totalVolume += parseInt(match[1]);
+  }
+  document.getElementById('stat-volume').textContent = totalVolume > 0 ? totalVolume : '—';
+
+  // Average moisture
+  const moistureFiltered = sensorData.filter(d => d.timestamp > cutoff && d.moisture_percent != null);
+  if (moistureFiltered.length > 0) {
+    const avg = moistureFiltered.reduce((sum, d) => sum + d.moisture_percent, 0) / moistureFiltered.length;
+    document.getElementById('stat-avg-moisture').textContent = Math.round(avg) + '%';
+  } else {
+    document.getElementById('stat-avg-moisture').textContent = '—';
+  }
+
+  // Min battery
+  const batteryFiltered = batteryData.filter(d => d.timestamp > cutoff && d.percent != null);
+  if (batteryFiltered.length > 0) {
+    const min = Math.min(...batteryFiltered.map(d => d.percent));
+    document.getElementById('stat-min-battery').textContent = Math.round(min) + '%';
+  } else {
+    document.getElementById('stat-min-battery').textContent = '—';
+  }
+}
+
+// Export CSV
+function exportCSV() {
+  let csv = 'timestamp,type,moisture_cap_pct,moisture_res_pct,adc_capacitive,adc_resistive,battery_percent,battery_voltage,charging,boot_type,reset_reason,message\n';
+
+  // Add sensor data
+  for (const d of sensorData) {
+    const time = new Date(d.timestamp * 1000).toISOString();
+    csv += `${time},sensor,${d.moisture_percent || ''},${d.sensor2_percent || ''},${d.adc_raw || ''},${d.sensor2_adc || ''},,,,,,""\n`;
+  }
+
+  // Add battery data
+  for (const d of batteryData) {
+    const time = new Date(d.timestamp * 1000).toISOString();
+    csv += `${time},battery,,,,,${d.percent || ''},${d.voltage || ''},${d.charging || ''},,,\n`;
+  }
+
+  // Add activity (includes boot events with boot_type and reset_reason)
+  for (const a of activityData) {
+    const time = new Date(a.timestamp * 1000).toISOString();
+    const msg = (a.message || '').replace(/,/g, ';').replace(/\n/g, ' ');
+    const bootType = a.boot_type || '';
+    const resetReason = a.reset_reason || '';
+    csv += `${time},${a.type},,,,,,,,${bootType},${resetReason},"${msg}"\n`;
+  }
+
+  // Download with standardized filename: DeviceID_date_type-period.csv
+  const blob = new Blob([csv], { type: 'text/csv' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  const date = new Date().toISOString().split('T')[0];
+  const periodLabel = currentPeriod === 1 ? '24h' : currentPeriod + 'd';
+  a.download = `${DEVICE_ID}_${date}_trends-${periodLabel}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+// Refresh all data
+async function refreshAll() {
+  // Load pump data first (needed for chart annotations)
+  await loadPumpHistory();
+
+  // Then load all other data in parallel
+  await Promise.all([
+    loadSensorHistory(),
+    loadBatteryHistory(),
+    loadActivity()
+  ]);
+}
+
+// Admin nav link - moved to common.js
+
+// ============ LONG-TERM DATA (from GitHub JSON) ============
+let longTermData = []; // Weekly summaries from GitHub
+
+// Load weekly summaries from GitHub
+async function loadLongTermData() {
+  const loading = document.getElementById('longterm-loading');
+  const error = document.getElementById('longterm-error');
+
+  loading.style.display = 'block';
+  error.style.display = 'none';
+
+  try {
+    // Extract short device ID (BB00C1) from DEVICE_ID (Polivalka-BB00C1 or BB00C1)
+    const shortId = DEVICE_ID.replace('Polivalka-', '');
+    const url = `data/weekly/${shortId}.json`;
+
+    const response = await fetch(url, { cache: 'no-store' });
+    if (!response.ok) {
+      if (response.status === 404) {
+        loading.style.display = 'none';
+        longTermData = [];
+        renderAllLtCharts([]);
+        renderHistoryList([]);
+        return;
+      }
+      throw new Error(`HTTP ${response.status}`);
+    }
+
+    const data = await response.json();
+    longTermData = data.summaries || [];
+
+    loading.style.display = 'none';
+
+    // Filter and render based on selected period
+    const filtered = filterLongTermData(longTermPeriod);
+    renderAllLtCharts(filtered);
+    renderHistoryList(longTermData); // History shows all data
+
+  } catch(e) {
+    loading.style.display = 'none';
+    error.style.display = 'block';
+    error.textContent = 'Failed to load long-term data: ' + e.message;
+    console.error('Long-term data error:', e);
+  }
+}
+
+// Current long-term period (weeks)
+let longTermPeriod = 26; // 6 months by default
+
+// Filter data by period
+function filterLongTermData(weeks) {
+  if (longTermData.length === 0) return [];
+
+  // Sort by week descending
+  const sorted = [...longTermData].sort((a, b) => b.week.localeCompare(a.week));
+
+  // Take last N weeks
+  return sorted.slice(0, weeks).reverse();
+}
+
+// Set long-term period
+function setLongTermPeriod(weeks) {
+  longTermPeriod = weeks;
+  // Find period-selector inside long-term card (not the short-term one)
+  const ltCard = document.querySelector('.card[style*="border-top:3px"]');
+  if (ltCard) {
+    ltCard.querySelectorAll('.period-selector button').forEach(b => b.classList.remove('active'));
+  }
+  const btn = document.getElementById('btn-lt-' + weeks + 'w');
+  if (btn) btn.classList.add('active');
+
+  const labels = { 4: '1 month', 26: '6 months', 52: '1 year', 104: '2 years', 156: '3 years' };
+  document.getElementById('longterm-period-label').textContent = labels[weeks] || weeks + ' weeks';
+
+  const filtered = filterLongTermData(weeks);
+  renderAllLtCharts(filtered);
+}
+
+// Long-term chart type selector
+function setLtChartType(type) {
+  ltChartType = type;
+  document.getElementById('btn-lt-line').classList.toggle('active', type === 'line');
+  document.getElementById('btn-lt-scatter').classList.toggle('active', type === 'scatter');
+  const filtered = filterLongTermData(longTermPeriod);
+  renderAllLtCharts(filtered);
+}
+
+// Long-term chart instances
+let ltMoistureChart = null;
+let ltSensor2Chart = null;
+let ltBatteryChart = null;
+let ltWateringChart = null;
+
+// Helper: Format week data to readable date labels
+function formatWeekLabel(weekData) {
+  if (weekData.start_date) {
+    const date = new Date(weekData.start_date);
+    return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  }
+  return weekData.week;
+}
+
+// Build time series from weekly raw data points + current week live data
+function buildLtTimeSeries(weeks) {
+  let sensor = [], battery = [], pump = [];
+
+  for (const w of weeks) {
+    if (w.raw) {
+      // Raw points available — use them directly
+      for (const p of (w.raw.sensor || [])) {
+        sensor.push({ timestamp: p.ts, moisture_percent: p.pct, adc_raw: p.adc ?? null,
+                       sensor2_percent: p.s2p ?? null, sensor2_adc: p.s2a ?? null });
+      }
+      for (const p of (w.raw.battery || [])) {
+        battery.push({ timestamp: p.ts, percent: p.pct, voltage: p.v ?? null, charging: p.chg || false });
+      }
+      for (const p of (w.raw.pump || [])) {
+        pump.push({ timestamp: p.ts, volume: p.ml || 0, duration: p.sec || 0, type: p.src || 'unknown' });
+      }
+    } else {
+      // Old weeks without raw data — create synthetic point at week midpoint
+      const startMs = new Date(w.start_date).getTime();
+      const endMs = new Date(w.end_date).getTime();
+      const midTs = Math.round((startMs + endMs) / 2000); // seconds
+      if (w.moisture?.avg_percent != null) {
+        sensor.push({ timestamp: midTs, moisture_percent: w.moisture.avg_percent,
+                       adc_raw: w.moisture?.avg_adc ?? null,
+                       sensor2_percent: w.sensor2?.avg_percent ?? null,
+                       sensor2_adc: w.sensor2?.avg_adc ?? null });
+      }
+      if (w.battery?.avg_percent != null) {
+        battery.push({ timestamp: midTs, percent: w.battery.avg_percent,
+                        voltage: w.battery?.avg_voltage ?? null, charging: false });
+      }
+    }
+  }
+
+  // Add current week from already-loaded short-term API data
+  if (sensorData.length) sensor.push(...sensorData);
+  if (batteryData.length) battery.push(...batteryData);
+
+  // Pump events from activityData
+  const pumpFromActivity = activityData
+    .filter(a => a.type === 'PUMP' && a.message && a.message.toLowerCase().includes('start'))
+    .map(e => {
+      const msg = e.message || '';
+      const sec = msg.match(/(\d+)\s*s[,)]/i);
+      const vol = msg.match(/(\d+)\s*ml/i);
+      const msgLower = msg.toLowerCase();
+      return { timestamp: e.timestamp, volume: vol ? parseInt(vol[1]) : 0,
+               duration: sec ? parseInt(sec[1]) : 0,
+               type: msgLower.includes('microprime') ? 'microprime' : msgLower.includes('manual') ? 'manual' : 'normal' };
+    });
+  pump.push(...pumpFromActivity);
+
+  // Deduplicate by timestamp (current week may overlap with raw data)
+  const dedup = (arr) => {
+    const seen = new Set();
+    return arr.filter(p => { const k = p.timestamp; if (seen.has(k)) return false; seen.add(k); return true; });
+  };
+  sensor = dedup(sensor);
+  battery = dedup(battery);
+  pump = dedup(pump);
+
+  // Sort by timestamp
+  sensor.sort((a, b) => a.timestamp - b.timestamp);
+  battery.sort((a, b) => a.timestamp - b.timestamp);
+  pump.sort((a, b) => a.timestamp - b.timestamp);
+
+  return { sensor, battery, pump };
+}
+
+// Get week boundary timestamps for annotation lines
+function getWeekBoundaries(weeks) {
+  const boundaries = [];
+  for (const w of weeks) {
+    if (w.start_date) {
+      boundaries.push(new Date(w.start_date).getTime());
+    }
+  }
+  return boundaries;
+}
+
+// Build annotation config for week divider lines
+function buildWeekAnnotations(weeks) {
+  const boundaries = getWeekBoundaries(weeks);
+  const annotations = {};
+  for (let i = 0; i < boundaries.length; i++) {
+    annotations['week' + i] = {
+      type: 'line',
+      xMin: boundaries[i],
+      xMax: boundaries[i],
+      borderColor: 'rgba(0,0,0,0.08)',
+      borderWidth: 1,
+      borderDash: [4, 4]
+    };
+  }
+  return annotations;
+}
+
+// Long-term gap threshold (longer than short-term since data spans weeks)
+const LT_GAP_THRESHOLD_SECONDS = 14400; // 4 hours
+
+// Render chart for a specific long-term tab (lazy — only when visible)
+function renderLtTabChart(name) {
+  if (!ltFilteredData.length) return;
+  if (name === 'moisture') {
+    renderLtMoistureChart(ltFilteredData);
+    renderLtSensor2Chart(ltFilteredData);
+  } else if (name === 'battery') {
+    renderLtBatteryChart(ltFilteredData);
+  } else if (name === 'watering') {
+    renderLtWateringChart(ltFilteredData);
+  }
+}
+
+// Long-term tab switching
+function showLtTab(name, fromSync) {
+  // Hide all long-term tabs
+  document.querySelectorAll('.lt-tab-content').forEach(t => t.style.display = 'none');
+  // Remove active from all buttons
+  document.querySelectorAll('#lt-tab-buttons button').forEach(b => b.classList.remove('active'));
+  // Show selected tab
+  document.getElementById('lt-tab-' + name).style.display = 'block';
+  // Mark button as active (find by tab name if called from sync)
+  if (fromSync) {
+    const buttons = document.querySelectorAll('#lt-tab-buttons button');
+    const tabNames = ['moisture', 'battery', 'watering'];
+    const idx = tabNames.indexOf(name);
+    if (idx >= 0 && buttons[idx]) buttons[idx].classList.add('active');
+  } else {
+    event.target.classList.add('active');
+  }
+  // Render chart now that tab is visible (lazy rendering — avoids 0x0 canvas)
+  requestAnimationFrame(() => renderLtTabChart(name));
+}
+
+// Render long-term moisture chart (raw data points with time axis)
+function renderLtMoistureChart(weeks) {
+  const canvas = document.getElementById('lt-moisture-chart');
+  const nodata = document.getElementById('lt-moisture-nodata');
+
+  if (ltMoistureChart) { ltMoistureChart.destroy(); ltMoistureChart = null; }
+
+  const ts = buildLtTimeSeries(weeks);
+  const data = ts.sensor;
+
+  if (data.length === 0) {
+    canvas.style.display = 'none';
+    nodata.style.display = 'block';
+    return;
+  }
+
+  canvas.style.display = 'block';
+  nodata.style.display = 'none';
+
+  const moistureWithGaps = insertGapsForTimeSeries(data, d => d.moisture_percent);
+  const adcWithGaps = insertGapsForTimeSeries(data, d => d.adc_raw);
+  const labels = moistureWithGaps.labels;
+  const hasAdc = data.some(d => d.adc_raw != null);
+  const isScatter = ltChartType === 'scatter';
+  const weekAnnotations = buildWeekAnnotations(weeks);
+
+  ltMoistureChart = new Chart(canvas.getContext('2d'), {
+    type: isScatter ? 'scatter' : 'line',
+    data: {
+      labels: labels,
+      datasets: [
+        {
+          label: 'Moisture %',
+          data: isScatter ? data.map(d => ({ x: new Date(d.timestamp * 1000), y: d.moisture_percent })) : moistureWithGaps.values,
+          borderColor: '#1976d2',
+          backgroundColor: isScatter ? '#1976d2' : 'rgba(25,118,210,0.1)',
+          fill: !isScatter,
+          tension: 0.3,
+          pointRadius: isScatter ? 4 : 1,
+          yAxisID: 'y',
+          spanGaps: false
+        },
+        {
+          label: 'ADC',
+          data: isScatter ? data.map(d => ({ x: new Date(d.timestamp * 1000), y: d.adc_raw })) : adcWithGaps.values,
+          borderColor: '#ff9800',
+          borderDash: [5, 5],
+          fill: false,
+          tension: 0.3,
+          pointRadius: isScatter ? 3 : 0,
+          yAxisID: 'y1',
+          hidden: !hasAdc,
+          spanGaps: false
+        }
+      ]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      interaction: { mode: 'nearest', axis: 'x', intersect: false },
+      plugins: {
+        legend: { position: 'top' },
+        annotation: { annotations: weekAnnotations },
+        tooltip: {
+          filter: (item) => item.parsed.y !== null,
+          callbacks: {
+            title: (items) => items.length > 0 ? new Date(items[0].parsed.x).toLocaleString() : '',
+            label: (item) => {
+              if (item.parsed.y === null) return null;
+              const label = item.dataset.label;
+              if (label.includes('%')) return `${label}: ${item.parsed.y}%`;
+              return `${label}: ${item.parsed.y}`;
+            }
+          }
+        }
+      },
+      scales: {
+        x: {
+          type: 'time',
+          time: { unit: longTermPeriod <= 4 ? 'day' : 'week', displayFormats: { day: 'MMM d', week: 'MMM d' } },
+          grid: { display: false }
+        },
+        y: { type: 'linear', position: 'left', min: 0, max: 100, title: { display: true, text: 'Moisture %' }, ticks: { callback: v => v + '%' } },
+        y1: { type: 'linear', position: 'right', min: 0, max: 4095, title: { display: true, text: 'ADC' }, grid: { drawOnChartArea: false } }
+      }
+    }
+  });
+}
+
+// Render long-term sensor2 (J7) chart (raw data points with time axis)
+function renderLtSensor2Chart(weeks) {
+  const canvas = document.getElementById('lt-sensor2-chart');
+  const section = document.getElementById('lt-sensor2-section');
+
+  if (ltSensor2Chart) { ltSensor2Chart.destroy(); ltSensor2Chart = null; }
+
+  const ts = buildLtTimeSeries(weeks);
+  const data = ts.sensor;
+  const hasSensor2 = data.some(d => d.sensor2_percent != null);
+
+  if (!hasSensor2) {
+    section.style.display = 'none';
+    return;
+  }
+
+  section.style.display = 'block';
+
+  const s2PctWithGaps = insertGapsForTimeSeries(data, d => d.sensor2_percent);
+  const s2AdcWithGaps = insertGapsForTimeSeries(data, d => d.sensor2_adc);
+  const labels = s2PctWithGaps.labels;
+  const hasAdc = data.some(d => d.sensor2_adc != null);
+  const isScatter = ltChartType === 'scatter';
+  const weekAnnotations = buildWeekAnnotations(weeks);
+
+  ltSensor2Chart = new Chart(canvas.getContext('2d'), {
+    type: isScatter ? 'scatter' : 'line',
+    data: {
+      labels: labels,
+      datasets: [
+        {
+          label: 'Moisture %',
+          data: isScatter ? data.filter(d => d.sensor2_percent != null).map(d => ({ x: new Date(d.timestamp * 1000), y: d.sensor2_percent })) : s2PctWithGaps.values,
+          borderColor: '#9c27b0',
+          backgroundColor: isScatter ? '#9c27b0' : 'rgba(156,39,176,0.1)',
+          fill: !isScatter,
+          tension: 0.3,
+          pointRadius: isScatter ? 4 : 1,
+          yAxisID: 'y',
+          spanGaps: false
+        },
+        {
+          label: 'ADC',
+          data: isScatter ? data.filter(d => d.sensor2_adc != null).map(d => ({ x: new Date(d.timestamp * 1000), y: d.sensor2_adc })) : s2AdcWithGaps.values,
+          borderColor: '#e91e63',
+          borderDash: [5, 5],
+          fill: false,
+          tension: 0.3,
+          pointRadius: isScatter ? 3 : 0,
+          yAxisID: 'y1',
+          hidden: !hasAdc,
+          spanGaps: false
+        }
+      ]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      interaction: { mode: 'nearest', axis: 'x', intersect: false },
+      plugins: {
+        legend: { position: 'top' },
+        annotation: { annotations: weekAnnotations },
+        tooltip: {
+          filter: (item) => item.parsed.y !== null,
+          callbacks: {
+            title: (items) => items.length > 0 ? new Date(items[0].parsed.x).toLocaleString() : '',
+            label: (item) => {
+              if (item.parsed.y === null) return null;
+              const label = item.dataset.label;
+              if (label.includes('%')) return `${label}: ${item.parsed.y}%`;
+              return `${label}: ${item.parsed.y}`;
+            }
+          }
+        }
+      },
+      scales: {
+        x: {
+          type: 'time',
+          time: { unit: longTermPeriod <= 4 ? 'day' : 'week', displayFormats: { day: 'MMM d', week: 'MMM d' } },
+          grid: { display: false }
+        },
+        y: { type: 'linear', position: 'left', min: 0, max: 100, title: { display: true, text: 'Moisture %' }, ticks: { callback: v => v + '%' } },
+        y1: { type: 'linear', position: 'right', min: 0, max: 4095, title: { display: true, text: 'ADC' }, grid: { drawOnChartArea: false } }
+      }
+    }
+  });
+}
+
+// Render long-term battery chart (raw data points with time axis)
+function renderLtBatteryChart(weeks) {
+  const canvas = document.getElementById('lt-battery-chart');
+  const nodata = document.getElementById('lt-battery-nodata');
+
+  if (ltBatteryChart) { ltBatteryChart.destroy(); ltBatteryChart = null; }
+
+  const ts = buildLtTimeSeries(weeks);
+  const data = ts.battery.filter(d => d.percent != null);
+
+  if (data.length === 0) {
+    canvas.style.display = 'none';
+    nodata.style.display = 'block';
+    return;
+  }
+
+  canvas.style.display = 'block';
+  nodata.style.display = 'none';
+
+  // Li-Po discharge curve (same as short-term)
+  function voltageToPercent(voltage) {
+    if (voltage == null) return null;
+    if (voltage >= 4.20) return 100;
+    if (voltage <= 3.00) return 0;
+    const lipoCurve = [
+      { v: 4.20, p: 100 }, { v: 4.00, p: 80 }, { v: 3.85, p: 60 },
+      { v: 3.75, p: 40 }, { v: 3.65, p: 15 }, { v: 3.55, p: 7 },
+      { v: 3.45, p: 4 }, { v: 3.35, p: 2 }, { v: 3.00, p: 0 }
+    ];
+    for (let i = 0; i < lipoCurve.length - 1; i++) {
+      if (voltage <= lipoCurve[i].v && voltage > lipoCurve[i + 1].v) {
+        const v1 = lipoCurve[i].v, p1 = lipoCurve[i].p;
+        const v2 = lipoCurve[i + 1].v, p2 = lipoCurve[i + 1].p;
+        return p1 + (p2 - p1) * (voltage - v1) / (v2 - v1);
+      }
+    }
+    return 0;
+  }
+
+  const batteryWithGaps = insertGapsForTimeSeries(data, d => d.percent);
+  const voltageWithGaps = insertGapsForTimeSeries(data, d => voltageToPercent(d.voltage));
+  const labels = batteryWithGaps.labels;
+
+  // Build voltage lookup for tooltips
+  const voltageData = [];
+  let realIdx = 0;
+  for (let i = 0; i < batteryWithGaps.values.length; i++) {
+    if (batteryWithGaps.values[i] !== null) {
+      voltageData.push(data[realIdx].voltage);
+      realIdx++;
+    } else {
+      voltageData.push(null);
+    }
+  }
+
+  const hasVoltage = data.some(d => d.voltage != null);
+  const isScatter = ltChartType === 'scatter';
+  const weekAnnotations = buildWeekAnnotations(weeks);
+
+  ltBatteryChart = new Chart(canvas.getContext('2d'), {
+    type: isScatter ? 'scatter' : 'line',
+    data: {
+      labels: labels,
+      datasets: [
+        {
+          label: 'Battery %',
+          data: isScatter ? data.map(d => ({ x: new Date(d.timestamp * 1000), y: d.percent })) : batteryWithGaps.values,
+          borderColor: '#4caf50',
+          backgroundColor: isScatter ? '#4caf50' : 'rgba(76,175,80,0.1)',
+          fill: !isScatter,
+          tension: 0.3,
+          pointRadius: isScatter ? 4 : 1,
+          yAxisID: 'y',
+          spanGaps: false
+        },
+        {
+          label: 'Voltage V',
+          data: isScatter ? data.map(d => ({ x: new Date(d.timestamp * 1000), y: voltageToPercent(d.voltage) })) : voltageWithGaps.values,
+          borderColor: '#ff9800',
+          borderDash: [5, 5],
+          fill: false,
+          tension: 0.3,
+          pointRadius: isScatter ? 3 : 0,
+          yAxisID: 'y1',
+          hidden: !hasVoltage,
+          spanGaps: false,
+          voltageData: voltageData
+        }
+      ]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      interaction: { mode: 'nearest', axis: 'x', intersect: false },
+      plugins: {
+        legend: { position: 'top' },
+        annotation: { annotations: weekAnnotations },
+        tooltip: {
+          filter: (item) => item.parsed.y !== null,
+          callbacks: {
+            title: (items) => items.length > 0 ? new Date(items[0].parsed.x).toLocaleString() : '',
+            label: (ctx) => {
+              if (ctx.parsed.y === null) return null;
+              if (ctx.datasetIndex === 0) {
+                return `Battery: ${ctx.parsed.y.toFixed(1)}%`;
+              } else {
+                const voltage = ctx.dataset.voltageData[ctx.dataIndex];
+                if (voltage == null) return null;
+                return `Voltage: ${voltage.toFixed(2)}V`;
+              }
+            }
+          }
+        }
+      },
+      scales: {
+        x: {
+          type: 'time',
+          time: { unit: longTermPeriod <= 4 ? 'day' : 'week', displayFormats: { day: 'MMM d', week: 'MMM d' } },
+          grid: { display: false }
+        },
+        y: {
+          type: 'linear', position: 'left', min: 0, max: 100, grace: '5%',
+          title: { display: true, text: 'Charge %' },
+          ticks: { callback: v => v + '%' }
+        },
+        y1: {
+          type: 'linear', position: 'right', min: 0, max: 100, grace: '5%',
+          title: { display: true, text: 'Voltage' },
+          grid: { drawOnChartArea: false },
+          afterBuildTicks: (axis) => {
+            axis.ticks = [
+              { value: 100, label: '4.2V' }, { value: 90, label: '4.1V' },
+              { value: 80, label: '4.0V' }, { value: 67, label: '3.9V' },
+              { value: 50, label: '3.8V' }, { value: 28, label: '3.7V' },
+              { value: 11, label: '3.6V' }, { value: 6, label: '3.5V' },
+              { value: 0, label: '3.0V' }
+            ];
+          },
+          ticks: { callback: (v, i, ticks) => ticks[i]?.label || '' }
+        }
+      }
+    }
+  });
+}
+
+// Render long-term watering chart (individual pump events with time axis)
+function renderLtWateringChart(weeks) {
+  const canvas = document.getElementById('lt-watering-chart');
+  const nodata = document.getElementById('lt-watering-nodata');
+
+  if (ltWateringChart) { ltWateringChart.destroy(); ltWateringChart = null; }
+
+  const ts = buildLtTimeSeries(weeks);
+  const data = ts.pump;
+
+  if (data.length === 0) {
+    canvas.style.display = 'none';
+    nodata.style.display = 'block';
+    return;
+  }
+
+  canvas.style.display = 'block';
+  nodata.style.display = 'none';
+
+  // Build chart arrays with gap detection
+  const labels = [];
+  const volumeValues = [];
+  const durationValues = [];
+  const colors = [];
+
+  for (let i = 0; i < data.length; i++) {
+    const current = data[i];
+
+    if (i > 0) {
+      const prev = data[i - 1];
+      const gap = current.timestamp - prev.timestamp;
+      if (gap > LT_GAP_THRESHOLD_SECONDS) {
+        labels.push(new Date((prev.timestamp + gap / 2) * 1000));
+        volumeValues.push(null);
+        durationValues.push(null);
+        colors.push('transparent');
+      }
+    }
+
+    labels.push(new Date(current.timestamp * 1000));
+    volumeValues.push(current.volume || 0);
+    durationValues.push(current.duration || 0);
+
+    if (current.type === 'microprime') colors.push('#2196f3');
+    else if (current.type === 'manual') colors.push('#ff9800');
+    else colors.push('#4caf50');
+  }
+
+  const weekAnnotations = buildWeekAnnotations(weeks);
+
+  ltWateringChart = new Chart(canvas.getContext('2d'), {
+    type: 'bar',
+    data: {
+      labels: labels,
+      datasets: [
+        {
+          label: 'Volume (ml)',
+          data: volumeValues,
+          backgroundColor: colors,
+          borderColor: colors,
+          borderWidth: 1,
+          yAxisID: 'y',
+          barThickness: 6,
+          maxBarThickness: 10
+        },
+        {
+          label: 'Duration (s)',
+          data: durationValues,
+          type: 'line',
+          borderColor: '#9c27b0',
+          backgroundColor: 'transparent',
+          borderDash: [3, 3],
+          fill: false,
+          tension: 0,
+          pointRadius: 3,
+          pointBackgroundColor: '#9c27b0',
+          yAxisID: 'y1',
+          spanGaps: false
+        }
+      ]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: {
+        legend: { position: 'top' },
+        annotation: { annotations: weekAnnotations },
+        tooltip: {
+          filter: (item) => item.parsed.y !== null,
+          callbacks: {
+            title: (items) => items.length > 0 ? new Date(items[0].parsed.x).toLocaleString() : '',
+            label: (ctx) => {
+              if (ctx.parsed.y === null) return null;
+              if (ctx.datasetIndex === 0) return `Volume: ${ctx.parsed.y}ml`;
+              return `Duration: ${ctx.parsed.y}s`;
+            },
+            afterBody: (items) => {
+              if (items.length === 0) return '';
+              const idx = items[0].dataIndex;
+              const color = colors[idx];
+              if (color === '#2196f3') return 'Type: Microprime';
+              if (color === '#ff9800') return 'Type: Manual';
+              if (color === '#4caf50') return 'Type: Auto watering';
+              return '';
+            }
+          }
+        }
+      },
+      scales: {
+        x: {
+          type: 'time',
+          time: { unit: longTermPeriod <= 4 ? 'day' : 'week', displayFormats: { day: 'MMM d', week: 'MMM d' } },
+          grid: { display: false }
+        },
+        y: { type: 'linear', position: 'left', min: 0, title: { display: true, text: 'ml' }, grid: { color: 'rgba(0,0,0,0.05)' } },
+        y1: { type: 'linear', position: 'right', min: 0, title: { display: true, text: 'sec' }, grid: { drawOnChartArea: false } }
+      }
+    }
+  });
+}
+
+// Store filtered data for lazy rendering
+let ltFilteredData = [];
+
+// Render all long-term charts (only visible tab + store data for lazy render)
+function renderAllLtCharts(data) {
+  ltFilteredData = data;
+  // Only render the currently visible tab
+  const visibleTab = document.querySelector('.lt-tab-content[style*="display: block"], .lt-tab-content[style*="display:block"]');
+  const visibleId = visibleTab ? visibleTab.id : 'lt-tab-moisture';
+  renderLtTabChart(visibleId.replace('lt-tab-', ''));
+}
+
+// Render history list
+function renderHistoryList(data) {
+  const container = document.getElementById('history-list');
+
+  if (data.length === 0) {
+    container.innerHTML = '<div class="muted">No historical data available yet</div>';
+    return;
+  }
+
+  // Sort by week descending (newest first)
+  const sorted = [...data].sort((a, b) => b.week.localeCompare(a.week));
+
+  let html = '';
+  for (const w of sorted) {
+    const moisture = w.moisture?.avg_percent != null ? Math.round(w.moisture.avg_percent) + '%' : '—';
+    const battery = w.battery?.avg_percent != null ? Math.round(w.battery.avg_percent) + '%' : '—';
+    const waterings = w.watering?.events_count ?? 0;
+    const volume = w.watering?.total_ml ?? 0;
+    const online = w.system?.online_hours != null ? Math.round(w.system.online_hours) + 'h' : '—';
+
+    html += `<div class="event-row event-system" style="flex-direction:column;align-items:stretch">
+      <div style="display:flex;justify-content:space-between;align-items:center">
+        <strong>Week ${w.week}</strong>
+        <span class="muted">${w.start_date} — ${w.end_date}</span>
+      </div>
+      <div style="display:flex;gap:16px;margin-top:8px;font-size:13px;color:#666">
+        <span>💧 Moisture: ${moisture}</span>
+        <span>🔋 Battery: ${battery}</span>
+        <span>🚿 ${waterings} waterings (${volume}ml)</span>
+        <span>📡 Online: ${online}</span>
+      </div>
+    </div>`;
+  }
+
+  container.innerHTML = html;
+}
+
+// Export long-term data as CSV
+function exportLongTermCSV() {
+  if (longTermData.length === 0) {
+    alert('No long-term data to export');
+    return;
+  }
+
+  let csv = 'week,start_date,end_date,moisture_avg,moisture_min,moisture_max,battery_avg,battery_min,battery_max,waterings,total_ml,auto_events,manual_events,online_hours,offline_hours,restarts,firmware\n';
+
+  for (const w of longTermData) {
+    csv += `${w.week},${w.start_date},${w.end_date},`;
+    csv += `${w.moisture?.avg_percent || ''},${w.moisture?.min_percent || ''},${w.moisture?.max_percent || ''},`;
+    csv += `${w.battery?.avg_percent || ''},${w.battery?.min_percent || ''},${w.battery?.max_percent || ''},`;
+    csv += `${w.watering?.events_count || 0},${w.watering?.total_ml || 0},${w.watering?.auto_events || 0},${w.watering?.manual_events || 0},`;
+    csv += `${w.system?.online_hours || ''},${w.system?.offline_hours || ''},${w.system?.restarts || 0},${w.system?.firmware_version || ''}\n`;
+  }
+
+  // Download with standardized filename: DeviceID_date_type-period.csv
+  const blob = new Blob([csv], { type: 'text/csv' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  const date = new Date().toISOString().split('T')[0];
+  const periodLabels = { 4: '1mo', 26: '6mo', 52: '1y', 104: '2y', 156: '3y' };
+  const periodLabel = periodLabels[longTermPeriod] || longTermPeriod + 'w';
+  a.download = `${DEVICE_ID}_${date}_longterm-${periodLabel}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+// Init
+if (IS_CLOUD && DEVICE_ID) {
+  document.getElementById('device-id-header').textContent = '🌱 ' + DEVICE_ID;
+  document.title = `${DEVICE_ID} — Trends`;
+
+  // Load data (time handled by common.js universal clock)
+  refreshAll();
+  updateHeader();
+  updateBattery();
+  loadLongTermData(); // Load weekly summaries from GitHub
+
+  // Auto-refresh every 5 minutes
+  setInterval(refreshAll, 300000);
+  setInterval(updateHeader, 30000);
+  setInterval(updateBattery, 60000);
+  setInterval(loadLongTermData, 3600000); // Refresh long-term data every hour
+  // Refresh on tab return
+  document.addEventListener('visibilitychange', () => {
+    if (!document.hidden) { updateHeader(); refreshAll(); }
+  });
+} else {
+  // AP mode - show message
+  document.querySelector('.container').innerHTML = `
+    <div class="card">
+      <h3>📊 Trends</h3>
+      <p class="muted">Historical trends are only available in Cloud mode.</p>
+      <p>Connect your device to WiFi and access via <a href="https://gt3max.github.io/polivalka-web/trends.html?device=${location.hostname.includes('polivalka') ? location.hostname.split('.')[0].replace('polivalka-','').toUpperCase() : 'YOUR_DEVICE'}">Cloud Dashboard</a></p>
+    </div>
+  `;
+}
+</script>
+</body></html>
