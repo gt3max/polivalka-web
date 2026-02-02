@@ -3470,18 +3470,15 @@ def get_device_activity(device_id, user_id):
                 'result': cmd.get('result', {})
             })
 
-        # 2. Get telemetry (last 50 system events)
-        # Query recent telemetry and filter for system events
-        cutoff = int(time.time()) - 86400  # Last 24 hours
+        # 2. Get telemetry (last 7 days — matches trends.html Activity tab)
+        cutoff = int(time.time()) - 604800  # Last 7 days
         telem_device_id = get_telemetry_device_id(device_id)
         telem_response = telemetry_table.query(
             KeyConditionExpression=Key('device_id').eq(telem_device_id) & Key('timestamp').gt(cutoff),
-            Limit=100,  # Get more to filter for system events
             ScanIndexForward=False  # Sort DESC
         )
 
         # Process all telemetry events (system, pump, sensor, battery)
-        event_count = 0
         prev_firmware_version = None
         # Track reboot info to detect ACTUAL reboots (not just heartbeats)
         # When iterating DESC: prev = newer record, curr = older record
@@ -3494,9 +3491,6 @@ def get_device_activity(device_id, user_id):
         prev_timestamp = None
 
         for telem in telem_response.get('Items', []):
-            event_count += 1
-            if event_count > 100:  # Limit to 100 events total
-                break
 
             ts = int(telem.get('timestamp', 0))
             system_data = telem.get('system', {})
