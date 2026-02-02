@@ -29,6 +29,7 @@ import json
 import boto3
 import os
 from decimal import Decimal
+from boto3.dynamodb.conditions import Key
 
 dynamodb = boto3.resource('dynamodb', region_name='eu-central-1')
 
@@ -122,15 +123,15 @@ def lambda_handler(event, context):
         boot_type = data.get('boot_type')
         reset_reason = data.get('reset_reason')
 
-        # Find user_id for this device (scan the table)
+        # Find user_id for this device (query by GSI)
         try:
-            scan_response = devices_table.scan(
-                FilterExpression='device_id = :device',
-                ExpressionAttributeValues={':device': device_id}
+            query_response = devices_table.query(
+                IndexName='device_id-index',
+                KeyConditionExpression=Key('device_id').eq(device_id)
             )
 
-            if scan_response['Items'] and len(scan_response['Items']) > 0:
-                user_id = scan_response['Items'][0]['user_id']
+            if query_response['Items'] and len(query_response['Items']) > 0:
+                user_id = query_response['Items'][0]['user_id']
 
                 update_expr_parts = ['last_update = :ts']  # Always update last_update
                 expr_attr_values = {':ts': timestamp}
@@ -152,7 +153,7 @@ def lambda_handler(event, context):
                     expr_attr_values[':wifi_scan'] = wifi_scan_interval
 
                 # Get current item for comparison
-                current_item = scan_response['Items'][0]
+                current_item = query_response['Items'][0]
                 current_firmware = current_item.get('firmware_version', '')
                 firmware_changed = firmware_version and firmware_version != current_firmware
 
@@ -198,7 +199,7 @@ def lambda_handler(event, context):
 
                 # OTA stats - also protected (only increase)
                 if ota_count is not None:
-                    current_item = scan_response['Items'][0]
+                    current_item = query_response['Items'][0]
                     current_ota = current_item.get('ota_count', 0)
                     if ota_count >= current_ota:
                         update_expr_parts.append('ota_count = :ota_count')
@@ -239,15 +240,15 @@ def lambda_handler(event, context):
         pump_speed = data.get('speed')
         pump_calibration = data.get('calibration')
 
-        # Find user_id for this device (scan the table)
+        # Find user_id for this device (query by GSI)
         try:
-            scan_response = devices_table.scan(
-                FilterExpression='device_id = :device',
-                ExpressionAttributeValues={':device': device_id}
+            query_response = devices_table.query(
+                IndexName='device_id-index',
+                KeyConditionExpression=Key('device_id').eq(device_id)
             )
 
-            if scan_response['Items'] and len(scan_response['Items']) > 0:
-                user_id = scan_response['Items'][0]['user_id']
+            if query_response['Items'] and len(query_response['Items']) > 0:
+                user_id = query_response['Items'][0]['user_id']
 
                 update_expr_parts = []
                 expr_values = {}
@@ -324,18 +325,18 @@ def handle_config(event, device_id, timestamp):
     """
     config_type = event.get('config_type')  # "timer", "sensor", etc.
 
-    # Find user_id for this device (scan the table)
+    # Find user_id for this device (query by GSI)
     try:
-        scan_response = devices_table.scan(
-            FilterExpression='device_id = :device',
-            ExpressionAttributeValues={':device': device_id}
+        query_response = devices_table.query(
+            IndexName='device_id-index',
+            KeyConditionExpression=Key('device_id').eq(device_id)
         )
 
-        if not scan_response['Items'] or len(scan_response['Items']) == 0:
+        if not query_response['Items'] or len(query_response['Items']) == 0:
             print(f"Device {device_id} not found in devices table for config save")
             return {'statusCode': 404, 'body': 'Device not found'}
 
-        user_id = scan_response['Items'][0]['user_id']
+        user_id = query_response['Items'][0]['user_id']
 
         # Build update expression based on config_type
         if config_type == 'timer':

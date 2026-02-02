@@ -1014,12 +1014,12 @@ def lambda_handler(event, context):
 
                 # Read config_timer from devices table
                 try:
-                    scan_response = devices_table.scan(
-                        FilterExpression='device_id = :device',
-                        ExpressionAttributeValues={':device': device_id}
+                    query_response = devices_table.query(
+                        IndexName='device_id-index',
+                        KeyConditionExpression=Key('device_id').eq(device_id)
                     )
-                    if scan_response['Items'] and len(scan_response['Items']) > 0:
-                        device = scan_response['Items'][0]
+                    if query_response['Items'] and len(query_response['Items']) > 0:
+                        device = query_response['Items'][0]
                         schedules = device.get('config_timer', [])
                         updated = device.get('config_timer_updated', 0)
                         return {
@@ -2104,10 +2104,10 @@ def get_device_info(device_id, user_id):
     ADMIN_EMAILS = ['mrmaximshurigin@gmail.com', 'admin']
 
     if user_id in ADMIN_EMAILS:
-        # Admin: scan by device_id only (device may have any user_id in DB)
-        response = devices_table.scan(
-            FilterExpression='device_id = :device',
-            ExpressionAttributeValues={':device': device_id}
+        # Admin: query by device_id via GSI (device may have any user_id in DB)
+        response = devices_table.query(
+            IndexName='device_id-index',
+            KeyConditionExpression=Key('device_id').eq(device_id)
         )
         items = response.get('Items', [])
         return items[0] if items else {}
@@ -2285,10 +2285,10 @@ def admin_archive_device(device_id):
         if not device_id.startswith('Polivalka-'):
             device_id = f'Polivalka-{device_id}'
 
-        # Find device to get user_id (table has composite key: user_id + device_id)
-        response = devices_table.scan(
-            FilterExpression='device_id = :device',
-            ExpressionAttributeValues={':device': device_id}
+        # Find device to get user_id (query by GSI)
+        response = devices_table.query(
+            IndexName='device_id-index',
+            KeyConditionExpression=Key('device_id').eq(device_id)
         )
         items = response.get('Items', [])
         if not items:
@@ -2331,10 +2331,10 @@ def admin_restore_archive(device_id):
         if not device_id.startswith('Polivalka-'):
             device_id = f'Polivalka-{device_id}'
 
-        # Find device to get user_id (table has composite key: user_id + device_id)
-        response = devices_table.scan(
-            FilterExpression='device_id = :device',
-            ExpressionAttributeValues={':device': device_id}
+        # Find device to get user_id (query by GSI)
+        response = devices_table.query(
+            IndexName='device_id-index',
+            KeyConditionExpression=Key('device_id').eq(device_id)
         )
         items = response.get('Items', [])
         if not items:
@@ -2373,10 +2373,10 @@ def admin_delete_device(device_id):
         if not device_id.startswith('Polivalka-'):
             device_id = f'Polivalka-{device_id}'
 
-        # Find device to get user_id (table has composite key: user_id + device_id)
-        response = devices_table.scan(
-            FilterExpression='device_id = :device',
-            ExpressionAttributeValues={':device': device_id}
+        # Find device to get user_id (query by GSI)
+        response = devices_table.query(
+            IndexName='device_id-index',
+            KeyConditionExpression=Key('device_id').eq(device_id)
         )
         items = response.get('Items', [])
         if not items:
@@ -2436,10 +2436,10 @@ def admin_restore_deleted(device_id):
         if not device_id.startswith('Polivalka-'):
             device_id = f'Polivalka-{device_id}'
 
-        # Find device to get user_id (table has composite key: user_id + device_id)
-        response = devices_table.scan(
-            FilterExpression='device_id = :device',
-            ExpressionAttributeValues={':device': device_id}
+        # Find device to get user_id (query by GSI)
+        response = devices_table.query(
+            IndexName='device_id-index',
+            KeyConditionExpression=Key('device_id').eq(device_id)
         )
         items = response.get('Items', [])
         if not items:
@@ -3958,11 +3958,11 @@ def is_user_admin(user_id):
 
 
 def find_device_by_id(device_id):
-    """Find device in any user's collection (scan - OK for small tables)"""
+    """Find device in any user's collection (query by GSI)"""
     try:
-        response = devices_table.scan(
-            FilterExpression='device_id = :did',
-            ExpressionAttributeValues={':did': device_id}
+        response = devices_table.query(
+            IndexName='device_id-index',
+            KeyConditionExpression=Key('device_id').eq(device_id)
         )
         items = response.get('Items', [])
         return items[0] if items else None

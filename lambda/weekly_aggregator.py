@@ -73,20 +73,13 @@ def get_week_info():
 
 
 def get_all_devices():
-    """Get list of all device IDs from telemetry table"""
-    # Scan telemetry table to get unique device_ids
-    # In production, you might want to query a devices table instead
+    """Get list of all device IDs from devices table (small table, ~33 records)"""
     devices = set()
 
     try:
-        # Query recent data to find active devices
-        # This is more efficient than scanning the entire table
-        cutoff = int(time.time()) - (7 * 86400)  # Last 7 days
-
-        response = telemetry_table.scan(
-            FilterExpression=Key('timestamp').gt(cutoff),
+        # Scan devices table (small, ~33 records) instead of huge telemetry table
+        response = devices_table.scan(
             ProjectionExpression='device_id',
-            Limit=1000
         )
 
         for item in response.get('Items', []):
@@ -94,13 +87,11 @@ def get_all_devices():
             if device_id.startswith('Polivalka-'):
                 devices.add(device_id)
 
-        # Handle pagination
+        # Handle pagination (unlikely for ~33 records, but safe)
         while 'LastEvaluatedKey' in response:
-            response = telemetry_table.scan(
-                FilterExpression=Key('timestamp').gt(cutoff),
+            response = devices_table.scan(
                 ProjectionExpression='device_id',
                 ExclusiveStartKey=response['LastEvaluatedKey'],
-                Limit=1000
             )
             for item in response.get('Items', []):
                 device_id = item.get('device_id', '')

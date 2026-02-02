@@ -23,6 +23,7 @@ import boto3
 import os
 import time
 from decimal import Decimal
+from boto3.dynamodb.conditions import Key
 
 dynamodb = boto3.resource('dynamodb', region_name='eu-central-1')
 COMMANDS_TABLE = os.environ.get('COMMANDS_TABLE', 'polivalka_commands')
@@ -43,21 +44,117 @@ def convert_floats(obj):
     return obj
 
 
+def normalize_flat_response(flat):
+    """Convert flat ESP32 get_status response to nested format expected by Lambda/API.
+
+    ESP32 sends flat: {moisture: 99, adc: 1213, voltage: 4.18, percent: 81, mode: "sensor", ...}
+    Lambda expects nested: {sensor: {moisture, adc}, battery: {percent, voltage}, system: {mode, state}, pump: {running}}
+    """
+    # Only normalize if response is flat (no 'sensor'/'battery'/'system' keys)
+    if 'sensor' in flat or 'battery' in flat or 'system' in flat:
+        return flat  # Already nested format
+
+    result = {}
+
+    # Sensor data
+    if 'moisture' in flat or 'adc' in flat:
+        result['sensor'] = {
+            'moisture': flat.get('moisture'),
+            'adc': flat.get('adc'),
+            'percent_float': flat.get('percent_float'),
+            'calibration': {
+                'water': flat.get('water'),
+                'dry_soil': flat.get('dry_soil'),
+                'air': flat.get('air')
+            }
+        }
+
+    # Sensor2 (J7 resistive) if present
+    if 'sensor2_adc' in flat or 'sensor2_percent' in flat:
+        result['sensor2'] = {
+            'adc': flat.get('sensor2_adc'),
+            'percent': flat.get('sensor2_percent')
+        }
+
+    # Battery data
+    # Note: 'percent' in flat response is battery percent (moisture is in 'moisture' field)
+    # Sanity check: skip if percent=0 but voltage > 3.5V (old firmware bug, e.g. v1.0.33)
+    battery_pct = flat.get('percent')
+    battery_voltage = flat.get('voltage')
+    if 'voltage' in flat or 'charging' in flat:
+        if battery_pct is not None and battery_pct > 0:
+            result['battery'] = {
+                'percent': battery_pct,
+                'voltage': battery_voltage,
+                'charging': flat.get('charging', False)
+            }
+        elif battery_pct == 0 and battery_voltage and battery_voltage > 3.5:
+            # Firmware bug: percent=0 with high voltage — skip to preserve periodic telemetry
+            print(f"Skipping invalid battery: percent=0, voltage={battery_voltage} (firmware bug)")
+        else:
+            result['battery'] = {
+                'percent': battery_pct,
+                'voltage': battery_voltage,
+                'charging': flat.get('charging', False)
+            }
+
+    # System data
+    if 'mode' in flat or 'state' in flat:
+        result['system'] = {
+            'mode': flat.get('mode'),
+            'state': flat.get('state'),
+            'firmware': flat.get('firmware'),
+            'firmware_version': flat.get('firmware'),
+            'reboot_count': flat.get('reboot_count'),
+            'clean_restarts': flat.get('clean_restarts'),
+            'unexpected_restarts': flat.get('unexpected_restarts'),
+            'scan_interval_hours': flat.get('scan_interval_hours')
+        }
+
+    # Pump data
+    if 'running' in flat:
+        result['pump'] = {
+            'running': flat.get('running', False),
+            'calibration': flat.get('calibration'),
+            'speed': flat.get('speed')
+        }
+
+    return result
+
+
 def lambda_handler(event, context):
     """Update command status based on device response"""
 
     print(f"Received event: {json.dumps(event)}")
 
-    # ESP32 sends: {"device_id": "Polivalka-BB00C1", "response": {...}}
-    # IoT Rule SQL extracts fields from nested response object
-    device_id = event.get('device_id')  # Already has "Polivalka-" prefix
-    command_id = event.get('command_id')
-    status = event.get('status', 'unknown')
-    message = event.get('message', '')
-    result = event.get('result', {})  # IoT Rule extracts response.data as "result"
+    # ESP32 sends: {"device_id": "BB00C1", "response": {"command_id": ..., "status": ...}, "timestamp": ...}
+    # Handle both nested (SELECT *) and flat (IoT Rule extracts fields) formats
+    if 'response' in event and isinstance(event['response'], dict):
+        # Nested format: IoT Rule passes raw MQTT message
+        response_data = event['response']
+        device_id = event.get('device_id', '')
+        command_id = response_data.get('command_id')
+        status = response_data.get('status', 'unknown')
+        message = response_data.get('message', '')
+        result = response_data
+    else:
+        # Flat format: IoT Rule already extracted fields
+        device_id = event.get('device_id', '')
+        command_id = event.get('command_id')
+        status = event.get('status', 'unknown')
+        message = event.get('message', '')
+        result = event.get('result', {})
+
+    # Normalize device_id to always include Polivalka- prefix
+    if device_id and not device_id.startswith('Polivalka-'):
+        device_id = f'Polivalka-{device_id}'
+
+    # Normalize flat ESP32 response to nested format (sensor/battery/system/pump)
+    if isinstance(result, dict):
+        result = normalize_flat_response(result)
 
     if not command_id:
-        print("No command_id in response")
+        print(f"No command_id in response (device_id={device_id})")
         return {'statusCode': 400, 'body': 'Missing command_id'}
 
     # Update command in DynamoDB
@@ -173,13 +270,13 @@ def lambda_handler(event, context):
         # Extract calibration data from get_status response and update devices table
         if isinstance(result, dict):
             try:
-                # Find user_id for this device (once for all updates)
-                scan_response = devices_table.scan(
-                    FilterExpression='device_id = :device',
-                    ExpressionAttributeValues={':device': device_id}
+                # Find user_id for this device (query by GSI)
+                query_response = devices_table.query(
+                    IndexName='device_id-index',
+                    KeyConditionExpression=Key('device_id').eq(device_id)
                 )
-                if scan_response.get('Items'):
-                    user_id = scan_response['Items'][0]['user_id']
+                if query_response.get('Items'):
+                    user_id = query_response['Items'][0]['user_id']
 
                     # Pump calibration and speed
                     pump_data = result.get('pump', {})
