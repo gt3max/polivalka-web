@@ -3297,7 +3297,7 @@ def get_sensor_realtime(device_id, user_id):
                     'body': json.dumps({
                         'moisture_pct': sensor.get('moisture'),
                         'adc_raw': sensor.get('adc'),
-                        'battery': battery,
+                        'battery': battery if battery else None,
                         'pump_running': pump.get('running', False),
                         'mode': system.get('mode', 'manual'),
                         'state': system.get('state', 'DISABLED'),
