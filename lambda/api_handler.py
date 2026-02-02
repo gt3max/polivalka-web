@@ -3283,10 +3283,14 @@ def get_sensor_realtime(device_id, user_id):
 
                 # Extract nested data structures
                 sensor = result.get('sensor', {})
-                battery = result.get('battery', {})
                 pump = result.get('pump', {})
                 system = result.get('system', {})
 
+                # Battery: use periodic telemetry (source of truth), NOT command response.
+                # get_status battery percent is unreliable across firmware versions
+                # (v1.0.33: 0% at 4.16V, v1.0.104: 80% at 4.18V actual 99%).
+                latest_telem = get_latest_telemetry(device_id)
+                battery = latest_telem.get('battery', {})
                 # Convert battery percent -1 to null (indicates AC power, no battery)
                 if battery.get('percent') == -1 or battery.get('percent') == -1.0:
                     battery = {**battery, 'percent': None}
