@@ -1761,90 +1761,51 @@ function renderLtWateringChart(weeks) {
   canvas.style.display = 'block';
   nodata.style.display = 'none';
 
-  // Build chart arrays with gap detection
-  const labels = [];
-  const volumeValues = [];
-  const durationValues = [];
-  const colors = [];
+  const typeLabels = {
+    microprime: 'Maintenance flush',
+    manual: 'Manual pump',
+    timer: 'Timer watering',
+    sensor: 'Auto watering',
+    unknown: 'Watering'
+  };
 
-  for (let i = 0; i < data.length; i++) {
-    const current = data[i];
-
-    if (i > 0) {
-      const prev = data[i - 1];
-      const gap = current.timestamp - prev.timestamp;
-      if (gap > LT_GAP_THRESHOLD_SECONDS) {
-        labels.push(new Date((prev.timestamp + gap / 2) * 1000));
-        volumeValues.push(null);
-        durationValues.push(null);
-        colors.push('transparent');
-      }
-    }
-
-    labels.push(new Date(current.timestamp * 1000));
-    volumeValues.push(current.volume || 0);
-    durationValues.push(current.duration || 0);
-
-    if (current.type === 'microprime') colors.push('#2196f3');
-    else if (current.type === 'manual') colors.push('#ff9800');
-    else colors.push('#4caf50');
-  }
+  const points = data.map(d => ({
+    x: d.timestamp * 1000,
+    y: d.volume || 0,
+    duration: d.duration || 0,
+    typeLabel: typeLabels[d.type] || typeLabels.unknown
+  }));
 
   const weekAnnotations = buildWeekAnnotations(weeks);
 
   ltWateringChart = new Chart(canvas.getContext('2d'), {
-    type: 'bar',
+    type: 'scatter',
     data: {
-      labels: labels,
-      datasets: [
-        {
-          label: 'Volume (ml)',
-          data: volumeValues,
-          backgroundColor: colors,
-          borderColor: colors,
-          borderWidth: 1,
-          yAxisID: 'y',
-          barThickness: 6,
-          maxBarThickness: 10
-        },
-        {
-          label: 'Duration (s)',
-          data: durationValues,
-          type: 'line',
-          borderColor: '#9c27b0',
-          backgroundColor: 'transparent',
-          borderDash: [3, 3],
-          fill: false,
-          tension: 0,
-          pointRadius: 3,
-          pointBackgroundColor: '#9c27b0',
-          yAxisID: 'y1',
-          spanGaps: false
-        }
-      ]
+      datasets: [{
+        label: 'Pump activity',
+        data: points,
+        backgroundColor: '#4caf50',
+        borderColor: '#4caf50',
+        pointRadius: 5,
+        pointHoverRadius: 7,
+        showLine: false
+      }]
     },
     options: {
       responsive: true, maintainAspectRatio: false,
       plugins: {
-        legend: { position: 'top' },
+        legend: { display: false },
         annotation: { annotations: weekAnnotations },
         tooltip: {
-          filter: (item) => item.parsed.y !== null,
           callbacks: {
             title: (items) => items.length > 0 ? new Date(items[0].parsed.x).toLocaleString() : '',
             label: (ctx) => {
-              if (ctx.parsed.y === null) return null;
-              if (ctx.datasetIndex === 0) return `Volume: ${ctx.parsed.y}ml`;
-              return `Duration: ${ctx.parsed.y}s`;
-            },
-            afterBody: (items) => {
-              if (items.length === 0) return '';
-              const idx = items[0].dataIndex;
-              const color = colors[idx];
-              if (color === '#2196f3') return 'Type: Microprime';
-              if (color === '#ff9800') return 'Type: Manual';
-              if (color === '#4caf50') return 'Type: Auto watering';
-              return '';
+              const p = ctx.raw;
+              return [
+                `${p.typeLabel}`,
+                `Volume: ${p.y} ml`,
+                `Duration: ${p.duration}s`
+              ];
             }
           }
         }
@@ -1853,10 +1814,10 @@ function renderLtWateringChart(weeks) {
         x: {
           type: 'time',
           time: { unit: longTermPeriod <= 4 ? 'day' : 'week', displayFormats: { day: 'MMM d', week: 'MMM d' } },
+          ticks: { autoSkip: true, maxTicksLimit: 12 },
           grid: { display: false }
         },
-        y: { type: 'linear', position: 'left', min: 0, title: { display: true, text: 'ml' }, grid: { color: 'rgba(0,0,0,0.05)' } },
-        y1: { type: 'linear', position: 'right', min: 0, title: { display: true, text: 'sec' }, grid: { drawOnChartArea: false } }
+        y: { type: 'linear', position: 'left', min: 0, title: { display: true, text: 'ml' }, grid: { color: 'rgba(0,0,0,0.05)' } }
       }
     }
   });
