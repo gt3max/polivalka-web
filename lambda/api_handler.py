@@ -3286,11 +3286,11 @@ def get_sensor_realtime(device_id, user_id):
                 pump = result.get('pump', {})
                 system = result.get('system', {})
 
-                # Battery: use periodic telemetry (source of truth), NOT command response.
-                # get_status battery percent is unreliable across firmware versions
-                # (v1.0.33: 0% at 4.16V, v1.0.104: 80% at 4.18V actual 99%).
-                latest_telem = get_latest_telemetry(device_id)
-                battery = latest_telem.get('battery', {})
+                # Battery: use command response (real-time from device).
+                # Previous bug (80% vs 99%) was caused by stale ts=0 data in
+                # get_latest_telemetry(), NOT by command response being wrong.
+                # Command response matches periodic telemetry at same timestamp.
+                battery = result.get('battery', {})
                 # Convert battery percent -1 to null (indicates AC power, no battery)
                 if battery.get('percent') == -1 or battery.get('percent') == -1.0:
                     battery = {**battery, 'percent': None}
