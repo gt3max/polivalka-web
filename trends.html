@@ -1386,9 +1386,6 @@ function buildWeekAnnotations(weeks) {
   return annotations;
 }
 
-// Long-term gap threshold (longer than short-term since data spans weeks)
-const LT_GAP_THRESHOLD_SECONDS = 14400; // 4 hours
-
 // Render chart for a specific long-term tab (lazy — only when visible)
 function renderLtTabChart(name) {
   if (!ltFilteredData.length) return;
@@ -1458,10 +1455,10 @@ function renderLtMoistureChart(weeks) {
           label: 'Moisture %',
           data: isScatter ? data.map(d => ({ x: new Date(d.timestamp * 1000), y: d.moisture_percent })) : moistureWithGaps.values,
           borderColor: '#1976d2',
-          backgroundColor: isScatter ? '#1976d2' : 'rgba(25,118,210,0.1)',
+          backgroundColor: isScatter ? '#1976d2' : 'rgba(25, 118, 210, 0.1)',
           fill: !isScatter,
           tension: 0.3,
-          pointRadius: isScatter ? 4 : 1,
+          pointRadius: isScatter ? 6 : 3,
           yAxisID: 'y',
           spanGaps: false
         },
@@ -1472,7 +1469,7 @@ function renderLtMoistureChart(weeks) {
           borderDash: [5, 5],
           fill: false,
           tension: 0.3,
-          pointRadius: isScatter ? 3 : 0,
+          pointRadius: isScatter ? 5 : 2,
           yAxisID: 'y1',
           hidden: !hasAdc,
           spanGaps: false
@@ -1486,6 +1483,8 @@ function renderLtMoistureChart(weeks) {
         legend: { position: 'top' },
         annotation: { annotations: weekAnnotations },
         tooltip: {
+          enabled: true,
+          position: 'nearest',
           filter: (item) => item.parsed.y !== null,
           callbacks: {
             title: (items) => items.length > 0 ? new Date(items[0].parsed.x).toLocaleString() : '',
@@ -1501,7 +1500,10 @@ function renderLtMoistureChart(weeks) {
       scales: {
         x: {
           type: 'time',
-          time: { unit: longTermPeriod <= 4 ? 'day' : 'week', displayFormats: { day: 'MMM d', week: 'MMM d' } },
+          time: {
+            unit: longTermPeriod <= 4 ? 'day' : 'week',
+            displayFormats: { hour: 'HH:mm', day: 'MMM d', week: 'MMM d' }
+          },
           grid: { display: false }
         },
         y: { type: 'linear', position: 'left', min: 0, max: 100, title: { display: true, text: 'Moisture %' }, ticks: { callback: v => v + '%' } },
@@ -1545,10 +1547,10 @@ function renderLtSensor2Chart(weeks) {
           label: 'Moisture %',
           data: isScatter ? data.filter(d => d.sensor2_percent != null).map(d => ({ x: new Date(d.timestamp * 1000), y: d.sensor2_percent })) : s2PctWithGaps.values,
           borderColor: '#9c27b0',
-          backgroundColor: isScatter ? '#9c27b0' : 'rgba(156,39,176,0.1)',
+          backgroundColor: isScatter ? '#9c27b0' : 'rgba(156, 39, 176, 0.1)',
           fill: !isScatter,
           tension: 0.3,
-          pointRadius: isScatter ? 4 : 1,
+          pointRadius: isScatter ? 6 : 3,
           yAxisID: 'y',
           spanGaps: false
         },
@@ -1559,7 +1561,7 @@ function renderLtSensor2Chart(weeks) {
           borderDash: [5, 5],
           fill: false,
           tension: 0.3,
-          pointRadius: isScatter ? 3 : 0,
+          pointRadius: isScatter ? 5 : 2,
           yAxisID: 'y1',
           hidden: !hasAdc,
           spanGaps: false
@@ -1666,10 +1668,10 @@ function renderLtBatteryChart(weeks) {
           label: 'Battery %',
           data: isScatter ? data.map(d => ({ x: new Date(d.timestamp * 1000), y: d.percent })) : batteryWithGaps.values,
           borderColor: '#4caf50',
-          backgroundColor: isScatter ? '#4caf50' : 'rgba(76,175,80,0.1)',
+          backgroundColor: isScatter ? '#4caf50' : 'rgba(76, 175, 80, 0.1)',
           fill: !isScatter,
           tension: 0.3,
-          pointRadius: isScatter ? 4 : 1,
+          pointRadius: isScatter ? 6 : 3,
           yAxisID: 'y',
           spanGaps: false
         },
@@ -1680,7 +1682,7 @@ function renderLtBatteryChart(weeks) {
           borderDash: [5, 5],
           fill: false,
           tension: 0.3,
-          pointRadius: isScatter ? 3 : 0,
+          pointRadius: isScatter ? 5 : 2,
           yAxisID: 'y1',
           hidden: !hasVoltage,
           spanGaps: false,

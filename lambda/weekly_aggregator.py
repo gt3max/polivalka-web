@@ -50,18 +50,22 @@ def decimal_default(obj):
     raise TypeError(f"Object of type {type(obj)} is not JSON serializable")
 
 
-def get_week_info():
-    """Get current ISO week info and date range"""
-    now = datetime.utcnow()
-    # Get ISO week number
-    iso_calendar = now.isocalendar()
-    week = f"{iso_calendar[0]}-W{iso_calendar[1]:02d}"
+def get_week_info(target_week=None):
+    """Get ISO week info and date range. If target_week given (e.g. '2026-W05'), use that instead of current."""
+    if target_week:
+        # Parse '2026-W05' format
+        year, wnum = int(target_week[:4]), int(target_week.split('W')[1])
+        # ISO week 1 day 1 (Monday)
+        jan4 = datetime(year, 1, 4)
+        week_start = jan4 - timedelta(days=jan4.weekday()) + timedelta(weeks=wnum - 1)
+    else:
+        now = datetime.utcnow()
+        days_since_monday = now.weekday()
+        week_start = now - timedelta(days=days_since_monday)
 
-    # Calculate week start (Monday) and end (Sunday)
-    # ISO week starts on Monday
-    days_since_monday = now.weekday()
-    week_start = now - timedelta(days=days_since_monday)
     week_end = week_start + timedelta(days=6)
+    iso_calendar = week_start.isocalendar()
+    week = f"{iso_calendar[0]}-W{iso_calendar[1]:02d}"
 
     return {
         'week': week,
@@ -508,8 +512,9 @@ def lambda_handler(event, context):
         print("[ERROR] GITHUB_TOKEN not set")
         return {'statusCode': 500, 'body': 'GITHUB_TOKEN not configured'}
 
-    # Get week info
-    week_info = get_week_info()
+    # Get week info (supports target_week for backfill: {"target_week": "2026-W05"})
+    target_week = event.get('target_week') if isinstance(event, dict) else None
+    week_info = get_week_info(target_week=target_week)
     print(f"[INFO] Processing week {week_info['week']} ({week_info['start_date']} to {week_info['end_date']})")
 
     # Get all active devices
