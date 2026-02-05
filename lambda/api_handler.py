@@ -3751,8 +3751,8 @@ def get_device_activity(device_id, user_id):
         # 3. Sort all by timestamp DESC
         activity_items.sort(key=lambda x: x['timestamp'], reverse=True)
 
-        # 4. Limit to 100 most recent
-        activity_items = activity_items[:100]
+        # 4. Limit to 500 most recent (enough for 7 days at ~50-70 events/day)
+        activity_items = activity_items[:500]
 
         return {
             'statusCode': 200,
