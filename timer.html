@@ -1,7 +1,4 @@
-<!doctype html><html><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width, initial-scale=1"><title>PlantApp — Schedule</title>
-<link rel="icon" href="favicon.svg" type="image/svg+xml">
-<script src="api-adapter.js"></script>
-<script src="common.js"></script>
+<!doctype html><html><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width, initial-scale=1"><title>Polivalka — Schedule</title>
 <style>
     body{font-family:system-ui,Arial;margin:0;padding:0;max-width:100%}
     .header{position:sticky;top:0;z-index:1000;background:#2c5f2d;color:#fff;padding:8px 10px;display:flex;justify-content:space-between;align-items:center;gap:8px}
@@ -26,7 +23,6 @@
     .status-badge{display:inline-block;padding:4px 10px;border-radius:12px;font-size:13px;font-weight:600}
     .status-timer{background:#e3f2fd;color:#1976d2}
     .status-sensor{background:#fff3e0;color:#f57c00}
-    .status-off{background:#fce4ec;color:#c2185b}
     .status-manual{background:#e0e0e0;color:#616161}
     .schedule-item{border:1px solid #e0e0e0;padding:12px;border-radius:8px;margin:8px 0;background:#fafafa}
     .schedule-item.disabled{opacity:0.6}
@@ -39,17 +35,16 @@
     .modal.show{display:flex}
     .modal-content{background:#fff;padding:20px;border-radius:12px;max-width:500px;width:90%;max-height:80vh;overflow-y:auto}
   </style>
-</head><body><div class="header"><div><h1 id="device-id-header" style="margin:0;font-size:15px">🌱 Polivalka</h1><div style="font-size:13px">📍 <span id="location-text">—</span> / <span id="room-text">—</span><span id="custom-name-suffix"></span></div><div style="font-size:11px;margin-top:4px"><span id="battery-status">🔋 —</span> · <span id="header-state">💤 Standby</span></div></div><div class="header-info"><div id="header-time" class="mono" style="font-size:11px">--:--</div><div style="font-size:11px" id="header-mode"><span id="mode-badge" class="status-badge">—</span></div><div style="font-size:11px" id="header-conn">📡 <span id="conn-text" style="transition:color 0.3s">...</span></div></div></div></div><div class="nav"><a href="/">Fleet</a><a href="home.html">Home</a><a href="identify.html" style="background:#e8f5e9">🌱 Plant</a><a href="timer.html" class="active">Timer</a><a href="sensor.html">Sensor</a><a href="settings.html">Settings</a><a href="calibration.html">Calibration</a><a href="online.html">Online</a><a href="trends.html">Trends</a><a href="ota.html">Update</a><a href="admin.html" id="admin-nav-link" style="display:none">Admin</a></div><div class="container"><div class="card"><h3>Timer Mode</h3><p class="muted">Water on a schedule. Add up to 8 schedules with specific days and times.</p><div class="row"><button id="add-schedule-btn" class="primary" onclick="showModalWithCheck()">+ Add Schedule</button><span id="schedule-limit-info" class="muted" style="margin-left:8px"></span></div></div><div class="card"><h3>Active Schedules <span id="schedule-count" class="muted" style="font-weight:400;font-size:14px"></span></h3><div id="schedules-list"><div class="muted">No schedules configured. Click "+ Add Schedule" to create one.</div></div></div></div><div id="modal" class="modal"><div class="modal-content"><h3 id="modal-title">Add Schedule</h3><div style="margin:12px 0"><label>Time</label><br><input id="edit-time" type="time" value="07:00" style="width:150px;font-size:16px"></div><div style="margin:12px 0"><label>Days</label><br><div id="days-selector" style="margin-top:8px"><span class="day-btn" data-day="1">M</span><span class="day-btn" data-day="2">T</span><span class="day-btn" data-day="3">W</span><span class="day-btn" data-day="4">T</span><span class="day-btn" data-day="5">F</span><span class="day-btn" data-day="6">S</span><span class="day-btn" data-day="7">S</span></div><button onclick="selectAllDays()" style="margin-top:8px;font-size:12px">Every day</button><button onclick="selectWeekdays()" style="margin-top:8px;font-size:12px">Weekdays</button></div><div style="margin:12px 0"><label>Duration</label><br><input id="edit-duration" type="number" min="1" max="999" value="30" style="width:100px;text-align:left;font-size:16px"><select id="edit-unit" style="width:100px"><option value="sec">seconds</option><option value="min">minutes</option><option value="hr">hours</option></select></div><div style="margin:12px 0"><label><input id="edit-enabled" type="checkbox" checked>
+</head><body><div class="header"><div><h1 id="device-id-text" style="margin:0;font-size:18px">🌱 Polivalka</h1><div style="font-size:11px;opacity:0.8">📍 <span id="location-text">Home</span> / <span id="room-text">Room</span> / <span id="custom-name-suffix">Plant</span></div></div><div class="header-info"><div id="header-time" class="mono" style="font-size:11px;color:#fff">00:00</div><div style="font-size:11px" id="header-mode"><span id="mode-badge" class="status-badge status-manual">Manual</span></div><div style="font-size:11px" id="header-conn">📡 <span id="conn-text">Offline</span></div></div></div><div class="nav"><a href="/">Home</a><a href="/timer" class="active">Timer</a><a href="/sensor">Sensor</a><a href="/settings">Settings</a><a href="/calibration">Calibration</a><a href="/online">Online</a><a href="/trends">Trends</a><a href="/update">Update</a><a href="/hub">Hub</a></div><div class="container"><div class="card"><h3>Timer Mode</h3><p class="muted">Water on a schedule. Add up to 8 schedules with specific days and times.</p><div class="row"><button id="add-schedule-btn" class="primary" onclick="showModalWithCheck()">+ Add Schedule</button><span id="schedule-limit-info" class="muted" style="margin-left:8px"></span></div></div><div class="card"><h3>Active Schedules <span id="schedule-count" class="muted" style="font-weight:400;font-size:14px"></span></h3><div id="schedules-list"><div class="muted">No schedules configured. Click "+ Add Schedule" to create one.</div></div></div></div><div id="modal" class="modal"><div class="modal-content"><h3 id="modal-title">Add Schedule</h3><div style="margin:12px 0"><label>Time</label><br><input id="edit-time" type="time" value="07:00" style="width:150px;font-size:16px"></div><div style="margin:12px 0"><label>Days</label><br><div id="days-selector" style="margin-top:8px"><span class="day-btn" data-day="1">M</span><span class="day-btn" data-day="2">T</span><span class="day-btn" data-day="3">W</span><span class="day-btn" data-day="4">T</span><span class="day-btn" data-day="5">F</span><span class="day-btn" data-day="6">S</span><span class="day-btn" data-day="7">S</span></div><button onclick="selectAllDays()" style="margin-top:8px;font-size:12px">Every day</button><button onclick="selectWeekdays()" style="margin-top:8px;font-size:12px">Weekdays</button></div><div style="margin:12px 0"><label>Duration</label><br><input id="edit-duration" type="number" min="1" max="300" value="30" style="width:100px;text-align:left;font-size:16px"><select id="edit-unit" style="width:100px" onchange="updateDurationLimit()"><option value="sec">seconds</option><option value="min">minutes</option></select><div id="duration-hint" class="muted" style="font-size:11px;margin-top:4px">Max: 5 minutes (300 sec)</div></div><div style="margin:12px 0"><label><input id="edit-enabled" type="checkbox" checked>
 Enabled
 </label></div><div class="row" style="margin-top:16px"><button class="primary" onclick="saveSchedule()">Save</button><button onclick="closeModal()">Cancel</button></div></div></div>
 <script>
-// Admin nav link handled by common.js showAdminNavLink()
-
+(function(){var d=localStorage.getItem('hdr_did');if(d)document.getElementById('device-id-text').textContent=d;var l=localStorage.getItem('hdr_loc');if(l)document.getElementById('location-text').textContent=l;var r=localStorage.getItem('hdr_room');if(r)document.getElementById('room-text').textContent=r;var c=localStorage.getItem('hdr_cn');if(c)document.getElementById('custom-name-suffix').textContent=c;})();
 let editingId = null;
 
 async function loadSchedules(){
   try {
-    const data = await API.get('/schedules');
+    const data = await fetch('/api/schedules',{cache:'no-store'}).then(r=>r.json());
     const list = document.getElementById('schedules-list');
     const count = data.schedules ? data.schedules.length : 0;
     const maxSchedules = 8;
@@ -60,8 +55,6 @@ async function loadSchedules(){
     // Update limit info and button state
     const addBtn = document.getElementById('add-schedule-btn');
     const limitInfo = document.getElementById('schedule-limit-info');
-
-    // Cloud mode: editing enabled via MQTT commands
     if (count >= maxSchedules) {
       addBtn.disabled = true;
       limitInfo.textContent = 'Maximum reached';
@@ -72,58 +65,27 @@ async function loadSchedules(){
     }
 
     if (!data.schedules || data.schedules.length === 0) {
-      list.innerHTML = '<div class="muted">No schedules configured. Click "+ Add Schedule" to create one.</div>';
+      list.innerHTML = '<div class="muted">No schedules configured.</div>';
       return;
     }
 
     list.innerHTML = data.schedules.map(s => {
-      // Handle both formats: days (array from AP) and days_mask (bitmask from Cloud sync)
-      let daysText;
-      if (s.days) {
-        daysText = formatDays(s.days);
-      } else if (s.days_mask !== undefined) {
-        daysText = formatDaysFromMask(s.days_mask);
-      } else {
-        daysText = 'Unknown';
-      }
-
-      // Handle time format: either "HH:MM" string or separate hour/minute
-      let timeText;
-      if (s.time) {
-        timeText = s.time;
-      } else if (s.hour !== undefined && s.minute !== undefined) {
-        timeText = `${String(s.hour).padStart(2,'0')}:${String(s.minute).padStart(2,'0')}`;
-      } else {
-        timeText = '--:--';
-      }
-
-      // Handle unit: 0=sec, 1=min, 2=hr OR string 'sec'/'min'/'hr'
-      let unitText;
-      if (typeof s.unit === 'string') {
-        unitText = s.unit;
-      } else {
-        unitText = ['sec', 'min', 'hr'][s.unit] || 'sec';
-      }
-
-      const durationText = `${s.duration} ${unitText}`;
+      const daysText = formatDays(s.days);
+      const durationText = `${s.duration} ${s.unit}`;
       const statusIcon = s.enabled ? '✅' : '❌';
-
-      // Edit/Delete buttons (enabled in both Cloud and Local modes)
-      const buttons = `
-        <div class="row">
-          <button onclick="editSchedule(${s.id})">Edit</button>
-          <button class="danger" onclick="deleteSchedule(${s.id})">Delete</button>
-        </div>`;
 
       return `
         <div class="schedule-item ${s.enabled?'':'disabled'}">
           <div class="schedule-header">
             <div>
               <span style="font-size:24px">${statusIcon}</span>
-              <span class="schedule-time">${timeText}</span>
+              <span class="schedule-time">${s.time}</span>
               <span class="muted">• ${durationText}</span>
             </div>
-            ${buttons}
+            <div class="row">
+              <button onclick="editSchedule(${s.id})">Edit</button>
+              <button class="danger" onclick="deleteSchedule(${s.id})">Delete</button>
+            </div>
           </div>
           <div class="schedule-days muted">${daysText}</div>
         </div>
@@ -132,19 +94,6 @@ async function loadSchedules(){
   } catch(e) {
     console.error('Load schedules failed:', e);
   }
-}
-
-// Convert days_mask bitmask to human-readable text
-function formatDaysFromMask(mask) {
-  const dayNames = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
-  const days = [];
-  for (let i = 0; i < 7; i++) {
-    if (mask & (1 << i)) days.push(dayNames[i]);
-  }
-  if (days.length === 7) return 'Every day';
-  // Check weekdays by mask value: bits 0-4 set = Mon-Fri = 0b00011111 = 31
-  if (mask === 31) return 'Weekdays';
-  return days.join(', ') || 'No days';
 }
 
 function formatDays(days) {
@@ -157,7 +106,7 @@ function formatDays(days) {
 async function showModalWithCheck() {
   // Check if limit reached
   try {
-    const data = await API.get('/schedules');
+    const data = await fetch('/api/schedules', {cache:'no-store'}).then(r=>r.json());
     const count = data.schedules ? data.schedules.length : 0;
     if (count >= 8) {
       alert('Maximum 8 schedules allowed. Please delete an existing schedule first.');
@@ -175,43 +124,24 @@ function showModal(id = null) {
   document.getElementById('modal-title').textContent = id !== null ? 'Edit Schedule' : 'Add Schedule';
 
   if (id !== null) {
-    // Load existing schedule for editing
-    API.get('/schedules')
+    // Load existing schedule for editing (id can be 0!)
+    fetch('/api/schedules',{cache:'no-store'})
+      .then(r=>r.json())
       .then(data => {
         const s = data.schedules.find(x => x.id === id);
         if (s) {
-          // Handle time format: "HH:MM" string or separate hour/minute
-          let timeVal;
-          if (s.time) {
-            timeVal = s.time;
-          } else if (s.hour !== undefined && s.minute !== undefined) {
-            timeVal = `${String(s.hour).padStart(2,'0')}:${String(s.minute).padStart(2,'0')}`;
-          } else {
-            timeVal = '07:00';
-          }
-          document.getElementById('edit-time').value = timeVal;
+          document.getElementById('edit-time').value = s.time;
           document.getElementById('edit-duration').value = s.duration;
+          document.getElementById('edit-unit').value = s.unit;
+          document.getElementById('edit-enabled').checked = s.enabled;
 
-          // Handle unit: number (0/1/2) or string ('sec'/'min'/'hr')
-          let unitVal;
-          if (typeof s.unit === 'string') {
-            unitVal = s.unit;
-          } else {
-            unitVal = ['sec', 'min', 'hr'][s.unit] || 'sec';
-          }
-          document.getElementById('edit-unit').value = unitVal;
-          document.getElementById('edit-enabled').checked = s.enabled !== false;
-
-          // Convert days_mask to days array if needed, then set UI
-          let days = [];
-          if (s.days && Array.isArray(s.days)) {
-            days = s.days;
-          } else if (s.days_mask !== undefined) {
+          // Set days (handle both days array and days_mask)
+          let days = s.days || [];
+          if (!days.length && s.days_mask !== undefined) {
             for (let i = 0; i < 7; i++) {
               if (s.days_mask & (1 << i)) days.push(i + 1);
             }
           }
-
           document.querySelectorAll('.day-btn').forEach(btn => {
             const day = parseInt(btn.dataset.day);
             btn.classList.toggle('active', days.includes(day));
@@ -220,10 +150,6 @@ function showModal(id = null) {
           // Open modal AFTER data is loaded
           document.getElementById('modal').classList.add('show');
         }
-      })
-      .catch(e => {
-        console.error('Failed to load schedule for editing:', e);
-        alert('Failed to load schedule');
       });
   } else {
     // Reset form
@@ -275,31 +201,31 @@ function selectWeekdays() {
   }
 }
 
+function updateDurationLimit() {
+  const unit = document.getElementById('edit-unit').value;
+  const input = document.getElementById('edit-duration');
+  const hint = document.getElementById('duration-hint');
+  if (unit === 'min') {
+    input.max = 5;
+    hint.textContent = 'Max: 5 minutes';
+    if (parseInt(input.value) > 5) input.value = 5;
+  } else {
+    input.max = 300;
+    hint.textContent = 'Max: 300 seconds (5 min)';
+    if (parseInt(input.value) > 300) input.value = 300;
+  }
+}
+
 async function saveSchedule() {
   const time = document.getElementById('edit-time').value;
   const duration = parseInt(document.getElementById('edit-duration').value);
   const unit = document.getElementById('edit-unit').value;
   const enabled = document.getElementById('edit-enabled').checked;
 
-  // Duration validation with reasonable limits
-  const maxLimits = { sec: 300, min: 60, hr: 2 };  // 5min, 1hr, 2hr max
-  const unitNames = { sec: 'seconds', min: 'minutes', hr: 'hours' };
-
-  if (duration <= 0) {
-    alert('Duration must be greater than 0');
-    return;
-  }
-
-  if (duration > maxLimits[unit]) {
-    alert(`Maximum duration for ${unitNames[unit]}: ${maxLimits[unit]}\n\nFor longer watering, consider multiple shorter schedules.`);
-    return;
-  }
-
-  // Calculate total seconds and warn for large volumes
-  const totalSec = duration * (unit === 'hr' ? 3600 : unit === 'min' ? 60 : 1);
-  const estimatedMl = totalSec * 1.0;  // ~1.0 ml/sec pump calibration default
-
-  if (totalSec > 600 && !confirm(`⚠️ Warning: ${Math.round(totalSec/60)} minutes of watering!\n\nEstimated water: ~${Math.round(estimatedMl)} ml\n\nAre you sure?`)) {
+  // Validate duration (max 300 seconds = 5 minutes)
+  const durationSec = unit === 'min' ? duration * 60 : duration;
+  if (durationSec > 300) {
+    alert('Maximum duration is 5 minutes (300 seconds)');
     return;
   }
 
@@ -318,9 +244,8 @@ async function saveSchedule() {
       id = editingId;
     } else {
       // Find free slot (0-7)
-      const data = await API.get('/schedules');
-      const schedules = data.schedules || [];
-      const usedIds = schedules.map(s => s.id);
+      const data = await fetch('/api/schedules', {cache:'no-store'}).then(r=>r.json());
+      const usedIds = data.schedules.map(s => s.id);
       id = [0,1,2,3,4,5,6,7].find(i => !usedIds.includes(i));
       if (id === undefined) {
         alert('Maximum 8 schedules allowed');
@@ -331,8 +256,14 @@ async function saveSchedule() {
     const schedule = { id, time, days, duration, unit, enabled };
     console.log('Saving schedule:', schedule);
 
-    // API.post already returns parsed JSON
-    const result = await API.post('/schedule/set', schedule);
+    const response = await fetch('/api/schedule/set', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify(schedule),
+      cache: 'no-store'
+    });
+
+    const result = await response.json();
     console.log('Server response:', result);
 
     if (!result.success) {
@@ -341,9 +272,7 @@ async function saveSchedule() {
     }
 
     closeModal();
-    // Cloud mode: ESP32 publishes to DynamoDB via IoT Rule (async)
-    // Wait 1.5 sec for DynamoDB to update before refreshing
-    setTimeout(() => loadSchedules(), 1500);
+    loadSchedules();
   } catch(e) {
     console.error('Save error:', e);
     alert('Error saving schedule: ' + e.message);
@@ -354,15 +283,11 @@ async function deleteSchedule(id) {
   if (!confirm('Delete this schedule?')) return;
 
   try {
-    // Cloud mode: use POST with body, Local mode: use GET with query param
-    if (IS_CLOUD) {
-      await API.post('/schedule/delete', { id: id });
-      // Cloud mode: wait for DynamoDB to update
-      setTimeout(() => loadSchedules(), 1500);
-    } else {
-      await API.get('/schedule/delete?id=' + id);
-      loadSchedules();
-    }
+    await fetch('/api/schedule/delete?id=' + id, {
+      method: 'POST',
+      cache: 'no-store'
+    });
+    loadSchedules();
   } catch(e) {
     alert('Error deleting schedule: ' + e.message);
   }
@@ -374,7 +299,7 @@ async function editSchedule(id) {
 
 async function updateTime(){
   try {
-    const t = await API.get('/time/status');
+    const t = await fetch('/api/time/status',{cache:'no-store'}).then(r=>r.json());
     const timeEl = document.getElementById('header-time');
     if (t.time_set && t.current_time) {
       timeEl.textContent=t.current_time.substring(11,16);
@@ -386,111 +311,90 @@ async function updateTime(){
   } catch(e) {}
 }
 
-// mapStateToDisplay() - moved to common.js
-
-async function updateBattery(){
-  try {
-    const b = await API.get('/battery/status');
-    const el = document.getElementById('battery-status');
-    if (b.percent !== null && b.percent !== undefined && b.percent >= 0) {
-      el.textContent = `🔋 ${Math.round(b.percent)}%${b.charging ? ' ⚡' : ''}`;
-    } else {
-      el.textContent = '⚡ AC';
-    }
-  } catch(e) { document.getElementById('battery-status').textContent = '⚡ AC'; }
-}
-
 async function updateHeader(){
+  try{
+    const s=await fetch('/api/status',{cache:'no-store'}).then(r=>r.json());
+    if(s.system_state?.device_id){var dt='🌱 '+s.system_state.device_id;document.getElementById('device-id-text').textContent=dt;localStorage.setItem('hdr_did',dt);}
+    if(s.system_state?.location){document.getElementById('location-text').textContent=s.system_state.location;localStorage.setItem('hdr_loc',s.system_state.location);}
+    if(s.system_state?.room){document.getElementById('room-text').textContent=s.system_state.room;localStorage.setItem('hdr_room',s.system_state.room);}
+    var cn=s.system_state?.device_name||'';var cnv=(cn&&cn!=='Polivalka'&&!cn.toLowerCase().startsWith('polivalka-'))?cn:'Plant';document.getElementById('custom-name-suffix').textContent=cnv;localStorage.setItem('hdr_cn',cnv);
+    const mode=s.system_state?.mode||'manual';
+    const mb=document.getElementById('mode-badge');
+    mb.textContent=mode.charAt(0).toUpperCase()+mode.slice(1);
+    mb.className='status-badge status-'+mode;
+    const ct=document.getElementById('conn-text');
+    if(s.wifi_connected){ct.textContent='Online';ct.style.color='#fff';}
+    else{ct.textContent='Offline';ct.style.color='#999';}
+  }catch(e){}
+}
+
+// Track WiFi mode to detect disconnection
+var lastWiFiMode = null;
+var lastStaIp = null;
+
+async function monitorWiFiMode() {
   try {
-    const s = await API.get('/status');
+    const response = await fetch('/api/wifi/status', {
+      method: 'POST',
+      cache: 'no-store'
+    });
+    const result = await response.json();
+    const currentMode = result.mode; // "ap", "sta", "apsta"
+    const currentStaIp = result.sta_ip || null;
 
-    // Battery (Cloud mode)
-    const batteryStatus = document.getElementById('battery-status');
-    if (s.battery && s.battery.percent !== null && s.battery.percent !== undefined && s.battery.percent >= 0) {
-      batteryStatus.textContent = `🔋 ${Math.round(s.battery.percent)}%${s.battery.charging ? ' ⚡' : ''}`;
-    } else {
-      batteryStatus.textContent = '⚡ AC';
+    // Initialize on first call
+    if (lastWiFiMode === null) {
+      lastWiFiMode = currentMode;
+      lastStaIp = currentStaIp;
+      return;
     }
 
-    // Location, Room, Custom Name
-    if (s.system_state?.location) {
-      document.getElementById('location-text').textContent = s.system_state.location;
+    // Detect NEW connection to router (sta_ip appeared) - redirect immediately!
+    if (!lastStaIp && currentStaIp) {
+      console.log('Connected to router, redirecting to ' + currentStaIp);
+      window.location.href = 'http://' + currentStaIp + window.location.pathname;
+      return;
     }
-    if (s.system_state?.room) {
-      document.getElementById('room-text').textContent = s.system_state.room;
+
+    // Detect transition from online (sta/apsta) to offline (ap)
+    if ((lastWiFiMode === 'sta' || lastWiFiMode === 'apsta') && currentMode === 'ap') {
+      // WiFi disconnected - redirect to AP IP
+      console.log('WiFi disconnected, redirecting to AP mode...');
+      window.location.href = 'http://192.168.4.1' + window.location.pathname;
+      return;
     }
-    // Custom name suffix
-    let customName = s.system_state?.device_name || 'Plant';
-    if (customName === 'Polivalka' || customName.toLowerCase().startsWith('polivalka-')) {
-      customName = 'Plant';
+
+    lastWiFiMode = currentMode;
+    lastStaIp = currentStaIp;
+  } catch(e) {
+    // Connection lost - try AP fallback
+    console.log('Connection lost, trying AP fallback...');
+    try {
+      await fetch('http://192.168.4.1/api/wifi/status', {
+        method: 'POST',
+        cache: 'no-store'
+      });
+      // AP is accessible - redirect
+      console.log('AP accessible, redirecting...');
+      window.location.href = 'http://192.168.4.1' + window.location.pathname;
+    } catch(e2) {
+      // AP not accessible yet, will retry on next poll
     }
-    document.getElementById('custom-name-suffix').textContent = ' / ' + customName;
-
-    // Mode
-    const mode = s.system_state?.mode || 'off';
-    const modeBadge = document.getElementById('mode-badge');
-    const modeText = mode.charAt(0).toUpperCase() + mode.slice(1);
-    modeBadge.textContent = modeText;
-    modeBadge.className = 'status-badge status-' + mode;
-
-    // Connection status
-    const ct = document.getElementById('conn-text');
-    if (s.wifi_connected) { ct.textContent = 'Online'; ct.style.color = '#fff'; }
-    else { ct.textContent = 'Offline'; ct.style.color = '#999'; }
-
-    // Header state
-    const rawState = s.system_state?.state || 'OFF';
-    const displayState = mapStateToDisplay(rawState, s.pump_running);
-    const headerStateEl = document.getElementById('header-state');
-    if (headerStateEl) headerStateEl.textContent = `${displayState.emoji} ${displayState.text}`;
-  } catch(e) {}
-}
-
-// monitorWiFiMode() - moved to common.js
-
-// Cloud mode: показать device ID в header сразу
-if (IS_CLOUD && DEVICE_ID) {
-  document.getElementById('device-id-header').textContent = '🌱 ' + DEVICE_ID;
-  document.title = `${DEVICE_ID} — Timer Mode`;
-}
-
-// Smart polling with visibility pause (saves API costs when tab hidden)
-const MODE_INTERVAL = IS_CLOUD ? 60000 : 30000;
-let modeIntervalId = null;
-
-function startPolling() {
-  if (modeIntervalId) return;
-  modeIntervalId = setInterval(updateHeader, MODE_INTERVAL);
-}
-
-function stopPolling() {
-  if (modeIntervalId) {
-    clearInterval(modeIntervalId);
-    modeIntervalId = null;
   }
 }
 
-document.addEventListener('visibilitychange', () => {
-  if (document.hidden) {
-    stopPolling();
-  } else {
-    updateHeader();
-    startPolling();
-  }
-});
-
-setInterval(updateBattery, 60000);   // Battery: every minute
-updateBattery();
-if (!IS_CLOUD) {
-  setInterval(updateTime, 60000);      // Local mode: ESP32 time
-  setInterval(monitorWiFiMode, 5000);
-  updateTime();
-  monitorWiFiMode();
-}
+// Auto-update intervals
+setInterval(updateTime, 60000);      // Time: every minute
+setInterval(updateHeader, 30000);    // Status/Mode: every 30 seconds
+setInterval(monitorWiFiMode, 5000);  // WiFi mode: every 5 seconds (balance UX/load for active editing)
 
 // Initial load
+updateTime();
 updateHeader();
-startPolling();
+monitorWiFiMode();
 loadSchedules();
+
+// Refresh on tab return
+document.addEventListener('visibilitychange',()=>{if(!document.hidden){updateTime();updateHeader();}});
 </script>
 </body></html>
