@@ -285,9 +285,6 @@
         <input type="text" id="search-input" placeholder="🔍 Search device name..." onkeyup="filterDevices()">
         <select id="location-filter" onchange="filterDevices()">
           <option value="">All Locations</option>
-          <option value="Home">Home</option>
-          <option value="Office">Office</option>
-          <option value="Dacha">Dacha</option>
         </select>
         <select id="status-filter" onchange="filterDevices()">
           <option value="">All Status</option>
@@ -660,6 +657,7 @@ async function loadDevices() {
   console.log('[Fleet] Rendering', allDevices.length, 'devices...');
   renderDevices(allDevices);
   updateStats(allDevices);
+  updateLocationFilter(allDevices);
 }
 
 function renderDevices(devices) {
@@ -1033,6 +1031,30 @@ function createDeviceCard(device) {
   `;
 
   return div;
+}
+
+function updateLocationFilter(devices) {
+  const select = document.getElementById('location-filter');
+  const currentValue = select.value;
+
+  // Get unique locations from devices
+  const locations = [...new Set(devices.map(d => d.location).filter(Boolean))].sort();
+
+  // Clear existing options except "All Locations"
+  select.innerHTML = '<option value="">All Locations</option>';
+
+  // Add dynamic options
+  locations.forEach(loc => {
+    const option = document.createElement('option');
+    option.value = loc;
+    option.textContent = loc;
+    select.appendChild(option);
+  });
+
+  // Restore previous selection if still valid
+  if (currentValue && locations.includes(currentValue)) {
+    select.value = currentValue;
+  }
 }
 
 function updateStats(devices) {
