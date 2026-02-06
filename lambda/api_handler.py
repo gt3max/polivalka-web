@@ -3841,10 +3841,11 @@ def get_device_logs(device_id, user_id):
                     except:
                         pass
 
-                # Extract logs array
-                logs = result.get('logs', [])
-                count = result.get('count', 0)
-                uptime_ms = result.get('uptime_ms', 0)
+                # Extract logs array (ESP32 sends data inside 'data' key)
+                data = result.get('data', result)  # Fallback to result itself
+                logs = data.get('logs', [])
+                count = data.get('count', 0)
+                uptime_ms = data.get('uptime_ms', 0)
 
                 # Format logs for display
                 formatted_logs = []
