@@ -98,9 +98,20 @@ def lambda_handler(event, context):
 
     # Save to DynamoDB telemetry table
     # Convert floats to Decimal (DynamoDB doesn't support Python floats)
+    # IMPORTANT: Use update_item to MERGE data, not replace!
+    # Multiple topics (sensor, battery, system) may share the same timestamp
+    # put_item would overwrite previous data; update_item preserves it
     try:
-        item_converted = convert_floats_to_decimal(item)
-        telemetry_table.put_item(Item=item_converted)
+        data_converted = convert_floats_to_decimal(data)
+        telemetry_table.update_item(
+            Key={'device_id': device_id, 'timestamp': timestamp},
+            UpdateExpression='SET #dtype = :data, #ttl = :ttl',
+            ExpressionAttributeNames={'#dtype': data_type, '#ttl': 'ttl'},
+            ExpressionAttributeValues={
+                ':data': data_converted,
+                ':ttl': timestamp + TTL_SECONDS
+            }
+        )
         print(f"Saved {data_type} data for {device_id} at {timestamp}")
     except Exception as e:
         print(f"Error saving telemetry: {e}")
