@@ -159,9 +159,6 @@
         <div id="current-plant-preset" style="color:#2c5f2d;font-size:12px;margin-top:4px"></div>
       </div>
     </div>
-    <button class="secondary" onclick="showUpload()" style="width:100%;margin-top:16px">
-      🔄 Change Plant
-    </button>
   </div>
 
   <!-- Step 1: Upload -->
@@ -621,12 +618,7 @@ function showCurrentPlant(plant) {
   document.getElementById('current-plant-preset').textContent = `${plant.preset || 'Standard'} (${plant.start_pct || 35}-${plant.stop_pct || 55}%)`;
 
   document.getElementById('step-current').style.display = 'block';
-  document.getElementById('step-upload').style.display = 'none';
-}
-
-function showUpload() {
-  document.getElementById('step-current').style.display = 'none';
-  document.getElementById('step-upload').style.display = 'block';
+  // Keep upload form visible - user can identify any plant
 }
 
 // ============ File Handling ============
