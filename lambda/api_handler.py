@@ -3283,6 +3283,7 @@ def get_sensor_realtime(device_id, user_id):
 
                 # Extract nested data structures
                 sensor = result.get('sensor', {})
+                sensor2 = result.get('sensor2', {})
                 pump = result.get('pump', {})
                 system = result.get('system', {})
 
@@ -3301,8 +3302,18 @@ def get_sensor_realtime(device_id, user_id):
                     'body': json.dumps({
                         'moisture_pct': sensor.get('moisture'),
                         'adc_raw': sensor.get('adc'),
+                        'percent_float': sensor.get('percent_float'),
+                        'sensor_calibration': sensor.get('calibration'),
+                        # Sensor2 (J7 resistive) - may not be present
+                        'sensor2_adc': sensor2.get('adc') if sensor2 else None,
+                        'sensor2_percent': sensor2.get('percent') if sensor2 else None,
+                        'sensor2_percent_float': sensor2.get('percent_float') if sensor2 else None,
+                        # Battery
                         'battery': battery if battery else None,
+                        # Pump
                         'pump_running': pump.get('running', False),
+                        'pump_calibration': pump.get('calibration'),
+                        # System
                         'mode': system.get('mode', 'manual'),
                         'state': system.get('state', 'DISABLED'),
                         'firmware_version': system.get('firmware'),

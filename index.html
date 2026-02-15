@@ -1141,8 +1141,14 @@ async function refreshSensor(deviceId) {
     // Update device in allDevices array
     const device = allDevices.find(d => d.device_id === deviceId);
     if (device) {
+      // Sensor data
       device.moisture_pct = result.moisture_pct;
       device.adc_raw = result.adc_raw;
+      if (result.percent_float !== undefined) device.percent_float = result.percent_float;
+      // Sensor2 (J7 resistive)
+      if (result.sensor2_adc !== undefined) device.sensor2_adc = result.sensor2_adc;
+      if (result.sensor2_percent !== undefined) device.sensor2_percent = result.sensor2_percent;
+      // Mode and state
       device.mode = result.mode || 'manual';
       device.state = result.state || 'DISABLED';
       device.pump_running = result.pump_running || false;
@@ -1150,12 +1156,15 @@ async function refreshSensor(deviceId) {
       if (result.battery) {
         device.battery_pct = result.battery.percent;
         device.battery_charging = result.battery.charging;
+        device.battery_voltage = result.battery.voltage;
       }
+      // Pump calibration (for water volume calculation)
+      if (result.pump_calibration !== undefined) device.pump_calibration = result.pump_calibration;
       // Firmware and restart counters
       if (result.firmware_version) device.firmware_version = result.firmware_version;
       if (result.clean_restarts !== undefined) device.clean_restarts = result.clean_restarts;
       if (result.unexpected_restarts !== undefined) device.unexpected_restarts = result.unexpected_restarts;
-      if (result.reboot_count !== undefined) device.reboot_count = result.reboot_count; // fallback
+      if (result.reboot_count !== undefined) device.reboot_count = result.reboot_count;
       device.last_update = result.timestamp;
       device.online = true;  // Device responded = online
 
@@ -1164,7 +1173,8 @@ async function refreshSensor(deviceId) {
       updateStats(allDevices);
 
       // Show success feedback with updated values
-      showToast(`✅ ${deviceId}: ${result.moisture_pct}% | ${device.state}`, 'success');
+      const batteryInfo = result.battery ? ` | 🔋${Math.round(result.battery.percent)}%` : '';
+      showToast(`✅ ${deviceId}: ${result.moisture_pct}% | ${device.state}${batteryInfo}`, 'success');
     }
 
   } catch(e) {
@@ -1185,8 +1195,14 @@ async function refreshSensorSilent(deviceId) {
     // Update device in allDevices array
     const device = allDevices.find(d => d.device_id === deviceId);
     if (device) {
+      // Sensor data
       device.moisture_pct = result.moisture_pct;
       device.adc_raw = result.adc_raw;
+      if (result.percent_float !== undefined) device.percent_float = result.percent_float;
+      // Sensor2 (J7 resistive)
+      if (result.sensor2_adc !== undefined) device.sensor2_adc = result.sensor2_adc;
+      if (result.sensor2_percent !== undefined) device.sensor2_percent = result.sensor2_percent;
+      // Mode and state
       device.mode = result.mode || 'manual';
       device.state = result.state || 'DISABLED';
       device.pump_running = result.pump_running || false;
@@ -1194,12 +1210,15 @@ async function refreshSensorSilent(deviceId) {
       if (result.battery) {
         device.battery_pct = result.battery.percent;
         device.battery_charging = result.battery.charging;
+        device.battery_voltage = result.battery.voltage;
       }
+      // Pump calibration (for water volume calculation)
+      if (result.pump_calibration !== undefined) device.pump_calibration = result.pump_calibration;
       // Firmware and restart counters
       if (result.firmware_version) device.firmware_version = result.firmware_version;
       if (result.clean_restarts !== undefined) device.clean_restarts = result.clean_restarts;
       if (result.unexpected_restarts !== undefined) device.unexpected_restarts = result.unexpected_restarts;
-      if (result.reboot_count !== undefined) device.reboot_count = result.reboot_count; // fallback
+      if (result.reboot_count !== undefined) device.reboot_count = result.reboot_count;
       device.last_update = result.timestamp;
       device.online = true;  // Device responded = online
 
