@@ -527,6 +527,75 @@ telemetry_table = dynamodb.Table(TELEMETRY_TABLE)
 commands_table = dynamodb.Table(COMMANDS_TABLE)
 
 
+def save_plant_profile(user_id, event, origin):
+    """
+    POST /plants/save
+    Save plant profile to device record.
+    Body: { device_id: "Polivalka-BB00C1", plant: {...} }
+    """
+    try:
+        body = json.loads(event.get('body', '{}'))
+        device_id = body.get('device_id', '')
+        plant_data = body.get('plant', {})
+
+        if not device_id or not plant_data:
+            return {
+                'statusCode': 400,
+                'headers': cors_headers(origin),
+                'body': json.dumps({'error': 'Missing device_id or plant data'})
+            }
+
+        # Normalize device_id
+        if not device_id.startswith('Polivalka-'):
+            device_id = f'Polivalka-{device_id}'
+
+        # Verify user owns this device
+        response = devices_table.query(
+            IndexName='device_id-index',
+            KeyConditionExpression=Key('device_id').eq(device_id)
+        )
+        items = response.get('Items', [])
+        if not items:
+            return {
+                'statusCode': 404,
+                'headers': cors_headers(origin),
+                'body': json.dumps({'error': f'Device {device_id} not found'})
+            }
+
+        device_user_id = items[0].get('user_id')
+        if device_user_id != user_id:
+            return {
+                'statusCode': 403,
+                'headers': cors_headers(origin),
+                'body': json.dumps({'error': 'You do not own this device'})
+            }
+
+        # Add timestamp
+        plant_data['saved_at'] = int(time.time())
+
+        # Update device record with plant profile
+        devices_table.update_item(
+            Key={'user_id': user_id, 'device_id': device_id},
+            UpdateExpression='SET plant = :plant',
+            ExpressionAttributeValues={':plant': plant_data}
+        )
+
+        print(f"[PLANTS] Saved plant profile for {device_id}: {plant_data.get('scientific', 'unknown')}")
+        return {
+            'statusCode': 200,
+            'headers': cors_headers(origin),
+            'body': json.dumps({'success': True, 'message': 'Plant profile saved'})
+        }
+
+    except Exception as e:
+        print(f"[PLANTS] Error saving plant profile: {e}")
+        return {
+            'statusCode': 500,
+            'headers': cors_headers(origin),
+            'body': json.dumps({'error': str(e)})
+        }
+
+
 def get_telemetry_device_id(device_id):
     """Convert API device_id (BB00C1) to telemetry format (Polivalka-BB00C1)
     ESP32 publishes telemetry with 'Polivalka-' prefix, but API uses short ID
@@ -1083,6 +1152,10 @@ def lambda_handler(event, context):
     # GET /plants/care?name=xxx - Get plant care info
     if path == '/plants/care' and http_method == 'GET':
         return get_plant_care_handler(event, origin)
+
+    # POST /plants/save - Save plant profile to device
+    if path == '/plants/save' and http_method == 'POST':
+        return save_plant_profile(user_id, event, origin)
 
     # ============ Whitelist Check & Claim Routes (Security Migration 2026-01-20) ============
     # These are NOT admin-only - any authenticated user can check their whitelist status
