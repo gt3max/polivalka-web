@@ -570,8 +570,15 @@ def save_plant_profile(user_id, event, origin):
                 'body': json.dumps({'error': 'You do not own this device'})
             }
 
-        # Add timestamp
-        plant_data['saved_at'] = int(time.time())
+        # Generate plant_id if not provided (for data isolation)
+        current_time = int(time.time())
+        if not plant_data.get('plant_id'):
+            plant_data['plant_id'] = f"plant_{int(current_time * 1000)}"
+            # New plant — set started_at for telemetry filtering
+            plant_data['started_at'] = current_time
+
+        # Add/update saved_at timestamp
+        plant_data['saved_at'] = current_time
 
         # Update device record with plant profile
         devices_table.update_item(
@@ -2016,6 +2023,15 @@ def get_sensor_history(device_id, user_id, days=7):
     cutoff = int(time.time()) - (days * 86400)
     telem_device_id = get_telemetry_device_id(device_id)
 
+    # Data isolation: filter by plant.started_at (unless admin)
+    is_admin = user_id in ADMIN_EMAILS
+    if not is_admin:
+        device_info = get_device_info(device_id, user_id)
+        plant = device_info.get('plant', {})
+        plant_started_at = plant.get('started_at', 0)
+        if plant_started_at > cutoff:
+            cutoff = plant_started_at  # Only show data since current plant was assigned
+
     response = telemetry_table.query(
         KeyConditionExpression=Key('device_id').eq(telem_device_id) &
                                Key('timestamp').gt(cutoff),
@@ -2102,6 +2118,15 @@ def get_battery_history(device_id, user_id, days=7):
 
     cutoff = int(time.time()) - (days * 86400)
     telem_device_id = get_telemetry_device_id(device_id)
+
+    # Data isolation: filter by plant.started_at (unless admin)
+    is_admin = user_id in ADMIN_EMAILS
+    if not is_admin:
+        device_info = get_device_info(device_id, user_id)
+        plant = device_info.get('plant', {})
+        plant_started_at = plant.get('started_at', 0)
+        if plant_started_at > cutoff:
+            cutoff = plant_started_at
 
     response = telemetry_table.query(
         KeyConditionExpression=Key('device_id').eq(telem_device_id) &
@@ -3626,6 +3651,15 @@ def get_device_activity(device_id, user_id):
         # 2. Get telemetry (last 7 days — matches trends.html Activity tab)
         cutoff = int(time.time()) - 604800  # Last 7 days
         telem_device_id = get_telemetry_device_id(device_id)
+
+        # Data isolation: filter by plant.started_at (unless admin)
+        is_admin = user_id in ADMIN_EMAILS
+        if not is_admin:
+            device_info = get_device_info(device_id, user_id)
+            plant = device_info.get('plant', {})
+            plant_started_at = plant.get('started_at', 0)
+            if plant_started_at > cutoff:
+                cutoff = plant_started_at
         telem_response = telemetry_table.query(
             KeyConditionExpression=Key('device_id').eq(telem_device_id) & Key('timestamp').gt(cutoff),
             ScanIndexForward=False  # Sort DESC
