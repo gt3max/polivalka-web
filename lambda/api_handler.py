@@ -622,8 +622,9 @@ def get_plant_profile(user_id, device_id, origin):
         device = items[0]
         device_user_id = device.get('user_id')
 
-        # Verify ownership
-        if device_user_id != user_id:
+        # Verify ownership (admin can access any device)
+        is_admin = user_id in ADMIN_EMAILS
+        if device_user_id != user_id and not is_admin:
             return {
                 'statusCode': 403,
                 'headers': cors_headers(origin),
@@ -634,7 +635,7 @@ def get_plant_profile(user_id, device_id, origin):
         return {
             'statusCode': 200,
             'headers': cors_headers(origin),
-            'body': json.dumps({'success': True, 'plant': plant})
+            'body': json.dumps({'success': True, 'plant': plant}, cls=DecimalEncoder)
         }
 
     except Exception as e:
@@ -842,6 +843,10 @@ def lambda_handler(event, context):
 
             # Sensor controller status endpoint - returns data from telemetry
             if len(parts) == 6 and parts[3] == 'sensor' and parts[4] == 'controller' and parts[5] == 'status':
+                # SECURITY: Verify device ownership
+                if not verify_device_access(device_id, user_id):
+                    return {'statusCode': 403, 'headers': cors_headers(origin),
+                            'body': json.dumps({'error': 'Access denied'})}
                 # Get latest telemetry to determine controller state
                 latest = get_latest_telemetry(device_id)
                 mode = latest.get('system', {}).get('mode', 'manual')
@@ -921,6 +926,10 @@ def lambda_handler(event, context):
                 return send_command_with_params(device_id, user_id, 'schedule_delete', {'id': schedule_id}, 'Schedule deleted')
 
             if len(parts) == 6 and parts[3] == 'timer' and parts[4] == 'controller' and parts[5] == 'status' and http_method == 'GET':
+                # SECURITY: Verify device ownership
+                if not verify_device_access(device_id, user_id):
+                    return {'statusCode': 403, 'headers': cors_headers(origin),
+                            'body': json.dumps({'error': 'Access denied'})}
                 # Get latest telemetry to determine controller state
                 latest = get_latest_telemetry(device_id)
                 mode = latest.get('system', {}).get('mode', 'manual')
@@ -953,6 +962,10 @@ def lambda_handler(event, context):
 
             # Time status endpoint - for timer.html and settings.html
             if len(parts) == 5 and parts[3] == 'time' and parts[4] == 'status' and http_method == 'GET':
+                # SECURITY: Verify device ownership
+                if not verify_device_access(device_id, user_id):
+                    return {'statusCode': 403, 'headers': cors_headers(origin),
+                            'body': json.dumps({'error': 'Access denied'})}
                 latest = get_latest_telemetry(device_id)
                 time_set = latest.get('system', {}).get('time_set', False)
 
