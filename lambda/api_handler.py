@@ -603,6 +603,132 @@ def save_plant_profile(user_id, event, origin):
         }
 
 
+def archive_plant_profile(user_id, device_id, origin):
+    """
+    POST /plants/{device_id}/archive
+    Archive current plant profile.
+    Sets archived=true flag and resets started_at for data isolation.
+    """
+    try:
+        # Normalize device_id
+        if not device_id.startswith('Polivalka-'):
+            device_id = f'Polivalka-{device_id}'
+
+        # Get device record
+        response = devices_table.query(
+            IndexName='device_id-index',
+            KeyConditionExpression=Key('device_id').eq(device_id)
+        )
+        items = response.get('Items', [])
+        if not items:
+            return {
+                'statusCode': 404,
+                'headers': cors_headers(origin),
+                'body': json.dumps({'error': f'Device {device_id} not found'})
+            }
+
+        device = items[0]
+        device_user_id = device.get('user_id')
+
+        # Verify ownership
+        if device_user_id != user_id:
+            return {
+                'statusCode': 403,
+                'headers': cors_headers(origin),
+                'body': json.dumps({'error': 'You do not own this device'})
+            }
+
+        plant = device.get('plant')
+        if not plant:
+            return {
+                'statusCode': 404,
+                'headers': cors_headers(origin),
+                'body': json.dumps({'error': 'No plant profile to archive'})
+            }
+
+        # Archive current profile
+        current_time = int(time.time())
+        plant['archived'] = True
+        plant['archived_at'] = current_time
+
+        devices_table.update_item(
+            Key={'user_id': user_id, 'device_id': device_id},
+            UpdateExpression='SET plant = :plant',
+            ExpressionAttributeValues={':plant': plant}
+        )
+
+        print(f"[PLANTS] Archived plant profile for {device_id}: {plant.get('scientific', 'unknown')}")
+        return {
+            'statusCode': 200,
+            'headers': cors_headers(origin),
+            'body': json.dumps({'success': True, 'message': 'Plant profile archived'})
+        }
+
+    except Exception as e:
+        print(f"[PLANTS] Error archiving plant profile: {e}")
+        return {
+            'statusCode': 500,
+            'headers': cors_headers(origin),
+            'body': json.dumps({'error': str(e)})
+        }
+
+
+def delete_plant_profile(user_id, device_id, origin):
+    """
+    DELETE /plants/{device_id}
+    Delete plant profile from device.
+    """
+    try:
+        # Normalize device_id
+        if not device_id.startswith('Polivalka-'):
+            device_id = f'Polivalka-{device_id}'
+
+        # Get device record
+        response = devices_table.query(
+            IndexName='device_id-index',
+            KeyConditionExpression=Key('device_id').eq(device_id)
+        )
+        items = response.get('Items', [])
+        if not items:
+            return {
+                'statusCode': 404,
+                'headers': cors_headers(origin),
+                'body': json.dumps({'error': f'Device {device_id} not found'})
+            }
+
+        device = items[0]
+        device_user_id = device.get('user_id')
+
+        # Verify ownership
+        if device_user_id != user_id:
+            return {
+                'statusCode': 403,
+                'headers': cors_headers(origin),
+                'body': json.dumps({'error': 'You do not own this device'})
+            }
+
+        # Remove plant profile from device
+        devices_table.update_item(
+            Key={'user_id': user_id, 'device_id': device_id},
+            UpdateExpression='REMOVE plant'
+        )
+
+        print(f"[PLANTS] Deleted plant profile for {device_id}")
+        return {
+            'statusCode': 200,
+            'headers': cors_headers(origin),
+            'body': json.dumps({'success': True, 'message': 'Plant profile deleted'})
+        }
+
+    except Exception as e:
+        print(f"[PLANTS] Error deleting plant profile: {e}")
+        return {
+            'statusCode': 500,
+            'headers': cors_headers(origin),
+            'body': json.dumps({'error': str(e)})
+        }
+
+
 def get_plant_profile(user_id, device_id, origin):
     """
     GET /plants/{device_id}
@@ -1231,6 +1357,16 @@ def lambda_handler(event, context):
     if path.startswith('/plants/Polivalka-') and http_method == 'GET':
         device_id = path.split('/')[-1]  # Extract device_id from path
         return get_plant_profile(user_id, device_id, origin)
+
+    # POST /plants/{device_id}/archive - Archive plant profile
+    if path.startswith('/plants/Polivalka-') and path.endswith('/archive') and http_method == 'POST':
+        device_id = path.split('/')[2]  # /plants/Polivalka-XXX/archive -> Polivalka-XXX
+        return archive_plant_profile(user_id, device_id, origin)
+
+    # DELETE /plants/{device_id} - Delete plant profile
+    if path.startswith('/plants/Polivalka-') and http_method == 'DELETE':
+        device_id = path.split('/')[-1]  # Extract device_id from path
+        return delete_plant_profile(user_id, device_id, origin)
 
     # ============ Whitelist Check & Claim Routes (Security Migration 2026-01-20) ============
     # These are NOT admin-only - any authenticated user can check their whitelist status

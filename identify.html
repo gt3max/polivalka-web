@@ -159,6 +159,10 @@
         <div id="current-plant-preset" style="color:#2c5f2d;font-size:12px;margin-top:4px"></div>
       </div>
     </div>
+    <div style="display:flex;gap:8px;margin-top:16px">
+      <button class="secondary" onclick="archivePlant()" style="flex:1;font-size:13px">📦 Archive</button>
+      <button class="secondary" onclick="deletePlant()" style="flex:1;font-size:13px;color:#c62828;border-color:#c62828">🗑️ Delete</button>
+    </div>
   </div>
 
   <!-- Step 1: Upload -->
@@ -619,6 +623,57 @@ function showCurrentPlant(plant) {
 
   document.getElementById('step-current').style.display = 'block';
   // Keep upload form visible - user can identify any plant
+}
+
+async function archivePlant() {
+  if (!confirm('Archive this plant? Historical data will be preserved but hidden from graphs.')) return;
+
+  const deviceId = getDeviceId();
+  if (!deviceId) return;
+
+  try {
+    const resp = await fetch(`${CONFIG.apiUrl}/plants/${deviceId}/archive`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${localStorage.getItem('id_token')}`,
+        'Content-Type': 'application/json'
+      }
+    });
+    const data = await resp.json();
+    if (resp.ok) {
+      showToast('Plant archived', 'success');
+      document.getElementById('step-current').style.display = 'none';
+    } else {
+      showToast(data.error || 'Failed to archive', 'error');
+    }
+  } catch (e) {
+    showToast('Error: ' + e.message, 'error');
+  }
+}
+
+async function deletePlant() {
+  if (!confirm('Delete this plant profile? This cannot be undone.')) return;
+
+  const deviceId = getDeviceId();
+  if (!deviceId) return;
+
+  try {
+    const resp = await fetch(`${CONFIG.apiUrl}/plants/${deviceId}`, {
+      method: 'DELETE',
+      headers: {
+        'Authorization': `Bearer ${localStorage.getItem('id_token')}`
+      }
+    });
+    const data = await resp.json();
+    if (resp.ok) {
+      showToast('Plant deleted', 'success');
+      document.getElementById('step-current').style.display = 'none';
+    } else {
+      showToast(data.error || 'Failed to delete', 'error');
+    }
+  } catch (e) {
+    showToast('Error: ' + e.message, 'error');
+  }
 }
 
 // ============ File Handling ============
