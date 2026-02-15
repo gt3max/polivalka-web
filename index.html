@@ -1160,8 +1160,9 @@ async function refreshSensor(deviceId) {
         device.battery_charging = result.battery.charging;
         device.battery_voltage = result.battery.voltage;
       }
-      // Pump calibration (for water volume calculation)
+      // Pump calibration and speed (for water volume calculation)
       if (result.pump_calibration !== undefined) device.pump_calibration = result.pump_calibration;
+      if (result.pump_speed !== undefined) device.pump_speed = result.pump_speed;
       // Firmware and restart counters
       if (result.firmware_version) device.firmware_version = result.firmware_version;
       if (result.clean_restarts !== undefined) device.clean_restarts = result.clean_restarts;
@@ -1216,8 +1217,9 @@ async function refreshSensorSilent(deviceId) {
         device.battery_charging = result.battery.charging;
         device.battery_voltage = result.battery.voltage;
       }
-      // Pump calibration (for water volume calculation)
+      // Pump calibration and speed (for water volume calculation)
       if (result.pump_calibration !== undefined) device.pump_calibration = result.pump_calibration;
+      if (result.pump_speed !== undefined) device.pump_speed = result.pump_speed;
       // Firmware and restart counters
       if (result.firmware_version) device.firmware_version = result.firmware_version;
       if (result.clean_restarts !== undefined) device.clean_restarts = result.clean_restarts;
@@ -1467,8 +1469,9 @@ async function bulkAction(action) {
           device.battery_charging = result.battery.charging;
           device.battery_voltage = result.battery.voltage;
         }
-        // Pump calibration
+        // Pump calibration and speed
         if (result.pump_calibration !== undefined) device.pump_calibration = result.pump_calibration;
+        if (result.pump_speed !== undefined) device.pump_speed = result.pump_speed;
         // Firmware and restart counters
         if (result.firmware_version) device.firmware_version = result.firmware_version;
         if (result.reboot_count !== undefined) device.reboot_count = result.reboot_count;

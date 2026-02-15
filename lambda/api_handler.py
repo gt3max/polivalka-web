@@ -3313,6 +3313,7 @@ def get_sensor_realtime(device_id, user_id):
                         # Pump
                         'pump_running': pump.get('running', False),
                         'pump_calibration': pump.get('calibration'),
+                        'pump_speed': pump.get('speed'),
                         # System
                         'mode': system.get('mode', 'manual'),
                         'state': system.get('state', 'DISABLED'),
