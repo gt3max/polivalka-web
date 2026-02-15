@@ -596,6 +596,56 @@ def save_plant_profile(user_id, event, origin):
         }
 
 
+def get_plant_profile(user_id, device_id, origin):
+    """
+    GET /plants/{device_id}
+    Get plant profile from device record.
+    """
+    try:
+        # Normalize device_id
+        if not device_id.startswith('Polivalka-'):
+            device_id = f'Polivalka-{device_id}'
+
+        # Get device record
+        response = devices_table.query(
+            IndexName='device_id-index',
+            KeyConditionExpression=Key('device_id').eq(device_id)
+        )
+        items = response.get('Items', [])
+        if not items:
+            return {
+                'statusCode': 404,
+                'headers': cors_headers(origin),
+                'body': json.dumps({'error': f'Device {device_id} not found'})
+            }
+
+        device = items[0]
+        device_user_id = device.get('user_id')
+
+        # Verify ownership
+        if device_user_id != user_id:
+            return {
+                'statusCode': 403,
+                'headers': cors_headers(origin),
+                'body': json.dumps({'error': 'You do not own this device'})
+            }
+
+        plant = device.get('plant')
+        return {
+            'statusCode': 200,
+            'headers': cors_headers(origin),
+            'body': json.dumps({'success': True, 'plant': plant})
+        }
+
+    except Exception as e:
+        print(f"[PLANTS] Error getting plant profile: {e}")
+        return {
+            'statusCode': 500,
+            'headers': cors_headers(origin),
+            'body': json.dumps({'error': str(e)})
+        }
+
+
 def get_telemetry_device_id(device_id):
     """Convert API device_id (BB00C1) to telemetry format (Polivalka-BB00C1)
     ESP32 publishes telemetry with 'Polivalka-' prefix, but API uses short ID
@@ -1156,6 +1206,11 @@ def lambda_handler(event, context):
     # POST /plants/save - Save plant profile to device
     if path == '/plants/save' and http_method == 'POST':
         return save_plant_profile(user_id, event, origin)
+
+    # GET /plants/{device_id} - Get plant profile from device
+    if path.startswith('/plants/Polivalka-') and http_method == 'GET':
+        device_id = path.split('/')[-1]  # Extract device_id from path
+        return get_plant_profile(user_id, device_id, origin)
 
     # ============ Whitelist Check & Claim Routes (Security Migration 2026-01-20) ============
     # These are NOT admin-only - any authenticated user can check their whitelist status
