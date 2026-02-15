@@ -148,6 +148,22 @@
     <strong>Demo Mode:</strong> API not available. Using sample data.
   </div>
 
+  <!-- Current Plant (shown if profile exists) -->
+  <div id="step-current" class="card" style="display:none">
+    <h2 style="margin-top:0">🌿 Current Plant</h2>
+    <div style="display:flex;gap:16px;align-items:flex-start">
+      <img id="current-plant-img" src="" alt="" style="width:80px;height:80px;border-radius:12px;object-fit:cover">
+      <div style="flex:1">
+        <div id="current-plant-name" style="font-weight:600;font-size:16px"></div>
+        <div id="current-plant-scientific" style="color:#666;font-size:13px;font-style:italic"></div>
+        <div id="current-plant-preset" style="color:#2c5f2d;font-size:12px;margin-top:4px"></div>
+      </div>
+    </div>
+    <button class="secondary" onclick="showUpload()" style="width:100%;margin-top:16px">
+      🔄 Change Plant
+    </button>
+  </div>
+
   <!-- Step 1: Upload -->
   <div id="step-upload" class="card">
     <h2 style="margin-top:0">Identify Your Plant</h2>
@@ -567,8 +583,51 @@ document.addEventListener('DOMContentLoaded', function() {
     document.getElementById('camera-btn').style.display = 'none';
   }
 
+  // Load saved plant profile
+  loadSavedProfile();
+
   console.log('[Identify] Page initialized, mockMode:', CONFIG.mockMode);
 });
+
+// ============ Plant Profile Loading ============
+async function loadSavedProfile() {
+  const deviceId = getDeviceId();
+  if (!deviceId) {
+    console.log('[Identify] No device selected');
+    return;
+  }
+
+  try {
+    const url = `${CONFIG.apiUrl}/plants/Polivalka-${deviceId}`;
+    const response = await fetch(url, {
+      headers: API.getAuthHeaders()
+    });
+    const data = await response.json();
+
+    if (data.success && data.plant) {
+      showCurrentPlant(data.plant);
+    } else {
+      console.log('[Identify] No saved plant profile');
+    }
+  } catch (err) {
+    console.error('[Identify] Error loading profile:', err);
+  }
+}
+
+function showCurrentPlant(plant) {
+  document.getElementById('current-plant-img').src = plant.image_url || '';
+  document.getElementById('current-plant-name').textContent = plant.common_name || plant.scientific;
+  document.getElementById('current-plant-scientific').textContent = plant.scientific || '';
+  document.getElementById('current-plant-preset').textContent = `${plant.preset || 'Standard'} (${plant.start_pct || 35}-${plant.stop_pct || 55}%)`;
+
+  document.getElementById('step-current').style.display = 'block';
+  document.getElementById('step-upload').style.display = 'none';
+}
+
+function showUpload() {
+  document.getElementById('step-current').style.display = 'none';
+  document.getElementById('step-upload').style.display = 'block';
+}
 
 // ============ File Handling ============
 function handleDragOver(e) {
