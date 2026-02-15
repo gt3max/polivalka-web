@@ -1151,6 +1151,8 @@ async function refreshSensor(deviceId) {
       // Mode and state
       device.mode = result.mode || 'manual';
       device.state = result.state || 'DISABLED';
+      // Recalculate controller_enabled based on new state (same logic as get_devices)
+      device.controller_enabled = device.state !== 'DISABLED';
       device.pump_running = result.pump_running || false;
       // Battery: extract from object {voltage, percent, charging}
       if (result.battery) {
@@ -1205,6 +1207,8 @@ async function refreshSensorSilent(deviceId) {
       // Mode and state
       device.mode = result.mode || 'manual';
       device.state = result.state || 'DISABLED';
+      // Recalculate controller_enabled based on new state (same logic as get_devices)
+      device.controller_enabled = device.state !== 'DISABLED';
       device.pump_running = result.pump_running || false;
       // Battery: extract from object {voltage, percent, charging}
       if (result.battery) {
@@ -1444,18 +1448,32 @@ async function bulkAction(action) {
         const result = await API.get(`/device/${device.device_id}/sensor`);
 
         // Update real-time data from device response
+        // Sensor data
         device.moisture_pct = result.moisture_pct;
         device.adc_raw = result.adc_raw;
+        if (result.percent_float !== undefined) device.percent_float = result.percent_float;
+        // Sensor2 (J7 resistive)
+        if (result.sensor2_adc !== undefined) device.sensor2_adc = result.sensor2_adc;
+        if (result.sensor2_percent !== undefined) device.sensor2_percent = result.sensor2_percent;
+        // Mode and state
         device.mode = result.mode || device.mode || 'manual';
         device.state = result.state || device.state || 'DISABLED';
+        // Recalculate controller_enabled based on new state
+        device.controller_enabled = device.state !== 'DISABLED';
         device.pump_running = result.pump_running || false;
+        // Battery
         if (result.battery) {
           device.battery_pct = result.battery.percent;
           device.battery_charging = result.battery.charging;
           device.battery_voltage = result.battery.voltage;
         }
+        // Pump calibration
+        if (result.pump_calibration !== undefined) device.pump_calibration = result.pump_calibration;
+        // Firmware and restart counters
         if (result.firmware_version) device.firmware_version = result.firmware_version;
         if (result.reboot_count !== undefined) device.reboot_count = result.reboot_count;
+        if (result.clean_restarts !== undefined) device.clean_restarts = result.clean_restarts;
+        if (result.unexpected_restarts !== undefined) device.unexpected_restarts = result.unexpected_restarts;
         device.last_update = result.timestamp || Math.floor(Date.now() / 1000);
         device.online = true;
 
