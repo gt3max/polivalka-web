@@ -598,7 +598,7 @@ async function loadSavedProfile() {
   }
 
   try {
-    const url = `${CONFIG.apiUrl}/plants/Polivalka-${deviceId}`;
+    const url = `${CONFIG.apiUrl}/plants/${deviceId}`;
     const response = await fetch(url, {
       headers: API.getAuthHeaders()
     });
