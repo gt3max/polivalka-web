@@ -19,7 +19,7 @@ const IS_CLOUD = window.location.hostname === 'gt3max.github.io' ||
                  window.location.hostname === 'localhost';
 
 // Pages that don't require authentication
-const publicPages = ['login.html', 'index.html', 'landing.html'];
+const publicPages = ['login.html', 'index.html', 'fleet.html'];
 // Pages that require device ID
 const deviceRequiredPages = ['home.html', 'sensor.html', 'timer.html', 'settings.html', 'calibration.html', 'update.html', 'trends.html', 'online.html', 'ota.html'];
 
@@ -242,7 +242,7 @@ if (IS_CLOUD && !publicPages.includes(currentPage)) {
 // Redirect to home if Cloud mode without device ID (on device pages)
 if (IS_CLOUD && !DEVICE_ID && deviceRequiredPages.includes(currentPage)) {
   console.warn('[API Adapter] No device ID in Cloud mode, redirecting to home');
-  window.location.href = '/';
+  window.location.href = 'fleet.html';
 }
 
 // В Cloud mode: добавить ?device=XX ко всем внутренним ссылкам (кроме fleet, login)
@@ -252,7 +252,7 @@ if (IS_CLOUD && DEVICE_ID) {
       const href = link.getAttribute('href');
       // Только локальные ссылки на .html страницы (не fleet, login, внешние)
       if (href && href.endsWith('.html') && !href.includes('?') &&
-          !href.includes('index.html') && !href.includes('login.html') &&
+          !href.includes('fleet.html') && !href.includes('login.html') &&
           !href.startsWith('http')) {
         link.setAttribute('href', `${href.split('?')[0]}?device=${DEVICE_ID}`);
       }

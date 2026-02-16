@@ -1,2166 +1,1404 @@
-<!doctype html>
-<html>
+<!DOCTYPE html>
+<html lang="en">
 <head>
-<script>
-// Redirect to landing page if not logged in
-(function() {
-  const token = localStorage.getItem('access_token');
-  const expires = parseInt(localStorage.getItem('token_expires') || '0');
-  if (!token || expires < Date.now()) {
-    window.location.replace('landing.html');
-  }
-})();
-</script>
-<script src="api-adapter.js"></script>
-<script src="common.js"></script>
-<meta charset="utf-8"/>
-<link rel="icon" href="favicon.svg" type="image/svg+xml">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>PlantApp Fleet</title>
-<style>
-  /* Reusing styles from local HTML (home.html) */
-  body{font-family:system-ui,Arial;margin:0;padding:0;max-width:100%;background:#fafafa}
-  .header{position:sticky;top:0;z-index:1000;background:#2c5f2d;color:#fff;padding:8px 10px;display:flex;justify-content:space-between;align-items:center;gap:8px}
-  .header h1{margin:0;font-size:18px}
-  .header-info{font-size:12px;text-align:right;line-height:1.3}
-  .container{padding:18px;max-width:1200px;margin:0 auto}
-  .card{border:1px solid #ddd;padding:16px;border-radius:12px;margin:12px 0;background:#fff}
-  .row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
-  .mono{font-family:ui-monospace,monospace}
-  button{padding:8px 12px;border-radius:8px;border:1px solid #888;background:#fafafa;cursor:pointer}
-  button.primary{background:#2c5f2d;color:#fff;border-color:#2c5f2d}
-  button:hover{opacity:0.9}
-  .muted{color:#666;font-size:14px}
-  .danger{color:#b00;font-weight:600}
-  .ok{color:#0a0}
-  .warning{color:#f57c00;font-weight:600}
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <link rel="icon" href="favicon.svg" type="image/svg+xml">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600;700&family=Instrument+Serif:ital@0;1&display=swap" rel="stylesheet">
+    <title>PlantApp — Smart Watering Device</title>
+    <style>
+        /* ═══════════════════════════════════
+           GRAIN TEXTURE (SVG noise)
+           ═══════════════════════════════════ */
+        svg.grain-source { position: absolute; width: 0; height: 0; }
 
-  /* Stats dashboard - compact */
-  .stats-row{display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap}
-  .stat-card{background:#fff;border:1px solid #ddd;border-radius:8px;padding:8px 16px;text-align:center;flex:1;min-width:80px}
-  .stat-value{font-size:20px;font-weight:600;color:#2c5f2d}
-  .stat-label{font-size:10px;color:#666}
+        :root {
+            --forest: #1a3a1a;
+            --forest-mid: #2c5f2d;
+            --sage: #a8c5a0;
+            --sage-light: #c5dabe;
+            --accent: #3d8b40;
+            --cream: #f8f6f0;
+            --cream-dark: #efeadf;
+            --warm-white: #fdfcf8;
+            --text-primary: #1a2a18;
+            --text-secondary: #4a5e48;
+            --text-tertiary: #7a8d78;
+            --glass-bg: rgba(255, 253, 248, 0.6);
+            --glass-border: rgba(168, 197, 160, 0.3);
+            --glow-green: rgba(61, 139, 64, 0.15);
+            --shadow-soft: 0 8px 32px rgba(26, 58, 26, 0.08);
+            --shadow-heavy: 0 24px 80px rgba(26, 58, 26, 0.12);
+            --shadow-glow: 0 0 60px rgba(61, 139, 64, 0.12);
+        }
 
-  /* Filters */
-  .filters{display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap}
-  .filters input{padding:8px 12px;border:1px solid #ccc;border-radius:8px;flex:1;min-width:200px}
-  .filters select{padding:8px 12px;border:1px solid #ccc;border-radius:8px}
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        html { scroll-behavior: smooth; }
 
-  /* Device cards (grid mode) */
-  .device-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(350px,1fr));gap:16px}
+        body {
+            font-family: 'Instrument Sans', system-ui, sans-serif;
+            color: var(--text-primary);
+            background: var(--cream);
+            line-height: 1.6;
+            -webkit-font-smoothing: antialiased;
+            overflow-x: hidden;
+        }
 
-  /* Device list (expandable rows) */
-  .device-list{display:flex;flex-direction:column;gap:2px}
-  .device-list .device-card{border-left:3px solid transparent;padding:0;margin:0}
-  .device-list .device-card.warning{border-left-color:#f57c00}
-  .device-list .device-card.critical{border-left-color:#b00}
+        /* ═══════════════════════════════════
+           NAVBAR
+           ═══════════════════════════════════ */
+        .nav {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            z-index: 200;
+            padding: 0 32px;
+            height: 72px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: rgba(248, 246, 240, 0.7);
+            backdrop-filter: blur(20px) saturate(1.4);
+            -webkit-backdrop-filter: blur(20px) saturate(1.4);
+            border-bottom: 1px solid rgba(168, 197, 160, 0.15);
+            transition: background 0.3s;
+        }
 
-  /* Compact row (collapsed) */
-  .device-row{display:flex;align-items:center;padding:12px 16px;cursor:pointer;transition:background 0.2s}
-  .device-row:hover{background:#f9f9f9}
-  .device-row.has-warnings{background:#fff9e6}
-  .device-row .expand-icon{margin-right:12px;font-size:12px;color:#666;transition:transform 0.2s}
-  .device-row.expanded .expand-icon{transform:rotate(90deg)}
-  .device-row .warning-badge{color:#b00;font-size:16px;margin-right:8px;animation:pulse 2s infinite}
-  .device-row .device-name{flex:1;font-weight:600;font-size:14px}
-  .device-row .device-quick-info{display:flex;gap:12px;align-items:center;font-size:13px;flex-wrap:wrap}
-  .last-watering-badge{font-size:11px;color:#666}
-  .device-row .device-status{font-size:11px;padding:2px 6px;border-radius:6px;background:#e0e0e0;color:#666}
-  .device-row .device-status.online{background:#e8f5e9;color:#2e7d32}
-  .device-row .device-status.offline{background:#ffebee;color:#c62828}
+        .nav-inner {
+            width: 100%;
+            max-width: 1280px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
 
-  /* Expanded details (hidden by default) */
-  .device-details{display:none;padding:0 16px 12px 40px;background:#fafafa}
-  .device-details.expanded{display:block}
-  .device-details .detail-row{display:flex;gap:16px;margin-bottom:8px;flex-wrap:wrap}
-  .device-details .detail-item{font-size:13px;color:#666}
-  .device-details .device-warnings{margin:8px 0;padding:8px;background:#fff3cd;border-radius:6px;font-size:12px}
-  .device-details .device-actions{display:flex;gap:8px;margin-top:8px;flex-wrap:wrap}
-  .device-details .device-actions button{font-size:12px;padding:6px 10px;flex:1;min-width:90px}
-  .btn-primary{background:#2c5f2d;color:#fff;border-color:#2c5f2d}
-  .btn-secondary{background:#f5f5f5;border-color:#ccc}
-  .btn-danger{background:#b00;color:#fff;border-color:#900}
+        .nav-brand {
+            font-family: 'Instrument Sans', sans-serif;
+            font-weight: 700;
+            font-size: 20px;
+            color: var(--forest);
+            text-decoration: none;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            letter-spacing: -0.5px;
+        }
 
-  /* View toggle */
-  .view-toggle{display:flex;gap:4px;background:#f0f0f0;padding:4px;border-radius:8px;width:fit-content}
-  .view-toggle button{background:transparent;border:none;padding:6px 12px;border-radius:6px;cursor:pointer;font-size:13px}
-  .view-toggle button.active{background:#fff;box-shadow:0 1px 3px rgba(0,0,0,0.1)}
-  .device-card{border:1px solid #ddd;border-radius:12px;padding:16px;background:#fff;position:relative}
-  .device-card.offline{opacity:0.6;border-color:#ccc}
-  .device-card.warning{border-left:4px solid #f57c00}
-  .device-card.critical{border-left:4px solid #b00}
-  .device-header{display:flex;justify-content:space-between;align-items:start;margin-bottom:12px}
-  .device-name{font-size:18px;font-weight:600;color:#2c5f2d}
-  .device-location{font-size:12px;color:#666;margin-top:2px}
-  .device-status{font-size:11px;padding:3px 8px;border-radius:8px;background:#e0e0e0;color:#666}
-  .device-status.online{background:#e8f5e9;color:#2e7d32}
-  .device-status.offline{background:#ffebee;color:#c62828}
-  .device-metrics{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:12px 0}
-  .metric{padding:8px;background:#f5f5f5;border-radius:8px}
-  .metric-label{font-size:11px;color:#666}
-  .metric-value{font-size:16px;font-weight:600;margin-top:2px}
-  .metric-value.low{color:#b00}
-  .metric-value.medium{color:#f57c00}
-  .metric-value.good{color:#0a0}
-  .device-warnings{margin:8px 0;padding:8px;background:#fff3cd;border-radius:8px;font-size:13px}
-  .device-actions{display:flex;gap:8px;margin-top:12px}
-  .device-actions button{flex:1;font-size:13px;padding:6px 10px}
+        .nav-brand-icon {
+            width: 34px;
+            height: 34px;
+            background: var(--forest);
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
 
-  /* Mode badges */
-  .mode-badge{display:inline-block;padding:4px 10px;border-radius:12px;font-size:11px;font-weight:600}
-  .mode-off{background:#fce4ec;color:#c2185b}
-  .mode-manual{background:#e0e0e0;color:#616161}
-  .mode-timer{background:#e3f2fd;color:#1976d2}
-  .mode-sensor{background:#fff3e0;color:#f57c00}
+        .nav-brand-icon svg { width: 20px; height: 20px; }
 
-  /* Auth section (placeholder) */
-  .auth-section{display:none}
-  .auth-section.active{display:block}
+        .nav-links {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
 
-  /* Admin controls - compact */
-  .admin-controls{background:#e8eaf6;border:1px solid #3f51b5;border-radius:8px;padding:8px 12px;margin-bottom:12px}
-  .admin-controls h3{margin:0;color:#3f51b5;font-size:14px;display:inline-block;margin-right:12px}
+        .btn {
+            font-family: 'Instrument Sans', sans-serif;
+            font-weight: 600;
+            text-decoration: none;
+            cursor: pointer;
+            border: none;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.25s cubic-bezier(0.22, 1, 0.36, 1);
+            letter-spacing: -0.2px;
+        }
 
-  /* Animations */
-  @keyframes pulse{
-    0%,100%{opacity:1}
-    50%{opacity:0.5}
-  }
+        .btn-nav {
+            padding: 10px 20px;
+            font-size: 14px;
+            border-radius: 10px;
+        }
 
-  /* Modal */
-  .modal{position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.5);display:flex;align-items:center;justify-content:center;z-index:3000;padding:20px}
-  .modal-content{background:#fff;border-radius:16px;width:100%;max-width:500px;box-shadow:0 8px 32px rgba(0,0,0,0.2)}
-  .modal-header{padding:16px 20px;border-bottom:1px solid #eee}
-  .modal-body{padding:20px}
-  .modal-footer{padding:16px 20px;border-top:1px solid #eee;display:flex;gap:12px}
+        .btn-hollow {
+            background: transparent;
+            color: var(--forest);
+        }
 
-  /* Debug Console */
-  .debug-console{position:fixed;bottom:0;left:0;right:0;height:250px;background:#1e1e1e;color:#d4d4d4;border-top:2px solid #007acc;font-family:ui-monospace,monospace;font-size:12px;display:flex;flex-direction:column;z-index:2000}
-  .console-header{background:#2d2d2d;padding:8px 12px;display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid #3e3e3e}
-  .console-header h4{margin:0;font-size:13px;color:#fff}
-  .console-body{flex:1;overflow-y:auto;padding:8px}
-  .console-line{padding:2px 4px;border-bottom:1px solid #2d2d2d}
-  .console-line.error{color:#f48771;background:#3f1a1a}
-  .console-line.success{color:#89d185;background:#1a3f1a}
-  .console-line.info{color:#75beff}
-  .console-timestamp{color:#858585;margin-right:8px}
-  .console-toggle{position:fixed;bottom:260px;right:20px;z-index:2001;background:#007acc;color:#fff;border:none;padding:8px 16px;border-radius:8px 8px 0 0;cursor:pointer;font-size:11px}
-  .console-toggle.closed{bottom:0;border-radius:8px}
+        .btn-hollow:hover { background: rgba(168, 197, 160, 0.2); }
 
-  /* Toggle button for Water Now */
-  .btn-water-toggle{transition:all 0.3s;position:relative}
-  .btn-water-toggle.active{background:#2c5f2d !important;color:#fff !important;border-color:#2c5f2d !important;box-shadow:inset 0 3px 5px rgba(0,0,0,0.3)}
-  .water-hint{font-size:11px;color:#666;margin-left:4px;font-weight:normal}
+        .btn-solid {
+            background: var(--forest);
+            color: var(--cream);
+        }
 
-  /* Automation Control Toggle */
-  .automation-control{cursor:pointer;padding:4px 8px;border-radius:4px;transition:all 0.2s;display:inline-block;margin-left:8px;font-size:12px;font-weight:600}
-  .automation-control:hover{background:rgba(0,170,0,0.1)}
-  .automation-control span{user-select:none}
-</style>
+        .btn-solid:hover {
+            background: #0f2b10;
+            transform: translateY(-1px);
+            box-shadow: 0 6px 24px rgba(26, 58, 26, 0.2);
+        }
+
+        .btn-lg {
+            padding: 18px 40px;
+            font-size: 16px;
+            border-radius: 14px;
+        }
+
+        .btn-outline-light {
+            padding: 18px 40px;
+            font-size: 16px;
+            border-radius: 14px;
+            background: transparent;
+            color: var(--forest);
+            border: 1.5px solid var(--sage);
+        }
+
+        .btn-outline-light:hover {
+            background: rgba(168, 197, 160, 0.15);
+            border-color: var(--forest-mid);
+        }
+
+        .btn-white {
+            padding: 18px 44px;
+            font-size: 16px;
+            border-radius: 14px;
+            background: var(--cream);
+            color: var(--forest);
+            font-weight: 700;
+        }
+
+        .btn-white:hover {
+            background: #fff;
+            transform: translateY(-2px);
+            box-shadow: 0 8px 32px rgba(0,0,0,0.15);
+        }
+
+        /* ═══════════════════════════════════
+           HERO
+           ═══════════════════════════════════ */
+        .hero {
+            position: relative;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 120px 32px 80px;
+            overflow: hidden;
+            background: var(--cream);
+        }
+
+        /* Animated mesh gradient */
+        .hero-mesh {
+            position: absolute;
+            inset: 0;
+            z-index: 0;
+            overflow: hidden;
+        }
+
+        .hero-mesh .blob {
+            position: absolute;
+            border-radius: 50%;
+            filter: blur(80px);
+            opacity: 0.5;
+            will-change: transform;
+        }
+
+        .blob-1 {
+            width: 600px;
+            height: 600px;
+            background: radial-gradient(circle, rgba(168, 197, 160, 0.6) 0%, transparent 70%);
+            top: -10%;
+            left: -5%;
+            animation: meshFloat1 18s ease-in-out infinite;
+        }
+
+        .blob-2 {
+            width: 500px;
+            height: 500px;
+            background: radial-gradient(circle, rgba(61, 139, 64, 0.25) 0%, transparent 70%);
+            top: 20%;
+            right: -10%;
+            animation: meshFloat2 22s ease-in-out infinite;
+        }
+
+        .blob-3 {
+            width: 450px;
+            height: 450px;
+            background: radial-gradient(circle, rgba(197, 218, 190, 0.5) 0%, transparent 70%);
+            bottom: -5%;
+            left: 30%;
+            animation: meshFloat3 20s ease-in-out infinite;
+        }
+
+        @keyframes meshFloat1 {
+            0%, 100% { transform: translate(0, 0) scale(1); }
+            33% { transform: translate(80px, 40px) scale(1.1); }
+            66% { transform: translate(-30px, 80px) scale(0.95); }
+        }
+
+        @keyframes meshFloat2 {
+            0%, 100% { transform: translate(0, 0) scale(1); }
+            33% { transform: translate(-60px, 60px) scale(1.05); }
+            66% { transform: translate(40px, -30px) scale(0.9); }
+        }
+
+        @keyframes meshFloat3 {
+            0%, 100% { transform: translate(0, 0) scale(1); }
+            50% { transform: translate(50px, -50px) scale(1.08); }
+        }
+
+        /* Floating leaf particles */
+        .leaf-particle {
+            position: absolute;
+            z-index: 1;
+            font-size: 24px;
+            opacity: 0.15;
+            pointer-events: none;
+            will-change: transform;
+        }
+
+        .leaf-1 { top: 15%; left: 8%; animation: leafDrift 14s ease-in-out infinite; }
+        .leaf-2 { top: 60%; right: 6%; animation: leafDrift 18s ease-in-out infinite reverse; font-size: 20px; }
+        .leaf-3 { top: 35%; right: 15%; animation: leafDrift 16s ease-in-out infinite 2s; font-size: 28px; opacity: 0.1; }
+        .leaf-4 { bottom: 20%; left: 12%; animation: leafDrift 20s ease-in-out infinite 4s; font-size: 18px; }
+        .leaf-5 { top: 75%; left: 45%; animation: leafDrift 15s ease-in-out infinite 1s; font-size: 22px; opacity: 0.08; }
+
+        @keyframes leafDrift {
+            0%, 100% { transform: translateY(0) rotate(0deg); }
+            25% { transform: translateY(-20px) rotate(8deg); }
+            50% { transform: translateY(-8px) rotate(-5deg); }
+            75% { transform: translateY(-25px) rotate(12deg); }
+        }
+
+        /* Grain overlay */
+        .grain {
+            position: absolute;
+            inset: 0;
+            z-index: 1;
+            opacity: 0.3;
+            pointer-events: none;
+            background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.5'/%3E%3C/svg%3E");
+            background-repeat: repeat;
+            background-size: 200px;
+        }
+
+        .hero-content {
+            position: relative;
+            z-index: 5;
+            text-align: center;
+            max-width: 820px;
+        }
+
+        .hero-label {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 20px;
+            background: var(--glass-bg);
+            backdrop-filter: blur(12px);
+            border: 1px solid var(--glass-border);
+            border-radius: 100px;
+            font-size: 13px;
+            font-weight: 600;
+            color: var(--accent);
+            letter-spacing: 0.5px;
+            text-transform: uppercase;
+            margin-bottom: 32px;
+        }
+
+        .hero-label-dot {
+            width: 7px;
+            height: 7px;
+            background: var(--accent);
+            border-radius: 50%;
+            animation: pulseDot 2.5s ease-in-out infinite;
+        }
+
+        @keyframes pulseDot {
+            0%, 100% { opacity: 1; box-shadow: 0 0 0 0 rgba(61,139,64,0.4); }
+            50% { opacity: 0.6; box-shadow: 0 0 0 6px rgba(61,139,64,0); }
+        }
+
+        .hero h1 {
+            font-family: 'Instrument Sans', sans-serif;
+            font-size: clamp(44px, 7vw, 80px);
+            font-weight: 700;
+            line-height: 1.05;
+            letter-spacing: -3px;
+            color: var(--forest);
+            margin-bottom: 28px;
+        }
+
+        .hero h1 i {
+            font-family: 'Instrument Serif', Georgia, serif;
+            font-style: italic;
+            font-weight: 400;
+            color: var(--accent);
+        }
+
+        .hero-sub {
+            font-size: clamp(17px, 2vw, 20px);
+            line-height: 1.7;
+            color: var(--text-secondary);
+            max-width: 560px;
+            margin: 0 auto 44px;
+        }
+
+        .hero-ctas {
+            display: flex;
+            gap: 16px;
+            justify-content: center;
+            flex-wrap: wrap;
+            margin-bottom: 72px;
+        }
+
+        /* Hero dashboard mockup */
+        .hero-mockup-wrap {
+            position: relative;
+            z-index: 5;
+            max-width: 580px;
+            margin: 0 auto;
+        }
+
+        .hero-mockup-glow {
+            position: absolute;
+            inset: -40px;
+            background: radial-gradient(ellipse at center, rgba(61,139,64,0.1) 0%, transparent 65%);
+            border-radius: 50%;
+            z-index: 0;
+            filter: blur(20px);
+        }
+
+        .hero-mockup {
+            position: relative;
+            z-index: 1;
+            background: var(--warm-white);
+            border-radius: 20px;
+            border: 1px solid rgba(168, 197, 160, 0.25);
+            box-shadow: var(--shadow-heavy), 0 0 0 1px rgba(255,255,255,0.5) inset;
+            overflow: hidden;
+            transform: perspective(1400px) rotateX(4deg) rotateY(0deg);
+            transition: transform 0.6s cubic-bezier(0.22, 1, 0.36, 1);
+        }
+
+        .hero-mockup:hover {
+            transform: perspective(1400px) rotateX(1deg) rotateY(0deg);
+        }
+
+        .hm-header {
+            background: var(--forest);
+            color: #fff;
+            padding: 16px 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .hm-header-l h3 {
+            font-size: 14px;
+            font-weight: 700;
+            margin: 0 0 2px;
+        }
+
+        .hm-header-l span {
+            font-size: 11px;
+            opacity: 0.65;
+        }
+
+        .hm-header-r {
+            text-align: right;
+            font-size: 11px;
+            opacity: 0.75;
+            font-variant-numeric: tabular-nums;
+        }
+
+        .hm-nav {
+            display: flex;
+            gap: 2px;
+            padding: 6px 10px;
+            background: var(--cream-dark);
+            border-bottom: 1px solid rgba(0,0,0,0.06);
+        }
+
+        .hm-nav span {
+            font-size: 11px;
+            padding: 4px 10px;
+            border-radius: 6px;
+            color: var(--text-secondary);
+        }
+
+        .hm-nav span.act {
+            background: var(--forest);
+            color: #fff;
+        }
+
+        .hm-body {
+            padding: 16px;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            background: var(--warm-white);
+        }
+
+        .hm-card {
+            border: 1px solid rgba(0,0,0,0.07);
+            border-radius: 12px;
+            padding: 14px 16px;
+            background: #fff;
+        }
+
+        .hm-card-title {
+            font-size: 12px;
+            font-weight: 700;
+            color: var(--text-primary);
+            margin-bottom: 10px;
+        }
+
+        .hm-stats {
+            display: flex;
+            gap: 20px;
+        }
+
+        .hm-stat { flex: 1; }
+
+        .hm-stat-label {
+            font-size: 9px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            color: var(--text-tertiary);
+            margin-bottom: 2px;
+        }
+
+        .hm-stat-val {
+            font-variant-numeric: tabular-nums;
+            font-size: 20px;
+            font-weight: 700;
+            color: var(--forest);
+            letter-spacing: -0.5px;
+        }
+
+        .hm-bar {
+            height: 4px;
+            background: var(--cream-dark);
+            border-radius: 2px;
+            margin-top: 8px;
+            overflow: hidden;
+        }
+
+        .hm-bar-fill {
+            height: 100%;
+            border-radius: 2px;
+            background: linear-gradient(90deg, var(--accent), #5cb85c);
+            width: 0%;
+            transition: width 1.6s cubic-bezier(0.22, 1, 0.36, 1);
+        }
+
+        .hm-modes {
+            display: flex;
+            gap: 6px;
+        }
+
+        .hm-mode {
+            flex: 1;
+            text-align: center;
+            padding: 10px 4px;
+            border: 2px solid rgba(0,0,0,0.07);
+            border-radius: 10px;
+            background: #fff;
+            font-size: 10px;
+        }
+
+        .hm-mode.sel {
+            border-color: var(--forest-mid);
+            background: rgba(168, 197, 160, 0.15);
+        }
+
+        .hm-mode-ico { font-size: 20px; line-height: 1; }
+        .hm-mode-name { font-weight: 700; margin-top: 3px; font-size: 10px; }
+
+        .hm-status {
+            display: flex;
+            gap: 12px;
+            font-size: 11px;
+        }
+
+        .hm-status-item { flex: 1; }
+        .hm-status-label { color: var(--text-tertiary); font-size: 9px; }
+        .hm-status-val { font-weight: 600; margin-top: 1px; }
+
+        .hm-badge {
+            display: inline-block;
+            padding: 2px 8px;
+            border-radius: 8px;
+            font-size: 10px;
+            font-weight: 600;
+        }
+
+        .hm-badge-sensor { background: #fff3e0; color: #ef6c00; }
+
+        /* ═══════════════════════════════════
+           FEATURES
+           ═══════════════════════════════════ */
+        .features {
+            position: relative;
+            padding: 140px 32px;
+            background: var(--cream);
+        }
+
+        .features .grain { opacity: 0.15; }
+
+        .sect-inner { max-width: 1200px; margin: 0 auto; }
+
+        .sect-head {
+            text-align: center;
+            margin-bottom: 72px;
+        }
+
+        .sect-head h2 {
+            font-family: 'Instrument Sans', sans-serif;
+            font-size: clamp(32px, 4.5vw, 50px);
+            font-weight: 700;
+            letter-spacing: -1.8px;
+            color: var(--forest);
+            margin-bottom: 16px;
+            line-height: 1.1;
+        }
+
+        .sect-head h2 i {
+            font-family: 'Instrument Serif', Georgia, serif;
+            font-style: italic;
+            font-weight: 400;
+        }
+
+        .sect-head p {
+            font-size: 18px;
+            color: var(--text-secondary);
+            max-width: 460px;
+            margin: 0 auto;
+        }
+
+        .feat-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+        }
+
+        .feat-card {
+            position: relative;
+            background: var(--glass-bg);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border: 1px solid var(--glass-border);
+            border-radius: 20px;
+            padding: 40px 36px;
+            transition: all 0.4s cubic-bezier(0.22, 1, 0.36, 1);
+            overflow: hidden;
+        }
+
+        .feat-card::before {
+            content: '';
+            position: absolute;
+            inset: 0;
+            border-radius: 20px;
+            border: 1px solid transparent;
+            background: linear-gradient(135deg, rgba(61,139,64,0.1), transparent 60%) border-box;
+            -webkit-mask: linear-gradient(#fff 0 0) padding-box, linear-gradient(#fff 0 0);
+            -webkit-mask-composite: xor;
+            mask-composite: exclude;
+            opacity: 0;
+            transition: opacity 0.4s;
+        }
+
+        .feat-card:hover {
+            transform: translateY(-4px);
+            box-shadow: var(--shadow-soft), var(--shadow-glow);
+        }
+
+        .feat-card:hover::before { opacity: 1; }
+
+        .feat-ico {
+            font-size: 36px;
+            margin-bottom: 20px;
+            display: block;
+            line-height: 1;
+        }
+
+        .feat-card h3 {
+            font-size: 20px;
+            font-weight: 700;
+            color: var(--forest);
+            margin-bottom: 10px;
+            letter-spacing: -0.4px;
+        }
+
+        .feat-card p {
+            font-size: 15px;
+            color: var(--text-secondary);
+            line-height: 1.65;
+        }
+
+        /* ═══════════════════════════════════
+           HOW IT WORKS
+           ═══════════════════════════════════ */
+        .how {
+            position: relative;
+            padding: 140px 32px;
+            background: var(--warm-white);
+        }
+
+        .steps-row {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 48px;
+            position: relative;
+        }
+
+        /* Connecting gradient line */
+        .steps-line {
+            display: none;
+        }
+
+        @media (min-width: 768px) {
+            .steps-line {
+                display: block;
+                position: absolute;
+                top: 36px;
+                left: calc(16.66% + 28px);
+                right: calc(16.66% + 28px);
+                height: 3px;
+                background: linear-gradient(90deg, var(--sage-light), var(--accent), var(--sage-light));
+                border-radius: 2px;
+                z-index: 0;
+                opacity: 0.4;
+            }
+        }
+
+        .step {
+            text-align: center;
+            position: relative;
+            z-index: 1;
+        }
+
+        .step-circle {
+            width: 72px;
+            height: 72px;
+            margin: 0 auto 28px;
+            background: var(--forest);
+            color: var(--cream);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-family: 'Instrument Serif', Georgia, serif;
+            font-size: 28px;
+            font-style: italic;
+            box-shadow: 0 8px 32px rgba(26, 58, 26, 0.2);
+            position: relative;
+        }
+
+        .step-circle::after {
+            content: '';
+            position: absolute;
+            inset: -4px;
+            border-radius: 50%;
+            border: 2px solid var(--sage-light);
+            opacity: 0.4;
+        }
+
+        .step h3 {
+            font-size: 20px;
+            font-weight: 700;
+            color: var(--forest);
+            margin-bottom: 10px;
+            letter-spacing: -0.3px;
+        }
+
+        .step p {
+            font-size: 15px;
+            color: var(--text-secondary);
+            max-width: 280px;
+            margin: 0 auto;
+            line-height: 1.65;
+        }
+
+        /* ═══════════════════════════════════
+           DASHBOARD SHOWCASE
+           ═══════════════════════════════════ */
+        .showcase {
+            position: relative;
+            padding: 140px 32px;
+            background: var(--cream);
+        }
+
+        .showcase-grid {
+            max-width: 1200px;
+            margin: 0 auto;
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 80px;
+            align-items: center;
+        }
+
+        .showcase-text h2 {
+            font-family: 'Instrument Sans', sans-serif;
+            font-size: clamp(32px, 4.5vw, 50px);
+            font-weight: 700;
+            letter-spacing: -1.8px;
+            color: var(--forest);
+            margin-bottom: 18px;
+            line-height: 1.1;
+        }
+
+        .showcase-text h2 i {
+            font-family: 'Instrument Serif', Georgia, serif;
+            font-style: italic;
+            font-weight: 400;
+        }
+
+        .showcase-text > p {
+            font-size: 17px;
+            color: var(--text-secondary);
+            line-height: 1.7;
+            margin-bottom: 40px;
+            max-width: 440px;
+        }
+
+        .sc-feats {
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+
+        .sc-feat {
+            display: flex;
+            gap: 16px;
+            align-items: flex-start;
+        }
+
+        .sc-feat-ico {
+            width: 44px;
+            height: 44px;
+            background: var(--glass-bg);
+            backdrop-filter: blur(8px);
+            border: 1px solid var(--glass-border);
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 20px;
+            flex-shrink: 0;
+        }
+
+        .sc-feat h4 {
+            font-size: 15px;
+            font-weight: 700;
+            color: var(--forest);
+            margin-bottom: 3px;
+        }
+
+        .sc-feat p {
+            font-size: 14px;
+            color: var(--text-tertiary);
+            line-height: 1.55;
+        }
+
+        /* Device card mockup */
+        .sc-card-wrap {
+            position: relative;
+        }
+
+        .sc-card-glow {
+            position: absolute;
+            inset: -30px;
+            background: radial-gradient(ellipse, var(--glow-green) 0%, transparent 65%);
+            border-radius: 50%;
+            filter: blur(20px);
+            z-index: 0;
+        }
+
+        .sc-device {
+            position: relative;
+            z-index: 1;
+            background: #fff;
+            border-radius: 20px;
+            box-shadow: var(--shadow-heavy);
+            overflow: hidden;
+            border: 1px solid rgba(168,197,160,0.2);
+        }
+
+        .sc-dev-head {
+            background: linear-gradient(135deg, rgba(232,245,233,0.8), rgba(255,255,255,0.9));
+            padding: 22px 24px;
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            border-bottom: 1px solid rgba(0,0,0,0.05);
+        }
+
+        .sc-dev-icon {
+            width: 52px;
+            height: 52px;
+            background: var(--forest);
+            border-radius: 14px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 26px;
+        }
+
+        .sc-dev-name {
+            font-weight: 700;
+            font-size: 17px;
+            color: var(--forest);
+        }
+
+        .sc-dev-loc {
+            font-size: 12px;
+            color: var(--text-tertiary);
+            margin-top: 1px;
+        }
+
+        .sc-dev-badge {
+            margin-left: auto;
+            padding: 5px 14px;
+            background: rgba(168, 197, 160, 0.2);
+            border-radius: 100px;
+            font-size: 12px;
+            font-weight: 600;
+            color: var(--accent);
+        }
+
+        .sc-dev-body {
+            padding: 24px;
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 16px;
+        }
+
+        .sc-metric {
+            padding: 16px;
+            background: var(--cream);
+            border-radius: 12px;
+            border: 1px solid rgba(0,0,0,0.04);
+        }
+
+        .sc-metric-label {
+            font-size: 10px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            color: var(--text-tertiary);
+            margin-bottom: 6px;
+        }
+
+        .sc-metric-val {
+            font-variant-numeric: tabular-nums;
+            font-size: 24px;
+            font-weight: 700;
+            color: var(--forest);
+            letter-spacing: -0.5px;
+        }
+
+        .sc-metric-bar {
+            height: 4px;
+            background: var(--cream-dark);
+            border-radius: 2px;
+            margin-top: 10px;
+            overflow: hidden;
+        }
+
+        .sc-metric-bar-fill {
+            height: 100%;
+            border-radius: 2px;
+            background: linear-gradient(90deg, var(--accent), #66bb6a);
+            width: 0%;
+            transition: width 1.6s cubic-bezier(0.22, 1, 0.36, 1) 0.3s;
+        }
+
+        .sc-dev-foot {
+            padding: 16px 24px;
+            border-top: 1px solid rgba(0,0,0,0.05);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 12px;
+            color: var(--text-tertiary);
+        }
+
+        .sc-dev-mode {
+            padding: 4px 12px;
+            background: #fff3e0;
+            color: #ef6c00;
+            border-radius: 100px;
+            font-weight: 600;
+            font-size: 11px;
+        }
+
+        /* ═══════════════════════════════════
+           BOTTOM CTA
+           ═══════════════════════════════════ */
+        .cta-section {
+            position: relative;
+            padding: 160px 32px;
+            background: var(--forest);
+            overflow: hidden;
+        }
+
+        .cta-section .blob {
+            position: absolute;
+            border-radius: 50%;
+            filter: blur(100px);
+            opacity: 0.3;
+        }
+
+        .cta-blob-1 {
+            width: 500px;
+            height: 500px;
+            background: rgba(61, 139, 64, 0.4);
+            top: -20%;
+            right: -10%;
+            animation: meshFloat1 20s ease-in-out infinite;
+        }
+
+        .cta-blob-2 {
+            width: 400px;
+            height: 400px;
+            background: rgba(168, 197, 160, 0.3);
+            bottom: -20%;
+            left: -5%;
+            animation: meshFloat2 18s ease-in-out infinite;
+        }
+
+        .cta-content {
+            position: relative;
+            z-index: 2;
+            text-align: center;
+            max-width: 640px;
+            margin: 0 auto;
+        }
+
+        .cta-content h2 {
+            font-family: 'Instrument Sans', sans-serif;
+            font-size: clamp(32px, 5vw, 52px);
+            font-weight: 700;
+            letter-spacing: -2px;
+            color: var(--cream);
+            margin-bottom: 18px;
+            line-height: 1.08;
+        }
+
+        .cta-content h2 i {
+            font-family: 'Instrument Serif', Georgia, serif;
+            font-style: italic;
+            font-weight: 400;
+            color: var(--sage);
+        }
+
+        .cta-content p {
+            font-size: 18px;
+            color: var(--sage);
+            margin-bottom: 44px;
+            line-height: 1.7;
+        }
+
+        /* ═══════════════════════════════════
+           FOOTER
+           ═══════════════════════════════════ */
+        .footer {
+            background: #0f2b10;
+            padding: 48px 32px;
+            color: rgba(168, 197, 160, 0.5);
+        }
+
+        .footer-inner {
+            max-width: 1280px;
+            margin: 0 auto;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            flex-wrap: wrap;
+            gap: 20px;
+        }
+
+        .footer-brand {
+            font-family: 'Instrument Sans', sans-serif;
+            font-weight: 700;
+            font-size: 16px;
+            color: rgba(248, 246, 240, 0.6);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .footer-dot {
+            width: 8px;
+            height: 8px;
+            background: var(--accent);
+            border-radius: 50%;
+            opacity: 0.5;
+        }
+
+        .footer-links {
+            display: flex;
+            gap: 32px;
+        }
+
+        .footer-links a {
+            color: rgba(168, 197, 160, 0.4);
+            text-decoration: none;
+            font-size: 13px;
+            transition: color 0.2s;
+        }
+
+        .footer-links a:hover { color: var(--sage); }
+
+        /* ═══════════════════════════════════
+           SCROLL REVEAL
+           ═══════════════════════════════════ */
+        .rv {
+            opacity: 0;
+            transform: translateY(32px);
+            transition: opacity 0.8s cubic-bezier(0.22, 1, 0.36, 1),
+                        transform 0.8s cubic-bezier(0.22, 1, 0.36, 1);
+        }
+
+        .rv.vis {
+            opacity: 1;
+            transform: translateY(0);
+        }
+
+        .rv-d1 { transition-delay: 0.1s; }
+        .rv-d2 { transition-delay: 0.2s; }
+        .rv-d3 { transition-delay: 0.3s; }
+        .rv-d4 { transition-delay: 0.4s; }
+
+        /* ═══════════════════════════════════
+           RESPONSIVE
+           ═══════════════════════════════════ */
+        @media (max-width: 960px) {
+            .feat-grid { grid-template-columns: 1fr; }
+            .steps-row { grid-template-columns: 1fr; gap: 56px; }
+            .showcase-grid { grid-template-columns: 1fr; gap: 56px; }
+            .showcase-text { order: -1; text-align: center; }
+            .showcase-text > p { margin-left: auto; margin-right: auto; }
+            .sc-feats { align-items: center; }
+            .sc-card-wrap { max-width: 480px; margin: 0 auto; }
+            .hero-mockup { transform: none; }
+            .hero-mockup:hover { transform: none; }
+        }
+
+        @media (max-width: 640px) {
+            .nav { padding: 0 16px; height: 64px; }
+            .nav-links .btn-nav { padding: 8px 14px; font-size: 13px; }
+            .hero { padding: 100px 16px 56px; min-height: auto; }
+            .hero h1 { letter-spacing: -1.5px; }
+            .hero-ctas { flex-direction: column; align-items: center; }
+            .hero-ctas .btn { width: 100%; max-width: 320px; }
+            .hero-mockup-wrap { margin-left: -8px; margin-right: -8px; }
+            .features, .how, .showcase { padding: 80px 16px; }
+            .feat-card { padding: 28px 24px; }
+            .cta-section { padding: 100px 16px; }
+            .footer-inner { flex-direction: column; text-align: center; }
+            .sc-dev-body { grid-template-columns: 1fr; }
+            .blob-1, .blob-2, .blob-3 { filter: blur(60px); opacity: 0.35; }
+        }
+    </style>
 </head>
 <body>
 
-<!-- Auth Section -->
-<div id="auth-section" class="auth-section active">
-  <div style="max-width:400px;margin:40px auto;padding:20px">
-    <div style="text-align:center;margin-bottom:24px">
-      <h2 style="color:#2c5f2d;margin-bottom:8px">🌱 PlantApp</h2>
-      <p class="muted">Smart Plant Watering System</p>
-    </div>
-
-    <!-- Login Form -->
-    <div id="login-form" class="card">
-      <h3 style="margin-top:0">Login</h3>
-      <form onsubmit="handleLogin();return false" autocomplete="on">
-      <div style="margin-bottom:12px">
-        <label style="display:block;font-size:13px;margin-bottom:4px">Email</label>
-        <input type="email" id="login-email" placeholder="your@email.com" autocomplete="email" style="width:100%;padding:10px;border:1px solid #ccc;border-radius:8px;box-sizing:border-box">
-      </div>
-      <div style="margin-bottom:16px">
-        <label style="display:block;font-size:13px;margin-bottom:4px">Password</label>
-        <input type="password" id="login-password" placeholder="••••••••" autocomplete="current-password" style="width:100%;padding:10px;border:1px solid #ccc;border-radius:8px;box-sizing:border-box">
-      </div>
-      <button type="submit" class="primary" style="width:100%;padding:12px">Login</button>
-      </form>
-      <div style="text-align:center;margin-top:16px">
-        <span class="muted">Don't have an account?</span>
-        <a href="#" onclick="showRegister();return false" style="color:#2c5f2d;font-weight:600">Register</a>
-      </div>
-      <div id="login-error" style="display:none;margin-top:12px;padding:10px;background:#ffebee;color:#c62828;border-radius:8px;font-size:13px"></div>
-      <div id="login-success" style="display:none;margin-top:12px;padding:10px;background:#e8f5e9;color:#2e7d32;border-radius:8px;font-size:13px"></div>
-    </div>
-
-    <!-- Register Form -->
-    <div id="register-form" class="card" style="display:none">
-      <h3 style="margin-top:0">Create Account</h3>
-      <form onsubmit="handleRegister();return false" autocomplete="on">
-      <div style="margin-bottom:12px">
-        <label style="display:block;font-size:13px;margin-bottom:4px">Email</label>
-        <input type="email" id="register-email" placeholder="your@email.com" autocomplete="email" style="width:100%;padding:10px;border:1px solid #ccc;border-radius:8px;box-sizing:border-box">
-      </div>
-      <div style="margin-bottom:16px">
-        <label style="display:block;font-size:13px;margin-bottom:4px">Password (min 8 characters)</label>
-        <input type="password" id="register-password" placeholder="••••••••" autocomplete="new-password" style="width:100%;padding:10px;border:1px solid #ccc;border-radius:8px;box-sizing:border-box">
-      </div>
-      <button type="submit" class="primary" style="width:100%;padding:12px">Register</button>
-      </form>
-      <div style="text-align:center;margin-top:16px">
-        <span class="muted">Already have an account?</span>
-        <a href="#" onclick="showLogin();return false" style="color:#2c5f2d;font-weight:600">Login</a>
-      </div>
-      <div id="register-error" style="display:none;margin-top:12px;padding:10px;background:#ffebee;color:#c62828;border-radius:8px;font-size:13px"></div>
-      <div id="register-success" style="display:none;margin-top:12px;padding:10px;background:#e8f5e9;color:#2e7d32;border-radius:8px;font-size:13px"></div>
-    </div>
-
-    <!-- Verify Form -->
-    <div id="verify-form" class="card" style="display:none">
-      <h3 style="margin-top:0">Verify Email</h3>
-      <p class="muted">We sent a 6-digit code to <span id="verify-email-display"></span></p>
-      <div style="margin-bottom:16px">
-        <label style="display:block;font-size:13px;margin-bottom:4px">Verification Code</label>
-        <input type="text" id="verify-code" placeholder="123456" maxlength="6" style="width:100%;padding:10px;border:1px solid #ccc;border-radius:8px;box-sizing:border-box;font-size:24px;text-align:center;letter-spacing:8px">
-      </div>
-      <button class="primary" style="width:100%;padding:12px" onclick="handleVerify()">Verify</button>
-      <div style="text-align:center;margin-top:16px">
-        <a href="#" onclick="showLogin();return false" style="color:#2c5f2d">Back to Login</a>
-      </div>
-      <div id="verify-error" style="display:none;margin-top:12px;padding:10px;background:#ffebee;color:#c62828;border-radius:8px;font-size:13px"></div>
-    </div>
-
-  </div>
-</div>
-
-<!-- Fleet View (hidden until auth) -->
-<div id="fleet-view" style="display:none">
-
-  <!-- Header -->
-  <div class="header">
-    <div>
-      <h1>🌱 PlantApp Fleet</h1>
-      <div style="font-size:11px;opacity:0.8" id="user-info">Admin Dashboard</div>
-    </div>
-    <div class="header-info">
-      <div id="header-time" class="mono" style="font-size:11px">--:--</div>
-      <div style="font-size:11px"><a href="identify.html" style="color:#fff;text-decoration:none">🌱 Plant</a> | <span id="admin-link"></span><span style="cursor:pointer" onclick="logout()">👤 <span id="username">Admin</span> | Logout</span></div>
-    </div>
-  </div>
-
-  <div class="container">
-
-    <!-- Stats Dashboard -->
-    <div class="stats-row">
-      <div class="stat-card">
-        <div class="stat-value" id="stat-total">0</div>
-        <div class="stat-label">Total Devices</div>
-      </div>
-      <div class="stat-card">
-        <div class="stat-value ok" id="stat-online">0</div>
-        <div class="stat-label">Online</div>
-      </div>
-      <div class="stat-card">
-        <div class="stat-value warning" id="stat-warnings">0</div>
-        <div class="stat-label">Warnings</div>
-      </div>
-      <div class="stat-card">
-        <div class="stat-value" style="color:#1976d2" id="stat-watering">0</div>
-        <div class="stat-label">Watering Now</div>
-      </div>
-    </div>
-
-    <!-- Add Device Button (for all users) - compact -->
-    <div style="margin-bottom:12px;padding:8px 12px;background:#e8f5e9;border:1px solid #2c5f2d;border-radius:8px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
-      <span style="color:#2c5f2d;font-weight:600;font-size:14px">➕ Add Device</span>
-      <button class="primary" onclick="showClaimModal()" style="padding:6px 12px;font-size:13px">🌱 Claim</button>
-    </div>
-
-    <!-- Admin Controls (only for admin) - compact single line -->
-    <div id="admin-controls" class="admin-controls" style="display:flex;align-items:center;flex-wrap:wrap;gap:8px">
-      <h3>🔧 Admin</h3>
-      <button onclick="bulkAction('refresh')" style="padding:4px 8px;font-size:12px">🔄 Refresh All</button>
-      <button onclick="bulkAction('ota')" style="padding:4px 8px;font-size:12px">📦 Update All Online</button>
-      <button onclick="exportData()" style="padding:4px 8px;font-size:12px">📥 Export</button>
-      <span id="last-refresh-time" class="muted" style="margin-left:auto;font-size:11px"></span>
-    </div>
-
-    <!-- Filters -->
-    <div class="card">
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
-        <h3 style="margin:0">Device List</h3>
-        <div class="view-toggle">
-          <button id="view-cards" onclick="switchView('cards')">🔲 Cards</button>
-          <button id="view-list" class="active" onclick="switchView('list')">☰ List</button>
+    <!-- NAVBAR -->
+    <nav class="nav">
+        <div class="nav-inner">
+            <a href="/" class="nav-brand">
+                <span class="nav-brand-icon">
+                    <svg viewBox="0 0 20 20" fill="none"><path d="M10 3C10 3 5 6.5 5 12c0 3.5 2 5 5 5s5-1.5 5-5C15 6.5 10 3 10 3z" fill="#c5dabe" opacity="0.9"/><path d="M10 6.5c2 1 4 3.5 3.2 7" stroke="#a8c5a0" stroke-width="1.2" fill="none" stroke-linecap="round"/></svg>
+                </span>
+                PlantApp
+            </a>
+            <div class="nav-links">
+                <a href="login.html" class="btn btn-hollow btn-nav" id="nav-login">Log In</a>
+                <a href="login.html?tab=register" class="btn btn-solid btn-nav" id="nav-signup">Get Started</a>
+            </div>
         </div>
-      </div>
-      <div class="filters">
-        <input type="text" id="search-input" placeholder="🔍 Search device name..." onkeyup="filterDevices()">
-        <select id="location-filter" onchange="filterDevices()">
-          <option value="">All Locations</option>
-        </select>
-        <select id="status-filter" onchange="filterDevices()">
-          <option value="">All Status</option>
-          <option value="online">Online</option>
-          <option value="offline">Offline</option>
-          <option value="warning">Warnings Only</option>
-        </select>
-        <select id="mode-filter" onchange="filterDevices()">
-          <option value="">All Modes</option>
-          <option value="manual">Manual</option>
-          <option value="timer">Timer</option>
-          <option value="sensor">Sensor</option>
-        </select>
-      </div>
-    </div>
+    </nav>
 
-    <!-- Device Grid -->
-    <div id="device-grid" class="device-grid">
-      <!-- Populated by JS -->
-    </div>
-
-  </div>
-</div>
-
-<script>
-// getRssiDisplay, mapStateToDisplay, timeAgo, showToast - moved to common.js
-
-// Format restarts display: "10 (9 unexpected)" or just "10"
-// Prefer clean_restarts + unexpected_restarts (accurate, from devices table)
-// Fallback to reboot_count (legacy, from telemetry)
-function formatRestarts(device) {
-  const clean = device.clean_restarts;
-  const unexpected = device.unexpected_restarts;
-
-  // Prefer clean + unexpected (new accurate counters from devices table)
-  if (clean !== null && clean !== undefined && unexpected !== null && unexpected !== undefined) {
-    const total = clean + unexpected;
-    if (unexpected > 0) {
-      return `${total} <span style="color:#ff9800">(${unexpected} unexpected)</span>`;
-    }
-    return String(total);
-  }
-
-  // Fallback: reboot_count from telemetry (legacy)
-  const reboot = device.reboot_count;
-  if (reboot !== null && reboot !== undefined) {
-    return String(reboot);
-  }
-
-  return 'N/A';
-}
-
-// Mock data (fallback when API fails)
-// ВАЖНО: должен содержать ВСЕ реальные устройства!
-const MOCK_DEVICES = [
-  {
-    device_id: 'Polivalka-9AC805',
-    name: 'Polivalka-9AC805',
-    location: 'Home',
-    room: 'Living Room',
-    moisture_pct: null,  // No telemetry yet
-    battery_pct: null,
-    battery_charging: false,
-    mode: 'manual',
-    state: 'UNKNOWN',
-    firmware_version: 'v1.0.0',
-    clean_restarts: null,
-    unexpected_restarts: null,
-    last_watering: null,
-    last_update: null,
-    online: false,
-    warnings: []
-  },
-  {
-    device_id: 'Polivalka-BB00C1',
-    name: 'Polivalka-BB00C1',
-    location: 'Home',
-    room: 'Living Room',
-    moisture_pct: 45,
-    battery_pct: null,  // AC power
-    battery_charging: false,
-    mode: 'sensor',
-    state: 'STANDBY',
-    firmware_version: 'v1.0.0',
-    clean_restarts: 12,
-    unexpected_restarts: 3,
-    last_watering: Date.now() - 2 * 3600 * 1000,
-    last_update: Date.now() - 5 * 60 * 1000,
-    online: true,
-    warnings: []
-  },
-  {
-    device_id: 'Polivalka-BC67E9',
-    name: 'Polivalka-BC67E9',
-    location: 'Office',
-    room: 'Workspace',
-    moisture_pct: 50,
-    battery_pct: 85,
-    battery_charging: true,
-    mode: 'sensor',
-    state: 'STANDBY',
-    firmware_version: 'v1.0.0',
-    clean_restarts: 8,
-    unexpected_restarts: 0,
-    last_watering: Date.now() - 24 * 3600 * 1000,
-    last_update: Date.now() - 10 * 60 * 1000,
-    online: true,
-    warnings: []
-  }
-];
-
-let currentUser = null;
-let allDevices = [];
-let currentView = 'list'; // 'cards' or 'list' (default: list for mobile-first)
-
-// Pump settings (will be loaded from device status or use defaults)
-let pumpCalibration = 1.0;  // ml/sec default
-let maxWateringTime = 60;   // seconds default
-let pumpRunningDevices = new Set();  // Track which devices have pump running
-let pumpTimers = {};  // Track timers for each device
-
-// Track expanded devices (to preserve state across re-renders)
-let expandedDevices = new Set();
-
-// ============ Auth API ============
-const AUTH_API = 'https://p0833p2v29.execute-api.eu-central-1.amazonaws.com';
-
-// Store pending email for verification
-let pendingEmail = '';
-
-function showLogin() {
-  document.getElementById('login-form').style.display = 'block';
-  document.getElementById('register-form').style.display = 'none';
-  document.getElementById('verify-form').style.display = 'none';
-  clearErrors();
-}
-
-function showRegister() {
-  document.getElementById('login-form').style.display = 'none';
-  document.getElementById('register-form').style.display = 'block';
-  document.getElementById('verify-form').style.display = 'none';
-  clearErrors();
-}
-
-function showVerify(email) {
-  pendingEmail = email;
-  document.getElementById('verify-email-display').textContent = email;
-  document.getElementById('login-form').style.display = 'none';
-  document.getElementById('register-form').style.display = 'none';
-  document.getElementById('verify-form').style.display = 'block';
-  clearErrors();
-}
-
-function clearErrors() {
-  ['login-error', 'login-success', 'register-error', 'register-success', 'verify-error'].forEach(id => {
-    const el = document.getElementById(id);
-    if (el) el.style.display = 'none';
-  });
-}
-
-function showError(elementId, message) {
-  const el = document.getElementById(elementId);
-  el.textContent = message;
-  el.style.display = 'block';
-}
-
-async function handleRegister() {
-  const email = document.getElementById('register-email').value.trim();
-  const password = document.getElementById('register-password').value;
-
-  if (!email || !password) {
-    showError('register-error', 'Please fill in all fields');
-    return;
-  }
-
-  if (password.length < 8) {
-    showError('register-error', 'Password must be at least 8 characters');
-    return;
-  }
-
-  try {
-    const response = await fetch(`${AUTH_API}/auth/register`, {
-      method: 'POST',
-      headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({email, password})
-    });
-    const data = await response.json();
-
-    if (!response.ok) {
-      showError('register-error', data.error || 'Registration failed');
-      return;
-    }
-
-    // Show verification form
-    showVerify(email);
-
-  } catch (e) {
-    showError('register-error', 'Network error. Please try again.');
-    console.error('Register error:', e);
-  }
-}
-
-async function handleVerify() {
-  const code = document.getElementById('verify-code').value.trim();
-
-  if (!code || code.length !== 6) {
-    showError('verify-error', 'Please enter the 6-digit code');
-    return;
-  }
-
-  try {
-    const response = await fetch(`${AUTH_API}/auth/verify`, {
-      method: 'POST',
-      headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({email: pendingEmail, code})
-    });
-    const data = await response.json();
-
-    if (!response.ok) {
-      showError('verify-error', data.error || 'Verification failed');
-      return;
-    }
-
-    // Success - show login with success message
-    showLogin();
-    document.getElementById('login-success').textContent = 'Email verified! You can now login.';
-    document.getElementById('login-success').style.display = 'block';
-    document.getElementById('login-email').value = pendingEmail;
-
-  } catch (e) {
-    showError('verify-error', 'Network error. Please try again.');
-    console.error('Verify error:', e);
-  }
-}
-
-async function handleLogin() {
-  const email = document.getElementById('login-email').value.trim();
-  const password = document.getElementById('login-password').value;
-
-  if (!email || !password) {
-    showError('login-error', 'Please fill in all fields');
-    return;
-  }
-
-  try {
-    const response = await fetch(`${AUTH_API}/auth/login`, {
-      method: 'POST',
-      headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({email, password})
-    });
-    const data = await response.json();
-
-    if (!response.ok) {
-      // Check if email not verified
-      if (data.error && data.error.includes('not verified')) {
-        showVerify(email);
-        return;
-      }
-      showError('login-error', data.error || 'Login failed');
-      return;
-    }
-
-    // Store tokens
-    localStorage.setItem('access_token', data.access_token);
-    localStorage.setItem('refresh_token', data.refresh_token);
-    localStorage.setItem('user_email', data.email);
-
-    // Login success
-    loginSuccess(data.email);
-
-  } catch (e) {
-    showError('login-error', 'Network error. Please try again.');
-    console.error('Login error:', e);
-  }
-}
-
-function loginSuccess(email) {
-  currentUser = {username: email, role: 'user'};
-  document.getElementById('auth-section').style.display = 'none';
-  document.getElementById('fleet-view').style.display = 'block';
-  document.getElementById('username').textContent = email;
-
-  // Show Admin link only for admins (UX only - real security is on backend)
-  // Uses isAdmin() from common.js
-  if (isAdmin()) {
-    document.getElementById('admin-link').innerHTML = '<a href="admin.html" style="color:#fff;text-decoration:none">⚙️ Admin</a> | ';
-    // Show debug console toggle for admins
-    document.getElementById('consoleToggle').style.display = 'block';
-  }
-
-  // Load devices (time handled by common.js universal clock)
-  loadDevices();
-}
-
-function logout() {
-  // Use Auth from api-adapter.js
-  if (typeof Auth !== 'undefined') {
-    Auth.logout();
-  } else {
-    // Fallback
-    localStorage.removeItem('access_token');
-    localStorage.removeItem('refresh_token');
-    localStorage.removeItem('user_email');
-    window.location.href = 'login.html';
-  }
-}
-
-// Initialize user display on page load
-function initUserDisplay() {
-  // Get email from Auth (api-adapter.js handles token validation)
-  const email = typeof Auth !== 'undefined' ? Auth.getUserEmail() : localStorage.getItem('user_email');
-
-  if (email) {
-    // Show email in header
-    const usernameEl = document.getElementById('username');
-    if (usernameEl) {
-      usernameEl.textContent = email;
-    }
-
-    // Show admin features for admins
-    try {
-      if (typeof isAdmin === 'function' && isAdmin()) {
-        document.getElementById('admin-link').innerHTML = '<a href="admin.html" style="color:#fff;text-decoration:none">⚙️ Admin</a> | ';
-        const consoleToggle = document.getElementById('consoleToggle');
-        if (consoleToggle) consoleToggle.style.display = 'block';
-      }
-    } catch (e) {
-      console.error('Admin check failed:', e);
-    }
-
-    // Hide auth section if exists, show fleet view
-    const authSection = document.getElementById('auth-section');
-    const fleetView = document.getElementById('fleet-view');
-    if (authSection) authSection.style.display = 'none';
-    if (fleetView) fleetView.style.display = 'block';
-
-    // Load devices if not already loaded (time handled by common.js)
-    if (allDevices.length === 0) {
-      loadDevices();
-    }
-  }
-}
-
-// Initialize on page load
-initUserDisplay();
-
-async function loadDevices() {
-  // Load devices from API - ALWAYS fetch fresh data
-  // No caching on page load to prevent stale data (BUG #8)
-  console.log('[Fleet] loadDevices() called - fetching fresh data');
-
-  try {
-    console.log('[Fleet] Calling API.get(/devices)...');
-    allDevices = await API.get('/devices');
-    console.log('[Fleet] ✅ API returned', allDevices.length, 'devices');
-    console.log('[Fleet] Devices:', allDevices.map(d => d.device_id).join(', '));
-
-    // Validate that we got an array
-    if (!Array.isArray(allDevices)) {
-      console.error('[Fleet] ❌ API returned non-array:', typeof allDevices);
-      throw new Error('API returned non-array: ' + typeof allDevices);
-    }
-  } catch (e) {
-    console.error('[Fleet] ❌ Failed to load devices:', e.message);
-    console.error('[Fleet] Error details:', e);
-    allDevices = MOCK_DEVICES; // Fallback to mock data
-    console.log('[Fleet] ⚠️ Using MOCK_DEVICES (', MOCK_DEVICES.length, 'devices)');
-  }
-
-  console.log('[Fleet] Rendering', allDevices.length, 'devices...');
-  renderDevices(allDevices);
-  updateStats(allDevices);
-  updateLocationFilter(allDevices);
-}
-
-function renderDevices(devices) {
-  const container = document.getElementById('device-grid');
-  container.innerHTML = '';
-
-  // Update container class based on view mode
-  container.className = currentView === 'list' ? 'device-list' : 'device-grid';
-
-  // Show welcome message if no devices
-  if (devices.length === 0) {
-    container.innerHTML = `
-      <div class="card" style="text-align:center;padding:32px">
-        <div style="font-size:48px;margin-bottom:16px">🌱</div>
-        <h3 style="margin:0 0 8px">No devices yet</h3>
-        <p class="muted" style="margin:0 0 20px">Add your first device or try our Plant Recognition!</p>
-        <div style="display:flex;gap:12px;justify-content:center;flex-wrap:wrap">
-          <button class="primary" onclick="showClaimModal()" style="padding:12px 24px">➕ Add Device</button>
-          <a href="identify.html" style="text-decoration:none"><button style="padding:12px 24px">🌿 Identify Plant</button></a>
+    <!-- HERO -->
+    <section class="hero">
+        <div class="hero-mesh">
+            <div class="blob blob-1"></div>
+            <div class="blob blob-2"></div>
+            <div class="blob blob-3"></div>
         </div>
-      </div>
-    `;
-    return;
-  }
+        <div class="grain"></div>
+        <div class="leaf-particle leaf-1">&#127811;</div>
+        <div class="leaf-particle leaf-2">&#127807;</div>
+        <div class="leaf-particle leaf-3">&#127793;</div>
+        <div class="leaf-particle leaf-4">&#127811;</div>
+        <div class="leaf-particle leaf-5">&#127807;</div>
 
-  devices.forEach(device => {
-    const card = createDeviceCard(device);
-    container.appendChild(card);
-
-    // Restore expanded state if device was expanded before
-    if (expandedDevices.has(device.device_id)) {
-      const rowElement = card.querySelector('.device-row');
-      const detailsElement = card.querySelector(`#details-${device.device_id}`);
-      if (rowElement && detailsElement) {
-        rowElement.classList.add('expanded');
-        detailsElement.classList.add('expanded');
-      }
-    }
-  });
-}
-
-function createExpandableRow(device, isOnline, hasWarnings, isCritical) {
-  const div = document.createElement('div');
-
-  let cardClass = 'device-card';
-  if (!isOnline) cardClass += ' offline';
-  if (isCritical) cardClass += ' critical';
-  else if (hasWarnings) cardClass += ' warning';
-
-  div.className = cardClass;
-  div.setAttribute('data-device-id', device.device_id);
-
-  // Moisture & battery colors (как на home.html)
-  // Handle null moisture (no sensor telemetry yet)
-  const moisturePct = device.moisture_pct !== null && device.moisture_pct !== undefined ? device.moisture_pct : null;
-  let moistureColor = moisturePct === null ? '#666' : (moisturePct < 20 ? '#b00' : moisturePct < 40 ? '#f57c00' : '#0a0');
-  let batteryColor = device.battery_pct === null ? '#0a0' : device.battery_pct < 10 ? '#b00' : device.battery_pct < 30 ? '#f57c00' : '#0a0';
-
-  // Charging icon (⚡ если на розетке, как на home.html)
-  const chargingIcon = device.battery_charging ? ' ⚡' : '';
-
-  // Battery display text (null = AC power, no battery)
-  const batteryDisplay = device.battery_pct !== null ? `🔋${Math.round(device.battery_pct)}%${chargingIcon}` : '⚡ AC';
-  const batteryDisplayLong = device.battery_pct !== null ? `🔋 Battery: ${Math.round(device.battery_pct)}%${chargingIcon}` : '⚡ AC Power';
-
-  // Time ago (handles both seconds and milliseconds)
-  const lastWateringAgo = timeAgo(device.last_watering);
-
-  // Last watering badge (показать в короткой версии если давно)
-  const lastWateringMs = device.last_watering && device.last_watering < 10000000000 ? device.last_watering * 1000 : device.last_watering;
-  const hoursSinceWatering = lastWateringMs ? (Date.now() - lastWateringMs) / (3600 * 1000) : 999999;
-  let lastWateringBadge = '';
-  if (hoursSinceWatering > 24 && hoursSinceWatering < 999999) {
-    lastWateringBadge = `<span class="last-watering-badge" style="color:#f57c00">🕐 ${Math.floor(hoursSinceWatering / 24)}d ago</span>`;
-  } else if (hoursSinceWatering > 12 && hoursSinceWatering < 999999) {
-    lastWateringBadge = `<span class="last-watering-badge">🕐 ${Math.floor(hoursSinceWatering)}h ago</span>`;
-  }
-
-  // Mode badge (с иконками)
-  const modeMap = {
-    'manual': '🔧 Manual',
-    'timer': '⏰ Timer',
-    'sensor': '💧 Sensor',
-    'off': '✋ Manual (legacy)'  // Should not happen (Lambda transforms off→manual), but graceful fallback
-  };
-  const modeName = modeMap[device.mode] || '❓ Unknown';
-  const modeBadgeCompact = modeName ? `<span class="mode-badge mode-${device.mode}" style="font-size:11px;padding:2px 6px">${modeName}</span>` : '';
-
-  // Automation control - use controller_enabled, not just mode!
-  // mode = selected mode (sensor/timer/manual)
-  // controller_enabled = automation actually running
-  const controllerEnabled = device.controller_enabled === true;
-
-  // Show automation status based on controller_enabled
-  let automationText = '';
-  let automationColor = '#666';
-
-  if (controllerEnabled && device.mode === 'sensor') {
-    automationText = '✅ Auto ON (Sensor)';
-    automationColor = '#0a0';
-  } else if (controllerEnabled && device.mode === 'timer') {
-    automationText = '✅ Auto ON (Timer)';
-    automationColor = '#0a0';
-  } else {
-    automationText = '⭕ Auto OFF';
-    automationColor = '#999';
-  }
-
-  // Show automation status
-  const automationControl = `
-    <span class="automation-control" style="color: ${automationColor}; font-weight: 600">
-      ${automationText}
-    </span>
-  `;
-
-  // Determine actual state using mapStateToDisplay for consistent UX
-  const rawState = !controllerEnabled ? 'DISABLED' : (device.state || 'STANDBY');
-  const displayState = mapStateToDisplay(rawState, device.pump_running);
-  const stateText = `${displayState.emoji} ${displayState.text}`;
-  const stateColor = displayState.color;
-  const stateBg = displayState.bg;
-
-  // Custom name (plant name) - show only if different from device_id
-  const plantName = device.name !== device.device_id ? device.name : '';
-
-  div.innerHTML = `
-    <!-- Compact row (click to expand) -->
-    <div class="device-row ${hasWarnings ? 'has-warnings' : ''}" onclick="toggleDeviceExpand(this, '${device.device_id}')">
-      <span class="expand-icon">▶</span>
-      ${hasWarnings ? '<span class="warning-badge">⚠️</span>' : ''}
-      <span class="device-name">🌱 ${device.device_id}</span>
-      <div class="device-quick-info">
-        ${plantName ? `<span style="font-weight:600">${plantName}</span>` : ''}
-        <span style="color:${moistureColor}">💧${moisturePct !== null ? Math.round(moisturePct) + '%' : '—'}</span>
-        <span style="color:${batteryColor}">${batteryDisplay}</span>
-        ${modeBadgeCompact}
-        ${automationControl}
-        <span class="device-status" style="background:${stateBg};color:${stateColor}">${stateText}</span>
-        <span class="device-status ${isOnline ? 'online' : 'offline'}">${isOnline ? '● Online' : '○ Offline'}</span>
-        ${(() => {
-          const rssiData = getRssiDisplay(device.sta_rssi);
-          return rssiData.icon ? `<span style="color:${rssiData.color};font-size:12px">${rssiData.icon} ${rssiData.text}</span>` : '';
-        })()}
-      </div>
-    </div>
-
-    <!-- Expanded details (hidden by default) -->
-    <div class="device-details" id="details-${device.device_id}">
-      <div class="detail-row">
-        <span class="detail-item">📍 ${device.location || 'Home'} / ${device.room || 'Room'}${plantName ? ' / ' + plantName : ''}</span>
-        <span class="detail-item">State: ${stateText}</span>
-        <span class="detail-item">Mode: ${modeName}</span>
-      </div>
-
-      <div class="detail-row" style="margin-top:8px">
-        <span class="detail-item" style="color:${moistureColor}">💧 Moisture: ${moisturePct !== null ? moisturePct + '%' : '—'} (ADC: ${device.adc_raw != null ? device.adc_raw : 'N/A'})</span>
-        <span class="detail-item" style="color:${batteryColor}">${batteryDisplayLong}</span>
-        <span class="detail-item">Water: ≈${((device.watering_duration || maxWateringTime) * (device.pump_calibration || pumpCalibration) * (device.pump_speed || 100) / 100).toFixed(0)}ml / ${device.watering_duration || maxWateringTime}s</span>
-      </div>
-
-      <div class="detail-row" style="margin-top:8px">
-        <span class="detail-item">Last watering: ${lastWateringAgo}</span>
-        <span class="detail-item">🔧 Firmware: ${device.firmware_version || 'v1.0.0'}</span>
-        <span class="detail-item">🔄 Restarts: ${formatRestarts(device)}</span>
-        ${device.sta_rssi ? `<span class="detail-item" style="color:${getRssiDisplay(device.sta_rssi).color}">📶 Signal: ${device.sta_rssi} dBm</span>` : ''}
-      </div>
-
-      ${hasWarnings ? `
-        <div class="device-warnings">
-          ⚠️ ${device.warnings.join('<br>⚠️ ')}
+        <div class="hero-content">
+            <div class="hero-label rv">
+                <span class="hero-label-dot"></span>
+                Smart Watering Device
+            </div>
+            <h1 class="rv rv-d1">Keep your plants <i>alive</i></h1>
+            <p class="hero-sub rv rv-d2">
+                A smart device that monitors soil moisture and waters your plants automatically&thinsp;&mdash;&thinsp;at home or from anywhere in the world.
+            </p>
+            <div class="hero-ctas rv rv-d3">
+                <a href="login.html?tab=register" class="btn btn-solid btn-lg" id="hero-cta">Get Started Free</a>
+                <a href="#how" class="btn btn-outline-light">See How It Works</a>
+            </div>
         </div>
-      ` : ''}
 
-      <div class="device-actions">
-        <button onclick="event.stopPropagation(); refreshSensor('${device.device_id}')" class="btn-secondary">🔄 Refresh</button>
-        <button onclick="event.stopPropagation(); startPump('${device.device_id}', event)" class="btn-primary btn-water-toggle">💧 Water Now</button>
-        <button onclick="event.stopPropagation(); stopPump('${device.device_id}', event)" class="btn-danger">⛔ Stop</button>
-        <button onclick="event.stopPropagation(); viewDevice('${device.device_id}')">🏠 Home</button>
-        <button onclick="event.stopPropagation(); viewTrends('${device.device_id}')">📊 Trends</button>
-        <button onclick="event.stopPropagation(); deviceUpdate('${device.device_id}')">📦 OTA Update</button>
-        <button onclick="event.stopPropagation(); viewLogs('${device.device_id}')">📝 Logs</button>
-      </div>
-    </div>
-  `;
-
-  return div;
-}
-
-function toggleDeviceExpand(rowElement, deviceId) {
-  const detailsElement = document.getElementById('details-' + deviceId);
-  const isExpanded = detailsElement.classList.contains('expanded');
-
-  if (isExpanded) {
-    // Collapse
-    detailsElement.classList.remove('expanded');
-    rowElement.classList.remove('expanded');
-    expandedDevices.delete(deviceId);
-  } else {
-    // Expand
-    detailsElement.classList.add('expanded');
-    rowElement.classList.add('expanded');
-    expandedDevices.add(deviceId);
-
-    // NOTE: No auto-refresh on expand - use cached data from loadDevices()
-    // User can click "Refresh" button if they need fresh real-time data
-    // This scales better for 100+ devices
-  }
-}
-
-function switchView(view) {
-  currentView = view;
-
-  // Update button states
-  document.getElementById('view-cards').classList.toggle('active', view === 'cards');
-  document.getElementById('view-list').classList.toggle('active', view === 'list');
-
-  // Re-render devices
-  renderDevices(allDevices.filter(device => {
-    // Re-apply current filters
-    const search = document.getElementById('search-input').value.toLowerCase();
-    const location = document.getElementById('location-filter').value;
-    const status = document.getElementById('status-filter').value;
-    const mode = document.getElementById('mode-filter').value;
-
-    if (search && !device.name.toLowerCase().includes(search)) return false;
-    if (location && device.location !== location) return false;
-
-    // Use device.online from API (Lambda calculates with 45 min threshold)
-    const isOnline = device.online === true;
-    const hasWarnings = device.warnings.length > 0 || (device.battery_pct !== null && device.battery_pct < 10) || (device.moisture_pct !== null && device.moisture_pct < 15);
-    if (status === 'online' && !isOnline) return false;
-    if (status === 'offline' && isOnline) return false;
-    if (status === 'warning' && !hasWarnings) return false;
-    if (mode && device.mode !== mode) return false;
-
-    return true;
-  }));
-}
-
-function createDeviceCard(device) {
-  const div = document.createElement('div');
-
-  // Use device.online from API (Lambda calculates with 45 min threshold)
-  // Fallback to local calculation if device.online is missing (shouldn't happen)
-  const isOnline = device.online !== undefined ? device.online :
-                   ((Date.now() - (device.last_update < 10000000000 ? device.last_update * 1000 : device.last_update)) < 45 * 60 * 1000);
-  const hasWarnings = device.warnings.length > 0;
-  const isCritical = (device.battery_pct !== null && device.battery_pct < 10) || (device.moisture_pct !== null && device.moisture_pct < 15);
-
-  let cardClass = 'device-card';
-  if (!isOnline) cardClass += ' offline';
-  if (isCritical) cardClass += ' critical';
-  else if (hasWarnings) cardClass += ' warning';
-
-  div.className = cardClass;
-  div.setAttribute('data-device-id', device.device_id);
-
-  // List mode: expandable row
-  if (currentView === 'list') {
-    return createExpandableRow(device, isOnline, hasWarnings, isCritical);
-  }
-
-  // Cards mode: full card (original)
-
-  // Moisture color (handle null)
-  const cardMoisturePct = device.moisture_pct !== null && device.moisture_pct !== undefined ? device.moisture_pct : null;
-  let moistureClass = 'good';
-  if (cardMoisturePct !== null) {
-    if (cardMoisturePct < 20) moistureClass = 'low';
-    else if (cardMoisturePct < 40) moistureClass = 'medium';
-  }
-
-  // Battery color (safe null check)
-  let batteryClass = 'good';
-  if (device.battery_pct !== null) {
-    if (device.battery_pct < 10) batteryClass = 'low';
-    else if (device.battery_pct < 30) batteryClass = 'medium';
-  }
-
-  // Mode badge (List view - с иконками, скрываем 'off')
-  const modeMapList = {
-    'manual': '🔧 Manual',
-    'timer': '⏰ Timer',
-    'sensor': '💧 Sensor',
-    'off': ''
-  };
-  const modeNameList = modeMapList[device.mode] || '';
-  const modeBadge = modeNameList ? `<span class="mode-badge mode-${device.mode}">${modeNameList}</span>` : '';
-
-  // Watering status
-  const isWatering = device.state === 'PULSE' || device.state === 'WATERING';
-  const wateringBadge = isWatering ? '<span style="color:#1976d2;font-weight:600">💧 Watering...</span>' : '';
-
-  // Battery display (null = AC power, no battery)
-  const chargingIcon = device.battery_charging ? ' ⚡' : '';
-  const batteryMetric = device.battery_pct !== null ? `${Math.round(device.battery_pct)}%${chargingIcon}` : '⚡ AC Power';
-
-  // Time ago
-  const lastWateringAgo = timeAgo(device.last_watering);
-  const lastUpdateAgo = timeAgo(device.last_update);
-
-  // Custom name for Cards view
-  const cardPlantName = device.name !== device.device_id ? device.name : '';
-
-  // State and automation for Cards (same logic as List)
-  const cardControllerEnabled = device.controller_enabled === true;
-  const cardRawState = !cardControllerEnabled ? 'DISABLED' : (device.state || 'STANDBY');
-  const cardDisplayState = mapStateToDisplay(cardRawState, device.pump_running);
-  const cardStateText = `${cardDisplayState.emoji} ${cardDisplayState.text}`;
-  const cardStateColor = cardDisplayState.color;
-
-  // Automation text for Cards
-  let cardAutoText = '';
-  if (cardControllerEnabled && device.mode === 'sensor') {
-    cardAutoText = '✅ Auto ON';
-  } else if (cardControllerEnabled && device.mode === 'timer') {
-    cardAutoText = '✅ Auto ON';
-  } else {
-    cardAutoText = '⭕ Auto OFF';
-  }
-
-  div.innerHTML = `
-    <div class="device-header">
-      <div>
-        <div class="device-name">🌱 ${device.device_id}</div>
-        <div class="device-location">📍 ${device.location || 'Home'} / ${device.room || 'Room'}${cardPlantName ? ' / ' + cardPlantName : ''}</div>
-      </div>
-      <div class="device-status ${isOnline ? 'online' : 'offline'}">${isOnline ? '● Online' : '○ Offline'}</div>
-    </div>
-
-    <div style="margin:8px 0;display:flex;gap:8px;flex-wrap:wrap;align-items:center">
-      ${cardPlantName ? `<span style="font-weight:600">${cardPlantName}</span>` : ''}
-      ${modeBadge}
-      <span style="color:${cardControllerEnabled ? '#0a0' : '#999'};font-weight:600">${cardAutoText}</span>
-      <span style="background:#f5f5f5;color:${cardStateColor};padding:2px 6px;border-radius:6px;font-size:11px">${cardStateText}</span>
-      ${wateringBadge}
-    </div>
-
-    <div class="device-metrics">
-      <div class="metric">
-        <div class="metric-label">💧 Moisture</div>
-        <div class="metric-value ${moistureClass}">${cardMoisturePct !== null ? Math.round(cardMoisturePct) + '%' : '—'} <span style="font-size:11px;color:#666">(ADC: ${device.adc_raw != null ? device.adc_raw : 'N/A'})</span></div>
-      </div>
-      <div class="metric">
-        <div class="metric-label">🔋 Battery</div>
-        <div class="metric-value ${batteryClass}">${batteryMetric}</div>
-      </div>
-    </div>
-
-    <div class="muted" style="font-size:12px;margin:8px 0">
-      Water: ≈${((device.watering_duration || 60) * (device.pump_calibration || 1.0) * (device.pump_speed || 100) / 100).toFixed(0)}ml / ${device.watering_duration || 60}s<br>
-      Last watering: ${lastWateringAgo} | Last update: ${lastUpdateAgo}<br>
-      🔧 ${device.firmware_version || 'v1.0.0'} | 🔄 Restarts: ${formatRestarts(device)}${device.sta_rssi ? ` | <span style="color:${getRssiDisplay(device.sta_rssi).color}">📶 ${device.sta_rssi} dBm</span>` : ''}
-    </div>
-
-    ${hasWarnings ? `
-      <div class="device-warnings">
-        ⚠️ ${device.warnings.join('<br>⚠️ ')}
-      </div>
-    ` : ''}
-
-    <div class="device-actions">
-      <button onclick="refreshSensor('${device.device_id}')" class="btn-primary">🔄 Refresh</button>
-      <button onclick="startPump('${device.device_id}', event)" class="btn-primary btn-water-toggle">💧 Water Now</button>
-      <button onclick="stopPump('${device.device_id}', event)" class="btn-danger">⛔ Stop</button>
-      <button onclick="viewDevice('${device.device_id}')">🏠 Home</button>
-      <button onclick="viewTrends('${device.device_id}')">📊 Trends</button>
-      <button onclick="deviceUpdate('${device.device_id}')">📦 OTA Update</button>
-      <button onclick="viewLogs('${device.device_id}')">📝 Logs</button>
-    </div>
-  `;
-
-  return div;
-}
-
-function updateLocationFilter(devices) {
-  const select = document.getElementById('location-filter');
-  const currentValue = select.value;
-
-  // Get unique locations from devices
-  const locations = [...new Set(devices.map(d => d.location).filter(Boolean))].sort();
-
-  // Clear existing options except "All Locations"
-  select.innerHTML = '<option value="">All Locations</option>';
-
-  // Add dynamic options
-  locations.forEach(loc => {
-    const option = document.createElement('option');
-    option.value = loc;
-    option.textContent = loc;
-    select.appendChild(option);
-  });
-
-  // Restore previous selection if still valid
-  if (currentValue && locations.includes(currentValue)) {
-    select.value = currentValue;
-  }
-}
-
-function updateStats(devices) {
-  const total = devices.length;
-  // Use device.online from API (Lambda calculates with 45 min threshold)
-  const online = devices.filter(d => d.online === true).length;
-  const warnings = devices.filter(d => d.warnings.length > 0 || (d.battery_pct !== null && d.battery_pct < 10) || (d.moisture_pct !== null && d.moisture_pct < 15)).length;
-  const watering = devices.filter(d => d.state === 'PULSE' || d.state === 'WATERING').length;
-
-  document.getElementById('stat-total').textContent = total;
-  document.getElementById('stat-online').textContent = online;
-  document.getElementById('stat-warnings').textContent = warnings;
-  document.getElementById('stat-watering').textContent = watering;
-}
-
-function filterDevices() {
-  const search = document.getElementById('search-input').value.toLowerCase();
-  const location = document.getElementById('location-filter').value;
-  const status = document.getElementById('status-filter').value;
-  const mode = document.getElementById('mode-filter').value;
-
-  const filtered = allDevices.filter(device => {
-    // Search filter
-    if (search && !device.name.toLowerCase().includes(search)) return false;
-
-    // Location filter
-    if (location && device.location !== location) return false;
-
-    // Status filter
-    const lastUpdateMs = device.last_update < 10000000000 ? device.last_update * 1000 : device.last_update;
-    const isOnline = (Date.now() - lastUpdateMs) < 2 * 60 * 60 * 1000;
-    const hasWarnings = device.warnings.length > 0 || (device.battery_pct !== null && device.battery_pct < 10) || (device.moisture_pct !== null && device.moisture_pct < 15);
-    if (status === 'online' && !isOnline) return false;
-    if (status === 'offline' && isOnline) return false;
-    if (status === 'warning' && !hasWarnings) return false;
-
-    // Mode filter
-    if (mode && device.mode !== mode) return false;
-
-    return true;
-  });
-
-  renderDevices(filtered);
-}
-
-// timeAgo() - moved to common.js
-
-function updateTime() {
-  const now = new Date();
-  const timeStr = now.toTimeString().substring(0, 5);
-  document.getElementById('header-time').textContent = timeStr;
-}
-
-// showToast() - moved to common.js
-
-// Device actions
-// Device control commands (send MQTT via Lambda)
-
-async function readSensor(deviceId) {
-  try {
-    // Use api-adapter.js instead of hardcoded URL
-    const result = await API.post(`/device/${deviceId}/command`, {
-      command: 'get_sensor',
-      params: {}
-    });
-
-    alert(`✓ Sensor reading requested for ${deviceId}\nCommand ID: ${result.command_id}`);
-
-    // Refresh device data after 2 seconds
-    setTimeout(() => loadDevices(), 2000);
-  } catch(e) {
-    alert(`Error: ${e.message}`);
-  }
-}
-
-async function refreshSensor(deviceId) {
-  // Immediate feedback - show loading toast
-  showToast(`🔄 Refreshing ${deviceId}...`, 'info');
-
-  try {
-    // Use real-time sensor endpoint (sends MQTT command, waits for device response)
-    const result = await API.get(`/device/${deviceId}/sensor`);
-
-    // Update device in allDevices array
-    const device = allDevices.find(d => d.device_id === deviceId);
-    if (device) {
-      // Sensor data
-      device.moisture_pct = result.moisture_pct;
-      device.adc_raw = result.adc_raw;
-      if (result.percent_float !== undefined) device.percent_float = result.percent_float;
-      // Sensor2 (J7 resistive)
-      if (result.sensor2_adc !== undefined) device.sensor2_adc = result.sensor2_adc;
-      if (result.sensor2_percent !== undefined) device.sensor2_percent = result.sensor2_percent;
-      // Mode and state
-      device.mode = result.mode || 'manual';
-      device.state = result.state || 'DISABLED';
-      // Recalculate controller_enabled based on new state (same logic as get_devices)
-      device.controller_enabled = device.state !== 'DISABLED';
-      device.pump_running = result.pump_running || false;
-      // Battery: extract from object {voltage, percent, charging}
-      if (result.battery) {
-        device.battery_pct = result.battery.percent;
-        device.battery_charging = result.battery.charging;
-        device.battery_voltage = result.battery.voltage;
-      }
-      // Pump calibration and speed (for water volume calculation)
-      if (result.pump_calibration !== undefined) device.pump_calibration = result.pump_calibration;
-      if (result.pump_speed !== undefined) device.pump_speed = result.pump_speed;
-      // Firmware and restart counters
-      if (result.firmware_version) device.firmware_version = result.firmware_version;
-      if (result.clean_restarts !== undefined) device.clean_restarts = result.clean_restarts;
-      if (result.unexpected_restarts !== undefined) device.unexpected_restarts = result.unexpected_restarts;
-      if (result.reboot_count !== undefined) device.reboot_count = result.reboot_count;
-      device.last_update = result.timestamp;
-      device.online = true;  // Device responded = online
-
-      // Re-render devices
-      renderDevices(allDevices);
-      updateStats(allDevices);
-
-      // Show success feedback with updated values
-      const batteryInfo = result.battery ? ` | 🔋${Math.round(result.battery.percent)}%` : '';
-      showToast(`✅ ${deviceId}: ${result.moisture_pct}% | ${device.state}${batteryInfo}`, 'success');
-    }
-
-  } catch(e) {
-    // Show error toast with clear message
-    const errorMsg = e.message.includes('408') || e.message.includes('timeout')
-      ? `⏱️ ${deviceId} не отвечает (offline?)`
-      : `❌ ${deviceId}: ${e.message}`;
-    showToast(errorMsg, 'error');
-  }
-}
-
-// Silent version for auto-refresh when expanding Home (no UI feedback)
-async function refreshSensorSilent(deviceId) {
-  try {
-    // Use real-time sensor endpoint (sends MQTT command, waits for device response)
-    const result = await API.get(`/device/${deviceId}/sensor`);
-
-    // Update device in allDevices array
-    const device = allDevices.find(d => d.device_id === deviceId);
-    if (device) {
-      // Sensor data
-      device.moisture_pct = result.moisture_pct;
-      device.adc_raw = result.adc_raw;
-      if (result.percent_float !== undefined) device.percent_float = result.percent_float;
-      // Sensor2 (J7 resistive)
-      if (result.sensor2_adc !== undefined) device.sensor2_adc = result.sensor2_adc;
-      if (result.sensor2_percent !== undefined) device.sensor2_percent = result.sensor2_percent;
-      // Mode and state
-      device.mode = result.mode || 'manual';
-      device.state = result.state || 'DISABLED';
-      // Recalculate controller_enabled based on new state (same logic as get_devices)
-      device.controller_enabled = device.state !== 'DISABLED';
-      device.pump_running = result.pump_running || false;
-      // Battery: extract from object {voltage, percent, charging}
-      if (result.battery) {
-        device.battery_pct = result.battery.percent;
-        device.battery_charging = result.battery.charging;
-        device.battery_voltage = result.battery.voltage;
-      }
-      // Pump calibration and speed (for water volume calculation)
-      if (result.pump_calibration !== undefined) device.pump_calibration = result.pump_calibration;
-      if (result.pump_speed !== undefined) device.pump_speed = result.pump_speed;
-      // Firmware and restart counters
-      if (result.firmware_version) device.firmware_version = result.firmware_version;
-      if (result.clean_restarts !== undefined) device.clean_restarts = result.clean_restarts;
-      if (result.unexpected_restarts !== undefined) device.unexpected_restarts = result.unexpected_restarts;
-      if (result.reboot_count !== undefined) device.reboot_count = result.reboot_count;
-      device.last_update = result.timestamp;
-      device.online = true;  // Device responded = online
-
-      // Re-render devices (will preserve expanded state)
-      renderDevices(allDevices);
-      updateStats(allDevices);
-    }
-
-    // Silent success - no toasts, no button updates
-
-  } catch(e) {
-    // Error - just log, don't update UI
-    console.warn(`refreshSensorSilent failed for ${deviceId}:`, e.message);
-    const device = allDevices.find(d => d.device_id === deviceId);
-    if (device) {
-      device.online = false;
-      renderDevices(allDevices);
-      updateStats(allDevices);
-    }
-
-    // Only show error toast if request fails
-    showToast(e.message.includes('408') ?
-      '⚠️ Device offline or sleeping.' :
-      `❌ Error refreshing: ${e.message}`, 'error');
-  }
-}
-
-async function startPump(deviceId, event) {
-  if (event) event.stopPropagation();
-
-  // Prevent multiple clicks - check if pump already running
-  if (pumpRunningDevices.has(deviceId)) {
-    return; // Ignore click if pump already running
-  }
-
-  // Immediate feedback
-  showToast(`💧 Starting pump on ${deviceId}...`, 'info');
-
-  // Mark as running BEFORE API call to prevent race condition
-  pumpRunningDevices.add(deviceId);
-  updatePumpButton(deviceId, true, 0, maxWateringTime);
-
-  try {
-    // Start pump for maxWateringTime
-    await API.post(`/device/${deviceId}/pump?sec=${maxWateringTime}`);
-
-    // Start timer to update elapsed time
-    startPumpTimer(deviceId);
-
-    // Success feedback
-    showToast(`✅ Pump started (${maxWateringTime}s)`, 'success');
-    setTimeout(() => loadDevices(), 2000);
-  } catch(e) {
-    // On error, revert state
-    pumpRunningDevices.delete(deviceId);
-    stopPumpTimer(deviceId);
-    updatePumpButton(deviceId, false);
-    showToast(`❌ Failed to start pump: ${e.message}`, 'error');
-  }
-}
-
-async function stopPump(deviceId, event) {
-  if (event) event.stopPropagation();
-
-  // ALWAYS send stop command — pump may have been started by device itself
-  // (microprime, sensor controller, timer) without Fleet knowing
-
-  // Immediate feedback
-  showToast(`🛑 Stopping pump on ${deviceId}...`, 'info');
-
-  // Clear local tracking state
-  pumpRunningDevices.delete(deviceId);
-  stopPumpTimer(deviceId);
-  updatePumpButton(deviceId, false);
-
-  try {
-    await API.post(`/device/${deviceId}/pump/stop`);
-    showToast(`✅ Pump stopped`, 'success');
-    setTimeout(() => loadDevices(), 1000);
-  } catch(e) {
-    showToast(`❌ Failed to stop pump: ${e.message}`, 'error');
-  }
-}
-
-async function toggleAutomation(deviceId, enable) {
-  // Toggle automation (controller enabled/disabled)
-  try {
-    // Show loading state
-    const toggles = document.querySelectorAll(`[data-device-id="${deviceId}"] .automation-control`);
-    toggles.forEach(toggle => {
-      toggle.style.opacity = '0.5';
-      toggle.style.pointerEvents = 'none';
-    });
-
-    // Determine the mode to set
-    let newMode;
-    if (enable) {
-      // Enable automation - use the last known automated mode or default to sensor
-      const device = allDevices.find(d => d.device_id === deviceId);
-      if (device && device.last_auto_mode) {
-        newMode = device.last_auto_mode; // timer or sensor
-      } else {
-        newMode = 'sensor'; // Default to sensor mode
-      }
-    } else {
-      // Disable automation - switch to manual mode
-      newMode = 'manual';
-    }
-
-    // Send mode change command
-    const result = await API.post(`/device/${deviceId}/mode`, { mode: newMode });
-
-    if (result.success) {
-      showToast(`Automation ${enable ? 'enabled' : 'disabled'} (${newMode} mode)`, 'success');
-
-      // Wait a bit for the device to process the command
-      setTimeout(async () => {
-        // Reload devices from API to get fresh data
-        await loadDevices();
-      }, 2000);
-    } else {
-      showToast(`Failed to ${enable ? 'enable' : 'disable'} automation`, 'error');
-    }
-  } catch (error) {
-    console.error('Toggle automation error:', error);
-    showToast(`Failed to ${enable ? 'enable' : 'disable'} automation: ${error.message}`, 'error');
-  } finally {
-    // Restore toggle state
-    const toggles = document.querySelectorAll(`[data-device-id="${deviceId}"] .automation-control`);
-    toggles.forEach(toggle => {
-      toggle.style.opacity = '1';
-      toggle.style.pointerEvents = 'auto';
-    });
-  }
-}
-
-function updatePumpButton(deviceId, isRunning, elapsed = 0, total = maxWateringTime) {
-  // Find and update Water Now button state for this device
-  const buttons = document.querySelectorAll(`[data-device-id="${deviceId}"] .btn-water-toggle`);
-  buttons.forEach(btn => {
-    if (isRunning) {
-      btn.classList.add('active');
-      const remaining = total - elapsed;
-      btn.textContent = `🛑 Stop (${elapsed}s / ${total}s)`;
-      btn.onclick = (e) => stopPump(deviceId, e);
-    } else {
-      btn.classList.remove('active');
-      btn.textContent = `💧 Water Now`;
-      btn.onclick = (e) => startPump(deviceId, e);
-    }
-  });
-}
-
-function startPumpTimer(deviceId) {
-  // Clear existing timer if any (prevent memory leak)
-  if (pumpTimers[deviceId]) {
-    clearInterval(pumpTimers[deviceId]);
-  }
-
-  let elapsed = 0;
-  pumpTimers[deviceId] = setInterval(() => {
-    elapsed++;
-    updatePumpButton(deviceId, true, elapsed, maxWateringTime);
-
-    // Auto-stop timer when reaching max time
-    if (elapsed >= maxWateringTime) {
-      stopPumpTimer(deviceId);
-      pumpRunningDevices.delete(deviceId);
-      updatePumpButton(deviceId, false);
-    }
-  }, 1000);
-}
-
-function stopPumpTimer(deviceId) {
-  if (pumpTimers[deviceId]) {
-    clearInterval(pumpTimers[deviceId]);
-    delete pumpTimers[deviceId];
-  }
-}
-
-function viewDevice(deviceId) {
-  // Navigate to home.html with device_id parameter
-  window.location.href = `home.html?device=${deviceId}`;
-}
-
-function viewTrends(deviceId) {
-  // Navigate to trends.html with device_id parameter
-  window.location.href = `trends.html?device=${deviceId}`;
-}
-
-function deviceUpdate(deviceId) {
-  window.location.href = `ota.html?device=${deviceId}`;
-}
-
-// Admin actions
-async function bulkAction(action) {
-  if (action === 'refresh') {
-    // Step 1: Reload all data from DynamoDB (name, location, calibration, last_watering, etc.)
-    showToast(`🔄 Loading device data...`, 'info');
-
-    try {
-      await loadDevices();
-    } catch(e) {
-      showToast(`❌ Failed to load devices: ${e.message}`, 'error');
-      return;
-    }
-
-    const totalDevices = allDevices.length;
-    if (totalDevices === 0) {
-      showToast('❌ No devices found', 'error');
-      return;
-    }
-
-    // Step 2: Query each device via MQTT for real-time status
-    showToast(`🔄 Querying ${totalDevices} devices...`, 'info');
-
-    let successCount = 0;
-    let failCount = 0;
-
-    // Query all devices in parallel
-    const refreshPromises = allDevices.map(async (device) => {
-      try {
-        const result = await API.get(`/device/${device.device_id}/sensor`);
-
-        // Update real-time data from device response
-        // Sensor data
-        device.moisture_pct = result.moisture_pct;
-        device.adc_raw = result.adc_raw;
-        if (result.percent_float !== undefined) device.percent_float = result.percent_float;
-        // Sensor2 (J7 resistive)
-        if (result.sensor2_adc !== undefined) device.sensor2_adc = result.sensor2_adc;
-        if (result.sensor2_percent !== undefined) device.sensor2_percent = result.sensor2_percent;
-        // Mode and state
-        device.mode = result.mode || device.mode || 'manual';
-        device.state = result.state || device.state || 'DISABLED';
-        // Recalculate controller_enabled based on new state
-        device.controller_enabled = device.state !== 'DISABLED';
-        device.pump_running = result.pump_running || false;
-        // Battery
-        if (result.battery) {
-          device.battery_pct = result.battery.percent;
-          device.battery_charging = result.battery.charging;
-          device.battery_voltage = result.battery.voltage;
-        }
-        // Pump calibration and speed
-        if (result.pump_calibration !== undefined) device.pump_calibration = result.pump_calibration;
-        if (result.pump_speed !== undefined) device.pump_speed = result.pump_speed;
-        // Firmware and restart counters
-        if (result.firmware_version) device.firmware_version = result.firmware_version;
-        if (result.reboot_count !== undefined) device.reboot_count = result.reboot_count;
-        if (result.clean_restarts !== undefined) device.clean_restarts = result.clean_restarts;
-        if (result.unexpected_restarts !== undefined) device.unexpected_restarts = result.unexpected_restarts;
-        device.last_update = result.timestamp || Math.floor(Date.now() / 1000);
-        device.online = true;
-
-        successCount++;
-      } catch(e) {
-        // Device didn't respond = offline
-        device.online = false;
-        failCount++;
-      }
-    });
-
-    await Promise.all(refreshPromises);
-
-    // Re-render with updated data
-    renderDevices(allDevices);
-    updateStats(allDevices);
-
-    // Update last refresh timestamp
-    const now = new Date();
-    const timeStr = now.toLocaleTimeString('en-US', {hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false});
-    document.getElementById('last-refresh-time').textContent = `Last refresh: ${timeStr}`;
-
-    // Show summary
-    if (failCount === 0) {
-      showToast(`✅ All ${successCount} devices online!`, 'success');
-    } else if (successCount === 0) {
-      showToast(`❌ All ${failCount} devices offline!`, 'error');
-    } else {
-      showToast(`✅ ${successCount} online, ❌ ${failCount} offline`, 'success');
-    }
-
-  } else if (action === 'ota') {
-    massOTAUpdate();
-  } else {
-    alert(`Bulk action: ${action} (TODO: implement)`);
-  }
-}
-
-// Mass OTA Update
-async function massOTAUpdate() {
-  console.log('[OTA] massOTAUpdate started');
-  console.log('[OTA] allDevices count:', allDevices.length);
-  console.log('[OTA] allDevices online status:', allDevices.map(d => ({id: d.device_id, online: d.online})));
-
-  // Step 1: Select firmware file
-  const input = document.createElement('input');
-  input.type = 'file';
-  input.accept = '.bin';
-
-  input.onchange = async (e) => {
-    console.log('[OTA] File selected');
-    const file = e.target.files[0];
-    if (!file) {
-      console.log('[OTA] No file selected (cancelled)');
-      return;
-    }
-    console.log('[OTA] File:', file.name, 'Size:', file.size);
-
-    // Confirm
-    const onlineDevices = allDevices.filter(d => d.online);
-    console.log('[OTA] Online devices:', onlineDevices.length, onlineDevices.map(d => d.device_id));
-    if (onlineDevices.length === 0) {
-      console.log('[OTA] No online devices - showing alert');
-      alert('❌ No online devices to update!');
-      return;
-    }
-
-    if (!confirm(`📦 Update All Online\n\nFile: ${file.name} (${(file.size/1024/1024).toFixed(2)} MB)\nOnline devices: ${onlineDevices.length}\n\n⚠️ Offline devices will NOT be updated.\nYou'll need to update them individually when they come online.\n\nContinue?`)) {
-      return;
-    }
-
-    // Step 2: Upload firmware to S3 (use first device for presigned URL)
-    showToast('📤 Uploading firmware to S3...', 'info');
-    console.log('[OTA] Getting presigned URL for device:', onlineDevices[0].device_id);
-
-    try {
-      // Get presigned URL from first device (same S3 bucket for all devices)
-      const urlResponse = await API.get(`/device/${onlineDevices[0].device_id}/ota/upload-url`);
-      console.log('[OTA] Presigned URL response:', urlResponse);
-
-      if (!urlResponse.upload_url) {
-        console.error('[OTA] No upload_url in response');
-        throw new Error('Failed to get S3 upload URL');
-      }
-
-      // Upload to S3
-      console.log('[OTA] Uploading to S3:', urlResponse.upload_url.substring(0, 100) + '...');
-      const uploadResponse = await fetch(urlResponse.upload_url, {
-        method: 'PUT',
-        body: file,
-        headers: {'Content-Type': 'application/octet-stream'}
-      });
-
-      console.log('[OTA] S3 upload response status:', uploadResponse.status);
-      if (!uploadResponse.ok) {
-        throw new Error(`S3 upload failed: ${uploadResponse.status}`);
-      }
-
-      const firmwareUrl = urlResponse.download_url;
-      console.log('[OTA] Firmware URL:', firmwareUrl);
-      showToast('✅ Firmware uploaded to S3', 'success');
-
-      // Step 3: Trigger OTA for all online devices
-      console.log('[OTA] Triggering OTA for', onlineDevices.length, 'devices');
-      const results = [];
-      let completed = 0;
-
-      // Send OTA to all devices, then poll results
-      const commandIds = [];
-      for (const device of onlineDevices) {
-        try {
-          console.log('[OTA] Triggering OTA for device:', device.device_id);
-          showToast(`Sending to ${device.device_id}... (${completed+1}/${onlineDevices.length})`, 'info');
-
-          const otaResult = await API.post(`/device/${device.device_id}/ota`, {
-            url: firmwareUrl,
-            version: 'cloud-update'
-          });
-          commandIds.push({device_id: device.device_id, command_id: otaResult.command_id});
-        } catch(e) {
-          console.error('[OTA] OTA trigger failed for', device.device_id, ':', e.message);
-          results.push({device_id: device.device_id, success: false, error: e.message});
-        }
-        completed++;
-      }
-
-      // Poll device responses (up to 20s)
-      showToast('⏳ Waiting for device responses...', 'info');
-      for (let i = 0; i < 10; i++) {
-        await new Promise(r => setTimeout(r, 2000));
-        for (const cmd of commandIds) {
-          if (cmd.done) continue;
-          try {
-            const cmdResult = await API.get(`/device/${cmd.device_id}/command/${cmd.command_id}`);
-            if (cmdResult.status === 'success') {
-              results.push({device_id: cmd.device_id, success: true});
-              cmd.done = true;
-            } else if (cmdResult.status === 'error') {
-              results.push({device_id: cmd.device_id, success: false, error: cmdResult.message || 'Device rejected'});
-              cmd.done = true;
+        <div class="hero-mockup-wrap rv rv-d4">
+            <div class="hero-mockup-glow"></div>
+            <div class="hero-mockup" id="hero-mockup">
+                <div class="hm-header">
+                    <div class="hm-header-l">
+                        <h3>&#127793; Polivalka-BB00C1</h3>
+                        <span>&#128205; Home / Kitchen / Basil</span>
+                    </div>
+                    <div class="hm-header-r">14:32<br>&#128225; Online</div>
+                </div>
+                <div class="hm-nav">
+                    <span>Fleet</span>
+                    <span class="act">Home</span>
+                    <span>Timer</span>
+                    <span>Sensor</span>
+                    <span>Settings</span>
+                </div>
+                <div class="hm-body">
+                    <div class="hm-card">
+                        <div class="hm-card-title">&#128167; Capacitive Sensor</div>
+                        <div class="hm-stats">
+                            <div class="hm-stat">
+                                <div class="hm-stat-label">Moisture</div>
+                                <div class="hm-stat-val">62%</div>
+                                <div class="hm-bar"><div class="hm-bar-fill" data-w="62"></div></div>
+                            </div>
+                            <div class="hm-stat">
+                                <div class="hm-stat-label">Battery</div>
+                                <div class="hm-stat-val">87%</div>
+                                <div class="hm-bar"><div class="hm-bar-fill" data-w="87"></div></div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="hm-card">
+                        <div class="hm-card-title">Operating Mode</div>
+                        <div class="hm-modes">
+                            <div class="hm-mode"><div class="hm-mode-ico">&#9995;</div><div class="hm-mode-name">Manual</div></div>
+                            <div class="hm-mode"><div class="hm-mode-ico">&#9200;</div><div class="hm-mode-name">Timer</div></div>
+                            <div class="hm-mode sel"><div class="hm-mode-ico">&#128167;</div><div class="hm-mode-name">Sensor</div></div>
+                        </div>
+                    </div>
+                    <div class="hm-card" style="padding: 10px 16px;">
+                        <div class="hm-status">
+                            <div class="hm-status-item"><div class="hm-status-label">State</div><div class="hm-status-val">&#128164; Standby</div></div>
+                            <div class="hm-status-item"><div class="hm-status-label">Mode</div><div class="hm-status-val"><span class="hm-badge hm-badge-sensor">Sensor</span></div></div>
+                            <div class="hm-status-item"><div class="hm-status-label">Last Watering</div><div class="hm-status-val">2h ago</div></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- FEATURES -->
+    <section class="features" id="features">
+        <div class="grain"></div>
+        <div class="sect-inner">
+            <div class="sect-head rv">
+                <h2>Everything your plants <i>need</i></h2>
+                <p>Automated care from a device that fits in your palm.</p>
+            </div>
+            <div class="feat-grid">
+                <div class="feat-card rv">
+                    <span class="feat-ico">&#128167;</span>
+                    <h3>Automatic Watering</h3>
+                    <p>The moisture sensor monitors soil levels and triggers the pump exactly when your plant needs water. Set it and forget it.</p>
+                </div>
+                <div class="feat-card rv rv-d1">
+                    <span class="feat-ico">&#127760;</span>
+                    <h3>Remote Dashboard</h3>
+                    <p>Check on your plants from anywhere. Real-time moisture, battery level, and full watering history in your cloud dashboard.</p>
+                </div>
+                <div class="feat-card rv rv-d2">
+                    <span class="feat-ico">&#9200;</span>
+                    <h3>Smart Scheduling</h3>
+                    <p>Set custom watering schedules with flexible timers. Morning, evening, or custom intervals&thinsp;&mdash;&thinsp;up to 8 schedules per device.</p>
+                </div>
+                <div class="feat-card rv rv-d3">
+                    <span class="feat-ico">&#128267;</span>
+                    <h3>Battery Powered</h3>
+                    <p>Ultra-efficient deep sleep mode means weeks of operation on a single charge. Monitor battery remotely and get low-power alerts.</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- HOW IT WORKS -->
+    <section class="how" id="how">
+        <div class="sect-inner">
+            <div class="sect-head rv">
+                <h2>Up and running in <i>3 minutes</i></h2>
+                <p>Three simple steps to happier plants.</p>
+            </div>
+            <div class="steps-row">
+                <div class="steps-line"></div>
+                <div class="step rv">
+                    <div class="step-circle">1</div>
+                    <h3>Plug in the sensor</h3>
+                    <p>Connect the moisture sensor and pump to your PlantApp device. Insert the probe into the soil.</p>
+                </div>
+                <div class="step rv rv-d1">
+                    <div class="step-circle">2</div>
+                    <h3>Connect to Wi-Fi</h3>
+                    <p>The device creates a hotspot. Connect from your phone, enter your Wi-Fi credentials, done.</p>
+                </div>
+                <div class="step rv rv-d2">
+                    <div class="step-circle">3</div>
+                    <h3>Water automatically</h3>
+                    <p>Choose sensor mode, timer mode, or control manually from anywhere through the dashboard.</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- DASHBOARD SHOWCASE -->
+    <section class="showcase">
+        <div class="showcase-grid">
+            <div class="showcase-text rv">
+                <h2>Control from <i>anywhere</i></h2>
+                <p>Your cloud dashboard gives you full visibility and control over every device, wherever you are.</p>
+                <div class="sc-feats">
+                    <div class="sc-feat">
+                        <div class="sc-feat-ico">&#128200;</div>
+                        <div><h4>Real-time data</h4><p>Moisture, battery, and watering history updated live.</p></div>
+                    </div>
+                    <div class="sc-feat">
+                        <div class="sc-feat-ico">&#127968;</div>
+                        <div><h4>Multi-device fleet</h4><p>Manage all your plants from one dashboard with rooms and locations.</p></div>
+                    </div>
+                    <div class="sc-feat">
+                        <div class="sc-feat-ico">&#128274;</div>
+                        <div><h4>Secure access</h4><p>JWT authentication with automatic refresh. Your data stays private.</p></div>
+                    </div>
+                </div>
+            </div>
+            <div class="sc-card-wrap rv rv-d2">
+                <div class="sc-card-glow"></div>
+                <div class="sc-device" id="sc-device">
+                    <div class="sc-dev-head">
+                        <div class="sc-dev-icon">&#127807;</div>
+                        <div>
+                            <div class="sc-dev-name">Kitchen Basil</div>
+                            <div class="sc-dev-loc">&#128205; Home / Kitchen</div>
+                        </div>
+                        <div class="sc-dev-badge">&#128164; Standby</div>
+                    </div>
+                    <div class="sc-dev-body">
+                        <div class="sc-metric">
+                            <div class="sc-metric-label">Moisture</div>
+                            <div class="sc-metric-val">62%</div>
+                            <div class="sc-metric-bar"><div class="sc-metric-bar-fill" data-w="62"></div></div>
+                        </div>
+                        <div class="sc-metric">
+                            <div class="sc-metric-label">Battery</div>
+                            <div class="sc-metric-val">87%</div>
+                            <div class="sc-metric-bar"><div class="sc-metric-bar-fill" data-w="87"></div></div>
+                        </div>
+                        <div class="sc-metric">
+                            <div class="sc-metric-label">Last Watered</div>
+                            <div class="sc-metric-val" style="font-size:18px">2h ago</div>
+                        </div>
+                        <div class="sc-metric">
+                            <div class="sc-metric-label">Waterings Today</div>
+                            <div class="sc-metric-val">3</div>
+                        </div>
+                    </div>
+                    <div class="sc-dev-foot">
+                        <span>Polivalka-BB00C1</span>
+                        <span class="sc-dev-mode">&#128167; Sensor Mode</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- BOTTOM CTA -->
+    <section class="cta-section">
+        <div class="blob cta-blob-1"></div>
+        <div class="blob cta-blob-2"></div>
+        <div class="cta-content rv">
+            <h2>Ready to keep your plants <i>happy</i>?</h2>
+            <p>Create your free account and connect your first device in minutes.</p>
+            <a href="login.html?tab=register" class="btn btn-white" id="cta-bottom">Create Free Account</a>
+        </div>
+    </section>
+
+    <!-- FOOTER -->
+    <footer class="footer">
+        <div class="footer-inner">
+            <div class="footer-brand">
+                <span class="footer-dot"></span>
+                PlantApp
+            </div>
+            <div class="footer-links">
+                <a href="login.html">Log In</a>
+                <a href="login.html?tab=register">Sign Up</a>
+                <a href="https://github.com/gt3max/Polivalka" target="_blank" rel="noopener">GitHub</a>
+            </div>
+        </div>
+    </footer>
+
+    <script>
+        // Auth-aware buttons
+        (function() {
+            var t = localStorage.getItem('access_token');
+            var e = parseInt(localStorage.getItem('token_expires') || '0');
+            if (t && e > Date.now()) {
+                var m = {
+                    'nav-login':  { t: 'My Plants', h: 'fleet.html' },
+                    'nav-signup': { t: 'Dashboard', h: 'fleet.html' },
+                    'hero-cta':   { t: 'Go to Dashboard', h: 'fleet.html' },
+                    'cta-bottom': { t: 'Open Dashboard', h: 'fleet.html' }
+                };
+                for (var id in m) {
+                    var el = document.getElementById(id);
+                    if (el) { el.textContent = m[id].t; el.href = m[id].h; }
+                }
             }
-          } catch(e) { /* pending */ }
-        }
-        if (commandIds.every(c => c.done)) break;
-      }
-      // Mark remaining as timeout
-      for (const cmd of commandIds) {
-        if (!cmd.done) results.push({device_id: cmd.device_id, success: false, error: 'No response (timeout)'});
-      }
+        })();
 
-      // Step 4: Show results
-      const successful = results.filter(r => r.success).length;
-      const failed = results.filter(r => !r.success).length;
+        // Scroll reveal (IntersectionObserver)
+        var io = new IntersectionObserver(function(entries) {
+            entries.forEach(function(en) {
+                if (en.isIntersecting) en.target.classList.add('vis');
+            });
+        }, { threshold: 0.1, rootMargin: '0px 0px -40px 0px' });
 
-      let resultMsg = `📦 OTA Update Results\n\n✅ Accepted: ${successful}\n❌ Failed/Rejected: ${failed}\n\n`;
+        document.querySelectorAll('.rv').forEach(function(el) { io.observe(el); });
 
-      if (failed > 0) {
-        resultMsg += 'Failed devices:\n';
-        results.filter(r => !r.success).forEach(r => {
-          resultMsg += `- ${r.device_id}: ${r.error}\n`;
+        // Animate bars when mockups become visible
+        var barIO = new IntersectionObserver(function(entries) {
+            entries.forEach(function(en) {
+                if (en.isIntersecting) {
+                    en.target.querySelectorAll('[data-w]').forEach(function(b) {
+                        b.style.width = b.getAttribute('data-w') + '%';
+                    });
+                    barIO.unobserve(en.target);
+                }
+            });
+        }, { threshold: 0.3 });
+
+        document.querySelectorAll('#hero-mockup, #sc-device').forEach(function(el) {
+            barIO.observe(el);
         });
-      }
-
-      alert(resultMsg);
-
-      showToast(failed > 0 ? `⚠️ OTA: ${successful} OK, ${failed} failed` : `✅ All ${successful} devices accepted OTA`, failed > 0 ? 'error' : 'success');
-
-    } catch(e) {
-      console.error('Mass OTA failed:', e);
-      showToast(`❌ Mass OTA failed: ${e.message}`, 'error');
-    }
-  };
-
-  input.click();
-}
-
-function exportData() {
-  console.log('Export data');
-  alert('Export all data (TODO: implement)');
-}
-
-async function viewLogs(deviceId) {
-  // Store device ID globally for tab switching
-  currentLogsDeviceId = deviceId;
-
-  // Show modal
-  document.getElementById('logsModal').style.display = 'flex';
-  document.getElementById('logsModalTitle').textContent = `📝 Logs - ${deviceId}`;
-
-  // Load Activity logs by default (highlight Activity tab)
-  await switchLogsTab('activity');
-}
-
-function closeLogsModal() {
-  document.getElementById('logsModal').style.display = 'none';
-}
-
-// Global variable to store current device ID for logs modal
-let currentLogsDeviceId = null;
-let currentLogsTab = 'activity'; // 'activity' or 'device'
-
-// Switch between Activity and Device logs tabs
-async function switchLogsTab(tab) {
-  if (!currentLogsDeviceId) return;
-  currentLogsTab = tab;
-
-  // Update tab button styles
-  const activityBtn = document.getElementById('logsTabActivity');
-  const deviceBtn = document.getElementById('logsTabDevice');
-
-  if (tab === 'activity') {
-    activityBtn.style.background = '#4CAF50';
-    activityBtn.style.color = 'white';
-    deviceBtn.style.background = '';
-    deviceBtn.style.color = '';
-    await viewActivityLogs(currentLogsDeviceId);
-  } else if (tab === 'device') {
-    deviceBtn.style.background = '#2196F3';
-    deviceBtn.style.color = 'white';
-    activityBtn.style.background = '';
-    activityBtn.style.color = '';
-    await viewDeviceLogs(currentLogsDeviceId);
-  }
-}
-
-// View Activity logs (DynamoDB - 7 days)
-async function viewActivityLogs(deviceId) {
-  try {
-    document.getElementById('logsContent').textContent = 'Loading Activity logs...';
-
-    const data = await API.get(`/device/${deviceId}/activity`);
-
-    const logLines = data.activity.map(item => {
-      const date = new Date(item.timestamp * 1000);
-      const dateStr = date.toLocaleDateString('en-CA');
-      const timeStr = date.toLocaleTimeString('en-US', {hour12: false});
-      const datetime = `${dateStr} ${timeStr}`;
-      const level = item.level || 'INFO';
-      const component = item.component || 'UNKNOWN';
-
-      if (item.type === 'COMMAND') {
-        const statusIcon = item.status === 'success' ? '✅' : item.status === 'error' ? '❌' : '⏳';
-        const msg = item.message || `Command: ${item.command}`;
-        return `${level.charAt(0)} (${datetime}) ${component}: ${item.command} → ${statusIcon} ${msg}`;
-      } else if (item.type === 'OTA') {
-        // OTA Update event
-        return `I (${datetime}) ${component}: ${item.message}`;
-      } else if (item.type === 'REBOOT') {
-        // Reboot event (crash, power loss, manual restart)
-        return `${level.charAt(0)} (${datetime}) ${component}: ${item.message}`;
-      } else if (item.type === 'SYSTEM') {
-        return `${level.charAt(0)} (${datetime}) ${component}: ${item.message}`;
-      } else {
-        // SENSOR, BATTERY, PUMP - все имеют item.message
-        return `${level.charAt(0)} (${datetime}) ${component}: ${item.message}`;
-      }
-    }).join('\n');
-
-    document.getElementById('logsContent').textContent = logLines || 'No activity logs available (last 7 days)';
-
-  } catch(e) {
-    document.getElementById('logsContent').textContent = `Error loading Activity logs: ${e.message}`;
-  }
-}
-
-// View Device RAM logs (ESP32 circular buffer - 100 events)
-async function viewDeviceLogs(deviceId) {
-  try {
-    document.getElementById('logsContent').textContent = 'Loading Device RAM logs...';
-
-    const data = await API.get(`/device/${deviceId}/logs`);
-
-    // Format logs with uptime
-    const uptimeSec = (data.uptime_ms / 1000).toFixed(2);
-    const header = `Device Uptime: ${uptimeSec}s | RAM Buffer: ${data.count} events\n${'='.repeat(80)}\n`;
-
-    const logLines = data.logs.map(log => {
-      return log.formatted; // Already formatted by Lambda as "[  123.456] EVENT_TEXT"
-    }).join('\n');
-
-    document.getElementById('logsContent').textContent = header + (logLines || 'No device logs available');
-
-  } catch(e) {
-    if (e.message.includes('408')) {
-      document.getElementById('logsContent').textContent = '⚠️ Device is offline or sleeping.\n\nDevice RAM logs are only available when device is online and awake.';
-    } else {
-      document.getElementById('logsContent').textContent = `Error loading Device logs: ${e.message}`;
-    }
-  }
-}
-
-// Copy all logs to clipboard
-async function copyLogs() {
-  const logsContent = document.getElementById('logsContent').textContent;
-  if (!logsContent || logsContent.includes('Loading') || logsContent.includes('Error')) {
-    alert('No logs to copy');
-    return;
-  }
-
-  const btn = event.target;
-  const originalText = btn.textContent;
-
-  try {
-    await navigator.clipboard.writeText(logsContent);
-  } catch(e) {
-    // Fallback for older browsers
-    const textarea = document.createElement('textarea');
-    textarea.value = logsContent;
-    document.body.appendChild(textarea);
-    textarea.select();
-    document.execCommand('copy');
-    document.body.removeChild(textarea);
-  }
-
-  // Brief visual feedback (no alert!)
-  btn.textContent = '✅ Copied!';
-  setTimeout(() => btn.textContent = originalText, 1500);
-}
-
-// Download logs as CSV file
-function downloadLogsCSV() {
-  const logsContent = document.getElementById('logsContent').textContent;
-  if (!logsContent || logsContent.includes('Loading') || logsContent.includes('Error')) {
-    alert('No logs to download');
-    return;
-  }
-
-  // Parse logs into CSV format
-  const lines = logsContent.split('\n').filter(line => line.trim());
-  const csvRows = ['timestamp,type,message'];  // CSV header
-
-  for (const line of lines) {
-    // Parse format: "I (2026-01-10 13:59:29) SENSOR: message"
-    // or "E (2026-01-10 00:19:50) AWS_IOT: message"
-    const match = line.match(/^([IEW])\s+\((\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}:\d{2})\)\s+(\w+):\s*(.*)$/);
-    if (match) {
-      const [, level, timestamp, type, message] = match;
-      // Escape quotes in message for CSV
-      const escapedMsg = message.replace(/"/g, '""');
-      csvRows.push(`"${timestamp}","${type}","${escapedMsg}"`);
-    } else if (line.trim() && !line.startsWith('===') && !line.startsWith('Uptime')) {
-      // Non-standard line, include as-is
-      const escapedLine = line.replace(/"/g, '""');
-      csvRows.push(`"","","${escapedLine}"`);
-    }
-  }
-
-  // Create and download file
-  const csvContent = csvRows.join('\n');
-  const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-  const url = URL.createObjectURL(blob);
-
-  // Standardized filename: DeviceID_date_type.csv
-  const deviceId = currentLogsDeviceId || 'device';
-  const date = new Date().toISOString().split('T')[0];
-  const logType = currentLogsTab === 'device' ? 'logs-device' : 'logs-activity';
-  const filename = `${deviceId}_${date}_${logType}.csv`;
-
-  const link = document.createElement('a');
-  link.href = url;
-  link.download = filename;
-  link.click();
-
-  URL.revokeObjectURL(url);
-}
-
-// ========== DEBUG CONSOLE ==========
-const consoleLines = [];
-const MAX_CONSOLE_LINES = 100;
-
-function logToConsole(message, type = 'info') {
-  const timestamp = new Date().toISOString().substr(11, 8);
-  const line = { timestamp, message, type };
-  consoleLines.push(line);
-
-  if (consoleLines.length > MAX_CONSOLE_LINES) {
-    consoleLines.shift();
-  }
-
-  renderConsole();
-}
-
-function renderConsole() {
-  const consoleBody = document.getElementById('consoleBody');
-  if (!consoleBody) return;
-
-  consoleBody.innerHTML = consoleLines.map(line =>
-    `<div class="console-line ${line.type}">
-      <span class="console-timestamp">${line.timestamp}</span>
-      <span>${line.message}</span>
-    </div>`
-  ).join('');
-
-  // Auto-scroll to bottom
-  consoleBody.scrollTop = consoleBody.scrollHeight;
-}
-
-function toggleConsole() {
-  const console = document.getElementById('debugConsole');
-  const toggle = document.getElementById('consoleToggle');
-
-  if (console.style.display === 'none') {
-    console.style.display = 'flex';
-    toggle.textContent = '▼ Hide Console';
-    toggle.classList.remove('closed');
-  } else {
-    console.style.display = 'none';
-    toggle.textContent = '▲ Show Console';
-    toggle.classList.add('closed');
-  }
-}
-
-function clearConsole() {
-  consoleLines.length = 0;
-  renderConsole();
-}
-
-// Log all fetch requests
-const originalFetch = window.fetch;
-window.fetch = async function(...args) {
-  const url = args[0];
-  const options = args[1] || {};
-
-  logToConsole(`→ ${options.method || 'GET'} ${url}`, 'info');
-
-  try {
-    const response = await originalFetch.apply(this, args);
-    const clonedResponse = response.clone();
-
-    try {
-      const data = await clonedResponse.json();
-      if (response.ok) {
-        logToConsole(`← ${response.status} ${url}: ${JSON.stringify(data).substr(0, 100)}`, 'success');
-      } else {
-        logToConsole(`← ${response.status} ${url}: ${JSON.stringify(data).substr(0, 100)}`, 'error');
-      }
-    } catch(e) {
-      logToConsole(`← ${response.status} ${url}: (non-JSON response)`, response.ok ? 'success' : 'error');
-    }
-
-    return response;
-  } catch(error) {
-    logToConsole(`✗ ${url}: ${error.message}`, 'error');
-    throw error;
-  }
-};
-
-// ========== CLAIM DEVICE ==========
-function showClaimModal() {
-  document.getElementById('claimModal').style.display = 'flex';
-  document.getElementById('claim-device-id').value = '';
-  document.getElementById('claim-error').style.display = 'none';
-  document.getElementById('claim-success').style.display = 'none';
-  document.getElementById('claim-device-id').focus();
-}
-
-function closeClaimModal() {
-  document.getElementById('claimModal').style.display = 'none';
-}
-
-// ============ Whitelist Check via Lambda API (Security Migration 2026-01-20) ============
-
-async function claimDevice() {
-  const deviceIdInput = document.getElementById('claim-device-id');
-  const errorEl = document.getElementById('claim-error');
-  const successEl = document.getElementById('claim-success');
-  const claimBtn = document.getElementById('claim-btn');
-
-  // Get and normalize device ID
-  let deviceId = deviceIdInput.value.trim().toUpperCase();
-
-  // Remove "Polivalka-" prefix if user entered it
-  if (deviceId.startsWith('POLIVALKA-')) {
-    deviceId = deviceId.replace('POLIVALKA-', '');
-  }
-
-  if (!deviceId || deviceId.length < 4) {
-    errorEl.textContent = 'Please enter a valid Device ID (e.g., BB00C1)';
-    errorEl.style.display = 'block';
-    successEl.style.display = 'none';
-    return;
-  }
-
-  // Disable button and show loading
-  claimBtn.disabled = true;
-  claimBtn.textContent = 'Checking...';
-  errorEl.style.display = 'none';
-  successEl.style.display = 'none';
-
-  try {
-    const userEmail = localStorage.getItem('user_email');
-    if (!userEmail) {
-      throw new Error('Please log in first');
-    }
-
-    // Admin can always claim
-    if (isAdmin()) {
-      claimBtn.textContent = 'Claiming...';
-      const response = await API.post('/devices/claim', { device_id: deviceId });
-      if (response.success) {
-        successEl.textContent = `✅ Device ${deviceId} claimed (Admin)`;
-        successEl.style.display = 'block';
-        setTimeout(() => { closeClaimModal(); loadDevices(); }, 1500);
-      } else {
-        throw new Error(response.message || 'Claim failed');
-      }
-      return;
-    }
-
-    // Check whitelist via API
-    const checkRes = await fetch(`${API.cloudBase}/whitelist/check?device_id=${deviceId}`, {
-      headers: API.getAuthHeaders(),
-      cache: 'no-store'
-    });
-
-    if (!checkRes.ok) {
-      throw new Error('Failed to check whitelist status');
-    }
-
-    const checkResult = await checkRes.json();
-
-    if (checkResult.allowed) {
-      // User is whitelisted and device is assigned - allow claim
-      claimBtn.textContent = 'Claiming...';
-      const response = await API.post('/devices/claim', { device_id: deviceId });
-
-      if (response.success) {
-        successEl.textContent = `✅ Device ${deviceId} is now yours!`;
-        successEl.style.display = 'block';
-        setTimeout(() => { closeClaimModal(); loadDevices(); showToast(`🎉 Device ${deviceId} claimed!`, 'success'); }, 1500);
-      } else {
-        throw new Error(response.message || 'Claim failed');
-      }
-    } else {
-      // Not allowed - check reason
-      switch (checkResult.reason) {
-        case 'banned':
-          errorEl.textContent = 'Your account has been banned. Contact admin.';
-          errorEl.style.display = 'block';
-          break;
-
-        case 'suspended':
-          errorEl.textContent = 'Your account is suspended. Contact admin.';
-          errorEl.style.display = 'block';
-          break;
-
-        case 'device_not_assigned':
-          errorEl.textContent = `Device ${deviceId} is not assigned to you. Contact admin.`;
-          errorEl.style.display = 'block';
-          break;
-
-        case 'not_whitelisted':
-        default:
-          // Submit claim request via API
-          claimBtn.textContent = 'Sending request...';
-
-          const claimRes = await fetch(`${API.cloudBase}/claims`, {
-            method: 'POST',
-            headers: { ...API.getAuthHeaders(), 'Content-Type': 'application/json' },
-            body: JSON.stringify({ device_id: deviceId })
-          });
-
-          const claimResult = await claimRes.json();
-
-          if (claimRes.ok && claimResult.success) {
-            successEl.innerHTML = `⏳ <strong>Request submitted!</strong><br>Admin will review your request to claim device ${deviceId}.`;
-            successEl.style.display = 'block';
-            setTimeout(() => { closeClaimModal(); }, 3000);
-          } else if (claimRes.status === 409) {
-            errorEl.textContent = claimResult.message || 'You already have a pending request for this device.';
-            errorEl.style.display = 'block';
-          } else {
-            errorEl.textContent = claimResult.error || claimResult.message || 'Failed to submit claim request.';
-            errorEl.style.display = 'block';
-          }
-          break;
-      }
-    }
-
-  } catch (e) {
-    console.error('Claim error:', e);
-    errorEl.textContent = e.message || 'Failed to claim device. Please try again.';
-    errorEl.style.display = 'block';
-  } finally {
-    claimBtn.disabled = false;
-    claimBtn.textContent = '🌱 Claim Device';
-  }
-}
-
-// Initialize console on load
-window.addEventListener('DOMContentLoaded', () => {
-  logToConsole('Fleet Management Console initialized', 'success');
-});
-
-// Handle bfcache (back-forward cache) - refresh data when page restored from cache
-// This fixes stale data when user navigates back to Fleet
-window.addEventListener('pageshow', (event) => {
-  if (event.persisted) {
-    console.log('[Fleet] Page restored from bfcache - refreshing data');
-    loadDevices();
-  }
-});
-</script>
-
-<!-- Claim Device Modal -->
-<div id="claimModal" class="modal" style="display:none">
-  <div class="modal-content" style="max-width:450px">
-    <div class="modal-header" style="display:flex;align-items:center;justify-content:space-between">
-      <h3 style="margin:0">🌱 Claim Your Device</h3>
-      <button onclick="closeClaimModal()" style="background:none;border:none;font-size:24px;cursor:pointer;padding:0">×</button>
-    </div>
-    <div class="modal-body" style="padding:20px">
-      <p style="margin:0 0 16px;color:#666">
-        Enter the 6-character Device ID shown on your device's screen or label.
-        <br><br>
-        Example: <code style="background:#f5f5f5;padding:2px 8px;border-radius:4px;font-size:16px">BB00C1</code>
-      </p>
-      <div style="margin-bottom:16px">
-        <label style="display:block;font-size:13px;margin-bottom:4px;font-weight:600">Device ID</label>
-        <input type="text" id="claim-device-id"
-               placeholder="BB00C1"
-               maxlength="10"
-               style="width:100%;padding:14px;border:2px solid #2c5f2d;border-radius:8px;box-sizing:border-box;font-size:20px;text-align:center;text-transform:uppercase;letter-spacing:4px;font-family:monospace"
-               onkeyup="if(event.key==='Enter') claimDevice()">
-      </div>
-      <div id="claim-error" style="display:none;margin-bottom:16px;padding:12px;background:#ffebee;color:#c62828;border-radius:8px;font-size:13px"></div>
-      <div id="claim-success" style="display:none;margin-bottom:16px;padding:12px;background:#e8f5e9;color:#2e7d32;border-radius:8px;font-size:13px"></div>
-    </div>
-    <div class="modal-footer" style="display:flex;gap:12px;padding:16px;border-top:1px solid #eee">
-      <button onclick="closeClaimModal()" class="btn-secondary" style="flex:1;padding:12px">Cancel</button>
-      <button onclick="claimDevice()" class="primary" style="flex:2;padding:12px;font-size:16px" id="claim-btn">🌱 Claim Device</button>
-    </div>
-  </div>
-</div>
-
-<!-- Logs Modal -->
-<div id="logsModal" class="modal" style="display:none">
-  <div class="modal-content" style="max-width:900px;max-height:80vh">
-    <div class="modal-header" style="display:flex;align-items:center;justify-content:space-between">
-      <div style="display:flex;align-items:center;gap:16px">
-        <h3 id="logsModalTitle">📝 Device Logs</h3>
-        <div style="display:flex;gap:8px">
-          <button id="logsTabActivity" onclick="switchLogsTab('activity')" class="btn-secondary" style="padding:6px 12px;font-size:14px">Activity (7d)</button>
-          <button id="logsTabDevice" onclick="switchLogsTab('device')" class="btn-secondary" style="padding:6px 12px;font-size:14px">Device RAM</button>
-        </div>
-      </div>
-      <button onclick="closeLogsModal()" style="background:none;border:none;font-size:24px;cursor:pointer;padding:0">×</button>
-    </div>
-    <div class="modal-body" style="max-height:60vh;overflow-y:auto">
-      <div id="logsContent" style="font-family:monospace;font-size:13px;line-height:1.6;white-space:pre-wrap;background:#1e1e1e;color:#d4d4d4;padding:16px;border-radius:8px;overflow-x:auto"></div>
-    </div>
-    <div class="modal-footer" style="display:flex;gap:8px;justify-content:space-between">
-      <div style="display:flex;gap:8px">
-        <button onclick="copyLogs()" class="btn-secondary" style="padding:8px 16px">📋 Copy All</button>
-        <button onclick="downloadLogsCSV()" class="btn-secondary" style="padding:8px 16px">📥 Download CSV</button>
-      </div>
-      <button onclick="closeLogsModal()" class="btn-secondary">Close</button>
-    </div>
-  </div>
-</div>
-
-<!-- Debug Console (admin only) -->
-<button id="consoleToggle" class="console-toggle" onclick="toggleConsole()" style="display:none">▲ Show Console</button>
-
-<div id="debugConsole" class="debug-console" style="display:none">
-  <div class="console-header">
-    <h4>🐛 Debug Console</h4>
-    <div>
-      <button onclick="clearConsole()" style="padding:4px 12px;margin-right:8px;background:#444;color:#fff;border:none;border-radius:4px;cursor:pointer">Clear</button>
-      <button onclick="toggleConsole()" style="padding:4px 12px;background:#444;color:#fff;border:none;border-radius:4px;cursor:pointer">Close</button>
-    </div>
-  </div>
-  <div id="consoleBody" class="console-body"></div>
-</div>
-
+    </script>
 </body>
 </html>

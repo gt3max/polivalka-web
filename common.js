@@ -377,8 +377,8 @@ function updateNavLinksWithDevice(deviceId) {
 
   document.querySelectorAll('.nav a, a[href*=".html"]').forEach(link => {
     const href = link.getAttribute('href');
-    if (href && href.endsWith('.html') && !href.includes('index.html') && href !== '/') {
-      // Don't add device to index.html or root (Fleet page shows all devices)
+    if (href && href.endsWith('.html') && !href.includes('fleet.html') && href !== '/') {
+      // Don't add device to fleet.html or root (Fleet page shows all devices)
       try {
         const url = new URL(href, window.location.origin);
         url.searchParams.set('device', deviceId);  // Always set (not just if missing)
