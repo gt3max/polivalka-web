@@ -525,6 +525,25 @@ FIRMWARE_CDN_DOMAIN = os.environ.get('FIRMWARE_CDN_DOMAIN', 'dueyl7xkzas7u.cloud
 devices_table = dynamodb.Table(DEVICES_TABLE)
 telemetry_table = dynamodb.Table(TELEMETRY_TABLE)
 commands_table = dynamodb.Table(COMMANDS_TABLE)
+history_table = dynamodb.Table('polivalka_admin_history')
+
+
+def add_device_history(device_id, event_type, user_email, details=None):
+    """Add entry to device history (polivalka_admin_history table)"""
+    try:
+        import datetime
+        item = {
+            'device_id': device_id,
+            'timestamp': datetime.datetime.now().isoformat(),
+            'event': event_type,
+            'user_email': user_email
+        }
+        if details:
+            item['details'] = details
+        history_table.put_item(Item=item)
+        print(f"[History] Added: {event_type} for {device_id} by {user_email}")
+    except Exception as e:
+        print(f"[History] Error adding history: {e}")  # Non-fatal
 
 
 def save_plant_profile(user_id, event, origin):
@@ -586,6 +605,10 @@ def save_plant_profile(user_id, event, origin):
             UpdateExpression='SET plant = :plant',
             ExpressionAttributeValues={':plant': plant_data}
         )
+
+        # Add to device history
+        plant_name = plant_data.get('common_name') or plant_data.get('scientific', 'Unknown')
+        add_device_history(device_id, 'plant_saved', user_id, plant_name)
 
         print(f"[PLANTS] Saved plant profile for {device_id}: {plant_data.get('scientific', 'unknown')}")
         return {
@@ -657,6 +680,10 @@ def archive_plant_profile(user_id, device_id, origin):
             ExpressionAttributeValues={':plant': plant}
         )
 
+        # Add to device history
+        plant_name = plant.get('common_name') or plant.get('scientific', 'Unknown')
+        add_device_history(device_id, 'plant_archived', user_id, plant_name)
+
         print(f"[PLANTS] Archived plant profile for {device_id}: {plant.get('scientific', 'unknown')}")
         return {
             'statusCode': 200,
@@ -707,11 +734,18 @@ def delete_plant_profile(user_id, device_id, origin):
                 'body': json.dumps({'error': 'You do not own this device'})
             }
 
+        # Get plant name for history before deleting
+        plant = device.get('plant', {})
+        plant_name = plant.get('common_name') or plant.get('scientific', 'Unknown')
+
         # Remove plant profile from device
         devices_table.update_item(
             Key={'user_id': user_id, 'device_id': device_id},
             UpdateExpression='REMOVE plant'
         )
+
+        # Add to device history
+        add_device_history(device_id, 'plant_deleted', user_id, plant_name)
 
         print(f"[PLANTS] Deleted plant profile for {device_id}")
         return {
