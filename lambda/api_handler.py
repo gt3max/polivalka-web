@@ -1544,6 +1544,7 @@ def get_devices(user_id):
             # Get latest telemetry (sensor, battery, system)
             latest = get_latest_telemetry(device_id)
             print(f"[DEBUG] Processing device {device_id}, telemetry keys: {list(latest.keys())}")
+            print(f"[DEBUG] Device {device_id} sensor data: {latest.get('sensor', {})}")
 
             # Merge device metadata + telemetry
             # Migration: "off" → "manual" (backward compatibility with old firmware)
