@@ -150,7 +150,7 @@
 
   <!-- Current Plant (shown if profile exists) -->
   <div id="step-current" class="card" style="display:none">
-    <h2 style="margin-top:0">🌿 Current Plant</h2>
+    <h2 style="margin-top:0">🌿 Current Plant <span id="archived-badge" style="display:none;font-size:12px;background:#ff9800;color:#fff;padding:2px 8px;border-radius:10px;margin-left:8px">Archived</span></h2>
     <div style="display:flex;gap:16px;align-items:flex-start">
       <img id="current-plant-img" src="" alt="" style="width:80px;height:80px;border-radius:12px;object-fit:cover">
       <div style="flex:1">
@@ -159,8 +159,9 @@
         <div id="current-plant-preset" style="color:#2c5f2d;font-size:12px;margin-top:4px"></div>
       </div>
     </div>
-    <div style="display:flex;gap:8px;margin-top:16px">
-      <button class="secondary" onclick="archivePlant()" style="flex:1;font-size:13px">📦 Archive</button>
+    <div id="plant-actions" style="display:flex;gap:8px;margin-top:16px">
+      <button id="btn-archive" class="secondary" onclick="archivePlant()" style="flex:1;font-size:13px">📦 Archive</button>
+      <button id="btn-unarchive" class="secondary" onclick="unarchivePlant()" style="flex:1;font-size:13px;display:none">📤 Restore</button>
       <button class="secondary" onclick="deletePlant()" style="flex:1;font-size:13px;color:#c62828;border-color:#c62828">🗑️ Delete</button>
     </div>
   </div>
@@ -621,12 +622,17 @@ function showCurrentPlant(plant) {
   document.getElementById('current-plant-scientific').textContent = plant.scientific || '';
   document.getElementById('current-plant-preset').textContent = `${plant.preset || 'Standard'} (${plant.start_pct || 35}-${plant.stop_pct || 55}%)`;
 
+  // Show/hide archived badge and buttons
+  const isArchived = plant.archived === true;
+  document.getElementById('archived-badge').style.display = isArchived ? 'inline' : 'none';
+  document.getElementById('btn-archive').style.display = isArchived ? 'none' : 'block';
+  document.getElementById('btn-unarchive').style.display = isArchived ? 'block' : 'none';
+
   document.getElementById('step-current').style.display = 'block';
-  // Keep upload form visible - user can identify any plant
 }
 
 async function archivePlant() {
-  if (!confirm('Archive this plant? Historical data will be preserved but hidden from graphs.')) return;
+  if (!confirm('Archive this plant? Historical data will be preserved.')) return;
 
   const deviceId = getDeviceId();
   if (!deviceId) return;
@@ -642,9 +648,39 @@ async function archivePlant() {
     const data = await resp.json();
     if (resp.ok) {
       showToast('Plant archived', 'success');
-      document.getElementById('step-current').style.display = 'none';
+      // Update UI to show archived state
+      document.getElementById('archived-badge').style.display = 'inline';
+      document.getElementById('btn-archive').style.display = 'none';
+      document.getElementById('btn-unarchive').style.display = 'block';
     } else {
       showToast(data.error || 'Failed to archive', 'error');
+    }
+  } catch (e) {
+    showToast('Error: ' + e.message, 'error');
+  }
+}
+
+async function unarchivePlant() {
+  const deviceId = getDeviceId();
+  if (!deviceId) return;
+
+  try {
+    const resp = await fetch(`${CONFIG.apiUrl}/plants/${deviceId}/unarchive`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${localStorage.getItem('id_token')}`,
+        'Content-Type': 'application/json'
+      }
+    });
+    const data = await resp.json();
+    if (resp.ok) {
+      showToast('Plant restored', 'success');
+      // Update UI to show active state
+      document.getElementById('archived-badge').style.display = 'none';
+      document.getElementById('btn-archive').style.display = 'block';
+      document.getElementById('btn-unarchive').style.display = 'none';
+    } else {
+      showToast(data.error || 'Failed to restore', 'error');
     }
   } catch (e) {
     showToast('Error: ' + e.message, 'error');

@@ -700,6 +700,74 @@ def archive_plant_profile(user_id, device_id, origin):
         }
 
 
+def unarchive_plant_profile(user_id, device_id, origin):
+    """
+    POST /plants/{device_id}/unarchive
+    Restore plant profile from archive.
+    """
+    try:
+        if not device_id.startswith('Polivalka-'):
+            device_id = f'Polivalka-{device_id}'
+
+        response = devices_table.query(
+            IndexName='device_id-index',
+            KeyConditionExpression=Key('device_id').eq(device_id)
+        )
+        items = response.get('Items', [])
+        if not items:
+            return {
+                'statusCode': 404,
+                'headers': cors_headers(origin),
+                'body': json.dumps({'error': f'Device {device_id} not found'})
+            }
+
+        device = items[0]
+        device_user_id = device.get('user_id')
+
+        if device_user_id != user_id:
+            return {
+                'statusCode': 403,
+                'headers': cors_headers(origin),
+                'body': json.dumps({'error': 'You do not own this device'})
+            }
+
+        plant = device.get('plant')
+        if not plant:
+            return {
+                'statusCode': 404,
+                'headers': cors_headers(origin),
+                'body': json.dumps({'error': 'No plant profile to unarchive'})
+            }
+
+        # Remove archived flag
+        plant.pop('archived', None)
+        plant.pop('archived_at', None)
+
+        devices_table.update_item(
+            Key={'user_id': user_id, 'device_id': device_id},
+            UpdateExpression='SET plant = :plant',
+            ExpressionAttributeValues={':plant': plant}
+        )
+
+        plant_name = plant.get('common_name') or plant.get('scientific', 'Unknown')
+        add_device_history(device_id, 'plant_unarchived', user_id, plant_name)
+
+        print(f"[PLANTS] Unarchived plant profile for {device_id}")
+        return {
+            'statusCode': 200,
+            'headers': cors_headers(origin),
+            'body': json.dumps({'success': True, 'message': 'Plant profile restored'})
+        }
+
+    except Exception as e:
+        print(f"[PLANTS] Error unarchiving plant profile: {e}")
+        return {
+            'statusCode': 500,
+            'headers': cors_headers(origin),
+            'body': json.dumps({'error': str(e)})
+        }
+
+
 def delete_plant_profile(user_id, device_id, origin):
     """
     DELETE /plants/{device_id}
@@ -1396,6 +1464,11 @@ def lambda_handler(event, context):
     if path.startswith('/plants/Polivalka-') and path.endswith('/archive') and http_method == 'POST':
         device_id = path.split('/')[2]  # /plants/Polivalka-XXX/archive -> Polivalka-XXX
         return archive_plant_profile(user_id, device_id, origin)
+
+    # POST /plants/{device_id}/unarchive - Restore plant profile from archive
+    if path.startswith('/plants/Polivalka-') and path.endswith('/unarchive') and http_method == 'POST':
+        device_id = path.split('/')[2]  # /plants/Polivalka-XXX/unarchive -> Polivalka-XXX
+        return unarchive_plant_profile(user_id, device_id, origin)
 
     # DELETE /plants/{device_id} - Delete plant profile
     if path.startswith('/plants/Polivalka-') and http_method == 'DELETE':
