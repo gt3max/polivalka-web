@@ -1486,6 +1486,10 @@ def lambda_handler(event, context):
     if path == '/claims' and http_method == 'POST':
         return create_user_claim(user_id, event, origin)
 
+    # POST /devices/claim - Claim device (for whitelisted users or admin)
+    if path == '/devices/claim' and http_method == 'POST':
+        return claim_device(user_id, event, origin)
+
     # ============ Admin Device Management Routes (added 2025-12-06) ============
     # These endpoints are admin-only for device lifecycle management
 
@@ -3156,6 +3160,117 @@ def create_user_claim(user_id, event, origin):
 
     except Exception as e:
         print(f"[Claims] Error creating claim: {e}")
+        return {
+            'statusCode': 500,
+            'headers': cors_headers(origin),
+            'body': json.dumps({'error': str(e)})
+        }
+
+
+def claim_device(user_id, event, origin):
+    """POST /devices/claim - Claim device for whitelisted user or admin
+
+    Creates a new device record for the user in polivalka_devices.
+    Requires either: admin access OR user is whitelisted for this device.
+    """
+    try:
+        body = json.loads(event.get('body', '{}'))
+        raw_device_id = body.get('device_id', '').upper()
+
+        if not raw_device_id:
+            return {
+                'statusCode': 400,
+                'headers': cors_headers(origin),
+                'body': json.dumps({'error': 'device_id required'})
+            }
+
+        # Normalize device_id format
+        if raw_device_id.startswith('POLIVALKA-'):
+            device_id = f'Polivalka-{raw_device_id[10:]}'
+        else:
+            device_id = f'Polivalka-{raw_device_id}'
+
+        # Check authorization: admin can claim any device
+        is_admin = user_id in ADMIN_EMAILS
+
+        if not is_admin:
+            # Check whitelist
+            whitelist_table = dynamodb.Table('polivalka_admin_users')
+            response = whitelist_table.get_item(Key={'email': user_id})
+
+            if 'Item' not in response:
+                return {
+                    'statusCode': 403,
+                    'headers': cors_headers(origin),
+                    'body': json.dumps({'error': 'You are not in the whitelist'})
+                }
+
+            user_data = response['Item']
+            status = user_data.get('status', 'active')
+
+            if status != 'active':
+                return {
+                    'statusCode': 403,
+                    'headers': cors_headers(origin),
+                    'body': json.dumps({'error': f'Your account is {status}'})
+                }
+
+            # Check if device is assigned to this user
+            devices = user_data.get('devices', [])
+            if device_id not in devices:
+                return {
+                    'statusCode': 403,
+                    'headers': cors_headers(origin),
+                    'body': json.dumps({'error': f'Device {device_id} is not assigned to you'})
+                }
+
+        # Check if user already has this device
+        existing = devices_table.get_item(
+            Key={'user_id': user_id, 'device_id': device_id}
+        )
+
+        if 'Item' in existing:
+            return {
+                'statusCode': 200,
+                'headers': cors_headers(origin),
+                'body': json.dumps({
+                    'success': True,
+                    'message': 'Device already claimed',
+                    'device_id': device_id
+                })
+            }
+
+        # Create new device record for this user
+        import datetime
+        current_time = int(time.time())
+
+        devices_table.put_item(Item={
+            'user_id': user_id,
+            'device_id': device_id,
+            'claimed_at': current_time,
+            'location': 'Home',
+            'room': 'Room'
+            # Note: plant profile is empty - user will set it via identify.html
+        })
+
+        # Add to device history
+        add_device_history(device_id, 'claimed', user_id)
+
+        print(f"[Claim] Device {device_id} claimed by {user_id}")
+        return {
+            'statusCode': 201,
+            'headers': cors_headers(origin),
+            'body': json.dumps({
+                'success': True,
+                'message': f'Device {device_id} is now yours!',
+                'device_id': device_id
+            })
+        }
+
+    except Exception as e:
+        print(f"[Claim] Error claiming device: {e}")
+        import traceback
+        traceback.print_exc()
         return {
             'statusCode': 500,
             'headers': cors_headers(origin),
