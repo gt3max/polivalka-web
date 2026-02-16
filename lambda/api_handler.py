@@ -2556,13 +2556,12 @@ def get_latest_telemetry(device_id):
                 latest['sensor']['timestamp'] = sensor_ts
                 latest_timestamps['sensor'] = sensor_ts
 
-            # Battery from command response (was missing → Refresh battery reverted to stale data)
-            if 'battery' in item:
-                battery_data = dict(item['battery'])
-                battery_ts = int(battery_data.get('updated_at', 0))
-                latest['battery'] = battery_data
-                latest['battery']['timestamp'] = battery_ts
-                latest_timestamps['battery'] = battery_ts
+            # Battery: DO NOT read from ts=0 record!
+            # iot_rule_response.py explicitly does NOT save battery to ts=0 because
+            # get_status battery percent is unreliable (v1.0.33: 0% at 4.16V, v1.0.104: 81% at 4.18V).
+            # Any existing ts=0 battery data is stale from before this fix.
+            # Periodic battery telemetry (timestamp > 0) is the only source of truth.
+            # See iot_rule_response.py lines 221-226 for reasoning.
 
             # System from command response (stored as 'system_data' to avoid DynamoDB reserved word)
             if 'system_data' in item:
