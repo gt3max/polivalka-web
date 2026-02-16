@@ -787,6 +787,162 @@ def delete_plant_profile(user_id, device_id, origin):
         }
 
 
+def get_plant_library(user_id, origin):
+    """
+    GET /plants/library
+    Get all plant profiles for this user (from all their devices).
+    Returns list of plants with device associations.
+    """
+    try:
+        # Query all devices for this user
+        response = devices_table.query(
+            KeyConditionExpression=Key('user_id').eq(user_id)
+        )
+
+        plants = []
+        for device in response.get('Items', []):
+            plant = device.get('plant')
+            if plant:
+                # Add device info to plant
+                plant_entry = {
+                    'plant_id': plant.get('plant_id'),
+                    'scientific': plant.get('scientific'),
+                    'common_name': plant.get('common_name'),
+                    'image_url': plant.get('image_url'),
+                    'preset': plant.get('preset'),
+                    'start_pct': plant.get('start_pct'),
+                    'stop_pct': plant.get('stop_pct'),
+                    'started_at': plant.get('started_at'),
+                    'saved_at': plant.get('saved_at'),
+                    'archived': plant.get('archived', False),
+                    'device_id': device.get('device_id'),
+                    'device_location': device.get('location', ''),
+                    'device_room': device.get('room', '')
+                }
+                plants.append(plant_entry)
+
+        # Sort by saved_at descending (most recent first)
+        plants.sort(key=lambda x: x.get('saved_at', 0), reverse=True)
+
+        print(f"[PLANTS] Library for {user_id}: {len(plants)} plants")
+        return {
+            'statusCode': 200,
+            'headers': cors_headers(origin),
+            'body': json.dumps({'success': True, 'plants': plants}, cls=DecimalEncoder)
+        }
+
+    except Exception as e:
+        print(f"[PLANTS] Error getting plant library: {e}")
+        return {
+            'statusCode': 500,
+            'headers': cors_headers(origin),
+            'body': json.dumps({'error': str(e)})
+        }
+
+
+def assign_plant_to_device(user_id, device_id, event, origin):
+    """
+    POST /plants/{device_id}/assign
+    Assign an existing plant profile from library to this device.
+    Body: { plant_id: "plant_1707123456789" }
+
+    This copies the plant profile to the target device with a new started_at
+    for data isolation. The original plant profile remains on its device.
+    """
+    try:
+        body = json.loads(event.get('body', '{}'))
+        source_plant_id = body.get('plant_id')
+
+        if not source_plant_id:
+            return {
+                'statusCode': 400,
+                'headers': cors_headers(origin),
+                'body': json.dumps({'error': 'plant_id required'})
+            }
+
+        # Normalize device_id
+        if not device_id.startswith('Polivalka-'):
+            device_id = f'Polivalka-{device_id}'
+
+        # Verify user owns target device
+        target_response = devices_table.get_item(
+            Key={'user_id': user_id, 'device_id': device_id}
+        )
+        if 'Item' not in target_response:
+            return {
+                'statusCode': 404,
+                'headers': cors_headers(origin),
+                'body': json.dumps({'error': f'Device {device_id} not found for your account'})
+            }
+
+        # Find source plant in user's library (search all their devices)
+        all_devices = devices_table.query(
+            KeyConditionExpression=Key('user_id').eq(user_id)
+        )
+
+        source_plant = None
+        source_device_id = None
+        for device in all_devices.get('Items', []):
+            plant = device.get('plant')
+            if plant and plant.get('plant_id') == source_plant_id:
+                source_plant = plant
+                source_device_id = device.get('device_id')
+                break
+
+        if not source_plant:
+            return {
+                'statusCode': 404,
+                'headers': cors_headers(origin),
+                'body': json.dumps({'error': f'Plant {source_plant_id} not found in your library'})
+            }
+
+        # Copy plant profile to target device with new timestamps
+        current_time = int(time.time())
+        new_plant = {
+            'plant_id': f"plant_{int(current_time * 1000)}",  # New plant_id for this instance
+            'scientific': source_plant.get('scientific'),
+            'common_name': source_plant.get('common_name'),
+            'image_url': source_plant.get('image_url'),
+            'preset': source_plant.get('preset'),
+            'start_pct': source_plant.get('start_pct'),
+            'stop_pct': source_plant.get('stop_pct'),
+            'started_at': current_time,  # New started_at for data isolation
+            'saved_at': current_time,
+            'copied_from': source_plant_id,  # Track origin
+            'copied_from_device': source_device_id
+        }
+
+        # Save to target device
+        devices_table.update_item(
+            Key={'user_id': user_id, 'device_id': device_id},
+            UpdateExpression='SET plant = :plant',
+            ExpressionAttributeValues={':plant': new_plant}
+        )
+
+        # Add to device history
+        plant_name = new_plant.get('common_name') or new_plant.get('scientific', 'Unknown')
+        add_device_history(device_id, 'plant_assigned', user_id, f"{plant_name} (from {source_device_id})")
+
+        print(f"[PLANTS] Assigned {source_plant_id} to {device_id} as {new_plant['plant_id']}")
+        return {
+            'statusCode': 200,
+            'headers': cors_headers(origin),
+            'body': json.dumps({
+                'success': True,
+                'message': f'Plant assigned to {device_id}',
+                'plant': new_plant
+            }, cls=DecimalEncoder)
+        }
+
+    except Exception as e:
+        print(f"[PLANTS] Error assigning plant: {e}")
+        return {
+            'statusCode': 500,
+            'headers': cors_headers(origin),
+            'body': json.dumps({'error': str(e)})
+        }
+
+
 def get_plant_profile(user_id, device_id, origin):
     """
     GET /plants/{device_id}
@@ -1404,6 +1560,10 @@ def lambda_handler(event, context):
     if path == '/plants/save' and http_method == 'POST':
         return save_plant_profile(user_id, event, origin)
 
+    # GET /plants/library - Get all plant profiles for user
+    if path == '/plants/library' and http_method == 'GET':
+        return get_plant_library(user_id, origin)
+
     # GET /plants/{device_id} - Get plant profile from device
     if path.startswith('/plants/Polivalka-') and http_method == 'GET':
         device_id = path.split('/')[-1]  # Extract device_id from path
@@ -1418,6 +1578,11 @@ def lambda_handler(event, context):
     if path.startswith('/plants/Polivalka-') and path.endswith('/unarchive') and http_method == 'POST':
         device_id = path.split('/')[2]  # /plants/Polivalka-XXX/unarchive -> Polivalka-XXX
         return unarchive_plant_profile(user_id, device_id, origin)
+
+    # POST /plants/{device_id}/assign - Assign plant from library to device
+    if path.startswith('/plants/Polivalka-') and path.endswith('/assign') and http_method == 'POST':
+        device_id = path.split('/')[2]  # /plants/Polivalka-XXX/assign -> Polivalka-XXX
+        return assign_plant_to_device(user_id, device_id, event, origin)
 
     # DELETE /plants/{device_id} - Delete plant profile
     if path.startswith('/plants/Polivalka-') and http_method == 'DELETE':

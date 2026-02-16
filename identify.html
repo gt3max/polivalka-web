@@ -166,6 +166,21 @@
     </div>
   </div>
 
+  <!-- Plant Library (all user's plants across devices) -->
+  <div id="plant-library" class="card" style="display:none">
+    <h2 style="margin-top:0;cursor:pointer" onclick="toggleLibrary()">
+      📚 My Plants <span id="library-count" style="font-size:14px;color:#666">(0)</span>
+      <span id="library-toggle" style="float:right;font-size:14px">▼</span>
+    </h2>
+    <div id="library-content" style="display:none">
+      <p class="muted" style="margin:0 0 12px">Select a plant to assign to this device:</p>
+      <div id="library-list" style="display:grid;gap:8px"></div>
+      <div id="library-empty" style="display:none;color:#999;font-size:14px;text-align:center;padding:16px">
+        No plants in library yet. Identify your first plant above!
+      </div>
+    </div>
+  </div>
+
   <!-- Step 1: Upload -->
   <div id="step-upload" class="card">
     <h2 style="margin-top:0">Identify Your Plant</h2>
@@ -610,9 +625,13 @@ async function loadSavedProfile() {
       showCurrentPlant(data.plant);
     } else {
       console.log('[Identify] No saved plant profile');
+      // Still load library even without current plant
+      loadPlantLibrary();
     }
   } catch (err) {
     console.error('[Identify] Error loading profile:', err);
+    // Still load library on error
+    loadPlantLibrary();
   }
 }
 
@@ -629,6 +648,111 @@ function showCurrentPlant(plant) {
   document.getElementById('btn-unarchive').style.display = isArchived ? 'block' : 'none';
 
   document.getElementById('step-current').style.display = 'block';
+
+  // Load plant library after showing current plant
+  loadPlantLibrary();
+}
+
+// ============ Plant Library ============
+let libraryExpanded = false;
+
+async function loadPlantLibrary() {
+  try {
+    const url = `${CONFIG.apiUrl}/plants/library`;
+    const response = await fetch(url, {
+      headers: API.getAuthHeaders()
+    });
+    const data = await response.json();
+
+    if (data.success && data.plants) {
+      renderPlantLibrary(data.plants);
+    }
+  } catch (err) {
+    console.error('[Identify] Error loading library:', err);
+  }
+}
+
+function renderPlantLibrary(plants) {
+  const libraryDiv = document.getElementById('plant-library');
+  const listDiv = document.getElementById('library-list');
+  const emptyDiv = document.getElementById('library-empty');
+  const countSpan = document.getElementById('library-count');
+  const currentDeviceId = getDeviceId();
+
+  // Filter out current device's plant (already shown above)
+  const otherPlants = plants.filter(p => p.device_id !== currentDeviceId);
+
+  countSpan.textContent = `(${otherPlants.length})`;
+
+  if (otherPlants.length === 0) {
+    listDiv.style.display = 'none';
+    emptyDiv.style.display = 'block';
+    // Only show library section if user has multiple devices
+    if (plants.length > 0) {
+      libraryDiv.style.display = 'block';
+    }
+    return;
+  }
+
+  libraryDiv.style.display = 'block';
+  listDiv.style.display = 'grid';
+  emptyDiv.style.display = 'none';
+
+  listDiv.innerHTML = otherPlants.map(plant => {
+    const archivedBadge = plant.archived ? '<span style="background:#ff9800;color:#fff;font-size:10px;padding:1px 4px;border-radius:4px;margin-left:4px">Archived</span>' : '';
+    const deviceInfo = plant.device_room ? `${plant.device_room}` : plant.device_id.replace('Polivalka-', '');
+
+    return `
+      <div class="library-item" style="display:flex;gap:12px;padding:10px;border:1px solid #ddd;border-radius:8px;align-items:center;cursor:pointer;transition:all 0.2s"
+           onclick="assignPlantFromLibrary('${plant.plant_id}')"
+           onmouseover="this.style.borderColor='#2c5f2d';this.style.background='#f9fff9'"
+           onmouseout="this.style.borderColor='#ddd';this.style.background='#fff'">
+        <img src="${plant.image_url || ''}" style="width:50px;height:50px;border-radius:8px;object-fit:cover;background:#f0f0f0">
+        <div style="flex:1;min-width:0">
+          <div style="font-weight:600;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">
+            ${plant.common_name || plant.scientific}${archivedBadge}
+          </div>
+          <div style="font-size:12px;color:#666">${plant.preset || 'Standard'} • ${deviceInfo}</div>
+        </div>
+        <div style="color:#2c5f2d;font-size:18px">→</div>
+      </div>
+    `;
+  }).join('');
+}
+
+function toggleLibrary() {
+  libraryExpanded = !libraryExpanded;
+  document.getElementById('library-content').style.display = libraryExpanded ? 'block' : 'none';
+  document.getElementById('library-toggle').textContent = libraryExpanded ? '▲' : '▼';
+}
+
+async function assignPlantFromLibrary(plantId) {
+  if (!confirm('Assign this plant to current device? This will replace the current plant profile.')) return;
+
+  const deviceId = getDeviceId();
+  if (!deviceId) return;
+
+  try {
+    const resp = await fetch(`${CONFIG.apiUrl}/plants/${deviceId}/assign`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${localStorage.getItem('id_token')}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ plant_id: plantId })
+    });
+    const data = await resp.json();
+
+    if (resp.ok && data.success) {
+      showToast('Plant assigned successfully!', 'success');
+      // Reload the page to show new plant
+      setTimeout(() => location.reload(), 1000);
+    } else {
+      showToast(data.error || 'Failed to assign plant', 'error');
+    }
+  } catch (e) {
+    showToast('Error: ' + e.message, 'error');
+  }
 }
 
 async function archivePlant() {

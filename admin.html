@@ -687,6 +687,10 @@ async function loadDeviceHistoryUI(deviceId) {
       icon = '📤';
       const plantName = e.details || 'Unknown';
       text = `Plant restored: <span style="color:#81c784">${plantName}</span> by ${email}`;
+    } else if (e.event === 'plant_assigned') {
+      icon = '🔄';
+      const details = e.details || 'Unknown';
+      text = `Plant assigned: <span style="color:#64b5f6">${details}</span> by ${email}`;
     }
     return `<div style="padding:8px 0;border-bottom:1px solid #444;display:flex;justify-content:space-between;align-items:center">
       <span style="color:#fff;font-size:14px">${icon} ${text}</span>
