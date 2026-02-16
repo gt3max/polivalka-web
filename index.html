@@ -1,6 +1,16 @@
 <!doctype html>
 <html>
 <head>
+<script>
+// Redirect to landing page if not logged in
+(function() {
+  const token = localStorage.getItem('access_token');
+  const expires = parseInt(localStorage.getItem('token_expires') || '0');
+  if (!token || expires < Date.now()) {
+    window.location.replace('landing.html');
+  }
+})();
+</script>
 <script src="api-adapter.js"></script>
 <script src="common.js"></script>
 <meta charset="utf-8"/>
