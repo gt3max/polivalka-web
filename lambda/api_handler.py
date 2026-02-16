@@ -568,25 +568,15 @@ def save_plant_profile(user_id, event, origin):
         if not device_id.startswith('Polivalka-'):
             device_id = f'Polivalka-{device_id}'
 
-        # Verify user owns this device
-        response = devices_table.query(
-            IndexName='device_id-index',
-            KeyConditionExpression=Key('device_id').eq(device_id)
+        # Verify user owns this device (use get_item with both keys for exact match)
+        response = devices_table.get_item(
+            Key={'user_id': user_id, 'device_id': device_id}
         )
-        items = response.get('Items', [])
-        if not items:
+        if 'Item' not in response:
             return {
                 'statusCode': 404,
                 'headers': cors_headers(origin),
-                'body': json.dumps({'error': f'Device {device_id} not found'})
-            }
-
-        device_user_id = items[0].get('user_id')
-        if device_user_id != user_id:
-            return {
-                'statusCode': 403,
-                'headers': cors_headers(origin),
-                'body': json.dumps({'error': 'You do not own this device'})
+                'body': json.dumps({'error': f'Device {device_id} not found for your account'})
             }
 
         # Generate plant_id if not provided (for data isolation)
@@ -637,30 +627,18 @@ def archive_plant_profile(user_id, device_id, origin):
         if not device_id.startswith('Polivalka-'):
             device_id = f'Polivalka-{device_id}'
 
-        # Get device record
-        response = devices_table.query(
-            IndexName='device_id-index',
-            KeyConditionExpression=Key('device_id').eq(device_id)
+        # Get THIS user's device record (use get_item for exact match)
+        response = devices_table.get_item(
+            Key={'user_id': user_id, 'device_id': device_id}
         )
-        items = response.get('Items', [])
-        if not items:
+        if 'Item' not in response:
             return {
                 'statusCode': 404,
                 'headers': cors_headers(origin),
-                'body': json.dumps({'error': f'Device {device_id} not found'})
+                'body': json.dumps({'error': f'Device {device_id} not found for your account'})
             }
 
-        device = items[0]
-        device_user_id = device.get('user_id')
-
-        # Verify ownership
-        if device_user_id != user_id:
-            return {
-                'statusCode': 403,
-                'headers': cors_headers(origin),
-                'body': json.dumps({'error': 'You do not own this device'})
-            }
-
+        device = response['Item']
         plant = device.get('plant')
         if not plant:
             return {
@@ -709,28 +687,18 @@ def unarchive_plant_profile(user_id, device_id, origin):
         if not device_id.startswith('Polivalka-'):
             device_id = f'Polivalka-{device_id}'
 
-        response = devices_table.query(
-            IndexName='device_id-index',
-            KeyConditionExpression=Key('device_id').eq(device_id)
+        # Get THIS user's device record (use get_item for exact match)
+        response = devices_table.get_item(
+            Key={'user_id': user_id, 'device_id': device_id}
         )
-        items = response.get('Items', [])
-        if not items:
+        if 'Item' not in response:
             return {
                 'statusCode': 404,
                 'headers': cors_headers(origin),
-                'body': json.dumps({'error': f'Device {device_id} not found'})
+                'body': json.dumps({'error': f'Device {device_id} not found for your account'})
             }
 
-        device = items[0]
-        device_user_id = device.get('user_id')
-
-        if device_user_id != user_id:
-            return {
-                'statusCode': 403,
-                'headers': cors_headers(origin),
-                'body': json.dumps({'error': 'You do not own this device'})
-            }
-
+        device = response['Item']
         plant = device.get('plant')
         if not plant:
             return {
@@ -778,30 +746,18 @@ def delete_plant_profile(user_id, device_id, origin):
         if not device_id.startswith('Polivalka-'):
             device_id = f'Polivalka-{device_id}'
 
-        # Get device record
-        response = devices_table.query(
-            IndexName='device_id-index',
-            KeyConditionExpression=Key('device_id').eq(device_id)
+        # Get THIS user's device record (use get_item for exact match)
+        response = devices_table.get_item(
+            Key={'user_id': user_id, 'device_id': device_id}
         )
-        items = response.get('Items', [])
-        if not items:
+        if 'Item' not in response:
             return {
                 'statusCode': 404,
                 'headers': cors_headers(origin),
-                'body': json.dumps({'error': f'Device {device_id} not found'})
+                'body': json.dumps({'error': f'Device {device_id} not found for your account'})
             }
 
-        device = items[0]
-        device_user_id = device.get('user_id')
-
-        # Verify ownership
-        if device_user_id != user_id:
-            return {
-                'statusCode': 403,
-                'headers': cors_headers(origin),
-                'body': json.dumps({'error': 'You do not own this device'})
-            }
-
+        device = response['Item']
         # Get plant name for history before deleting
         plant = device.get('plant', {})
         plant_name = plant.get('common_name') or plant.get('scientific', 'Unknown')
@@ -835,37 +791,30 @@ def get_plant_profile(user_id, device_id, origin):
     """
     GET /plants/{device_id}
     Get plant profile from device record.
+
+    IMPORTANT: Each user has their OWN device record with their own plant profile.
+    When device is transferred, new user has separate record with no plant profile.
+    This ensures data isolation between users.
     """
     try:
         # Normalize device_id
         if not device_id.startswith('Polivalka-'):
             device_id = f'Polivalka-{device_id}'
 
-        # Get device record
-        response = devices_table.query(
-            IndexName='device_id-index',
-            KeyConditionExpression=Key('device_id').eq(device_id)
+        # Get THIS user's device record directly (not via GSI which returns all users)
+        response = devices_table.get_item(
+            Key={'user_id': user_id, 'device_id': device_id}
         )
-        items = response.get('Items', [])
-        if not items:
+
+        if 'Item' not in response:
+            # User doesn't have this device
             return {
                 'statusCode': 404,
                 'headers': cors_headers(origin),
-                'body': json.dumps({'error': f'Device {device_id} not found'})
+                'body': json.dumps({'error': f'Device {device_id} not found for your account'})
             }
 
-        device = items[0]
-        device_user_id = device.get('user_id')
-
-        # Verify ownership (admin can access any device)
-        is_admin = user_id in ADMIN_EMAILS
-        if device_user_id != user_id and not is_admin:
-            return {
-                'statusCode': 403,
-                'headers': cors_headers(origin),
-                'body': json.dumps({'error': 'You do not own this device'})
-            }
-
+        device = response['Item']
         plant = device.get('plant')
         return {
             'statusCode': 200,
