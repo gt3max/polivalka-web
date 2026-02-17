@@ -822,14 +822,8 @@ function createExpandableRow(device, isOnline, hasWarnings, isCritical) {
         <span class="detail-item">🔧 Firmware: ${device.firmware_version || 'v1.0.0'}</span>
         <span class="detail-item">🔄 Restarts: ${formatRestarts(device)}</span>
         ${device.sta_rssi ? `<span class="detail-item" style="color:${getRssiDisplay(device.sta_rssi).color}">📶 Signal: ${device.sta_rssi} dBm</span>` : ''}
+        ${isAdmin() && device.owner && device.owner !== 'admin' ? `<span class="detail-item" style="color:#1565c0">📧 Assigned to: ${device.owner}</span>` : ''}
       </div>
-
-      ${isAdmin() && device.owner ? `
-      <div class="detail-row" style="margin-top:8px;padding:6px 10px;background:#e3f2fd;border-radius:6px">
-        <span class="detail-item" style="color:#1565c0">👤 Owner: <strong>${device.owner === 'admin' ? 'Admin (me)' : device.owner}</strong></span>
-        ${device.all_owners && device.all_owners.length > 1 ? `<span class="detail-item" style="color:#666">Also assigned to: ${device.all_owners.filter(o => o !== device.owner).join(', ')}</span>` : ''}
-      </div>
-      ` : ''}
 
       ${hasWarnings ? `
         <div class="device-warnings">
