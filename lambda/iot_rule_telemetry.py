@@ -134,13 +134,23 @@ def lambda_handler(event, context):
 
             for item in query_response['Items']:
                 user_id = item['user_id']
+                # Skip transferred records - they are archived, only active owner gets updates
+                if item.get('transferred'):
+                    print(f"Skipping transferred record for {user_id}/{device_id}")
+                    continue
                 try:
-                    # Create empty 'latest' Map if not exists, then set nested field
+                    # Step 1: Ensure 'latest' Map exists (idempotent)
                     devices_table.update_item(
                         Key={'user_id': user_id, 'device_id': device_id},
-                        UpdateExpression='SET latest = if_not_exists(latest, :empty), latest.#dtype = :data',
+                        UpdateExpression='SET latest = if_not_exists(latest, :empty)',
+                        ExpressionAttributeValues={':empty': {}}
+                    )
+                    # Step 2: Update nested field + last_update for online status
+                    devices_table.update_item(
+                        Key={'user_id': user_id, 'device_id': device_id},
+                        UpdateExpression='SET latest.#dtype = :data, latest.last_update = :ts',
                         ExpressionAttributeNames={'#dtype': data_type},
-                        ExpressionAttributeValues={':empty': {}, ':data': latest_data}
+                        ExpressionAttributeValues={':data': latest_data, ':ts': timestamp}
                     )
                 except Exception as e:
                     print(f"Error updating latest.{data_type} for {user_id}/{device_id}: {e}")

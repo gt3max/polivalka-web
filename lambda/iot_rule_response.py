@@ -108,7 +108,10 @@ def normalize_flat_response(flat):
             'reboot_count': flat.get('reboot_count'),
             'clean_restarts': flat.get('clean_restarts'),
             'unexpected_restarts': flat.get('unexpected_restarts'),
-            'scan_interval_hours': flat.get('scan_interval_hours')
+            'scan_interval_hours': flat.get('scan_interval_hours'),
+            'device_name': flat.get('device_name'),
+            'location': flat.get('location'),
+            'room': flat.get('room')
         }
 
     # Pump data
@@ -267,6 +270,10 @@ def lambda_handler(event, context):
 
                     for item in query_response['Items']:
                         owner_id = item['user_id']
+                        # Skip transferred records - they are archived, only active owner gets updates
+                        if item.get('transferred'):
+                            print(f"Skipping transferred record for {owner_id}/{device_id}")
+                            continue
                         update_parts = []
                         expr_names = {}
                         expr_values = {}
@@ -280,13 +287,22 @@ def lambda_handler(event, context):
                                 expr_names[f'#{dtype}'] = dtype
                                 expr_values[f':{dtype}'] = data_copy
 
+                        # Always update last_update for online status check
+                        update_parts.append('latest.last_update = :last_update')
+                        expr_values[':last_update'] = current_time
+
                         if update_parts:
                             try:
-                                # Create empty 'latest' Map if not exists, then set nested fields
-                                expr_values[':empty'] = {}
+                                # Step 1: Ensure 'latest' Map exists (idempotent)
                                 devices_table.update_item(
                                     Key={'user_id': owner_id, 'device_id': device_id},
-                                    UpdateExpression='SET latest = if_not_exists(latest, :empty), ' + ', '.join(update_parts),
+                                    UpdateExpression='SET latest = if_not_exists(latest, :empty)',
+                                    ExpressionAttributeValues={':empty': {}}
+                                )
+                                # Step 2: Update nested fields
+                                devices_table.update_item(
+                                    Key={'user_id': owner_id, 'device_id': device_id},
+                                    UpdateExpression='SET ' + ', '.join(update_parts),
                                     ExpressionAttributeNames=expr_names,
                                     ExpressionAttributeValues=expr_values
                                 )

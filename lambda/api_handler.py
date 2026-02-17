@@ -1721,8 +1721,9 @@ def get_devices(user_id):
     items = response.get('Items', [])
     print(f"[DEBUG] get_devices: Found {len(items)} devices before filter: {[i['device_id'] for i in items]}")
 
-    # Filter out archived and deleted devices (they go to separate lists)
-    items = [i for i in items if not i.get('archived') and not i.get('deleted')]
+    # Filter out archived, deleted, and transferred devices
+    # Transferred records are kept for history but admin sees user's active record instead
+    items = [i for i in items if not i.get('archived') and not i.get('deleted') and not i.get('transferred')]
     print(f"[DEBUG] get_devices: {len(items)} active devices after filter")
 
     # Admin: group by device_id to avoid duplicates (same device may have multiple owners)
@@ -1741,6 +1742,14 @@ def get_devices(user_id):
             group.sort(key=lambda x: (x['user_id'] in ADMIN_EMAILS, -(x.get('claimed_at') or 0)))
             primary = group[0]
             primary['_all_owners'] = [i['user_id'] for i in group]
+            # Merge metadata from all records (device_name, location, room may be in any)
+            for other in group[1:]:
+                if not primary.get('device_name') and other.get('device_name'):
+                    primary['device_name'] = other['device_name']
+                if not primary.get('location') and other.get('location'):
+                    primary['location'] = other['location']
+                if not primary.get('room') and other.get('room'):
+                    primary['room'] = other['room']
             items.append(primary)
         print(f"[DEBUG] get_devices: Admin grouped to {len(items)} unique devices")
 
@@ -1758,6 +1767,13 @@ def get_devices(user_id):
                 print(f"[DEBUG] Device {device_id} using legacy get_latest_telemetry()")
             else:
                 print(f"[DEBUG] Device {device_id} using devices.latest")
+                # Partial fallback: if battery missing in latest, get from telemetry
+                # (battery publishes every 60 min, may not be in devices.latest yet)
+                if 'battery' not in latest:
+                    legacy = get_latest_telemetry(device_id)
+                    if legacy.get('battery'):
+                        latest['battery'] = legacy['battery']
+                        print(f"[DEBUG] Device {device_id} battery from telemetry fallback")
             print(f"[DEBUG] Processing device {device_id}, telemetry keys: {list(latest.keys())}")
 
             # Merge device metadata + telemetry
@@ -1832,6 +1848,7 @@ def get_devices(user_id):
                 'sensor_calibration': sensor_calib_dict,
                 'total_water_ml': int(item.get('total_water_ml', 0)) if item.get('total_water_ml') else None,
                 'pump_runtime_sec': int(item.get('pump_runtime_sec', 0)) if item.get('pump_runtime_sec') else None,
+                'pump_running': latest.get('pump', {}).get('running', False),  # For state display
                 # Owner info (for admin fleet view)
                 'owner': item.get('user_id'),
                 'all_owners': item.get('_all_owners', [item.get('user_id')]) if is_admin else None
@@ -3381,28 +3398,96 @@ def claim_device(user_id, event, origin):
         )
 
         if 'Item' in existing:
-            return {
-                'statusCode': 200,
-                'headers': cors_headers(origin),
-                'body': json.dumps({
-                    'success': True,
-                    'message': 'Device already claimed',
-                    'device_id': device_id
-                })
-            }
+            # Check if it's a transferred record (user reclaiming)
+            if not existing['Item'].get('transferred'):
+                return {
+                    'statusCode': 200,
+                    'headers': cors_headers(origin),
+                    'body': json.dumps({
+                        'success': True,
+                        'message': 'Device already claimed',
+                        'device_id': device_id
+                    })
+                }
 
-        # Create new device record for this user
-        import datetime
         current_time = int(time.time())
 
+        # ============ DEVICE TRANSFER ARCHITECTURE ============
+        # Find ALL existing records for this device (all owners)
+        all_records = devices_table.query(
+            IndexName='device_id-index',
+            KeyConditionExpression=Key('device_id').eq(device_id)
+        )
+
+        # Archive previous owners' data and mark as transferred
+        for record in all_records.get('Items', []):
+            prev_owner = record['user_id']
+            if prev_owner == user_id:
+                continue  # Skip if same user
+
+            # Archive plant profile if exists
+            plant = record.get('plant')
+            archived_plants = record.get('archived_plants', [])
+            if plant:
+                plant['archived_at'] = current_time
+                plant['archived_reason'] = 'device_transferred'
+                archived_plants.append(plant)
+
+            # Mark record as transferred (preserves history, stops latest updates)
+            try:
+                update_expr = 'SET transferred = :t, transferred_to = :to, transferred_at = :at'
+                expr_values = {
+                    ':t': True,
+                    ':to': user_id,
+                    ':at': current_time
+                }
+
+                if archived_plants:
+                    update_expr += ', archived_plants = :ap'
+                    expr_values[':ap'] = archived_plants
+
+                # Remove latest field (no longer updated for transferred records)
+                update_expr += ' REMOVE plant, latest'
+
+                devices_table.update_item(
+                    Key={'user_id': prev_owner, 'device_id': device_id},
+                    UpdateExpression=update_expr,
+                    ExpressionAttributeValues=expr_values
+                )
+                print(f"[Transfer] Archived {prev_owner}'s data for {device_id}")
+                add_device_history(device_id, 'transferred', prev_owner,
+                                   {'transferred_to': user_id, 'plant_archived': plant is not None})
+            except Exception as e:
+                print(f"[Transfer] Error archiving {prev_owner}: {e}")
+
+        # Create new device record for this user with default name
         devices_table.put_item(Item={
             'user_id': user_id,
             'device_id': device_id,
+            'device_name': 'Polivalka',  # Default name for new owner
             'claimed_at': current_time,
             'location': 'Home',
             'room': 'Room'
-            # Note: plant profile is empty - user will set it via identify.html
+            # plant = None - user will set via identify.html
         })
+
+        # Send MQTT command to ESP32 to reset device_name
+        try:
+            topic = f'Polivalka/{device_id.replace("Polivalka-", "")}/command'
+            mqtt_payload = {
+                'command_id': str(uuid.uuid4()),
+                'command': 'set_device_name',
+                'params': {'name': 'Polivalka'}
+            }
+            iot_client.publish(
+                topic=topic,
+                qos=1,
+                payload=json.dumps(mqtt_payload)
+            )
+            print(f"[Transfer] Sent set_device_name=Polivalka to {topic}")
+        except Exception as mqtt_err:
+            print(f"[Transfer] MQTT publish failed: {mqtt_err}")
+            # Non-fatal - user can change name manually
 
         # Add to device history
         add_device_history(device_id, 'claimed', user_id)
