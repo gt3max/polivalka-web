@@ -106,8 +106,8 @@ def get_user_from_event(event):
     email = payload.get('email')
 
     # Admin email maps to 'admin' user_id (consistent with auto-registration)
-    ADMIN_EMAILS = ['mrmaximshurigin@gmail.com']
-    if email in ADMIN_EMAILS:
+    # Note: uses actual email only (not 'admin' which is the user_id, not an email)
+    if email == 'mrmaximshurigin@gmail.com':
         return 'admin'
 
     return email
@@ -1707,8 +1707,6 @@ def get_devices(user_id):
     """GET /devices - List all user's devices with latest telemetry"""
 
     # Admin users see ALL devices (for fleet management)
-    ADMIN_EMAILS = ['mrmaximshurigin@gmail.com', 'admin']
-
     if user_id in ADMIN_EMAILS:
         # Admin: scan ALL devices
         print(f"[DEBUG] get_devices: Admin user {user_id}, scanning ALL devices")
@@ -2645,7 +2643,6 @@ def verify_device_access(device_id, user_id):
     """Check if user owns this device (admins have access to all devices)"""
 
     # Admin has access to ALL devices
-    ADMIN_EMAILS = ['mrmaximshurigin@gmail.com', 'admin']
     if user_id in ADMIN_EMAILS:
         return True
 
@@ -2663,8 +2660,6 @@ def get_device_info(device_id, user_id):
     For admin users: scans by device_id only (admin sees all devices)
     For regular users: queries by user_id + device_id (only own devices)
     """
-    ADMIN_EMAILS = ['mrmaximshurigin@gmail.com', 'admin']
-
     if user_id in ADMIN_EMAILS:
         # Admin: query by device_id via GSI (device may have any user_id in DB)
         response = devices_table.query(
@@ -4679,7 +4674,6 @@ class DecimalEncoder(json.JSONEncoder):
 
 def is_user_admin(user_id):
     """Check if user has admin privileges"""
-    ADMIN_EMAILS = ['mrmaximshurigin@gmail.com', 'admin']
     return user_id in ADMIN_EMAILS
 
 
