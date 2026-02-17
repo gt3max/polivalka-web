@@ -718,9 +718,21 @@ function createExpandableRow(device, isOnline, hasWarnings, isCritical) {
   // Charging icon (⚡ если на розетке, как на home.html)
   const chargingIcon = device.battery_charging ? ' ⚡' : '';
 
-  // Battery display text (null = AC power, no battery)
-  const batteryDisplay = device.battery_pct !== null ? `🔋${Math.round(device.battery_pct)}%${chargingIcon}` : '⚡ AC';
-  const batteryDisplayLong = device.battery_pct !== null ? `🔋 Battery: ${Math.round(device.battery_pct)}%${chargingIcon}` : '⚡ AC Power';
+  // Battery display text
+  // battery_no_data = true: no telemetry received yet (device new/offline)
+  // battery_pct = null: telemetry received but no battery (AC power)
+  // battery_pct = number: battery data available
+  let batteryDisplay, batteryDisplayLong;
+  if (device.battery_no_data === true) {
+    batteryDisplay = '— (no data)';
+    batteryDisplayLong = '🔋 Battery: no data';
+  } else if (device.battery_pct !== null) {
+    batteryDisplay = `🔋${Math.round(device.battery_pct)}%${chargingIcon}`;
+    batteryDisplayLong = `🔋 Battery: ${Math.round(device.battery_pct)}%${chargingIcon}`;
+  } else {
+    batteryDisplay = '⚡ AC';
+    batteryDisplayLong = '⚡ AC Power';
+  }
 
   // Time ago (handles both seconds and milliseconds)
   const lastWateringAgo = timeAgo(device.last_watering);
@@ -887,7 +899,7 @@ function switchView(view) {
 
     // Use device.online from API (Lambda calculates with 45 min threshold)
     const isOnline = device.online === true;
-    const hasWarnings = device.warnings.length > 0 || (device.battery_pct !== null && device.battery_pct < 10) || (device.moisture_pct !== null && device.moisture_pct < 15);
+    const hasWarnings = device.warnings.length > 0 || (device.battery_pct !== null && device.battery_pct < 10) || (device.moisture_pct !== null && device.moisture_pct < 20);
     if (status === 'online' && !isOnline) return false;
     if (status === 'offline' && isOnline) return false;
     if (status === 'warning' && !hasWarnings) return false;
@@ -1061,7 +1073,8 @@ function updateStats(devices) {
   const total = devices.length;
   // Use device.online from API (Lambda calculates with 45 min threshold)
   const online = devices.filter(d => d.online === true).length;
-  const warnings = devices.filter(d => d.warnings.length > 0 || (d.battery_pct !== null && d.battery_pct < 10) || (d.moisture_pct !== null && d.moisture_pct < 15)).length;
+  // Warning threshold: 20% moisture (matches backend generate_warnings), 10% battery
+  const warnings = devices.filter(d => d.warnings.length > 0 || (d.battery_pct !== null && d.battery_pct < 10) || (d.moisture_pct !== null && d.moisture_pct < 20)).length;
   const watering = devices.filter(d => d.state === 'PULSE' || d.state === 'WATERING').length;
 
   document.getElementById('stat-total').textContent = total;
@@ -1083,10 +1096,10 @@ function filterDevices() {
     // Location filter
     if (location && device.location !== location) return false;
 
-    // Status filter
+    // Status filter (45 min threshold - same as API is_device_online())
     const lastUpdateMs = device.last_update < 10000000000 ? device.last_update * 1000 : device.last_update;
-    const isOnline = (Date.now() - lastUpdateMs) < 2 * 60 * 60 * 1000;
-    const hasWarnings = device.warnings.length > 0 || (device.battery_pct !== null && device.battery_pct < 10) || (device.moisture_pct !== null && device.moisture_pct < 15);
+    const isOnline = (Date.now() - lastUpdateMs) < 45 * 60 * 1000;
+    const hasWarnings = device.warnings.length > 0 || (device.battery_pct !== null && device.battery_pct < 10) || (device.moisture_pct !== null && device.moisture_pct < 20);
     if (status === 'online' && !isOnline) return false;
     if (status === 'offline' && isOnline) return false;
     if (status === 'warning' && !hasWarnings) return false;
