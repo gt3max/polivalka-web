@@ -134,12 +134,76 @@
         .btn-solid {
             background: var(--forest);
             color: var(--cream);
+            position: relative;
+            overflow: hidden;
+            z-index: 1;
+        }
+
+        .btn-solid::before {
+            content: '';
+            position: absolute;
+            inset: 0;
+            background: linear-gradient(135deg, #3d8b40, #2c5f2d 40%, #1a3a1a 70%, #3d8b40);
+            background-size: 300% 300%;
+            z-index: -1;
+            opacity: 0;
+            transition: opacity 0.4s ease;
+            animation: shimmerGrad 3s ease infinite paused;
+        }
+
+        .btn-solid::after {
+            content: '';
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: 0;
+            height: 0;
+            background: radial-gradient(circle, rgba(168,197,160,0.3) 0%, transparent 70%);
+            border-radius: 50%;
+            transform: translate(-50%, -50%);
+            transition: width 0.6s cubic-bezier(0.22, 1, 0.36, 1), height 0.6s cubic-bezier(0.22, 1, 0.36, 1);
+            z-index: -1;
         }
 
         .btn-solid:hover {
-            background: #0f2b10;
-            transform: translateY(-1px);
-            box-shadow: 0 6px 24px rgba(26, 58, 26, 0.2);
+            box-shadow: 0 8px 32px rgba(26, 58, 26, 0.3), 0 0 20px rgba(61, 139, 64, 0.15);
+        }
+
+        .btn-solid:hover::before {
+            opacity: 1;
+            animation-play-state: running;
+        }
+
+        .btn-solid:hover::after {
+            width: 300px;
+            height: 300px;
+        }
+
+        .btn-solid:active {
+            transform: scale(0.97);
+            box-shadow: 0 2px 8px rgba(26, 58, 26, 0.2);
+        }
+
+        @keyframes shimmerGrad {
+            0% { background-position: 0% 50%; }
+            50% { background-position: 100% 50%; }
+            100% { background-position: 0% 50%; }
+        }
+
+        /* Hero CTA special glow pulse */
+        .hero-ctas .btn-solid {
+            box-shadow: 0 4px 20px rgba(61, 139, 64, 0.2);
+            animation: ctaPulse 3s ease-in-out infinite;
+        }
+
+        .hero-ctas .btn-solid:hover {
+            animation: none;
+            box-shadow: 0 8px 40px rgba(61, 139, 64, 0.35), 0 0 60px rgba(61, 139, 64, 0.1);
+        }
+
+        @keyframes ctaPulse {
+            0%, 100% { box-shadow: 0 4px 20px rgba(61, 139, 64, 0.2); }
+            50% { box-shadow: 0 4px 32px rgba(61, 139, 64, 0.35), 0 0 40px rgba(61, 139, 64, 0.08); }
         }
 
         .btn-lg {
@@ -173,7 +237,6 @@
 
         .btn-white:hover {
             background: #fff;
-            transform: translateY(-2px);
             box-shadow: 0 8px 32px rgba(0,0,0,0.15);
         }
 
@@ -339,6 +402,44 @@
             font-style: italic;
             font-weight: 400;
             color: var(--accent);
+        }
+
+        .word-rotator {
+            display: block;
+            min-height: 1.1em;
+            position: relative;
+        }
+
+        .word-letter {
+            display: inline-block;
+            opacity: 0;
+            transform: scale(0.4) rotate(-8deg);
+            filter: blur(4px);
+        }
+
+        .word-letter.in {
+            animation: letterIn 0.55s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+            animation-delay: calc(var(--i) * 0.06s);
+        }
+
+        .word-letter.out {
+            opacity: 1;
+            transform: scale(1) rotate(0);
+            filter: blur(0);
+            animation: letterOut 0.3s cubic-bezier(0.55, 0, 1, 0.45) forwards;
+            animation-delay: calc(var(--i) * 0.03s);
+        }
+
+        @keyframes letterIn {
+            0% { opacity: 0; transform: scale(0.4) rotate(-8deg); filter: blur(4px); }
+            50% { opacity: 1; filter: blur(0); }
+            75% { transform: scale(1.06) rotate(1deg); }
+            100% { opacity: 1; transform: scale(1) rotate(0); filter: blur(0); }
+        }
+
+        @keyframes letterOut {
+            0% { opacity: 1; transform: scale(1) rotate(0); filter: blur(0); }
+            100% { opacity: 0; transform: scale(0.6) rotate(6deg); filter: blur(4px); }
         }
 
         .hero-sub {
@@ -1145,7 +1246,7 @@
                 <span class="hero-label-dot"></span>
                 Smart Watering Device
             </div>
-            <h1 class="rv rv-d1">Keep your plants <i>alive</i></h1>
+            <h1 class="rv rv-d1">Keep your plants <i class="word-rotator" id="word-rotator"></i></h1>
             <p class="hero-sub rv rv-d2">
                 A smart device that monitors soil moisture and waters your plants automatically&thinsp;&mdash;&thinsp;at home or from anywhere in the world.
             </p>
@@ -1399,6 +1500,44 @@
         document.querySelectorAll('#hero-mockup, #sc-device').forEach(function(el) {
             barIO.observe(el);
         });
+
+        // Word rotator
+        (function() {
+            var words = ['alive', 'thriving', 'happy', 'hydrated', 'gorgeous'];
+            var el = document.getElementById('word-rotator');
+            if (!el) return;
+            var idx = 0;
+            var isFirst = true;
+
+            function setWord(word, animate) {
+                var letters = word.split('').map(function(ch, i) {
+                    return '<span class="word-letter ' + (animate ? 'in' : '') + '" style="--i:' + i + '">' + ch + '</span>';
+                }).join('');
+                el.innerHTML = letters;
+            }
+
+            function animateOut(cb) {
+                var spans = el.querySelectorAll('.word-letter');
+                spans.forEach(function(s) {
+                    s.classList.remove('in');
+                    s.classList.add('out');
+                });
+                setTimeout(cb, 300 + spans.length * 40);
+            }
+
+            function cycle() {
+                animateOut(function() {
+                    idx = (idx + 1) % words.length;
+                    setWord(words[idx], true);
+                });
+            }
+
+            // Initial word appears with delay after page load
+            setTimeout(function() {
+                setWord(words[0], true);
+                setInterval(cycle, 3000);
+            }, isFirst ? 1000 : 0);
+        })();
     </script>
 </body>
 </html>
