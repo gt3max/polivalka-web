@@ -1749,8 +1749,15 @@ def get_devices(user_id):
         device_id = item['device_id']
 
         try:
-            # Get latest telemetry (sensor, battery, system)
-            latest = get_latest_telemetry(device_id)
+            # FLEET ARCHITECTURE: Read from devices.latest (single source of truth)
+            # Fallback to get_latest_telemetry() for devices without latest field yet
+            latest = item.get('latest') or {}
+            if not latest:
+                # Legacy fallback - device hasn't received telemetry since Phase 2 deploy
+                latest = get_latest_telemetry(device_id)
+                print(f"[DEBUG] Device {device_id} using legacy get_latest_telemetry()")
+            else:
+                print(f"[DEBUG] Device {device_id} using devices.latest")
             print(f"[DEBUG] Processing device {device_id}, telemetry keys: {list(latest.keys())}")
 
             # Merge device metadata + telemetry

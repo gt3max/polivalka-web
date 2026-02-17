@@ -282,9 +282,11 @@ def lambda_handler(event, context):
 
                         if update_parts:
                             try:
+                                # Create empty 'latest' Map if not exists, then set nested fields
+                                expr_values[':empty'] = {}
                                 devices_table.update_item(
                                     Key={'user_id': owner_id, 'device_id': device_id},
-                                    UpdateExpression='SET ' + ', '.join(update_parts),
+                                    UpdateExpression='SET latest = if_not_exists(latest, :empty), ' + ', '.join(update_parts),
                                     ExpressionAttributeNames=expr_names,
                                     ExpressionAttributeValues=expr_values
                                 )

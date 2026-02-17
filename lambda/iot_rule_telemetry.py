@@ -135,11 +135,12 @@ def lambda_handler(event, context):
             for item in query_response['Items']:
                 user_id = item['user_id']
                 try:
+                    # Create empty 'latest' Map if not exists, then set nested field
                     devices_table.update_item(
                         Key={'user_id': user_id, 'device_id': device_id},
-                        UpdateExpression='SET latest.#dtype = :data',
+                        UpdateExpression='SET latest = if_not_exists(latest, :empty), latest.#dtype = :data',
                         ExpressionAttributeNames={'#dtype': data_type},
-                        ExpressionAttributeValues={':data': latest_data}
+                        ExpressionAttributeValues={':empty': {}, ':data': latest_data}
                     )
                 except Exception as e:
                     print(f"Error updating latest.{data_type} for {user_id}/{device_id}: {e}")
