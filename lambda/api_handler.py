@@ -1727,6 +1727,25 @@ def get_devices(user_id):
     items = [i for i in items if not i.get('archived') and not i.get('deleted')]
     print(f"[DEBUG] get_devices: {len(items)} active devices after filter")
 
+    # Admin: group by device_id to avoid duplicates (same device may have multiple owners)
+    is_admin = user_id in ADMIN_EMAILS
+    if is_admin:
+        device_groups = {}
+        for item in items:
+            did = item['device_id']
+            if did not in device_groups:
+                device_groups[did] = []
+            device_groups[did].append(item)
+
+        # For each group, pick primary item (prefer non-admin owner, then newest claimed_at)
+        items = []
+        for did, group in device_groups.items():
+            group.sort(key=lambda x: (x['user_id'] in ADMIN_EMAILS, -(x.get('claimed_at') or 0)))
+            primary = group[0]
+            primary['_all_owners'] = [i['user_id'] for i in group]
+            items.append(primary)
+        print(f"[DEBUG] get_devices: Admin grouped to {len(items)} unique devices")
+
     devices = []
     for item in items:
         device_id = item['device_id']
@@ -1807,7 +1826,10 @@ def get_devices(user_id):
                 'pump_speed': pump_speed_int,
                 'sensor_calibration': sensor_calib_dict,
                 'total_water_ml': int(item.get('total_water_ml', 0)) if item.get('total_water_ml') else None,
-                'pump_runtime_sec': int(item.get('pump_runtime_sec', 0)) if item.get('pump_runtime_sec') else None
+                'pump_runtime_sec': int(item.get('pump_runtime_sec', 0)) if item.get('pump_runtime_sec') else None,
+                # Owner info (for admin fleet view)
+                'owner': item.get('user_id'),
+                'all_owners': item.get('_all_owners', [item.get('user_id')]) if is_admin else None
             }
 
             devices.append(device_data)
@@ -1844,7 +1866,9 @@ def get_devices(user_id):
                 'warnings': [],
                 'pump_calibration': 1.0,  # CALIBRATION_DEFAULT
                 'pump_speed': 100,
-                'sensor_calibration': {'water': 1200, 'dry_soil': 2400, 'air': 2800}
+                'sensor_calibration': {'water': 1200, 'dry_soil': 2400, 'air': 2800},
+                'owner': item.get('user_id'),
+                'all_owners': item.get('_all_owners', [item.get('user_id')]) if is_admin else None
             })
 
     print(f"[DEBUG] get_devices: Returning {len(devices)} devices")
