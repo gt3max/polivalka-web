@@ -4047,13 +4047,16 @@ def get_sensor_realtime(device_id, user_id):
                 pump = result.get('pump', {})
                 system = result.get('system', {})
 
-                # Battery: use command response (real-time from device).
-                # Previous bug (80% vs 99%) was caused by stale ts=0 data in
-                # get_latest_telemetry(), NOT by command response being wrong.
-                # Command response matches periodic telemetry at same timestamp.
-                battery = result.get('battery', {})
+                # Battery: DO NOT use command response!
+                # ESP32 get_status returns unreliable battery % (firmware bug).
+                # Example: device at 6% reports 77% in command response.
+                # Use devices.latest.battery from periodic telemetry (source of truth).
+                # See: iot_rule_response.py, FLEET_ARCHITECTURE_REFACTOR_PLAN.md
+                device_info = get_device_info(device_id, user_id)
+                latest_data = device_info.get('latest', {}) if device_info else {}
+                battery = latest_data.get('battery', {})
                 # Convert battery percent -1 to null (indicates AC power, no battery)
-                if battery.get('percent') == -1 or battery.get('percent') == -1.0:
+                if battery and (battery.get('percent') == -1 or battery.get('percent') == -1.0):
                     battery = {**battery, 'percent': None}
 
                 return {
