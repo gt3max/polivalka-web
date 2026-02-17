@@ -1154,19 +1154,19 @@ async function refreshSensor(deviceId) {
     // Update device in allDevices array
     const device = allDevices.find(d => d.device_id === deviceId);
     if (device) {
-      // Sensor data
-      device.moisture_pct = result.moisture_pct;
-      device.adc_raw = result.adc_raw;
+      // Sensor data - only update if value present (don't overwrite good data with null)
+      if (result.moisture_pct !== undefined && result.moisture_pct !== null) device.moisture_pct = result.moisture_pct;
+      if (result.adc_raw !== undefined && result.adc_raw !== null) device.adc_raw = result.adc_raw;
       if (result.percent_float !== undefined) device.percent_float = result.percent_float;
       // Sensor2 (J7 resistive)
       if (result.sensor2_adc !== undefined) device.sensor2_adc = result.sensor2_adc;
       if (result.sensor2_percent !== undefined) device.sensor2_percent = result.sensor2_percent;
-      // Mode and state
-      device.mode = result.mode || 'manual';
-      device.state = result.state || 'DISABLED';
+      // Mode and state - only update if present
+      if (result.mode) device.mode = result.mode;
+      if (result.state) device.state = result.state;
       // Recalculate controller_enabled based on new state (same logic as get_devices)
       device.controller_enabled = device.state !== 'DISABLED';
-      device.pump_running = result.pump_running || false;
+      if (result.pump_running !== undefined) device.pump_running = result.pump_running;
       // Battery: percent is unreliable from command response (firmware bug)
       // BUT charging status IS reliable and should be updated
       if (result.battery && result.battery.charging !== undefined) {
@@ -1180,7 +1180,7 @@ async function refreshSensor(deviceId) {
       if (result.clean_restarts !== undefined) device.clean_restarts = result.clean_restarts;
       if (result.unexpected_restarts !== undefined) device.unexpected_restarts = result.unexpected_restarts;
       if (result.reboot_count !== undefined) device.reboot_count = result.reboot_count;
-      device.last_update = result.timestamp;
+      if (result.timestamp) device.last_update = result.timestamp;
       device.online = true;  // Device responded = online
 
       // Re-render devices
@@ -1188,7 +1188,8 @@ async function refreshSensor(deviceId) {
       updateStats(allDevices);
 
       // Show success feedback with updated values (no battery - unreliable from command response)
-      showToast(`✅ ${deviceId}: ${result.moisture_pct}% | ${device.state}`, 'success');
+      const moistureDisplay = device.moisture_pct !== undefined ? device.moisture_pct : '—';
+      showToast(`✅ ${deviceId}: ${moistureDisplay}% | ${device.state}`, 'success');
     }
 
   } catch(e) {
@@ -1209,19 +1210,19 @@ async function refreshSensorSilent(deviceId) {
     // Update device in allDevices array
     const device = allDevices.find(d => d.device_id === deviceId);
     if (device) {
-      // Sensor data
-      device.moisture_pct = result.moisture_pct;
-      device.adc_raw = result.adc_raw;
+      // Sensor data - only update if value present (don't overwrite good data with null)
+      if (result.moisture_pct !== undefined && result.moisture_pct !== null) device.moisture_pct = result.moisture_pct;
+      if (result.adc_raw !== undefined && result.adc_raw !== null) device.adc_raw = result.adc_raw;
       if (result.percent_float !== undefined) device.percent_float = result.percent_float;
       // Sensor2 (J7 resistive)
       if (result.sensor2_adc !== undefined) device.sensor2_adc = result.sensor2_adc;
       if (result.sensor2_percent !== undefined) device.sensor2_percent = result.sensor2_percent;
-      // Mode and state
-      device.mode = result.mode || 'manual';
-      device.state = result.state || 'DISABLED';
+      // Mode and state - only update if present
+      if (result.mode) device.mode = result.mode;
+      if (result.state) device.state = result.state;
       // Recalculate controller_enabled based on new state (same logic as get_devices)
       device.controller_enabled = device.state !== 'DISABLED';
-      device.pump_running = result.pump_running || false;
+      if (result.pump_running !== undefined) device.pump_running = result.pump_running;
       // Battery: percent is unreliable from command response (firmware bug)
       // BUT charging status IS reliable and should be updated
       if (result.battery && result.battery.charging !== undefined) {
@@ -1235,7 +1236,7 @@ async function refreshSensorSilent(deviceId) {
       if (result.clean_restarts !== undefined) device.clean_restarts = result.clean_restarts;
       if (result.unexpected_restarts !== undefined) device.unexpected_restarts = result.unexpected_restarts;
       if (result.reboot_count !== undefined) device.reboot_count = result.reboot_count;
-      device.last_update = result.timestamp;
+      if (result.timestamp) device.last_update = result.timestamp;
       device.online = true;  // Device responded = online
 
       // Re-render devices (will preserve expanded state)
@@ -1460,9 +1461,9 @@ async function bulkAction(action) {
         const result = await API.get(`/device/${device.device_id}/sensor`);
 
         // Update real-time data from device response
-        // Sensor data
-        device.moisture_pct = result.moisture_pct;
-        device.adc_raw = result.adc_raw;
+        // Sensor data - only update if value is present (don't overwrite good data with null)
+        if (result.moisture_pct !== undefined && result.moisture_pct !== null) device.moisture_pct = result.moisture_pct;
+        if (result.adc_raw !== undefined && result.adc_raw !== null) device.adc_raw = result.adc_raw;
         if (result.percent_float !== undefined) device.percent_float = result.percent_float;
         // Sensor2 (J7 resistive)
         if (result.sensor2_adc !== undefined) device.sensor2_adc = result.sensor2_adc;
@@ -1472,7 +1473,7 @@ async function bulkAction(action) {
         device.state = result.state || device.state || 'DISABLED';
         // Recalculate controller_enabled based on new state
         device.controller_enabled = device.state !== 'DISABLED';
-        device.pump_running = result.pump_running || false;
+        if (result.pump_running !== undefined) device.pump_running = result.pump_running;
         // Battery: percent is unreliable (firmware bug), BUT charging status IS reliable
         if (result.battery && result.battery.charging !== undefined) {
           device.battery_charging = result.battery.charging;
