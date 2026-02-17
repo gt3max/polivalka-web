@@ -2384,14 +2384,18 @@ def get_sensor_history(device_id, user_id, days=7):
     cutoff = int(time.time()) - (days * 86400)
     telem_device_id = get_telemetry_device_id(device_id)
 
-    # Data isolation: filter by plant.started_at (unless admin)
+    # Data isolation: filter by plant.started_at or claimed_at (unless admin)
+    # Priority: plant.started_at > claimed_at > 0
     is_admin = user_id in ADMIN_EMAILS
     if not is_admin:
         device_info = get_device_info(device_id, user_id)
         plant = device_info.get('plant', {})
-        plant_started_at = plant.get('started_at', 0)
-        if plant_started_at > cutoff:
-            cutoff = plant_started_at  # Only show data since current plant was assigned
+        plant_started_at = plant.get('started_at')
+        # Fallback to claimed_at if no plant profile yet (device just claimed)
+        if plant_started_at is None:
+            plant_started_at = device_info.get('claimed_at', 0)
+        if plant_started_at and plant_started_at > cutoff:
+            cutoff = plant_started_at  # Only show data since device was claimed/plant assigned
 
     response = telemetry_table.query(
         KeyConditionExpression=Key('device_id').eq(telem_device_id) &
@@ -2480,14 +2484,18 @@ def get_battery_history(device_id, user_id, days=7):
     cutoff = int(time.time()) - (days * 86400)
     telem_device_id = get_telemetry_device_id(device_id)
 
-    # Data isolation: filter by plant.started_at (unless admin)
+    # Data isolation: filter by plant.started_at or claimed_at (unless admin)
+    # Priority: plant.started_at > claimed_at > 0
     is_admin = user_id in ADMIN_EMAILS
     if not is_admin:
         device_info = get_device_info(device_id, user_id)
         plant = device_info.get('plant', {})
-        plant_started_at = plant.get('started_at', 0)
-        if plant_started_at > cutoff:
-            cutoff = plant_started_at
+        plant_started_at = plant.get('started_at')
+        # Fallback to claimed_at if no plant profile yet (device just claimed)
+        if plant_started_at is None:
+            plant_started_at = device_info.get('claimed_at', 0)
+        if plant_started_at and plant_started_at > cutoff:
+            cutoff = plant_started_at  # Only show data since device was claimed/plant assigned
 
     response = telemetry_table.query(
         KeyConditionExpression=Key('device_id').eq(telem_device_id) &
@@ -4123,14 +4131,18 @@ def get_device_activity(device_id, user_id):
         cutoff = int(time.time()) - 604800  # Last 7 days
         telem_device_id = get_telemetry_device_id(device_id)
 
-        # Data isolation: filter by plant.started_at (unless admin)
+        # Data isolation: filter by plant.started_at or claimed_at (unless admin)
+        # Priority: plant.started_at > claimed_at > 0
         is_admin = user_id in ADMIN_EMAILS
         if not is_admin:
             device_info = get_device_info(device_id, user_id)
             plant = device_info.get('plant', {})
-            plant_started_at = plant.get('started_at', 0)
-            if plant_started_at > cutoff:
-                cutoff = plant_started_at
+            plant_started_at = plant.get('started_at')
+            # Fallback to claimed_at if no plant profile yet (device just claimed)
+            if plant_started_at is None:
+                plant_started_at = device_info.get('claimed_at', 0)
+            if plant_started_at and plant_started_at > cutoff:
+                cutoff = plant_started_at  # Only show data since device was claimed/plant assigned
         telem_response = telemetry_table.query(
             KeyConditionExpression=Key('device_id').eq(telem_device_id) & Key('timestamp').gt(cutoff),
             ScanIndexForward=False  # Sort DESC
