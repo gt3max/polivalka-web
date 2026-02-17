@@ -4063,8 +4063,10 @@ def get_sensor_realtime(device_id, user_id):
                     'statusCode': 200,
                     'headers': cors_headers(),
                     'body': json.dumps({
-                        'moisture_pct': sensor.get('moisture'),
-                        'adc_raw': sensor.get('adc'),
+                        # IMPORTANT: Use same field names as normalize_flat_response()
+                        # which saves as moisture_percent/adc_raw (not moisture/adc)
+                        'moisture_pct': sensor.get('moisture_percent') or sensor.get('moisture'),
+                        'adc_raw': sensor.get('adc_raw') or sensor.get('adc'),
                         'percent_float': sensor.get('percent_float'),
                         'sensor_calibration': sensor.get('calibration'),
                         # Sensor2 (J7 resistive) - may not be present
