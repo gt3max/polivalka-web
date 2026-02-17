@@ -1912,8 +1912,13 @@ def get_device_status(device_id, user_id):
     # Get device metadata (uses admin-aware get_device_info)
     device_meta = get_device_info(device_id, user_id)
 
-    # Get latest telemetry
-    latest = get_latest_telemetry(device_id)
+    # FLEET ARCHITECTURE: Read from devices.latest (single source of truth)
+    # This was migrated from get_latest_telemetry() which read from telemetry table
+    latest = device_meta.get('latest') or {}
+    if not latest:
+        # Fallback for legacy devices without devices.latest
+        print(f"[DEBUG] Device {device_id} has no devices.latest, falling back to telemetry table")
+        latest = get_latest_telemetry(device_id)
 
     # Migration: "off" → "manual" (backward compatibility)
     mode = latest.get('system', {}).get('mode', 'manual')
