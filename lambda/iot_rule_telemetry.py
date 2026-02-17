@@ -146,12 +146,18 @@ def lambda_handler(event, context):
                         ExpressionAttributeValues={':empty': {}}
                     )
                     # Step 2: Update nested field + last_update for online status
+                    # PROTECTION: Only update if new timestamp > existing timestamp
+                    # This prevents stale data from overwriting fresh data (race conditions,
+                    # out-of-order delivery, network delays, etc.)
                     devices_table.update_item(
                         Key={'user_id': user_id, 'device_id': device_id},
                         UpdateExpression='SET latest.#dtype = :data, latest.last_update = :ts',
                         ExpressionAttributeNames={'#dtype': data_type},
-                        ExpressionAttributeValues={':data': latest_data, ':ts': timestamp}
+                        ExpressionAttributeValues={':data': latest_data, ':ts': timestamp},
+                        ConditionExpression='attribute_not_exists(latest.#dtype.updated_at) OR latest.#dtype.updated_at < :ts'
                     )
+                except dynamodb.meta.client.exceptions.ConditionalCheckFailedException:
+                    print(f"Skipping stale {data_type} for {user_id}/{device_id}: ts={timestamp} not newer than existing")
                 except Exception as e:
                     print(f"Error updating latest.{data_type} for {user_id}/{device_id}: {e}")
 

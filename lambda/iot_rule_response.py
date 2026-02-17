@@ -274,40 +274,43 @@ def lambda_handler(event, context):
                         if item.get('transferred'):
                             print(f"Skipping transferred record for {owner_id}/{device_id}")
                             continue
-                        update_parts = []
-                        expr_names = {}
-                        expr_values = {}
 
-                        # Update each data type with its own updated_at
-                        for dtype in ['sensor', 'battery', 'system', 'pump']:
-                            if dtype in result and result[dtype]:
-                                data_copy = convert_floats(result[dtype].copy())
-                                data_copy['updated_at'] = current_time
-                                update_parts.append(f'latest.#{dtype} = :{dtype}')
-                                expr_names[f'#{dtype}'] = dtype
-                                expr_values[f':{dtype}'] = data_copy
+                        try:
+                            # Step 1: Ensure 'latest' Map exists (idempotent)
+                            devices_table.update_item(
+                                Key={'user_id': owner_id, 'device_id': device_id},
+                                UpdateExpression='SET latest = if_not_exists(latest, :empty)',
+                                ExpressionAttributeValues={':empty': {}}
+                            )
 
-                        # Always update last_update for online status check
-                        update_parts.append('latest.last_update = :last_update')
-                        expr_values[':last_update'] = current_time
+                            # Step 2: Update each data type SEPARATELY with timestamp protection
+                            # IMPORTANT: Do NOT include 'battery' here!
+                            # ESP32 get_status returns unreliable battery percentage (e.g. 67% when actual is 6%).
+                            # Periodic battery telemetry (via iot_rule_telemetry.py) is the only source of truth.
+                            for dtype in ['sensor', 'system', 'pump']:
+                                if dtype in result and result[dtype]:
+                                    data_copy = convert_floats(result[dtype].copy())
+                                    data_copy['updated_at'] = current_time
+                                    try:
+                                        # PROTECTION: Only update if new timestamp > existing
+                                        devices_table.update_item(
+                                            Key={'user_id': owner_id, 'device_id': device_id},
+                                            UpdateExpression='SET latest.#dtype = :data',
+                                            ExpressionAttributeNames={'#dtype': dtype},
+                                            ExpressionAttributeValues={':data': data_copy, ':ts': current_time},
+                                            ConditionExpression='attribute_not_exists(latest.#dtype.updated_at) OR latest.#dtype.updated_at < :ts'
+                                        )
+                                    except dynamodb.meta.client.exceptions.ConditionalCheckFailedException:
+                                        print(f"Skipping stale {dtype} for {owner_id}/{device_id}: ts={current_time} not newer")
 
-                        if update_parts:
-                            try:
-                                # Step 1: Ensure 'latest' Map exists (idempotent)
-                                devices_table.update_item(
-                                    Key={'user_id': owner_id, 'device_id': device_id},
-                                    UpdateExpression='SET latest = if_not_exists(latest, :empty)',
-                                    ExpressionAttributeValues={':empty': {}}
-                                )
-                                # Step 2: Update nested fields
-                                devices_table.update_item(
-                                    Key={'user_id': owner_id, 'device_id': device_id},
-                                    UpdateExpression='SET ' + ', '.join(update_parts),
-                                    ExpressionAttributeNames=expr_names,
-                                    ExpressionAttributeValues=expr_values
-                                )
-                            except Exception as e:
-                                print(f"Error updating latest for {owner_id}/{device_id}: {e}")
+                            # Always update last_update for online status (no condition - always want latest)
+                            devices_table.update_item(
+                                Key={'user_id': owner_id, 'device_id': device_id},
+                                UpdateExpression='SET latest.last_update = :ts',
+                                ExpressionAttributeValues={':ts': current_time}
+                            )
+                        except Exception as e:
+                            print(f"Error updating latest for {owner_id}/{device_id}: {e}")
 
                     print(f"Updated devices.latest for {len(query_response['Items'])} owner(s)")
             except Exception as e:
