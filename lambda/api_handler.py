@@ -1760,9 +1760,13 @@ def get_devices(user_id):
             battery_charging = battery_data.get('charging', False) if battery_data else False
             battery_no_data = battery_data is None
 
-            # Pump calibration and speed from device record (set via admin panel or telemetry)
-            pump_calib = item.get('pump_calibration', 2.5)
-            pump_calib_float = float(pump_calib) if pump_calib else 2.5
+            # Pump calibration: prefer telemetry (pump.calibration = working value from ESP32)
+            # This is the actual ml/sec value the pump uses (either preset or user-calibrated)
+            # Fallback chain: telemetry → devices_table → 1.0 (CALIBRATION_DEFAULT)
+            pump_calib_from_telem = latest.get('pump', {}).get('calibration')
+            pump_calib_from_db = item.get('pump_calibration')
+            pump_calib = pump_calib_from_telem if pump_calib_from_telem is not None else pump_calib_from_db
+            pump_calib_float = float(pump_calib) if pump_calib else 1.0
             pump_speed = item.get('pump_speed', 100)
             pump_speed_int = int(pump_speed) if pump_speed else 100
 
@@ -1838,7 +1842,7 @@ def get_devices(user_id):
                 'last_update': None,
                 'online': False,
                 'warnings': [],
-                'pump_calibration': 2.5,
+                'pump_calibration': 1.0,  # CALIBRATION_DEFAULT
                 'pump_speed': 100,
                 'sensor_calibration': {'water': 1200, 'dry_soil': 2400, 'air': 2800}
             })
