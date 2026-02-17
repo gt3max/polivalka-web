@@ -252,6 +252,50 @@ def lambda_handler(event, context):
         except Exception as e:
             print(f"Failed to update telemetry: {e}")  # Non-fatal, continue
 
+        # ============ FLEET ARCHITECTURE: Update devices.latest ============
+        # This provides single source of truth for Fleet display
+        if isinstance(result, dict) and result:
+            try:
+                # Find ALL device records (may have multiple owners)
+                query_response = devices_table.query(
+                    IndexName='device_id-index',
+                    KeyConditionExpression=Key('device_id').eq(device_id)
+                )
+
+                if query_response.get('Items'):
+                    current_time = int(time.time())
+
+                    for item in query_response['Items']:
+                        owner_id = item['user_id']
+                        update_parts = []
+                        expr_names = {}
+                        expr_values = {}
+
+                        # Update each data type with its own updated_at
+                        for dtype in ['sensor', 'battery', 'system', 'pump']:
+                            if dtype in result and result[dtype]:
+                                data_copy = convert_floats(result[dtype].copy())
+                                data_copy['updated_at'] = current_time
+                                update_parts.append(f'latest.#{dtype} = :{dtype}')
+                                expr_names[f'#{dtype}'] = dtype
+                                expr_values[f':{dtype}'] = data_copy
+
+                        if update_parts:
+                            try:
+                                devices_table.update_item(
+                                    Key={'user_id': owner_id, 'device_id': device_id},
+                                    UpdateExpression='SET ' + ', '.join(update_parts),
+                                    ExpressionAttributeNames=expr_names,
+                                    ExpressionAttributeValues=expr_values
+                                )
+                            except Exception as e:
+                                print(f"Error updating latest for {owner_id}/{device_id}: {e}")
+
+                    print(f"Updated devices.latest for {len(query_response['Items'])} owner(s)")
+            except Exception as e:
+                print(f"Failed to update devices.latest: {e}")  # Non-fatal
+        # ============ END FLEET ARCHITECTURE ============
+
         # Extract calibration data from get_status response and update devices table
         if isinstance(result, dict):
             try:

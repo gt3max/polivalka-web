@@ -117,6 +117,41 @@ def lambda_handler(event, context):
         print(f"Error saving telemetry: {e}")
         return {'statusCode': 500, 'body': str(e)}
 
+    # ============ FLEET ARCHITECTURE: Update devices.latest ============
+    # This provides single source of truth for Fleet display
+    # Instead of complex get_latest_telemetry() merging from multiple sources
+    try:
+        # Find ALL device records (may have multiple owners)
+        query_response = devices_table.query(
+            IndexName='device_id-index',
+            KeyConditionExpression=Key('device_id').eq(device_id)
+        )
+
+        if query_response.get('Items'):
+            # Prepare latest.{data_type} update
+            latest_data = convert_floats_to_decimal(data.copy())
+            latest_data['updated_at'] = timestamp
+
+            for item in query_response['Items']:
+                user_id = item['user_id']
+                try:
+                    devices_table.update_item(
+                        Key={'user_id': user_id, 'device_id': device_id},
+                        UpdateExpression='SET latest.#dtype = :data',
+                        ExpressionAttributeNames={'#dtype': data_type},
+                        ExpressionAttributeValues={':data': latest_data}
+                    )
+                except Exception as e:
+                    print(f"Error updating latest.{data_type} for {user_id}/{device_id}: {e}")
+
+            print(f"Updated devices.latest.{data_type} for {len(query_response['Items'])} owner(s)")
+        else:
+            print(f"Device {device_id} not found in devices table for latest update")
+    except Exception as e:
+        print(f"Error updating devices.latest: {e}")
+        # Don't fail - telemetry is already saved
+    # ============ END FLEET ARCHITECTURE ============
+
     # If system telemetry, update Devices table with all device stats
     if data_type == 'system':
         # Extract all fields we want to persist to devices table
