@@ -1158,6 +1158,299 @@
         .footer-links a:hover { color: var(--sage); }
 
         /* ═══════════════════════════════════
+           WAITLIST MODAL
+           ═══════════════════════════════════ */
+        .wl-overlay {
+            position: fixed;
+            inset: 0;
+            z-index: 9999;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+            opacity: 0;
+            visibility: hidden;
+            transition: opacity 0.35s, visibility 0.35s;
+        }
+
+        .wl-overlay.open {
+            opacity: 1;
+            visibility: visible;
+        }
+
+        .wl-backdrop {
+            position: absolute;
+            inset: 0;
+            background: rgba(15, 30, 12, 0.55);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+        }
+
+        .wl-modal {
+            position: relative;
+            width: 100%;
+            max-width: 440px;
+            background: var(--warm-white);
+            border-radius: 24px;
+            border: 1px solid var(--glass-border);
+            box-shadow: 0 32px 100px rgba(26, 58, 26, 0.25), 0 0 0 1px rgba(255,255,255,0.4) inset;
+            overflow: hidden;
+            transform: scale(0.9) translateY(20px);
+            transition: transform 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+
+        .wl-overlay.open .wl-modal {
+            transform: scale(1) translateY(0);
+        }
+
+        .wl-modal-top {
+            position: relative;
+            padding: 40px 36px 28px;
+            text-align: center;
+            overflow: hidden;
+        }
+
+        .wl-modal-mesh {
+            position: absolute;
+            inset: 0;
+            z-index: 0;
+        }
+
+        .wl-modal-mesh .blob {
+            position: absolute;
+            border-radius: 50%;
+            filter: blur(50px);
+            opacity: 0.4;
+        }
+
+        .wl-modal-mesh .blob:nth-child(1) {
+            width: 200px; height: 200px;
+            background: rgba(168, 197, 160, 0.5);
+            top: -40%; left: -10%;
+            animation: meshFloat1 12s ease-in-out infinite;
+        }
+
+        .wl-modal-mesh .blob:nth-child(2) {
+            width: 160px; height: 160px;
+            background: rgba(61, 139, 64, 0.25);
+            bottom: -30%; right: -5%;
+            animation: meshFloat2 15s ease-in-out infinite;
+        }
+
+        .wl-modal-icon {
+            position: relative;
+            z-index: 1;
+            width: 64px;
+            height: 64px;
+            margin: 0 auto 20px;
+            background: var(--forest);
+            border-radius: 18px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 30px;
+            box-shadow: 0 8px 24px rgba(26, 58, 26, 0.2);
+        }
+
+        .wl-modal-title {
+            position: relative;
+            z-index: 1;
+            font-family: 'Instrument Sans', sans-serif;
+            font-size: 24px;
+            font-weight: 700;
+            color: var(--forest);
+            letter-spacing: -0.8px;
+            margin-bottom: 8px;
+        }
+
+        .wl-modal-sub {
+            position: relative;
+            z-index: 1;
+            font-size: 15px;
+            color: var(--text-secondary);
+            line-height: 1.5;
+        }
+
+        .wl-modal-close {
+            position: absolute;
+            top: 16px;
+            right: 16px;
+            z-index: 2;
+            width: 36px;
+            height: 36px;
+            border: none;
+            background: rgba(0,0,0,0.04);
+            border-radius: 10px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: var(--text-tertiary);
+            font-size: 18px;
+            transition: background 0.2s, color 0.2s;
+        }
+
+        .wl-modal-close:hover {
+            background: rgba(0,0,0,0.08);
+            color: var(--text-primary);
+        }
+
+        .wl-modal-body {
+            padding: 4px 36px 36px;
+        }
+
+        .wl-input-wrap {
+            position: relative;
+            margin-bottom: 16px;
+        }
+
+        .wl-input-wrap input {
+            width: 100%;
+            padding: 16px 18px 16px 48px;
+            border: 2px solid rgba(168, 197, 160, 0.25);
+            border-radius: 14px;
+            font-family: 'Instrument Sans', sans-serif;
+            font-size: 16px;
+            color: var(--text-primary);
+            background: var(--cream);
+            outline: none;
+            transition: border-color 0.3s, box-shadow 0.3s;
+        }
+
+        .wl-input-wrap input:focus {
+            border-color: var(--accent);
+            box-shadow: 0 0 0 4px rgba(61, 139, 64, 0.08);
+        }
+
+        .wl-input-wrap input::placeholder {
+            color: var(--text-tertiary);
+        }
+
+        .wl-input-icon {
+            position: absolute;
+            left: 16px;
+            top: 50%;
+            transform: translateY(-50%);
+            color: var(--text-tertiary);
+            font-size: 18px;
+            pointer-events: none;
+        }
+
+        .wl-submit {
+            width: 100%;
+            padding: 16px;
+            border: none;
+            border-radius: 14px;
+            background: var(--forest);
+            color: var(--cream);
+            font-family: 'Instrument Sans', sans-serif;
+            font-size: 16px;
+            font-weight: 700;
+            cursor: pointer;
+            position: relative;
+            overflow: hidden;
+            z-index: 1;
+            transition: box-shadow 0.3s;
+        }
+
+        .wl-submit::before {
+            content: '';
+            position: absolute;
+            inset: 0;
+            background: linear-gradient(135deg, #3d8b40, #2c5f2d 40%, #1a3a1a 70%, #3d8b40);
+            background-size: 300% 300%;
+            z-index: -1;
+            opacity: 0;
+            transition: opacity 0.4s;
+            animation: shimmerGrad 3s ease infinite paused;
+        }
+
+        .wl-submit:hover {
+            box-shadow: 0 8px 32px rgba(26, 58, 26, 0.25), 0 0 20px rgba(61, 139, 64, 0.12);
+        }
+
+        .wl-submit:hover::before {
+            opacity: 1;
+            animation-play-state: running;
+        }
+
+        .wl-submit:active { transform: scale(0.97); }
+
+        .wl-submit:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+
+        .wl-spinner {
+            display: inline-block;
+            width: 18px;
+            height: 18px;
+            border: 2px solid rgba(248,246,240,0.3);
+            border-top-color: var(--cream);
+            border-radius: 50%;
+            animation: spin 0.7s linear infinite;
+            vertical-align: middle;
+        }
+
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        .wl-note {
+            text-align: center;
+            font-size: 12px;
+            color: var(--text-tertiary);
+            margin-top: 16px;
+        }
+
+        /* Success state */
+        .wl-success-state {
+            text-align: center;
+            padding: 20px 36px 40px;
+        }
+
+        .wl-success-circle {
+            width: 72px;
+            height: 72px;
+            margin: 0 auto 20px;
+            background: linear-gradient(135deg, var(--accent), #66bb6a);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            animation: successPop 0.5s cubic-bezier(0.16, 1, 0.3, 1);
+            box-shadow: 0 8px 32px rgba(61, 139, 64, 0.25);
+        }
+
+        .wl-success-circle svg { width: 32px; height: 32px; }
+
+        @keyframes successPop {
+            0% { transform: scale(0) rotate(-20deg); }
+            60% { transform: scale(1.15) rotate(5deg); }
+            100% { transform: scale(1) rotate(0); }
+        }
+
+        .wl-success-title {
+            font-family: 'Instrument Sans', sans-serif;
+            font-size: 22px;
+            font-weight: 700;
+            color: var(--forest);
+            margin-bottom: 8px;
+            letter-spacing: -0.5px;
+        }
+
+        .wl-success-sub {
+            font-size: 15px;
+            color: var(--text-secondary);
+            line-height: 1.5;
+        }
+
+        @media (max-width: 640px) {
+            .wl-modal { max-width: 100%; border-radius: 20px; }
+            .wl-modal-top { padding: 32px 24px 22px; }
+            .wl-modal-body { padding: 4px 24px 28px; }
+            .wl-success-state { padding: 16px 24px 32px; }
+        }
+
+        /* ═══════════════════════════════════
            SCROLL REVEAL
            ═══════════════════════════════════ */
         .rv {
@@ -1222,7 +1515,7 @@
             </a>
             <div class="nav-links">
                 <a href="login.html" class="btn btn-hollow btn-nav" id="nav-login">Log In</a>
-                <a href="login.html?tab=register" class="btn btn-solid btn-nav" id="nav-signup">Get Started</a>
+                <a href="#waitlist" class="btn btn-solid btn-nav" id="nav-signup">Join Waitlist</a>
             </div>
         </div>
     </nav>
@@ -1251,7 +1544,7 @@
                 A smart device that monitors soil moisture and waters your plants automatically&thinsp;&mdash;&thinsp;at home or from anywhere in the world.
             </p>
             <div class="hero-ctas rv rv-d3">
-                <a href="login.html?tab=register" class="btn btn-solid btn-lg" id="hero-cta">Get Started Free</a>
+                <button class="btn btn-solid btn-lg" onclick="openWaitlist()">Join Waitlist</button>
                 <a href="#how" class="btn btn-outline-light">See How It Works</a>
             </div>
         </div>
@@ -1437,10 +1730,37 @@
         <div class="blob cta-blob-2"></div>
         <div class="cta-content rv">
             <h2>Ready to keep your plants <i>happy</i>?</h2>
-            <p>Create your free account and connect your first device in minutes.</p>
-            <a href="login.html?tab=register" class="btn btn-white" id="cta-bottom">Create Free Account</a>
+            <p>Join the waitlist and be the first to get your device.</p>
+            <button class="btn btn-white" onclick="openWaitlist()">Join Waitlist</button>
         </div>
     </section>
+
+    <!-- WAITLIST MODAL -->
+    <div class="wl-overlay" id="wl-overlay" onclick="if(event.target===this)closeWaitlist()">
+        <div class="wl-backdrop"></div>
+        <div class="wl-modal" id="wl-modal">
+            <div class="wl-modal-top">
+                <div class="wl-modal-mesh">
+                    <div class="blob"></div>
+                    <div class="blob"></div>
+                </div>
+                <button class="wl-modal-close" onclick="closeWaitlist()">&times;</button>
+                <div class="wl-modal-icon">&#127793;</div>
+                <div class="wl-modal-title">Join the Waitlist</div>
+                <div class="wl-modal-sub">Be the first to get PlantApp when we launch. No spam, just one email on launch day.</div>
+            </div>
+            <div class="wl-modal-body" id="wl-form-body">
+                <form id="wl-form" onsubmit="return submitWaitlist(event)">
+                    <div class="wl-input-wrap">
+                        <span class="wl-input-icon">&#9993;</span>
+                        <input type="email" id="wl-email" name="email" placeholder="you@email.com" required autocomplete="email">
+                    </div>
+                    <button type="submit" class="wl-submit" id="wl-submit-btn">Join Waitlist</button>
+                    <div class="wl-note">We respect your privacy. Unsubscribe anytime.</div>
+                </form>
+            </div>
+        </div>
+    </div>
 
     <!-- FOOTER -->
     <footer class="footer">
@@ -1451,28 +1771,34 @@
             </div>
             <div class="footer-links">
                 <a href="login.html">Log In</a>
-                <a href="login.html?tab=register">Sign Up</a>
+                <a href="#waitlist">Join Waitlist</a>
                 <a href="https://github.com/gt3max/Polivalka" target="_blank" rel="noopener">GitHub</a>
             </div>
         </div>
     </footer>
 
     <script>
-        // Auth-aware buttons
+        // Auth-aware: swap waitlist for dashboard
         (function() {
             var t = localStorage.getItem('access_token');
             var e = parseInt(localStorage.getItem('token_expires') || '0');
             if (t && e > Date.now()) {
-                var m = {
-                    'nav-login':  { t: 'My Plants', h: 'fleet.html' },
-                    'nav-signup': { t: 'Dashboard', h: 'fleet.html' },
-                    'hero-cta':   { t: 'Go to Dashboard', h: 'fleet.html' },
-                    'cta-bottom': { t: 'Open Dashboard', h: 'fleet.html' }
-                };
-                for (var id in m) {
-                    var el = document.getElementById(id);
-                    if (el) { el.textContent = m[id].t; el.href = m[id].h; }
-                }
+                var navLogin = document.getElementById('nav-login');
+                var navSignup = document.getElementById('nav-signup');
+                if (navLogin) { navLogin.textContent = 'My Plants'; navLogin.href = 'fleet.html'; }
+                if (navSignup) { navSignup.textContent = 'Dashboard'; navSignup.href = 'fleet.html'; navSignup.onclick = null; }
+                // Swap all waitlist buttons to dashboard
+                document.querySelectorAll('[onclick="openWaitlist()"]').forEach(function(btn) {
+                    btn.onclick = null;
+                    btn.textContent = 'Go to Dashboard';
+                    if (btn.tagName === 'BUTTON') {
+                        var a = document.createElement('a');
+                        a.href = 'fleet.html';
+                        a.className = btn.className;
+                        a.textContent = 'Go to Dashboard';
+                        btn.replaceWith(a);
+                    }
+                });
             }
         })();
 
@@ -1538,6 +1864,59 @@
                 setInterval(cycle, 3000);
             }, isFirst ? 1000 : 0);
         })();
+
+        // Waitlist modal
+        function openWaitlist() {
+            document.getElementById('wl-overlay').classList.add('open');
+            document.body.style.overflow = 'hidden';
+            setTimeout(function() {
+                var inp = document.getElementById('wl-email');
+                if (inp) inp.focus();
+            }, 350);
+        }
+
+        function closeWaitlist() {
+            document.getElementById('wl-overlay').classList.remove('open');
+            document.body.style.overflow = '';
+        }
+
+        document.addEventListener('keydown', function(e) {
+            if (e.key === 'Escape') closeWaitlist();
+        });
+
+        function submitWaitlist(e) {
+            e.preventDefault();
+            var email = document.getElementById('wl-email').value.trim();
+            if (!email) return false;
+
+            var btn = document.getElementById('wl-submit-btn');
+            btn.disabled = true;
+            btn.innerHTML = '<span class="wl-spinner"></span>';
+
+            fetch('https://formsubmit.co/ajax/mahin84@gmail.com', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+                body: JSON.stringify({
+                    email: email,
+                    _subject: 'PlantApp Waitlist: ' + email,
+                    message: 'New waitlist signup from ' + email
+                })
+            })
+            .then(function() { showWaitlistSuccess(); })
+            .catch(function() { showWaitlistSuccess(); });
+
+            return false;
+        }
+
+        function showWaitlistSuccess() {
+            var modal = document.getElementById('wl-modal');
+            var formBody = document.getElementById('wl-form-body');
+            formBody.innerHTML = '<div class="wl-success-state">' +
+                '<div class="wl-success-circle"><svg viewBox="0 0 32 32" fill="none"><path d="M8 17L13 22L24 10" stroke="#fff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg></div>' +
+                '<div class="wl-success-title">You\'re on the list!</div>' +
+                '<div class="wl-success-sub">We\'ll email you when PlantApp launches.<br>Welcome aboard.</div>' +
+                '</div>';
+        }
     </script>
 </body>
 </html>
