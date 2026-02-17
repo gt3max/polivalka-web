@@ -1471,12 +1471,9 @@ async function bulkAction(action) {
         // Recalculate controller_enabled based on new state
         device.controller_enabled = device.state !== 'DISABLED';
         device.pump_running = result.pump_running || false;
-        // Battery
-        if (result.battery) {
-          device.battery_pct = result.battery.percent;
-          device.battery_charging = result.battery.charging;
-          device.battery_voltage = result.battery.voltage;
-        }
+        // IMPORTANT: Do NOT update battery from command response!
+        // ESP32 get_status returns unreliable battery % (firmware bug).
+        // Battery is ONLY updated from periodic telemetry via devices.latest.
         // Pump calibration and speed
         if (result.pump_calibration !== undefined) device.pump_calibration = result.pump_calibration;
         if (result.pump_speed !== undefined) device.pump_speed = result.pump_speed;
