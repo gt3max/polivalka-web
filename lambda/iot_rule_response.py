@@ -57,10 +57,12 @@ def normalize_flat_response(flat):
     result = {}
 
     # Sensor data
+    # IMPORTANT: Use same field names as periodic telemetry (moisture_percent, adc_raw)
+    # so that readers (API, Fleet) find consistent data regardless of source
     if 'moisture' in flat or 'adc' in flat:
         result['sensor'] = {
-            'moisture': flat.get('moisture'),
-            'adc': flat.get('adc'),
+            'moisture_percent': flat.get('moisture'),  # Match periodic telemetry field name
+            'adc_raw': flat.get('adc'),                # Match periodic telemetry field name
             'percent_float': flat.get('percent_float'),
             'calibration': {
                 'water': flat.get('water'),

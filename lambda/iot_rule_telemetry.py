@@ -132,6 +132,11 @@ def lambda_handler(event, context):
             latest_data = convert_floats_to_decimal(data.copy())
             latest_data['updated_at'] = timestamp
 
+            # PUMP: Convert 'action' (start/stop) to 'running' (true/false)
+            # API expects pump.running but telemetry sends pump.action
+            if data_type == 'pump' and 'action' in data:
+                latest_data['running'] = (data.get('action') == 'start')
+
             for item in query_response['Items']:
                 user_id = item['user_id']
                 # Skip transferred records - they are archived, only active owner gets updates
