@@ -653,7 +653,7 @@
 
         .features .grain { opacity: 0.15; }
 
-        .sect-inner { max-width: 1200px; margin: 0 auto; }
+        .sect-inner { max-width: 960px; margin: 0 auto; }
 
         .sect-head {
             text-align: center;
@@ -686,61 +686,346 @@
         .feat-grid {
             display: grid;
             grid-template-columns: 1fr 1fr;
-            gap: 20px;
+            gap: 16px;
         }
 
         .feat-card {
             position: relative;
-            background: var(--glass-bg);
-            backdrop-filter: blur(16px);
-            -webkit-backdrop-filter: blur(16px);
-            border: 1px solid var(--glass-border);
-            border-radius: 20px;
-            padding: 40px 36px;
-            transition: all 0.4s cubic-bezier(0.22, 1, 0.36, 1);
+            background: var(--warm-white);
+            border: 1px solid rgba(168, 197, 160, 0.15);
+            border-radius: 24px;
+            padding: 0;
             overflow: hidden;
+            display: flex;
+            flex-direction: column;
         }
 
-        .feat-card::before {
-            content: '';
-            position: absolute;
-            inset: 0;
-            border-radius: 20px;
-            border: 1px solid transparent;
-            background: linear-gradient(135deg, rgba(61,139,64,0.1), transparent 60%) border-box;
-            -webkit-mask: linear-gradient(#fff 0 0) padding-box, linear-gradient(#fff 0 0);
-            -webkit-mask-composite: xor;
-            mask-composite: exclude;
-            opacity: 0;
-            transition: opacity 0.4s;
+        /* Card visual area — the illustration zone */
+        .feat-visual {
+            position: relative;
+            height: 180px;
+            overflow: hidden;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: var(--cream);
         }
 
-        .feat-card:hover {
-            transform: translateY(-4px);
-            box-shadow: var(--shadow-soft), var(--shadow-glow);
-        }
-
-        .feat-card:hover::before { opacity: 1; }
-
-        .feat-ico {
-            font-size: 36px;
-            margin-bottom: 20px;
-            display: block;
-            line-height: 1;
+        .feat-card-body {
+            padding: 24px 28px 28px;
         }
 
         .feat-card h3 {
-            font-size: 20px;
+            font-size: 18px;
             font-weight: 700;
             color: var(--forest);
-            margin-bottom: 10px;
+            margin-bottom: 8px;
             letter-spacing: -0.4px;
         }
 
         .feat-card p {
-            font-size: 15px;
+            font-size: 14px;
             color: var(--text-secondary);
             line-height: 1.65;
+        }
+
+        /* ---- Card 1: Water droplet with animated ripples ---- */
+        .feat-vis-water {
+            background: linear-gradient(160deg, #f0f7f0 0%, #e8f5e9 100%);
+        }
+
+        .feat-drop {
+            width: 48px;
+            height: 62px;
+            position: relative;
+            z-index: 2;
+            animation: featDropFloat 3s ease-in-out infinite;
+        }
+
+        .feat-drop svg { width: 100%; height: 100%; }
+
+        @keyframes featDropFloat {
+            0%, 100% { transform: translateY(0); }
+            50% { transform: translateY(-8px); }
+        }
+
+        .feat-ripple {
+            position: absolute;
+            bottom: -8px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 20px;
+            height: 20px;
+            border: 1.5px solid rgba(61, 139, 64, 0.35);
+            border-radius: 50%;
+            animation: featRipple 2.5s ease-out infinite;
+        }
+
+        .feat-ripple:nth-child(2) { animation-delay: 0.8s; }
+        .feat-ripple:nth-child(3) { animation-delay: 1.6s; }
+
+        @keyframes featRipple {
+            0% { width: 20px; height: 10px; opacity: 0.7; }
+            100% { width: 120px; height: 40px; opacity: 0; }
+        }
+
+        /* Ambient gradient orbs in visual */
+        .feat-orb {
+            position: absolute;
+            border-radius: 50%;
+            filter: blur(40px);
+            pointer-events: none;
+        }
+
+        .feat-vis-water .feat-orb:nth-child(1) {
+            width: 120px; height: 120px;
+            background: rgba(61, 139, 64, 0.12);
+            top: -20px; left: -20px;
+            animation: featOrbFloat 8s ease-in-out infinite;
+        }
+        .feat-vis-water .feat-orb:nth-child(2) {
+            width: 80px; height: 80px;
+            background: rgba(102, 187, 106, 0.1);
+            bottom: -10px; right: 10px;
+            animation: featOrbFloat 10s ease-in-out infinite reverse;
+        }
+
+        @keyframes featOrbFloat {
+            0%, 100% { transform: translate(0, 0); }
+            50% { transform: translate(10px, -10px); }
+        }
+
+        /* ---- Card 2: Dashboard mini-visualization ---- */
+        .feat-vis-dash {
+            background: linear-gradient(160deg, #eef5fc 0%, #e3f0fb 100%);
+        }
+
+        .feat-vis-dash .feat-orb:nth-child(1) {
+            width: 100px; height: 100px;
+            background: rgba(30, 136, 229, 0.1);
+            top: -10px; right: -10px;
+            animation: featOrbFloat 9s ease-in-out infinite 1s;
+        }
+
+        .feat-mini-screen {
+            width: 160px;
+            background: rgba(255,255,255,0.8);
+            border-radius: 10px;
+            border: 1px solid rgba(30, 136, 229, 0.1);
+            padding: 12px;
+            position: relative;
+            z-index: 2;
+            box-shadow: 0 4px 20px rgba(30, 136, 229, 0.08);
+        }
+
+        .feat-mini-bar-row {
+            display: flex;
+            gap: 6px;
+            align-items: flex-end;
+            height: 50px;
+            margin-bottom: 10px;
+        }
+
+        .feat-mini-bar {
+            flex: 1;
+            border-radius: 3px 3px 0 0;
+            animation: featBarGrow 2s ease-out forwards;
+        }
+
+        .feat-mini-bar:nth-child(1) { height: 60%; background: rgba(30, 136, 229, 0.35); animation-delay: 0.1s; }
+        .feat-mini-bar:nth-child(2) { height: 85%; background: rgba(30, 136, 229, 0.5); animation-delay: 0.2s; }
+        .feat-mini-bar:nth-child(3) { height: 45%; background: rgba(30, 136, 229, 0.3); animation-delay: 0.3s; }
+        .feat-mini-bar:nth-child(4) { height: 95%; background: rgba(30, 136, 229, 0.55); animation-delay: 0.4s; }
+        .feat-mini-bar:nth-child(5) { height: 70%; background: rgba(30, 136, 229, 0.4); animation-delay: 0.5s; }
+
+        @keyframes featBarGrow {
+            0% { transform: scaleY(0); transform-origin: bottom; }
+            100% { transform: scaleY(1); transform-origin: bottom; }
+        }
+
+        .feat-mini-line {
+            height: 4px;
+            border-radius: 2px;
+            background: rgba(30, 136, 229, 0.08);
+            margin-bottom: 6px;
+        }
+
+        .feat-mini-line:last-child { width: 60%; margin-bottom: 0; }
+
+        /* Bars pulsing animation after grow */
+        .feat-mini-bar {
+            animation: featBarGrow 1.5s ease-out forwards, featBarPulse 3s ease-in-out infinite 2s;
+        }
+
+        @keyframes featBarPulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.6; }
+        }
+
+        /* ---- Card 3: Timer ring ---- */
+        .feat-vis-timer {
+            background: linear-gradient(160deg, #fef6ee 0%, #fff3e0 100%);
+        }
+
+        .feat-vis-timer .feat-orb:nth-child(1) {
+            width: 100px; height: 100px;
+            background: rgba(251, 140, 0, 0.1);
+            bottom: -10px; left: 20px;
+            animation: featOrbFloat 11s ease-in-out infinite 2s;
+        }
+
+        .feat-timer-ring {
+            width: 100px;
+            height: 100px;
+            position: relative;
+            z-index: 2;
+        }
+
+        .feat-timer-ring svg { width: 100%; height: 100%; }
+
+        .feat-timer-track {
+            fill: none;
+            stroke: rgba(251, 140, 0, 0.1);
+            stroke-width: 4;
+        }
+
+        .feat-timer-progress {
+            fill: none;
+            stroke: #fb8c00;
+            stroke-width: 4;
+            stroke-linecap: round;
+            stroke-dasharray: 251;
+            stroke-dashoffset: 251;
+            animation: featTimerFill 3s ease-out forwards 0.5s;
+            filter: drop-shadow(0 0 8px rgba(251, 140, 0, 0.2));
+        }
+
+        @keyframes featTimerFill {
+            to { stroke-dashoffset: 63; }
+        }
+
+        .feat-timer-text {
+            position: absolute;
+            inset: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-direction: column;
+        }
+
+        .feat-timer-val {
+            font-family: 'Instrument Sans', sans-serif;
+            font-size: 22px;
+            font-weight: 700;
+            color: var(--forest);
+            letter-spacing: -0.5px;
+            line-height: 1;
+        }
+
+        .feat-timer-label {
+            font-size: 9px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            color: var(--text-tertiary);
+            margin-top: 3px;
+        }
+
+        /* Timer tick animation */
+        .feat-timer-ring::after {
+            content: '';
+            position: absolute;
+            top: 12px;
+            left: 50%;
+            width: 2px;
+            height: 8px;
+            background: #fb8c00;
+            border-radius: 1px;
+            transform-origin: 50% 38px;
+            animation: featTimerTick 1s steps(1) infinite;
+        }
+
+        @keyframes featTimerTick {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.3; }
+        }
+
+        /* ---- Card 4: Battery with charge indicator ---- */
+        .feat-vis-battery {
+            background: linear-gradient(160deg, #eef7ee 0%, #e8f5e9 100%);
+        }
+
+        .feat-vis-battery .feat-orb:nth-child(1) {
+            width: 90px; height: 90px;
+            background: rgba(67, 160, 71, 0.1);
+            top: 10px; right: 20px;
+            animation: featOrbFloat 10s ease-in-out infinite 3s;
+        }
+
+        .feat-batt {
+            position: relative;
+            z-index: 2;
+            width: 72px;
+        }
+
+        .feat-batt-body {
+            width: 72px;
+            height: 110px;
+            border: 2px solid rgba(67, 160, 71, 0.25);
+            border-radius: 8px;
+            padding: 4px;
+            position: relative;
+        }
+
+        .feat-batt-cap {
+            width: 28px;
+            height: 8px;
+            background: rgba(67, 160, 71, 0.25);
+            border-radius: 3px 3px 0 0;
+            margin: 0 auto -2px;
+        }
+
+        .feat-batt-fill {
+            position: absolute;
+            bottom: 4px;
+            left: 4px;
+            right: 4px;
+            height: 0%;
+            background: linear-gradient(0deg, #43a047, #81c784);
+            border-radius: 4px;
+            animation: featBattFill 2s ease-out forwards 0.5s;
+            box-shadow: 0 0 20px rgba(67, 160, 71, 0.15);
+        }
+
+        @keyframes featBattFill {
+            to { height: 75%; }
+        }
+
+        .feat-batt-pct {
+            position: absolute;
+            inset: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-family: 'Instrument Sans', sans-serif;
+            font-size: 20px;
+            font-weight: 700;
+            color: var(--forest);
+            z-index: 2;
+        }
+
+        /* Battery pulse glow */
+        .feat-batt-body::after {
+            content: '';
+            position: absolute;
+            inset: -6px;
+            border-radius: 12px;
+            border: 1px solid rgba(67, 160, 71, 0.1);
+            animation: featBattPulse 3s ease-in-out infinite 2.5s;
+        }
+
+        @keyframes featBattPulse {
+            0%, 100% { border-color: rgba(67, 160, 71, 0.1); }
+            50% { border-color: rgba(67, 160, 71, 0.25); }
         }
 
         /* ═══════════════════════════════════
@@ -1494,7 +1779,7 @@
             .hero-ctas .btn { width: 100%; max-width: 320px; }
             .hero-mockup-wrap { margin-left: -8px; margin-right: -8px; }
             .features, .how, .showcase { padding: 80px 16px; }
-            .feat-card { padding: 28px 24px; }
+            .feat-visual { height: 140px; }
             .cta-section { padding: 100px 16px; }
             .footer-inner { flex-direction: column; text-align: center; }
             .sc-dev-body { grid-template-columns: 1fr; }
@@ -1612,24 +1897,72 @@
             </div>
             <div class="feat-grid">
                 <div class="feat-card rv">
-                    <span class="feat-ico">&#128167;</span>
-                    <h3>Automatic Watering</h3>
-                    <p>The moisture sensor monitors soil levels and triggers the pump exactly when your plant needs water. Set it and forget it.</p>
+                    <div class="feat-visual feat-vis-water">
+                        <div class="feat-orb"></div>
+                        <div class="feat-orb"></div>
+                        <div class="feat-drop">
+                            <svg viewBox="0 0 48 62" fill="none"><path d="M24 4S8 22 8 38c0 10 7 16 16 16s16-6 16-16C40 22 24 4 24 4z" fill="rgba(61,139,64,0.1)" stroke="rgba(61,139,64,0.4)" stroke-width="1.5"/><path d="M18 40c0 4 2.5 6 6 6" stroke="rgba(61,139,64,0.15)" stroke-width="1.5" stroke-linecap="round"/></svg>
+                            <div class="feat-ripple"></div>
+                            <div class="feat-ripple"></div>
+                            <div class="feat-ripple"></div>
+                        </div>
+                    </div>
+                    <div class="feat-card-body">
+                        <h3>Automatic Watering</h3>
+                        <p>Soil sensor triggers the pump at the exact moisture threshold. Set once, never think about it again.</p>
+                    </div>
                 </div>
                 <div class="feat-card rv rv-d1">
-                    <span class="feat-ico">&#127760;</span>
-                    <h3>Remote Dashboard</h3>
-                    <p>Check on your plants from anywhere. Real-time moisture, battery level, and full watering history in your cloud dashboard.</p>
+                    <div class="feat-visual feat-vis-dash">
+                        <div class="feat-orb"></div>
+                        <div class="feat-mini-screen">
+                            <div class="feat-mini-bar-row">
+                                <div class="feat-mini-bar"></div>
+                                <div class="feat-mini-bar"></div>
+                                <div class="feat-mini-bar"></div>
+                                <div class="feat-mini-bar"></div>
+                                <div class="feat-mini-bar"></div>
+                            </div>
+                            <div class="feat-mini-line"></div>
+                            <div class="feat-mini-line"></div>
+                        </div>
+                    </div>
+                    <div class="feat-card-body">
+                        <h3>Remote Dashboard</h3>
+                        <p>Real-time moisture, battery, and watering history. From anywhere in the world.</p>
+                    </div>
                 </div>
                 <div class="feat-card rv rv-d2">
-                    <span class="feat-ico">&#9200;</span>
-                    <h3>Smart Scheduling</h3>
-                    <p>Set custom watering schedules with flexible timers. Morning, evening, or custom intervals&thinsp;&mdash;&thinsp;up to 8 schedules per device.</p>
+                    <div class="feat-visual feat-vis-timer">
+                        <div class="feat-orb"></div>
+                        <div class="feat-timer-ring">
+                            <svg viewBox="0 0 100 100"><circle cx="50" cy="50" r="40" class="feat-timer-track"/><circle cx="50" cy="50" r="40" class="feat-timer-progress" transform="rotate(-90 50 50)"/></svg>
+                            <div class="feat-timer-text">
+                                <div class="feat-timer-val">6:00</div>
+                                <div class="feat-timer-label">AM</div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="feat-card-body">
+                        <h3>Smart Scheduling</h3>
+                        <p>Up to 8 timers. Morning, evening, custom intervals&thinsp;&mdash;&thinsp;your plants, your schedule.</p>
+                    </div>
                 </div>
                 <div class="feat-card rv rv-d3">
-                    <span class="feat-ico">&#128267;</span>
-                    <h3>Battery Powered</h3>
-                    <p>Ultra-efficient deep sleep mode means weeks of operation on a single charge. Monitor battery remotely and get low-power alerts.</p>
+                    <div class="feat-visual feat-vis-battery">
+                        <div class="feat-orb"></div>
+                        <div class="feat-batt">
+                            <div class="feat-batt-cap"></div>
+                            <div class="feat-batt-body">
+                                <div class="feat-batt-fill"></div>
+                                <div class="feat-batt-pct">87%</div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="feat-card-body">
+                        <h3>Battery Powered</h3>
+                        <p>Weeks on a single charge with deep sleep mode. Get alerts before it runs low.</p>
+                    </div>
                 </div>
             </div>
         </div>
