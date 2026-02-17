@@ -286,9 +286,9 @@ def lambda_handler(event, context):
                             )
 
                             # Step 2: Update each data type SEPARATELY with timestamp protection
-                            # IMPORTANT: Do NOT include 'battery' here!
-                            # ESP32 get_status returns unreliable battery percentage (e.g. 67% when actual is 6%).
-                            # Periodic battery telemetry (via iot_rule_telemetry.py) is the only source of truth.
+                            # NOTE: Battery percent is unreliable from get_status (firmware bug).
+                            # But charging status IS reliable and changes when user plugs/unplugs charger.
+                            # So we update ONLY battery.charging, NOT battery.percent.
                             for dtype in ['sensor', 'system', 'pump']:
                                 if dtype in result and result[dtype]:
                                     data_copy = convert_floats(result[dtype].copy())
@@ -304,6 +304,21 @@ def lambda_handler(event, context):
                                         )
                                     except dynamodb.meta.client.exceptions.ConditionalCheckFailedException:
                                         print(f"Skipping stale {dtype} for {owner_id}/{device_id}: ts={current_time} not newer")
+
+                            # Battery: Update ONLY charging status (reliable), NOT percent (unreliable firmware bug)
+                            if 'battery' in result and result['battery']:
+                                battery = result['battery']
+                                charging = battery.get('charging')
+                                if charging is not None:
+                                    try:
+                                        devices_table.update_item(
+                                            Key={'user_id': owner_id, 'device_id': device_id},
+                                            UpdateExpression='SET latest.battery.charging = :c',
+                                            ExpressionAttributeValues={':c': charging}
+                                        )
+                                        print(f"Updated battery.charging={charging} for {owner_id}/{device_id}")
+                                    except Exception as e:
+                                        print(f"Error updating battery.charging: {e}")
 
                             # Always update last_update for online status (no condition - always want latest)
                             devices_table.update_item(
