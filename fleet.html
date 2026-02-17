@@ -1167,12 +1167,10 @@ async function refreshSensor(deviceId) {
       // Recalculate controller_enabled based on new state (same logic as get_devices)
       device.controller_enabled = device.state !== 'DISABLED';
       device.pump_running = result.pump_running || false;
-      // Battery: extract from object {voltage, percent, charging}
-      if (result.battery) {
-        device.battery_pct = result.battery.percent;
-        device.battery_charging = result.battery.charging;
-        device.battery_voltage = result.battery.voltage;
-      }
+      // IMPORTANT: Do NOT update battery from command response!
+      // ESP32 get_status returns unreliable battery % (firmware bug - e.g. 77% when actual is 6%).
+      // Battery is ONLY updated from periodic telemetry via devices.latest (source of truth).
+      // See: iot_rule_response.py, FLEET_ARCHITECTURE_REFACTOR_PLAN.md
       // Pump calibration and speed (for water volume calculation)
       if (result.pump_calibration !== undefined) device.pump_calibration = result.pump_calibration;
       if (result.pump_speed !== undefined) device.pump_speed = result.pump_speed;
@@ -1188,9 +1186,8 @@ async function refreshSensor(deviceId) {
       renderDevices(allDevices);
       updateStats(allDevices);
 
-      // Show success feedback with updated values
-      const batteryInfo = result.battery ? ` | 🔋${Math.round(result.battery.percent)}%` : '';
-      showToast(`✅ ${deviceId}: ${result.moisture_pct}% | ${device.state}${batteryInfo}`, 'success');
+      // Show success feedback with updated values (no battery - unreliable from command response)
+      showToast(`✅ ${deviceId}: ${result.moisture_pct}% | ${device.state}`, 'success');
     }
 
   } catch(e) {
@@ -1224,12 +1221,10 @@ async function refreshSensorSilent(deviceId) {
       // Recalculate controller_enabled based on new state (same logic as get_devices)
       device.controller_enabled = device.state !== 'DISABLED';
       device.pump_running = result.pump_running || false;
-      // Battery: extract from object {voltage, percent, charging}
-      if (result.battery) {
-        device.battery_pct = result.battery.percent;
-        device.battery_charging = result.battery.charging;
-        device.battery_voltage = result.battery.voltage;
-      }
+      // IMPORTANT: Do NOT update battery from command response!
+      // ESP32 get_status returns unreliable battery % (firmware bug - e.g. 77% when actual is 6%).
+      // Battery is ONLY updated from periodic telemetry via devices.latest (source of truth).
+      // See: iot_rule_response.py, FLEET_ARCHITECTURE_REFACTOR_PLAN.md
       // Pump calibration and speed (for water volume calculation)
       if (result.pump_calibration !== undefined) device.pump_calibration = result.pump_calibration;
       if (result.pump_speed !== undefined) device.pump_speed = result.pump_speed;
