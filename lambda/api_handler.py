@@ -1667,6 +1667,10 @@ def lambda_handler(event, context):
             email = urllib.parse.unquote(path.split('/admin/whitelist/')[1])
             return admin_delete_whitelist(email)
 
+        # POST /admin/revoke-device - Revoke device from user, transfer back to admin
+        if path == '/admin/revoke-device' and http_method == 'POST':
+            return admin_revoke_device(event)
+
         # ============ Claims Management ============
         # GET /admin/claims - List all pending claims
         if path == '/admin/claims' and http_method == 'GET':
@@ -3690,6 +3694,175 @@ def admin_delete_whitelist(email):
         }
     except Exception as e:
         print(f"[Admin] Error deleting from whitelist: {e}")
+        return {
+            'statusCode': 500,
+            'headers': cors_headers(),
+            'body': json.dumps({'error': str(e)})
+        }
+
+
+def admin_revoke_device(event):
+    """POST /admin/revoke-device - Revoke device from user, transfer back to admin
+
+    This is a CRITICAL operation that:
+    1. Marks user's record as transferred (back to admin)
+    2. Archives user's plant profile
+    3. Removes user's latest field (stops Fleet display)
+    4. Restores admin's record (removes transferred flag)
+    5. Logs the revocation event
+    """
+    try:
+        body = json.loads(event.get('body', '{}'))
+        device_id = body.get('device_id', '').upper()
+        user_email = body.get('user_email', '')
+        admin_email = body.get('admin_email', 'admin')  # Default admin
+
+        # Normalize device_id
+        if not device_id:
+            return {
+                'statusCode': 400,
+                'headers': cors_headers(),
+                'body': json.dumps({'error': 'device_id required'})
+            }
+
+        if device_id.startswith('POLIVALKA-'):
+            device_id = f'Polivalka-{device_id[10:]}'
+        else:
+            device_id = f'Polivalka-{device_id}'
+
+        if not user_email:
+            return {
+                'statusCode': 400,
+                'headers': cors_headers(),
+                'body': json.dumps({'error': 'user_email required'})
+            }
+
+        devices_table = dynamodb.Table('polivalka_devices')
+        current_time = int(time.time())
+
+        print(f"[Revoke] *** DEVICE REVOCATION STARTED *** {device_id} from {user_email} to {admin_email}")
+
+        # ============ STEP 1: Mark user's record as transferred ============
+        user_record = devices_table.get_item(
+            Key={'user_id': user_email, 'device_id': device_id}
+        )
+
+        if 'Item' not in user_record:
+            return {
+                'statusCode': 404,
+                'headers': cors_headers(),
+                'body': json.dumps({'error': f'User {user_email} does not have device {device_id}'})
+            }
+
+        user_item = user_record['Item']
+
+        # Check if already transferred
+        if user_item.get('transferred'):
+            return {
+                'statusCode': 400,
+                'headers': cors_headers(),
+                'body': json.dumps({'error': f'Device already transferred from {user_email}'})
+            }
+
+        # Archive plant profile if exists
+        plant = user_item.get('plant')
+        archived_plants = user_item.get('archived_plants', [])
+        if plant:
+            plant['archived_at'] = current_time
+            plant['archived_reason'] = 'device_revoked'
+            archived_plants.append(plant)
+
+        # Mark user's record as transferred
+        update_expr = 'SET transferred = :t, transferred_to = :to, transferred_at = :at, revoked_by = :rb'
+        expr_values = {
+            ':t': True,
+            ':to': admin_email,
+            ':at': current_time,
+            ':rb': admin_email
+        }
+
+        if archived_plants:
+            update_expr += ', archived_plants = :ap'
+            expr_values[':ap'] = archived_plants
+
+        # Remove latest and plant
+        update_expr += ' REMOVE plant, latest'
+
+        devices_table.update_item(
+            Key={'user_id': user_email, 'device_id': device_id},
+            UpdateExpression=update_expr,
+            ExpressionAttributeValues=expr_values
+        )
+
+        print(f"[Revoke] *** ARCHIVED *** {user_email}'s data for {device_id}")
+        add_device_history(device_id, 'revoked', user_email, {
+            'revoked_by': admin_email,
+            'plant_archived': plant is not None
+        })
+
+        # ============ STEP 2: Restore admin's record ============
+        admin_record = devices_table.get_item(
+            Key={'user_id': admin_email, 'device_id': device_id}
+        )
+
+        if 'Item' in admin_record:
+            # Admin record exists - just remove transferred flag
+            devices_table.update_item(
+                Key={'user_id': admin_email, 'device_id': device_id},
+                UpdateExpression='REMOVE transferred, transferred_to, transferred_at'
+            )
+            print(f"[Revoke] Restored admin record for {device_id}")
+        else:
+            # Create new admin record
+            devices_table.put_item(Item={
+                'user_id': admin_email,
+                'device_id': device_id,
+                'device_name': 'Polivalka',
+                'claimed_at': current_time,
+                'location': 'Home',
+                'room': 'Room'
+            })
+            print(f"[Revoke] Created new admin record for {device_id}")
+
+        add_device_history(device_id, 'reclaimed', admin_email, {
+            'reclaimed_from': user_email
+        })
+
+        # ============ STEP 3: Remove device from user's whitelist ============
+        whitelist_table = dynamodb.Table('polivalka_admin_users')
+        try:
+            wl_response = whitelist_table.get_item(Key={'email': user_email})
+            if 'Item' in wl_response:
+                devices_list = wl_response['Item'].get('devices', [])
+                if device_id in devices_list:
+                    devices_list.remove(device_id)
+                    whitelist_table.update_item(
+                        Key={'email': user_email},
+                        UpdateExpression='SET devices = :d',
+                        ExpressionAttributeValues={':d': devices_list}
+                    )
+                    print(f"[Revoke] Removed {device_id} from {user_email}'s whitelist")
+        except Exception as wl_err:
+            print(f"[Revoke] Whitelist update failed (non-fatal): {wl_err}")
+
+        print(f"[Revoke] *** DEVICE REVOCATION COMPLETE *** {device_id} from {user_email} to {admin_email}")
+
+        return {
+            'statusCode': 200,
+            'headers': cors_headers(),
+            'body': json.dumps({
+                'success': True,
+                'message': f'Device {device_id} revoked from {user_email}',
+                'device_id': device_id,
+                'user_email': user_email,
+                'admin_email': admin_email
+            })
+        }
+
+    except Exception as e:
+        print(f"[Revoke] Error revoking device: {e}")
+        import traceback
+        traceback.print_exc()
         return {
             'statusCode': 500,
             'headers': cors_headers(),
