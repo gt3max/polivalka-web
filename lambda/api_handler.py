@@ -3402,18 +3402,13 @@ def claim_device(user_id, event, origin):
             Key={'user_id': user_id, 'device_id': device_id}
         )
 
+        user_record_exists = False
         if 'Item' in existing:
             # Check if it's a transferred record (user reclaiming)
             if not existing['Item'].get('transferred'):
-                return {
-                    'statusCode': 200,
-                    'headers': cors_headers(origin),
-                    'body': json.dumps({
-                        'success': True,
-                        'message': 'Device already claimed',
-                        'device_id': device_id
-                    })
-                }
+                user_record_exists = True
+                print(f"[Transfer] User {user_id} already has record for {device_id}, but CONTINUING to process transfers")
+                # DON'T RETURN EARLY! Must still process transfers for OTHER owners
 
         current_time = int(time.time())
 
@@ -3424,6 +3419,7 @@ def claim_device(user_id, event, origin):
             KeyConditionExpression=Key('device_id').eq(device_id)
         )
 
+        transfer_count = 0
         # Archive previous owners' data and mark as transferred
         for record in all_records.get('Items', []):
             prev_owner = record['user_id']
@@ -3459,22 +3455,36 @@ def claim_device(user_id, event, origin):
                     UpdateExpression=update_expr,
                     ExpressionAttributeValues=expr_values
                 )
-                print(f"[Transfer] Archived {prev_owner}'s data for {device_id}")
+                transfer_count += 1
+                print(f"[Transfer] *** ARCHIVED *** {prev_owner}'s data for {device_id} (#{transfer_count})")
                 add_device_history(device_id, 'transferred', prev_owner,
                                    {'transferred_to': user_id, 'plant_archived': plant is not None})
             except Exception as e:
                 print(f"[Transfer] Error archiving {prev_owner}: {e}")
 
-        # Create new device record for this user with default name
-        devices_table.put_item(Item={
-            'user_id': user_id,
-            'device_id': device_id,
-            'device_name': 'Polivalka',  # Default name for new owner
-            'claimed_at': current_time,
-            'location': 'Home',
-            'room': 'Room'
-            # plant = None - user will set via identify.html
-        })
+        # Create new device record for this user (skip if record already exists)
+        if not user_record_exists:
+            devices_table.put_item(Item={
+                'user_id': user_id,
+                'device_id': device_id,
+                'device_name': 'Polivalka',  # Default name for new owner
+                'claimed_at': current_time,
+                'location': 'Home',
+                'room': 'Room'
+                # plant = None - user will set via identify.html
+            })
+            print(f"[Claim] Created new record for {user_id} -> {device_id}")
+        else:
+            # User record exists - update claimed_at to reset data isolation cutoff
+            devices_table.update_item(
+                Key={'user_id': user_id, 'device_id': device_id},
+                UpdateExpression='SET claimed_at = :ca, device_name = :dn REMOVE transferred, plant',
+                ExpressionAttributeValues={
+                    ':ca': current_time,
+                    ':dn': 'Polivalka'
+                }
+            )
+            print(f"[Claim] Updated existing record for {user_id} -> {device_id}, reset claimed_at for data isolation")
 
         # Send MQTT command to ESP32 to reset device_name
         try:
@@ -3494,10 +3504,14 @@ def claim_device(user_id, event, origin):
             print(f"[Transfer] MQTT publish failed: {mqtt_err}")
             # Non-fatal - user can change name manually
 
-        # Add to device history
-        add_device_history(device_id, 'claimed', user_id)
+        # Add to device history - CRITICAL EVENT LOGGING
+        add_device_history(device_id, 'claimed', user_id, {
+            'existing_record': user_record_exists,
+            'claimed_at': current_time,
+            'previous_owners_archived': transfer_count
+        })
 
-        print(f"[Claim] Device {device_id} claimed by {user_id}")
+        print(f"[Claim] *** DEVICE TRANSFER COMPLETE *** {device_id} -> {user_id} (archived {transfer_count} previous owner(s))")
         return {
             'statusCode': 201,
             'headers': cors_headers(origin),
