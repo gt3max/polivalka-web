@@ -631,6 +631,16 @@ function initUserDisplay() {
 // Initialize on page load
 initUserDisplay();
 
+// ADC < 100 = capacitive sensor not connected (same logic as home.html)
+// Protects against old firmware that sends moisture=100% with ADC=0
+function normalizeSensorData(device) {
+  const adc = device.adc_raw;
+  if (adc !== null && adc !== undefined && adc < 100) {
+    device.moisture_pct = null;
+    device.percent_float = null;
+  }
+}
+
 async function loadDevices() {
   // Load devices from API - ALWAYS fetch fresh data
   // No caching on page load to prevent stale data (BUG #8)
@@ -647,6 +657,8 @@ async function loadDevices() {
       console.error('[Fleet] ❌ API returned non-array:', typeof allDevices);
       throw new Error('API returned non-array: ' + typeof allDevices);
     }
+    // Normalize sensor data: ADC < 100 = sensor disconnected
+    allDevices.forEach(normalizeSensorData);
   } catch (e) {
     console.error('[Fleet] ❌ Failed to load devices:', e.message);
     console.error('[Fleet] Error details:', e);
@@ -1171,9 +1183,9 @@ async function refreshSensor(deviceId) {
     // Update device in allDevices array
     const device = allDevices.find(d => d.device_id === deviceId);
     if (device) {
-      // Sensor data - only update if value present (don't overwrite good data with null)
-      if (result.moisture_pct !== undefined && result.moisture_pct !== null) device.moisture_pct = result.moisture_pct;
-      if (result.adc_raw !== undefined && result.adc_raw !== null) device.adc_raw = result.adc_raw;
+      // Sensor data - ACCEPT null (means sensor disconnected, don't keep stale value)
+      if (result.moisture_pct !== undefined) device.moisture_pct = result.moisture_pct;
+      if (result.adc_raw !== undefined) device.adc_raw = result.adc_raw;
       if (result.percent_float !== undefined) device.percent_float = result.percent_float;
       // Sensor2 (J7 resistive)
       if (result.sensor2_adc !== undefined) device.sensor2_adc = result.sensor2_adc;
@@ -1199,14 +1211,15 @@ async function refreshSensor(deviceId) {
       if (result.reboot_count !== undefined) device.reboot_count = result.reboot_count;
       if (result.timestamp) device.last_update = result.timestamp;
       device.online = true;  // Device responded = online
+      normalizeSensorData(device);  // ADC < 100 = sensor disconnected
 
       // Re-render devices
       renderDevices(allDevices);
       updateStats(allDevices);
 
       // Show success feedback with updated values (no battery - unreliable from command response)
-      const moistureDisplay = device.moisture_pct !== undefined ? device.moisture_pct : '—';
-      showToast(`✅ ${deviceId}: ${moistureDisplay}% | ${device.state}`, 'success');
+      const moistureDisplay = device.moisture_pct !== undefined && device.moisture_pct !== null ? Math.round(device.moisture_pct) + '%' : '—';
+      showToast(`✅ ${deviceId}: ${moistureDisplay} | ${device.state}`, 'success');
     }
 
   } catch(e) {
@@ -1227,9 +1240,9 @@ async function refreshSensorSilent(deviceId) {
     // Update device in allDevices array
     const device = allDevices.find(d => d.device_id === deviceId);
     if (device) {
-      // Sensor data - only update if value present (don't overwrite good data with null)
-      if (result.moisture_pct !== undefined && result.moisture_pct !== null) device.moisture_pct = result.moisture_pct;
-      if (result.adc_raw !== undefined && result.adc_raw !== null) device.adc_raw = result.adc_raw;
+      // Sensor data - ACCEPT null (means sensor disconnected, don't keep stale value)
+      if (result.moisture_pct !== undefined) device.moisture_pct = result.moisture_pct;
+      if (result.adc_raw !== undefined) device.adc_raw = result.adc_raw;
       if (result.percent_float !== undefined) device.percent_float = result.percent_float;
       // Sensor2 (J7 resistive)
       if (result.sensor2_adc !== undefined) device.sensor2_adc = result.sensor2_adc;
@@ -1255,6 +1268,7 @@ async function refreshSensorSilent(deviceId) {
       if (result.reboot_count !== undefined) device.reboot_count = result.reboot_count;
       if (result.timestamp) device.last_update = result.timestamp;
       device.online = true;  // Device responded = online
+      normalizeSensorData(device);  // ADC < 100 = sensor disconnected
 
       // Re-render devices (will preserve expanded state)
       renderDevices(allDevices);
@@ -1478,9 +1492,9 @@ async function bulkAction(action) {
         const result = await API.get(`/device/${device.device_id}/sensor`);
 
         // Update real-time data from device response
-        // Sensor data - only update if value is present (don't overwrite good data with null)
-        if (result.moisture_pct !== undefined && result.moisture_pct !== null) device.moisture_pct = result.moisture_pct;
-        if (result.adc_raw !== undefined && result.adc_raw !== null) device.adc_raw = result.adc_raw;
+        // Sensor data - ACCEPT null (means sensor disconnected, don't keep stale value)
+        if (result.moisture_pct !== undefined) device.moisture_pct = result.moisture_pct;
+        if (result.adc_raw !== undefined) device.adc_raw = result.adc_raw;
         if (result.percent_float !== undefined) device.percent_float = result.percent_float;
         // Sensor2 (J7 resistive)
         if (result.sensor2_adc !== undefined) device.sensor2_adc = result.sensor2_adc;
@@ -1505,6 +1519,7 @@ async function bulkAction(action) {
         if (result.unexpected_restarts !== undefined) device.unexpected_restarts = result.unexpected_restarts;
         device.last_update = result.timestamp || Math.floor(Date.now() / 1000);
         device.online = true;
+        normalizeSensorData(device);  // ADC < 100 = sensor disconnected
 
         successCount++;
       } catch(e) {

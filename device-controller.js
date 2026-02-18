@@ -38,7 +38,7 @@ class DeviceController {
       // Защита критичных полей
       device_id: deviceId,
       battery_pct: data.battery_pct !== undefined ? data.battery_pct : device.battery_pct,
-      moisture_pct: data.moisture_pct ?? device.moisture_pct ?? 0,
+      moisture_pct: data.moisture_pct !== undefined ? data.moisture_pct : device.moisture_pct,
       last_update: Date.now()
     };
 
