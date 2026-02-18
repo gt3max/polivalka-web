@@ -678,8 +678,9 @@ def save_plant_profile(user_id, event, origin):
         current_time = int(time.time())
         if not plant_data.get('plant_id'):
             plant_data['plant_id'] = f"plant_{int(current_time * 1000)}"
-            # New plant — set started_at for telemetry filtering
             plant_data['started_at'] = current_time
+            plant_data['created_at'] = current_time
+            plant_data['device_history'] = [{'device_id': device_id, 'started_at': current_time}]
 
         # Add/update saved_at timestamp
         plant_data['saved_at'] = current_time
@@ -993,18 +994,29 @@ def assign_plant_to_device(user_id, device_id, event, origin):
 
         # Copy plant profile to target device with new timestamps
         current_time = int(time.time())
+
+        # Build device_history: copy from source + add new device
+        source_history = source_plant.get('device_history', [])
+        new_history = list(source_history) + [{'device_id': device_id, 'started_at': current_time}]
+
         new_plant = {
-            'plant_id': f"plant_{int(current_time * 1000)}",  # New plant_id for this instance
+            'plant_id': f"plant_{int(current_time * 1000)}",
             'scientific': source_plant.get('scientific'),
             'common_name': source_plant.get('common_name'),
+            'family': source_plant.get('family'),
             'image_url': source_plant.get('image_url'),
             'preset': source_plant.get('preset'),
             'start_pct': source_plant.get('start_pct'),
             'stop_pct': source_plant.get('stop_pct'),
-            'started_at': current_time,  # New started_at for data isolation
+            'poisonous_to_pets': source_plant.get('poisonous_to_pets'),
+            'poisonous_to_humans': source_plant.get('poisonous_to_humans'),
+            'toxicity_note': source_plant.get('toxicity_note'),
+            'started_at': current_time,
+            'created_at': current_time,
             'saved_at': current_time,
-            'copied_from': source_plant_id,  # Track origin
-            'copied_from_device': source_device_id
+            'copied_from': source_plant_id,
+            'copied_from_device': source_device_id,
+            'device_history': new_history,
         }
 
         # Save to target device
