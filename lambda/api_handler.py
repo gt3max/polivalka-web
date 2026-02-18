@@ -294,6 +294,16 @@ def identify_plant_handler(event, origin):
             preset_key = FAMILY_PRESETS.get(family_name, 'standard')
             preset = PRESET_DETAILS.get(preset_key, PRESET_DETAILS['standard'])
 
+            # Get toxicity based on family
+            toxicity_data = TOXIC_FAMILIES.get(family_name)
+            toxicity = None
+            if toxicity_data:
+                toxicity = {
+                    'poisonous_to_pets': toxicity_data['pets'],
+                    'poisonous_to_humans': toxicity_data['humans'],
+                    'toxicity_note': toxicity_data['note']
+                }
+
             results.append({
                 'id': species.get('scientificNameWithoutAuthor', '').lower().replace(' ', '_'),
                 'scientific': species.get('scientificNameWithoutAuthor', ''),
@@ -311,7 +321,8 @@ def identify_plant_handler(event, origin):
                     'temperature': preset['temperature'],
                     'humidity': preset['humidity'],
                     'tips': preset['tips']
-                }
+                },
+                'toxicity': toxicity
             })
 
         return {
@@ -419,6 +430,28 @@ PRESET_DETAILS = {
         'humidity': 'Average (40-50%)',
         'tips': 'Herbs like consistent moisture. Harvest regularly to promote growth.'
     }
+}
+
+
+# Family-based toxicity data (Source: ASPCA Poison Control)
+# Format: pets/humans = true if toxic, note = CAUSE → EFFECT → ACTION
+TOXIC_FAMILIES = {
+    'Araliaceae': {'pets': True, 'humans': True, 'note': 'Sap on skin → rash. Pet eats leaf → vomiting. Wash hands after pruning'},
+    'Araceae': {'pets': True, 'humans': True, 'note': 'Chewing → mouth/throat swelling, drooling. Severe swelling → vet'},
+    'Liliaceae': {'pets': True, 'humans': False, 'note': 'CATS: pollen/leaf contact → kidney failure in 24-72h. Any contact → vet immediately'},
+    'Solanaceae': {'pets': True, 'humans': False, 'note': 'Ripe fruit = safe. Green leaves/stems → pet vomiting. Keep unripe away from pets'},
+    'Amaryllidaceae': {'pets': True, 'humans': True, 'note': 'Bulb most toxic. Pet chews bulb → vomiting, tremors. Keep bulbs buried or out of reach'},
+    'Apocynaceae': {'pets': True, 'humans': True, 'note': 'Any part eaten → heart rhythm problems. Even small amount → vet'},
+    'Crassulaceae': {'pets': True, 'humans': False, 'note': 'Pet eats → vomiting, diarrhea. Humans safe to handle'},
+    'Ericaceae': {'pets': True, 'humans': True, 'note': 'Any part eaten → vomiting, weakness, heart issues. Keep away from pets'},
+    'Euphorbiaceae': {'pets': True, 'humans': True, 'note': 'Milky sap on skin → irritation. In eyes → rinse 15 min. Wear gloves when pruning'},
+    'Cycadaceae': {'pets': True, 'humans': True, 'note': 'Seeds eaten → liver failure. Dogs love to chew them. Any ingestion → vet immediately'},
+    'Zamiaceae': {'pets': True, 'humans': True, 'note': 'Seeds eaten → liver failure. Dogs love to chew them. Any ingestion → vet immediately'},
+    'Ranunculaceae': {'pets': True, 'humans': True, 'note': 'Sap on skin → blisters. Eaten → mouth pain, vomiting. Wear gloves'},
+    'Plantaginaceae': {'pets': True, 'humans': True, 'note': 'Any amount eaten → heart rhythm problems. Keep away from children and pets'},
+    'Asteraceae': {'pets': True, 'humans': False, 'note': 'Pet eats → skin irritation, vomiting. Humans safe'},
+    'Moraceae': {'pets': True, 'humans': True, 'note': 'Sap on skin → rash. Pet eats leaf → vomiting. Wash hands after pruning'},
+    'Asparagaceae': {'pets': True, 'humans': False, 'note': 'Pet eats berries → vomiting, diarrhea. Keep berries away from pets'},
 }
 
 
@@ -1099,8 +1132,10 @@ def lambda_handler(event, context):
                 device_info = get_device_info(device_id, user_id)
                 sensor_config = device_info.get('config_sensor', {})
 
-                # Deep watering runtime stats come from system telemetry, not config
-                latest = get_latest_telemetry(device_id)
+                # Deep watering runtime stats from devices.latest (Phase 3)
+                latest = device_info.get('latest') or {}
+                if not latest:
+                    latest = get_latest_telemetry(device_id)  # Legacy fallback
                 system_data = latest.get('system', {})
 
                 # Return config matching ESP32 /api/sensor/preset format
@@ -1187,14 +1222,18 @@ def lambda_handler(event, context):
                 if not verify_device_access(device_id, user_id):
                     return {'statusCode': 403, 'headers': cors_headers(origin),
                             'body': json.dumps({'error': 'Access denied'})}
-                # Get latest telemetry to determine controller state
-                latest = get_latest_telemetry(device_id)
+                # FLEET ARCHITECTURE: Read from devices.latest (single source of truth)
+                device_info = get_device_info(device_id, user_id)
+                latest = device_info.get('latest') or {}
+                if not latest:
+                    latest = get_latest_telemetry(device_id)  # Legacy fallback
                 mode = latest.get('system', {}).get('mode', 'manual')
-                # Get state from system telemetry (ESP32 now sends it)
                 state = latest.get('system', {}).get('state', 'DISABLED')
-                # Get sensor data for moisture display
+                # Sensor data with ADC < 100 check (defense against pre-fix data)
                 sensor_data = latest.get('sensor', {})
-                moisture_pct = sensor_data.get('percent', 0) or 0
+                adc_raw = sensor_data.get('adc_raw')
+                sensor_disconnected = adc_raw is not None and int(adc_raw) < 100
+                moisture_pct = None if sensor_disconnected else sensor_data.get('moisture_percent')
 
                 # arming_countdown: 60 when LAUNCH, 0 otherwise
                 # Frontend will show countdown locally
@@ -1270,10 +1309,12 @@ def lambda_handler(event, context):
                 if not verify_device_access(device_id, user_id):
                     return {'statusCode': 403, 'headers': cors_headers(origin),
                             'body': json.dumps({'error': 'Access denied'})}
-                # Get latest telemetry to determine controller state
-                latest = get_latest_telemetry(device_id)
+                # FLEET ARCHITECTURE: Read from devices.latest (single source of truth)
+                device_info = get_device_info(device_id, user_id)
+                latest = device_info.get('latest') or {}
+                if not latest:
+                    latest = get_latest_telemetry(device_id)  # Legacy fallback
                 mode = latest.get('system', {}).get('mode', 'manual')
-                # Get state from system telemetry (ESP32 now sends it)
                 state = latest.get('system', {}).get('state', 'DISABLED')
 
                 # arming_countdown_sec: 15 when LAUNCH, 0 otherwise (timer uses 15 sec)
@@ -1306,11 +1347,12 @@ def lambda_handler(event, context):
                 if not verify_device_access(device_id, user_id):
                     return {'statusCode': 403, 'headers': cors_headers(origin),
                             'body': json.dumps({'error': 'Access denied'})}
-                latest = get_latest_telemetry(device_id)
-                time_set = latest.get('system', {}).get('time_set', False)
-
-                # Get timezone from devices_table (default: Europe/Warsaw for Poland)
+                # FLEET ARCHITECTURE: Read from devices.latest
                 device_info = get_device_info(device_id, user_id)
+                latest = device_info.get('latest') or {}
+                if not latest:
+                    latest = get_latest_telemetry(device_id)  # Legacy fallback
+                time_set = latest.get('system', {}).get('time_set', False)
                 tz_string = device_info.get('timezone', 'Europe/Warsaw')
 
                 # Use zoneinfo for proper DST handling
@@ -1834,7 +1876,8 @@ def get_devices(user_id):
                 'name': device_name,
                 'location': device_location,
                 'room': device_room,
-                'moisture_pct': latest.get('sensor', {}).get('moisture_percent'),
+                # ADC < 100 = capacitive sensor not connected (same check as ESP32 sensor_is_connected)
+                'moisture_pct': latest.get('sensor', {}).get('moisture_percent') if not (latest.get('sensor', {}).get('adc_raw') is not None and latest.get('sensor', {}).get('adc_raw') < 100) else None,
                 'adc_raw': latest.get('sensor', {}).get('adc_raw'),
                 'battery_pct': battery_pct,
                 'battery_charging': battery_charging,
@@ -1992,10 +2035,13 @@ def get_device_status(device_id, user_id):
 
     # Format response matching ESP32 /api/status structure
     sensor_data = latest.get('sensor', {})
+    adc_raw = sensor_data.get('adc_raw')
+    # ADC < 100 = capacitive sensor not connected (defense against pre-fix data in devices.latest)
+    sensor_disconnected = adc_raw is not None and int(adc_raw) < 100
     status = {
-        'adc': sensor_data.get('adc_raw'),
-        'percent': sensor_data.get('moisture_percent'),
-        'percent_float': sensor_data.get('percent_float'),  # Decimal precision for sensor1
+        'adc': adc_raw,
+        'percent': None if sensor_disconnected else sensor_data.get('moisture_percent'),
+        'percent_float': None if sensor_disconnected else sensor_data.get('percent_float'),  # Decimal precision for sensor1
         'sensor2_adc': sensor_data.get('sensor2_adc'),      # Resistive sensor J7 - ADC
         'sensor2_percent': sensor_data.get('sensor2_percent'),  # Resistive sensor J7 - %
         'sensor2_percent_float': sensor_data.get('sensor2_percent_float'),  # Decimal precision
@@ -2513,7 +2559,11 @@ def get_battery_status(device_id, user_id):
         return {'statusCode': 403, 'headers': cors_headers(),
                 'body': json.dumps({'error': 'Access denied'})}
 
-    latest = get_latest_telemetry(device_id)
+    # FLEET ARCHITECTURE Phase 3: Read from devices.latest
+    device_info = get_device_info(device_id, user_id)
+    latest = (device_info.get('latest') or {}) if device_info else {}
+    if not latest:
+        latest = get_latest_telemetry(device_id)  # Legacy fallback
     battery = latest.get('battery')
 
     # No battery telemetry at all - return available:false
@@ -2710,6 +2760,11 @@ def get_device_info(device_id, user_id):
             KeyConditionExpression=Key('device_id').eq(device_id)
         )
         items = response.get('Items', [])
+        # Prefer active (non-transferred) record — transferred records have stale devices.latest
+        # because iot_rule_response.py and iot_rule_telemetry.py skip transferred records
+        active = [i for i in items if not i.get('transferred')]
+        if active:
+            return active[0]
         return items[0] if items else {}
     else:
         # Regular user: query by user_id + device_id
@@ -4237,28 +4292,18 @@ def get_sensor_realtime(device_id, user_id):
 
             # Check if command completed (success or error)
             if status in ['success', 'error', 'completed']:
-                # Parse result data (get_status returns: sensor, battery, pump, system)
-                result = item.get('result', {})
-                if isinstance(result, str):
-                    try:
-                        result = json.loads(result)
-                    except:
-                        pass
-
-                # Extract nested data structures
-                sensor = result.get('sensor', {})
-                sensor2 = result.get('sensor2', {})
-                pump = result.get('pump', {})
-                system = result.get('system', {})
-
-                # Battery: DO NOT use command response!
-                # ESP32 get_status returns unreliable battery % (firmware bug).
-                # Example: device at 6% reports 77% in command response.
-                # Use devices.latest.battery from periodic telemetry (source of truth).
-                # See: iot_rule_response.py, FLEET_ARCHITECTURE_REFACTOR_PLAN.md
+                # FLEET ARCHITECTURE Phase 3: Read from devices.latest (single source of truth)
+                # iot_rule_response.py already updated devices.latest with normalized data
+                # (ADC < 100 → moisture_percent=null, battery from periodic telemetry only, etc.)
+                # No need to parse raw command result — devices.latest is authoritative.
                 device_info = get_device_info(device_id, user_id)
                 latest_data = device_info.get('latest', {}) if device_info else {}
+
+                sensor = latest_data.get('sensor', {})
                 battery = latest_data.get('battery', {})
+                system = latest_data.get('system', {})
+                pump = latest_data.get('pump', {})
+
                 # Convert battery percent -1 to null (indicates AC power, no battery)
                 if battery and (battery.get('percent') == -1 or battery.get('percent') == -1.0):
                     battery = {**battery, 'percent': None}
@@ -4267,17 +4312,17 @@ def get_sensor_realtime(device_id, user_id):
                     'statusCode': 200,
                     'headers': cors_headers(),
                     'body': json.dumps({
-                        # IMPORTANT: Use same field names as normalize_flat_response()
-                        # which saves as moisture_percent/adc_raw (not moisture/adc)
-                        'moisture_pct': sensor.get('moisture_percent') or sensor.get('moisture'),
-                        'adc_raw': sensor.get('adc_raw') or sensor.get('adc'),
+                        # Sensor — already normalized by iot_rule_response.py
+                        # (ADC < 100 → moisture_percent=null, no fake 100%)
+                        'moisture_pct': sensor.get('moisture_percent'),
+                        'adc_raw': sensor.get('adc_raw'),
                         'percent_float': sensor.get('percent_float'),
                         'sensor_calibration': sensor.get('calibration'),
-                        # Sensor2 (J7 resistive) - may not be present
-                        'sensor2_adc': sensor2.get('adc') if sensor2 else None,
-                        'sensor2_percent': sensor2.get('percent') if sensor2 else None,
-                        'sensor2_percent_float': sensor2.get('percent_float') if sensor2 else None,
-                        # Battery
+                        # Sensor2 (J7 resistive) — merged into sensor by iot_rule_response.py
+                        'sensor2_adc': sensor.get('sensor2_adc'),
+                        'sensor2_percent': sensor.get('sensor2_percent'),
+                        'sensor2_percent_float': sensor.get('sensor2_percent_float'),
+                        # Battery — from periodic telemetry only (reliable source)
                         'battery': battery if battery else None,
                         # Pump
                         'pump_running': pump.get('running', False),
@@ -4286,7 +4331,7 @@ def get_sensor_realtime(device_id, user_id):
                         # System
                         'mode': system.get('mode', 'manual'),
                         'state': system.get('state', 'DISABLED'),
-                        'firmware_version': system.get('firmware'),
+                        'firmware_version': system.get('firmware_version') or system.get('firmware'),
                         'reboot_count': system.get('reboot_count'),
                         'clean_restarts': system.get('clean_restarts'),
                         'unexpected_restarts': system.get('unexpected_restarts'),

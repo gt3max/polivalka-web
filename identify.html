@@ -234,11 +234,6 @@
 
     <div id="results-list"></div>
 
-    <div class="manual-search">
-      <p class="muted">Not found? Search by name:</p>
-      <input type="text" id="manual-search-input" placeholder="Enter plant name...">
-      <button class="secondary" onclick="searchByName()">Search</button>
-    </div>
   </div>
 
   <!-- Step 3: Plant Card -->
@@ -377,31 +372,8 @@ const CONFIG = {
   // API is now proxied through our Lambda (keys are server-side)
   mockMode: false,
 
-  // Our API endpoint (Lambda handles PlantNet/Perenual keys securely)
+  // Our API endpoint (Lambda handles PlantNet keys securely)
   apiUrl: 'https://p0833p2v29.execute-api.eu-central-1.amazonaws.com'
-};
-
-// ============ Toxic Plant Families (Source: ASPCA Poison Control) ============
-// Fallback when Perenual doesn't have the plant
-// Family-based toxicity (ASPCA data)
-// Format: CAUSE → EFFECT → ACTION
-const TOXIC_FAMILIES = {
-  'Araliaceae': { pets: true, humans: true, note: 'Sap on skin → rash. Pet eats leaf → vomiting. Wash hands after pruning' },
-  'Araceae': { pets: true, humans: true, note: 'Chewing → mouth/throat swelling, drooling. Severe swelling → vet' },
-  'Liliaceae': { pets: true, humans: false, note: '🚨 CATS: pollen/leaf contact → kidney failure in 24-72h. Any contact → vet immediately' },
-  'Solanaceae': { pets: true, humans: false, note: 'Ripe fruit = safe. Green leaves/stems → pet vomiting. Keep unripe away from pets' },
-  'Amaryllidaceae': { pets: true, humans: true, note: 'Bulb most toxic. Pet chews bulb → vomiting, tremors. Keep bulbs buried or out of reach' },
-  'Apocynaceae': { pets: true, humans: true, note: 'Any part eaten → heart rhythm problems. Even small amount → vet' },
-  'Crassulaceae': { pets: true, humans: false, note: 'Pet eats → vomiting, diarrhea. Humans safe to handle' },
-  'Ericaceae': { pets: true, humans: true, note: 'Any part eaten → vomiting, weakness, heart issues. Keep away from pets' },
-  'Euphorbiaceae': { pets: true, humans: true, note: 'Milky sap on skin → irritation. In eyes → rinse 15 min. Wear gloves when pruning' },
-  'Cycadaceae': { pets: true, humans: true, note: '🚨 Seeds eaten → liver failure. Dogs love to chew them. Any ingestion → vet immediately' },
-  'Zamiaceae': { pets: true, humans: true, note: '🚨 Seeds eaten → liver failure. Dogs love to chew them. Any ingestion → vet immediately' },
-  'Ranunculaceae': { pets: true, humans: true, note: 'Sap on skin → blisters. Eaten → mouth pain, vomiting. Wear gloves' },
-  'Plantaginaceae': { pets: true, humans: true, note: '🚨 Any amount eaten → heart rhythm problems. Keep away from children and pets' },
-  'Asteraceae': { pets: true, humans: false, note: 'Pet eats → skin irritation, vomiting. Humans safe' },
-  'Moraceae': { pets: true, humans: true, note: 'Sap on skin → rash. Pet eats leaf → vomiting. Wash hands after pruning' },
-  'Asparagaceae': { pets: true, humans: false, note: 'Pet eats berries → vomiting, diarrhea. Keep berries away from pets' }
 };
 
 // ============ Header Update (same as home.html) ============
@@ -496,83 +468,6 @@ let selectedFiles = [];
 let identificationResults = [];
 let selectedPlant = null;
 let selectedResult = null;  // Full API result with details
-
-// ============ Mock Data ============
-const MOCK_RESULTS = [
-  {
-    id: 'schefflera',
-    scientific: 'Schefflera arboricola',
-    commonNames: ['Umbrella tree', 'Dwarf umbrella tree'],
-    score: 94.2,
-    images: ['https://upload.wikimedia.org/wikipedia/commons/thumb/f/f9/Schefflera_arboricola_3.jpg/220px-Schefflera_arboricola_3.jpg']
-  },
-  {
-    id: 'ficus_benjamina',
-    scientific: 'Ficus benjamina',
-    commonNames: ['Weeping fig', 'Benjamin fig'],
-    score: 3.8,
-    images: ['https://upload.wikimedia.org/wikipedia/commons/thumb/6/68/Ficus_benjamina2.jpg/220px-Ficus_benjamina2.jpg']
-  },
-  {
-    id: 'dracaena',
-    scientific: 'Dracaena marginata',
-    commonNames: ['Dragon tree'],
-    score: 1.2,
-    images: ['https://upload.wikimedia.org/wikipedia/commons/thumb/2/2d/Dracaena_marginata.jpg/220px-Dracaena_marginata.jpg']
-  }
-];
-
-const PLANTS_DATABASE = {
-  schefflera: {
-    id: 'schefflera',
-    scientific: 'Schefflera arboricola',
-    names: { en: 'Umbrella tree', de: 'Strahlenaralie', ru: 'Шеффлера' },
-    category: 'standard',
-    care: {
-      preset: 'Standard',
-      start_pct: 30,
-      stop_pct: 50,
-      watering_days: '7',
-      sunlight: 'part_shade',
-      temp_min: 15,
-      temp_max: 25
-    },
-    tips: [
-      'Better to underwater than overwater',
-      'Water should not stagnate',
-      'Prefers bright indirect light'
-    ],
-    photos: ['https://upload.wikimedia.org/wikipedia/commons/thumb/f/f9/Schefflera_arboricola_3.jpg/220px-Schefflera_arboricola_3.jpg']
-  },
-  sansevieria: {
-    id: 'sansevieria',
-    scientific: 'Sansevieria trifasciata',
-    names: { en: 'Snake plant', de: 'Bogenhanf', ru: 'Сансевиерия' },
-    category: 'succulents',
-    care: {
-      preset: 'Succulents',
-      start_pct: 15,
-      stop_pct: 25,
-      watering_days: '10-14',
-      sunlight: 'full_sun_to_part_shade',
-      temp_min: 15,
-      temp_max: 27
-    },
-    tips: [
-      'Better to underwater than overwater',
-      'Do not allow water to stagnate',
-      'Reduce watering in winter'
-    ],
-    photos: ['https://upload.wikimedia.org/wikipedia/commons/thumb/7/7f/Snake_Plant_%28Sansevieria_trifasciata_%27Laurentii%27%29.jpg/220px-Snake_Plant_%28Sansevieria_trifasciata_%27Laurentii%27%29.jpg']
-  }
-};
-
-const CATEGORIES = {
-  succulents: { name: 'Succulents', preset: 'Succulents', start_pct: 15, stop_pct: 25 },
-  standard: { name: 'Standard', preset: 'Standard', start_pct: 35, stop_pct: 55 },
-  tropical: { name: 'Tropical', preset: 'Tropical', start_pct: 55, stop_pct: 75 },
-  herbs: { name: 'Herbs', preset: 'Herbs', start_pct: 30, stop_pct: 45 }
-};
 
 // ============ Init ============
 document.addEventListener('DOMContentLoaded', function() {
@@ -1186,63 +1081,38 @@ function showPlantCard(result) {
   tipsList.innerHTML = '<li></li>';
   tipsList.querySelector('li').textContent = care.tips || 'Water when top inch of soil is dry.';
 
-  // Detailed info from Perenual (if available)
+  // Detailed info from API
   const details = result.details || {};
 
-  // Safety section - CRITICAL
+  // Safety section - toxicity from API (TOXIC_FAMILIES on backend)
   const safetySection = document.getElementById('safety-section');
   const toxicHumansItem = document.getElementById('toxic-humans-item');
   const toxicPetsItem = document.getElementById('toxic-pets-item');
   let showSafety = false;
 
-  // Show toxicity note as main warning (friendlier than "TOXIC")
-  if (details.toxicity_note) {
-    const noteEl = document.createElement('div');
-    noteEl.style.cssText = 'font-size:12px;color:#e65100;background:#fff3e0;padding:8px 10px;border-radius:6px;margin-bottom:8px';
-    let noteText = `⚠️ ${details.toxicity_note}`;
-    if (details.poisonous_to_pets) noteText += ' • Keep away from pets';
-    noteEl.textContent = noteText;
-    safetySection.insertBefore(noteEl, safetySection.firstChild);
-    showSafety = true;
-  } else {
-    // No note - show simple labels
-    if (details.poisonous_to_humans === true) {
-      toxicHumansItem.style.display = '';
-      document.getElementById('toxic-humans').textContent = '⚠️ Caution';
-      showSafety = true;
-    } else if (details.poisonous_to_humans === false) {
-      toxicHumansItem.style.display = '';
-      toxicHumansItem.style.background = '#e8f5e9';
-      document.getElementById('toxic-humans').textContent = '✓ Safe';
-      document.getElementById('toxic-humans').style.color = '#2e7d32';
-      showSafety = true;
-    }
-
-    if (details.poisonous_to_pets === true) {
-      toxicPetsItem.style.display = '';
-      document.getElementById('toxic-pets').textContent = '⚠️ Keep away from pets';
-      showSafety = true;
-    } else if (details.poisonous_to_pets === false) {
-      toxicPetsItem.style.display = '';
-      toxicPetsItem.style.background = '#e8f5e9';
-      document.getElementById('toxic-pets').textContent = '✓ Safe';
-      document.getElementById('toxic-pets').style.color = '#2e7d32';
-      showSafety = true;
-    }
-  }
-
-  // ============ Fallback: Check family toxicity if Lambda didn't have data ============
-  if (!showSafety && plantData.family) {
-    const familyToxicity = TOXIC_FAMILIES[plantData.family];
-    if (familyToxicity && familyToxicity.note) {
+  const toxicity = result.toxicity;
+  if (toxicity) {
+    if (toxicity.toxicity_note) {
+      // Show detailed note (friendlier than "TOXIC")
       const noteEl = document.createElement('div');
       noteEl.style.cssText = 'font-size:12px;color:#e65100;background:#fff3e0;padding:8px 10px;border-radius:6px;margin-bottom:8px';
-      let noteText = `⚠️ ${familyToxicity.note}`;
-      if (familyToxicity.pets) noteText += ' • Keep away from pets';
+      let noteText = `⚠️ ${toxicity.toxicity_note}`;
+      if (toxicity.poisonous_to_pets) noteText += ' • Keep away from pets';
       noteEl.textContent = noteText;
       safetySection.insertBefore(noteEl, safetySection.firstChild);
       showSafety = true;
-      console.log(`[Identify] Toxicity from family ${plantData.family}:`, familyToxicity);
+    } else {
+      // No note - show simple labels
+      if (toxicity.poisonous_to_humans === true) {
+        toxicHumansItem.style.display = '';
+        document.getElementById('toxic-humans').textContent = '⚠️ Caution';
+        showSafety = true;
+      }
+      if (toxicity.poisonous_to_pets === true) {
+        toxicPetsItem.style.display = '';
+        document.getElementById('toxic-pets').textContent = '⚠️ Keep away from pets';
+        showSafety = true;
+      }
     }
   }
 
@@ -1497,8 +1367,8 @@ async function saveToProfile() {
     return;
   }
 
-  const details = selectedResult.details || {};
   const care = selectedResult.care || {};
+  const toxicity = selectedResult.toxicity || {};
 
   // Build plant data for API
   const plantData = {
@@ -1508,31 +1378,13 @@ async function saveToProfile() {
     preset: care.preset || 'standard',
     start_pct: care.start_pct || 35,
     stop_pct: care.stop_pct || 55,
-    // Safety info from Perenual
-    poisonous_to_humans: details.poisonous_to_humans,
-    poisonous_to_pets: details.poisonous_to_pets,
-    // Additional details
-    hardiness_zone: details.hardiness_min && details.hardiness_max
-      ? `${details.hardiness_min}-${details.hardiness_max}`
-      : '',
-    dimension: details.dimension || '',
-    care_level: details.care_level || '',
-    indoor: details.indoor,
+    // Safety info from API (TOXIC_FAMILIES on backend)
+    poisonous_to_humans: toxicity.poisonous_to_humans,
+    poisonous_to_pets: toxicity.poisonous_to_pets,
+    toxicity_note: toxicity.toxicity_note,
     // Image URL (external, not blob)
     image_url: selectedPlant.photos?.[0] || ''
   };
-
-  // ============ Fallback: Check family toxicity if Perenual didn't have data ============
-  if (plantData.poisonous_to_pets === undefined && plantData.family) {
-    const familyToxicity = TOXIC_FAMILIES[plantData.family];
-    if (familyToxicity) {
-      plantData.poisonous_to_pets = familyToxicity.pets;
-      plantData.poisonous_to_humans = familyToxicity.humans;
-      plantData.toxicity_source = 'family';  // Mark as family-based (not species-specific)
-      plantData.toxicity_note = familyToxicity.note;
-      console.log(`[Identify] Toxicity from family ${plantData.family}:`, familyToxicity);
-    }
-  }
 
   try {
     // Direct fetch - /plants/save is a global endpoint, not device-prefixed
@@ -1629,30 +1481,6 @@ async function apiCall(endpoint, data) {
   // Fallback for mock mode
   console.log('[API Mock]', endpoint, data);
   return { success: true };
-}
-
-function searchByName() {
-  const query = document.getElementById('manual-search-input').value.trim().toLowerCase();
-  if (!query) return;
-
-  // Search in local database
-  const matches = Object.values(PLANTS_DATABASE).filter(p =>
-    p.scientific.toLowerCase().includes(query) ||
-    Object.values(p.names).some(n => n && n.toLowerCase().includes(query))
-  );
-
-  if (matches.length > 0) {
-    identificationResults = matches.map(p => ({
-      id: p.id,
-      scientific: p.scientific,
-      commonNames: Object.values(p.names).filter(Boolean),
-      score: 100,
-      images: p.photos
-    }));
-    renderResults(identificationResults);
-  } else {
-    showToast('No plants found. Try different keywords.', 'info');
-  }
 }
 
 console.log('[Identify] Script loaded');
