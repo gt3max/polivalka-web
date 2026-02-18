@@ -747,6 +747,7 @@ def archive_plant_profile(user_id, device_id, origin):
         current_time = int(time.time())
         plant['archived'] = True
         plant['archived_at'] = current_time
+        plant['ended_at'] = current_time
 
         devices_table.update_item(
             Key={'user_id': user_id, 'device_id': device_id},
