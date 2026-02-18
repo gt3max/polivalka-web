@@ -3480,9 +3480,10 @@ def claim_device(user_id, event, origin):
             print(f"[Claim] Created new record for {user_id} -> {device_id}")
         else:
             # User record exists - update claimed_at to reset data isolation cutoff
+            # NOTE: Do NOT remove plant here - user may want to keep their plant profile
             devices_table.update_item(
                 Key={'user_id': user_id, 'device_id': device_id},
-                UpdateExpression='SET claimed_at = :ca, device_name = :dn REMOVE transferred, plant',
+                UpdateExpression='SET claimed_at = :ca, device_name = :dn REMOVE transferred',
                 ExpressionAttributeValues={
                     ':ca': current_time,
                     ':dn': 'Polivalka'
