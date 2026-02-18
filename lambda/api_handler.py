@@ -352,37 +352,92 @@ def identify_plant_handler(event, origin):
         }
 
 
-# Family to preset mapping for houseplants
+# Family to preset mapping for houseplants (76 families)
 FAMILY_PRESETS = {
-    # Tropical - high humidity, frequent watering
-    'Araceae': 'tropical',        # Monstera, Philodendron, Pothos, Alocasia, Anthurium
-    'Marantaceae': 'tropical',    # Calathea, Maranta, Stromanthe
-    'Bromeliaceae': 'tropical',   # Bromeliads
-    'Gesneriaceae': 'tropical',   # African violets
-    'Piperaceae': 'tropical',     # Peperomia (though some are succulent-like)
+    # ===== Tropical - high humidity, frequent watering =====
+    'Araceae': 'tropical',         # Monstera, Philodendron, Pothos, Alocasia, Anthurium, Spathiphyllum
+    'Marantaceae': 'tropical',     # Calathea, Maranta, Stromanthe, Ctenanthe
+    'Bromeliaceae': 'tropical',    # Bromeliads, Tillandsia (Air Plants), Aechmea
+    'Gesneriaceae': 'tropical',    # African Violet (Saintpaulia), Streptocarpus
+    'Piperaceae': 'tropical',      # Peperomia, Piper
+    'Polypodiaceae': 'tropical',   # Ferns (Microsorum, Polypodium)
+    'Pteridaceae': 'tropical',     # Ferns (Adiantum/Maidenhair, Pteris)
+    'Commelinaceae': 'tropical',   # Tradescantia, Callisia, Zebrina
+    'Acanthaceae': 'tropical',     # Fittonia, Aphelandra, Crossandra
+    'Musaceae': 'tropical',        # Musa (Banana plant)
+    'Heliconiaceae': 'tropical',   # Heliconia
+    'Zingiberaceae': 'tropical',   # Curcuma, Zingiber (Ginger)
+    'Costaceae': 'tropical',       # Costus (Spiral ginger)
+    'Davalliaceae': 'tropical',    # Davallia (Rabbit's foot fern)
+    'Aspleniaceae': 'tropical',    # Asplenium (Bird's nest fern)
+    'Nephrolepidaceae': 'tropical', # Nephrolepis (Boston fern)
+    'Dryopteridaceae': 'tropical', # Shield ferns
+    'Blechnaceae': 'tropical',     # Hard ferns
+    'Pandanaceae': 'tropical',     # Pandanus (Screw pine)
+    'Passifloraceae': 'tropical',  # Passiflora (Passion flower)
+    'Nepenthaceae': 'tropical',    # Nepenthes (Pitcher plant)
+    'Sarraceniaceae': 'tropical',  # Sarracenia (Pitcher plant)
+    'Droseraceae': 'tropical',     # Drosera (Sundew)
+    'Cannaceae': 'tropical',       # Canna lily
 
-    # Succulents - infrequent watering, drought tolerant
-    'Cactaceae': 'succulents',    # All cacti
-    'Crassulaceae': 'succulents', # Echeveria, Sedum, Crassula, Kalanchoe
+    # ===== Succulents - infrequent watering, drought tolerant =====
+    'Cactaceae': 'succulents',     # All cacti
+    'Crassulaceae': 'succulents',  # Echeveria, Sedum, Crassula (Jade), Kalanchoe
     'Asphodelaceae': 'succulents', # Aloe, Haworthia, Gasteria
-    'Aizoaceae': 'succulents',    # Lithops, living stones
-    'Euphorbiaceae': 'succulents', # Euphorbia (some are succulent)
+    'Aizoaceae': 'succulents',     # Lithops (Living stones)
+    'Euphorbiaceae': 'succulents', # Euphorbia, Codiaeum (Croton)
+    'Portulacaceae': 'succulents', # Portulaca
+    'Didiereaceae': 'succulents',  # Alluaudia (Madagascar plants)
 
-    # Herbs - moderate, consistent moisture
-    'Lamiaceae': 'herbs',         # Basil, Mint, Rosemary, Lavender
-    'Apiaceae': 'herbs',          # Parsley, Cilantro, Dill
+    # ===== Herbs - moderate, consistent moisture =====
+    'Lamiaceae': 'herbs',          # Basil, Mint, Rosemary, Lavender, Coleus
+    'Apiaceae': 'herbs',           # Parsley, Cilantro, Dill
+    'Lauraceae': 'herbs',          # Laurus (Bay laurel)
+    'Poaceae': 'herbs',            # Lemongrass, ornamental grasses
 
-    # Standard - average watering (default for most)
-    'Moraceae': 'standard',       # Ficus
-    'Asparagaceae': 'standard',   # Sansevieria, Dracaena, Yucca, Aspidistra
-    'Araliaceae': 'standard',     # Schefflera, Ivy
-    'Rutaceae': 'standard',       # Citrus
-    'Apocynaceae': 'standard',    # Hoya (though some need less water)
-    'Orchidaceae': 'standard',    # Orchids (specialized but moderate)
-    'Polypodiaceae': 'tropical',  # Ferns - actually need more water
-    'Pteridaceae': 'tropical',    # Ferns
-    'Begoniaceae': 'standard',    # Begonias
-    'Malvaceae': 'standard',      # Hibiscus
+    # ===== Standard - average watering (default for most) =====
+    'Moraceae': 'standard',        # Ficus (Fiddle Leaf, Rubber Plant, Weeping Fig)
+    'Asparagaceae': 'standard',    # Sansevieria, Dracaena, Yucca, Chlorophytum (Spider Plant)
+    'Araliaceae': 'standard',      # Schefflera, Hedera (Ivy), Fatsia
+    'Rutaceae': 'standard',        # Citrus
+    'Apocynaceae': 'standard',     # Hoya, Adenium, Plumeria
+    'Orchidaceae': 'standard',     # Phalaenopsis, Paphiopedilum
+    'Begoniaceae': 'standard',     # Begonia (various)
+    'Malvaceae': 'standard',       # Hibiscus, Abutilon
+    'Arecaceae': 'standard',       # Palms (Areca, Parlor, Kentia, Majesty)
+    'Urticaceae': 'standard',      # Pilea (Chinese Money Plant, Aluminum Plant)
+    'Amaryllidaceae': 'standard',  # Amaryllis, Hippeastrum, Clivia
+    'Rubiaceae': 'standard',       # Gardenia, Coffea (Coffee plant)
+    'Oleaceae': 'standard',        # Jasminum (Jasmine), Olea (Olive)
+    'Geraniaceae': 'standard',     # Pelargonium (Geranium)
+    'Oxalidaceae': 'standard',     # Oxalis (Shamrock plant)
+    'Strelitziaceae': 'standard',  # Strelitzia (Bird of Paradise)
+    'Solanaceae': 'standard',      # Capsicum, Solanum
+    'Liliaceae': 'standard',       # Lilium (Lily)
+    'Primulaceae': 'standard',     # Cyclamen, Primula
+    'Rosaceae': 'standard',        # Rosa (miniature roses)
+    'Hydrangeaceae': 'standard',   # Hydrangea
+    'Myrtaceae': 'standard',       # Eucalyptus, Myrtus, Callistemon
+    'Asteraceae': 'standard',      # Chrysanthemum, Gerbera, Senecio
+    'Amaranthaceae': 'standard',   # Iresine, Alternanthera, Celosia
+    'Nyctaginaceae': 'standard',   # Bougainvillea
+    'Ericaceae': 'standard',       # Azalea, Rhododendron
+    'Cycadaceae': 'standard',      # Cycas (Sago palm)
+    'Zamiaceae': 'standard',       # Zamia
+    'Vitaceae': 'standard',        # Cissus (Grape Ivy)
+    'Onagraceae': 'standard',      # Fuchsia
+    'Theaceae': 'standard',        # Camellia
+    'Balsaminaceae': 'standard',   # Impatiens
+    'Convolvulaceae': 'standard',  # Ipomoea (Sweet potato vine)
+    'Verbenaceae': 'standard',     # Lantana
+    'Ranunculaceae': 'standard',   # Clematis, Ranunculus
+    'Plantaginaceae': 'standard',  # Digitalis (Foxglove)
+    'Campanulaceae': 'standard',   # Campanula (Bellflower)
+    'Gentianaceae': 'standard',    # Exacum
+    'Sapindaceae': 'standard',     # Litchi
+    'Saxifragaceae': 'standard',   # Saxifraga, Tolmiea
+    'Lythraceae': 'standard',      # Cuphea, Lagerstroemia
+    'Caryophyllaceae': 'standard', # Dianthus (Carnation)
 }
 
 PRESET_DETAILS = {
@@ -433,7 +488,7 @@ PRESET_DETAILS = {
 }
 
 
-# Family-based toxicity data (Source: ASPCA Poison Control)
+# Family-based toxicity data (Source: ASPCA Poison Control, 22 families)
 # Format: pets/humans = true if toxic, note = CAUSE → EFFECT → ACTION
 TOXIC_FAMILIES = {
     'Araliaceae': {'pets': True, 'humans': True, 'note': 'Sap on skin → rash. Pet eats leaf → vomiting. Wash hands after pruning'},
@@ -452,6 +507,13 @@ TOXIC_FAMILIES = {
     'Asteraceae': {'pets': True, 'humans': False, 'note': 'Pet eats → skin irritation, vomiting. Humans safe'},
     'Moraceae': {'pets': True, 'humans': True, 'note': 'Sap on skin → rash. Pet eats leaf → vomiting. Wash hands after pruning'},
     'Asparagaceae': {'pets': True, 'humans': False, 'note': 'Pet eats berries → vomiting, diarrhea. Keep berries away from pets'},
+    # New additions (Phase 2)
+    'Begoniaceae': {'pets': True, 'humans': False, 'note': 'Tubers most toxic. Pet chews → mouth irritation, vomiting. Humans safe to handle'},
+    'Commelinaceae': {'pets': True, 'humans': False, 'note': 'Sap contact → mild skin irritation. Pet eats → stomach upset. Generally low toxicity'},
+    'Primulaceae': {'pets': True, 'humans': True, 'note': 'Cyclamen tubers highly toxic. Pet ingests → severe vomiting, heart rhythm problems. Skin contact → irritation'},
+    'Hydrangeaceae': {'pets': True, 'humans': True, 'note': 'All parts contain cyanogenic glycosides. Ingestion → vomiting, diarrhea, lethargy'},
+    'Strelitziaceae': {'pets': True, 'humans': False, 'note': 'Seeds/fruit if ingested → nausea, vomiting, drowsiness. Low severity for humans'},
+    'Verbenaceae': {'pets': True, 'humans': True, 'note': 'Lantana: unripe berries → liver damage. Pet ingests → vomiting, weakness, liver failure'},
 }
 
 
