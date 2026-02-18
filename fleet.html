@@ -79,6 +79,7 @@
   .device-card.offline{opacity:0.6;border-color:#ccc}
   .device-card.warning{border-left:4px solid #f57c00}
   .device-card.critical{border-left:4px solid #b00}
+  .device-card.transferred{opacity:0.7;border-left:4px solid #1565c0;background:#f5f9ff}
   .device-header{display:flex;justify-content:space-between;align-items:start;margin-bottom:12px}
   .device-name{font-size:18px;font-weight:600;color:#2c5f2d}
   .device-location{font-size:12px;color:#666;margin-top:2px}
@@ -701,6 +702,22 @@ function renderDevices(devices) {
 function createExpandableRow(device, isOnline, hasWarnings, isCritical) {
   const div = document.createElement('div');
 
+  // Check if device is transferred (assigned to another user)
+  if (device.transferred && device.transferred_to) {
+    div.className = 'device-card transferred';
+    div.setAttribute('data-device-id', device.device_id);
+    div.innerHTML = `
+      <div class="device-row transferred-row">
+        <span class="device-name">📤 ${device.device_id}</span>
+        <div class="device-quick-info">
+          <span style="color:#1565c0;font-weight:600">📧 Assigned to: ${device.transferred_to}</span>
+          <span class="device-status" style="background:#e3f2fd;color:#1565c0">Transferred</span>
+        </div>
+      </div>
+    `;
+    return div;
+  }
+
   let cardClass = 'device-card';
   if (!isOnline) cardClass += ' offline';
   if (isCritical) cardClass += ' critical';
@@ -834,7 +851,8 @@ function createExpandableRow(device, isOnline, hasWarnings, isCritical) {
         <span class="detail-item">🔧 Firmware: ${device.firmware_version || 'v1.0.0'}</span>
         <span class="detail-item">🔄 Restarts: ${formatRestarts(device)}</span>
         ${device.sta_rssi ? `<span class="detail-item" style="color:${getRssiDisplay(device.sta_rssi).color}">📶 Signal: ${device.sta_rssi} dBm</span>` : ''}
-        ${isAdmin() && device.owner && device.owner !== 'admin' ? `<span class="detail-item" style="color:#1565c0">📧 Assigned to: ${device.owner}</span>` : ''}
+        ${isAdmin() && device.transferred && device.transferred_to ? `<span class="detail-item" style="color:#1565c0">📧 Assigned to: ${device.transferred_to}</span>` : ''}
+        ${isAdmin() && !device.transferred && device.owner && device.owner !== 'admin' ? `<span class="detail-item" style="color:#1565c0">📧 Owner: ${device.owner}</span>` : ''}
       </div>
 
       ${hasWarnings ? `

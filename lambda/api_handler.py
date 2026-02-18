@@ -1725,10 +1725,17 @@ def get_devices(user_id):
     items = response.get('Items', [])
     print(f"[DEBUG] get_devices: Found {len(items)} devices before filter: {[i['device_id'] for i in items]}")
 
-    # Filter out archived, deleted, and transferred devices
-    # Transferred records are kept for history but admin sees user's active record instead
-    items = [i for i in items if not i.get('archived') and not i.get('deleted') and not i.get('transferred')]
-    print(f"[DEBUG] get_devices: {len(items)} active devices after filter")
+    # Filter out archived and deleted devices
+    # For admin: keep transferred devices (show who they're assigned to)
+    # For regular users: filter out transferred devices
+    is_admin = user_id in ADMIN_EMAILS
+    if is_admin:
+        # Admin sees all devices including transferred (to show assignments)
+        items = [i for i in items if not i.get('archived') and not i.get('deleted')]
+    else:
+        # Regular users don't see transferred devices
+        items = [i for i in items if not i.get('archived') and not i.get('deleted') and not i.get('transferred')]
+    print(f"[DEBUG] get_devices: {len(items)} devices after filter (is_admin={is_admin})")
 
     # Admin: group by device_id to avoid duplicates (same device may have multiple owners)
     is_admin = user_id in ADMIN_EMAILS
@@ -1855,7 +1862,10 @@ def get_devices(user_id):
                 'pump_running': latest.get('pump', {}).get('running', False),  # For state display
                 # Owner info (for admin fleet view)
                 'owner': item.get('user_id'),
-                'all_owners': item.get('_all_owners', [item.get('user_id')]) if is_admin else None
+                'all_owners': item.get('_all_owners', [item.get('user_id')]) if is_admin else None,
+                # Transfer status (for admin to see where device went)
+                'transferred': item.get('transferred', False),
+                'transferred_to': item.get('transferred_to')
             }
 
             devices.append(device_data)
