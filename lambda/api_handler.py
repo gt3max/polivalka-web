@@ -3491,11 +3491,12 @@ def claim_device(user_id, event, origin):
             print(f"[Claim] Updated existing record for {user_id} -> {device_id}, reset claimed_at for data isolation")
 
         # Send MQTT command to ESP32 to reset device_name
+        # Command is update_device_info (not set_device_name!)
         try:
             topic = f'Polivalka/{device_id.replace("Polivalka-", "")}/command'
             mqtt_payload = {
                 'command_id': str(uuid.uuid4()),
-                'command': 'set_device_name',
+                'command': 'update_device_info',
                 'params': {'name': 'Polivalka'}
             }
             iot_client.publish(
@@ -3503,7 +3504,7 @@ def claim_device(user_id, event, origin):
                 qos=1,
                 payload=json.dumps(mqtt_payload)
             )
-            print(f"[Transfer] Sent set_device_name=Polivalka to {topic}")
+            print(f"[Transfer] Sent update_device_info name=Polivalka to {topic}")
         except Exception as mqtt_err:
             print(f"[Transfer] MQTT publish failed: {mqtt_err}")
             # Non-fatal - user can change name manually
