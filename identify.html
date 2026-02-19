@@ -1244,42 +1244,6 @@ function capitalize(str) {
   return str.charAt(0).toUpperCase() + str.slice(1).toLowerCase();
 }
 
-function getPresetTips(preset) {
-  const tips = {
-    'Succulents': [
-      'Let soil dry completely between waterings',
-      'Overwatering is the #1 killer - when in doubt, wait',
-      'Needs good drainage - use cactus soil mix'
-    ],
-    'Standard': [
-      'Water when top inch of soil is dry',
-      'Most forgiving category for beginners',
-      'Avoid direct hot afternoon sun'
-    ],
-    'Tropical': [
-      'Keep soil consistently moist but not soggy',
-      'Mist leaves regularly or use a humidifier',
-      'Protect from cold drafts and dry air'
-    ],
-    'Herbs': [
-      'Keep soil consistently moist',
-      'Needs 6+ hours of sunlight',
-      'Harvest regularly to promote growth'
-    ]
-  };
-  return tips[preset] || tips['Standard'];
-}
-
-function formatSunlight(sunlight) {
-  const map = {
-    'full_sun': 'Full sun',
-    'part_shade': 'Partial shade',
-    'full_sun_to_part_shade': 'Sun to partial shade',
-    'shade': 'Shade'
-  };
-  return map[sunlight] || sunlight || 'Moderate';
-}
-
 // ============ Actions ============
 
 // Main action: Show confirmation, then Apply + Save + Redirect
@@ -1381,48 +1345,6 @@ async function confirmPlant() {
     showToast('Error: ' + err.message, 'error');
     btn.disabled = false;
     btn.textContent = originalText;
-  }
-}
-
-async function applyToDevice() {
-  if (!selectedPlant) return;
-
-  const deviceId = getDeviceId();
-  if (!deviceId) {
-    showToast('No device selected. Go to Fleet and select a device first.', 'warning');
-    return;
-  }
-
-  const care = selectedPlant.care;
-
-  try {
-    // 1. Apply watering preset (loads ALL values including max_water_cycle_ml)
-    await apiCall('command', {
-      device_id: deviceId,
-      command: 'sensor_preset_set',
-      params: {
-        preset: care.preset
-      }
-    });
-
-    // 2. Override start_pct and stop_pct with AI recommendations
-    await apiCall('command', {
-      device_id: deviceId,
-      command: 'sensor_set',
-      params: {
-        start_moisture_pct: care.start_pct,
-        stop_moisture_pct: care.stop_pct
-      }
-    });
-
-    showToast(`Applied ${care.preset} preset (${care.start_pct}%-${care.stop_pct}%)`, 'success');
-
-    // Also save plant to device profile
-    await saveToProfile();
-
-  } catch (err) {
-    console.error('Apply error:', err);
-    showToast('Error applying settings: ' + err.message, 'error');
   }
 }
 
