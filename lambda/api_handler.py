@@ -3716,13 +3716,16 @@ def claim_device(user_id, event, origin):
             if prev_owner == user_id:
                 continue  # Skip if same user
 
-            # Archive plant profile if exists
+            # Move plant to plant_library (same format as _auto_detach_plant)
             plant = record.get('plant')
-            archived_plants = record.get('archived_plants', [])
-            if plant:
+            plant_library = list(record.get('plant_library', []))
+            if plant and plant.get('plant_id'):
+                plant['ended_at'] = current_time
+                plant['detached_at'] = current_time
+                plant['archived'] = True
                 plant['archived_at'] = current_time
-                plant['archived_reason'] = 'device_transferred'
-                archived_plants.append(plant)
+                plant_library.append(plant)
+                plant_library = _enforce_library_limit(plant_library)
 
             # Mark record as transferred (preserves history, stops latest updates)
             try:
@@ -3733,9 +3736,9 @@ def claim_device(user_id, event, origin):
                     ':at': current_time
                 }
 
-                if archived_plants:
-                    update_expr += ', archived_plants = :ap'
-                    expr_values[':ap'] = archived_plants
+                if plant_library:
+                    update_expr += ', plant_library = :lib'
+                    expr_values[':lib'] = plant_library
 
                 # Remove latest field (no longer updated for transferred records)
                 update_expr += ' REMOVE plant, latest'
@@ -4052,13 +4055,16 @@ def admin_revoke_device(event):
                 'body': json.dumps({'error': f'Device already transferred from {user_email}'})
             }
 
-        # Archive plant profile if exists
+        # Move plant to plant_library (consistent with claim_device)
         plant = user_item.get('plant')
-        archived_plants = user_item.get('archived_plants', [])
-        if plant:
+        plant_library = list(user_item.get('plant_library', []))
+        if plant and plant.get('plant_id'):
+            plant['ended_at'] = current_time
+            plant['detached_at'] = current_time
+            plant['archived'] = True
             plant['archived_at'] = current_time
-            plant['archived_reason'] = 'device_revoked'
-            archived_plants.append(plant)
+            plant_library.append(plant)
+            plant_library = _enforce_library_limit(plant_library)
 
         # Mark user's record as transferred
         update_expr = 'SET transferred = :t, transferred_to = :to, transferred_at = :at, revoked_by = :rb'
@@ -4069,9 +4075,9 @@ def admin_revoke_device(event):
             ':rb': admin_email
         }
 
-        if archived_plants:
-            update_expr += ', archived_plants = :ap'
-            expr_values[':ap'] = archived_plants
+        if plant_library:
+            update_expr += ', plant_library = :lib'
+            expr_values[':lib'] = plant_library
 
         # Remove latest and plant
         update_expr += ' REMOVE plant, latest'
