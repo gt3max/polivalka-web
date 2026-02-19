@@ -534,7 +534,14 @@ function showCurrentPlant(plant) {
   document.getElementById('current-plant-img').src = plant.image_url || '';
   document.getElementById('current-plant-name').textContent = plant.common_name || plant.scientific;
   document.getElementById('current-plant-scientific').textContent = plant.scientific || '';
-  document.getElementById('current-plant-preset').textContent = `${plant.preset || 'Standard'} (${plant.start_pct || 35}-${plant.stop_pct || 55}%)`;
+
+  // Show preset + date
+  let presetText = `${plant.preset || 'Standard'} (${plant.start_pct || 35}-${plant.stop_pct || 55}%)`;
+  if (plant.started_at) {
+    const d = new Date(plant.started_at * 1000);
+    presetText += ` • since ${d.toLocaleDateString()}`;
+  }
+  document.getElementById('current-plant-preset').textContent = presetText;
 
   // Show/hide archived badge and buttons
   const isArchived = plant.archived === true;
@@ -574,18 +581,15 @@ function renderPlantLibrary(plants) {
   const countSpan = document.getElementById('library-count');
   const currentDeviceId = getDeviceId();
 
-  // Filter out current device's plant (already shown above)
-  const otherPlants = plants.filter(p => p.device_id !== currentDeviceId);
+  // Show ALL plants except the one currently active on THIS device (already shown in "Current Plant")
+  const libraryPlants = plants.filter(p => !(p.device_id === currentDeviceId && p.active));
 
-  countSpan.textContent = `(${otherPlants.length})`;
+  countSpan.textContent = `(${libraryPlants.length})`;
 
-  if (otherPlants.length === 0) {
+  if (libraryPlants.length === 0) {
     listDiv.style.display = 'none';
     emptyDiv.style.display = 'block';
-    // Only show library section if user has multiple devices
-    if (plants.length > 0) {
-      libraryDiv.style.display = 'block';
-    }
+    libraryDiv.style.display = plants.length > 0 ? 'block' : 'none';
     return;
   }
 
@@ -593,21 +597,41 @@ function renderPlantLibrary(plants) {
   listDiv.style.display = 'grid';
   emptyDiv.style.display = 'none';
 
-  listDiv.innerHTML = otherPlants.map(plant => {
+  // Auto-expand library if it has plants
+  if (!libraryExpanded && libraryPlants.length > 0) {
+    libraryExpanded = true;
+    document.getElementById('library-content').style.display = 'block';
+    document.getElementById('library-toggle').textContent = '▲';
+  }
+
+  listDiv.innerHTML = libraryPlants.map(plant => {
     const archivedBadge = plant.archived ? '<span style="background:#ff9800;color:#fff;font-size:10px;padding:1px 4px;border-radius:4px;margin-left:4px">Archived</span>' : '';
-    const deviceInfo = plant.device_room ? `${plant.device_room}` : plant.device_id.replace('Polivalka-', '');
+    const activeBadge = plant.active ? '<span style="background:#4caf50;color:#fff;font-size:10px;padding:1px 4px;border-radius:4px;margin-left:4px">Active</span>' : '';
+    const deviceLabel = plant.device_room || plant.device_id.replace('Polivalka-', '');
+    const isOtherDevice = plant.device_id !== currentDeviceId;
+    const deviceInfo = isOtherDevice ? deviceLabel : 'this device';
+
+    // Show when plant was active / detached
+    let timeInfo = '';
+    if (plant.ended_at) {
+      const d = new Date(plant.ended_at * 1000);
+      timeInfo = ` • detached ${d.toLocaleDateString()}`;
+    } else if (plant.started_at) {
+      const d = new Date(plant.started_at * 1000);
+      timeInfo = ` • since ${d.toLocaleDateString()}`;
+    }
 
     return `
       <div class="library-item" style="display:flex;gap:12px;padding:10px;border:1px solid #ddd;border-radius:8px;align-items:center;cursor:pointer;transition:all 0.2s"
            onclick="assignPlantFromLibrary('${plant.plant_id}')"
            onmouseover="this.style.borderColor='#2c5f2d';this.style.background='#f9fff9'"
            onmouseout="this.style.borderColor='#ddd';this.style.background='#fff'">
-        <img src="${plant.image_url || ''}" style="width:50px;height:50px;border-radius:8px;object-fit:cover;background:#f0f0f0">
+        <img src="${plant.image_url || ''}" style="width:50px;height:50px;border-radius:8px;object-fit:cover;background:#f0f0f0" onerror="this.style.display='none'">
         <div style="flex:1;min-width:0">
           <div style="font-weight:600;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">
-            ${plant.common_name || plant.scientific}${archivedBadge}
+            ${plant.common_name || plant.scientific}${archivedBadge}${activeBadge}
           </div>
-          <div style="font-size:12px;color:#666">${plant.preset || 'Standard'} • ${deviceInfo}</div>
+          <div style="font-size:12px;color:#666">${plant.preset || 'Standard'} • ${deviceInfo}${timeInfo}</div>
         </div>
         <div style="color:#2c5f2d;font-size:18px">→</div>
       </div>
@@ -707,7 +731,7 @@ async function unarchivePlant() {
 }
 
 async function deletePlant() {
-  if (!confirm('Delete this plant profile? This cannot be undone.')) return;
+  if (!confirm('Remove this plant from the device? It will be saved in your history.')) return;
 
   const deviceId = getDeviceId();
   if (!deviceId) return;
@@ -1251,8 +1275,23 @@ async function confirmPlant() {
     console.log('Could not check auto-watering status');
   }
 
+  // Check if there's a current plant that will be detached
+  let currentPlantName = null;
+  try {
+    const profileResp = await fetch(`${CONFIG.apiUrl}/plants/${deviceId}`, {
+      headers: API.getAuthHeaders()
+    });
+    const profileData = await profileResp.json();
+    if (profileData.success && profileData.plant && profileData.plant.plant_id) {
+      currentPlantName = profileData.plant.common_name || profileData.plant.scientific;
+    }
+  } catch (e) { /* ignore */ }
+
   // Build confirmation message
   let message = `Binding "${plantName}" to this device:\n\n`;
+  if (currentPlantName) {
+    message += `• Current plant "${currentPlantName}" will be saved to your library\n`;
+  }
   message += `• Device name will change to "${plantName}"\n`;
   message += `• Sensor mode will use ${care.start_pct}-${care.stop_pct}% moisture range\n`;
 
@@ -1300,12 +1339,12 @@ async function confirmPlant() {
     // 4. Save plant to profile
     await saveToProfile();
 
-    // 5. Success - redirect to home
+    // 5. Success - reload page to show updated plant + library
     btn.textContent = '✓ Saved!';
     showToast('Plant bound to device!', 'success');
 
     setTimeout(() => {
-      window.location.href = `home.html?device=${deviceId}`;
+      location.reload();
     }, 1500);
 
   } catch (err) {

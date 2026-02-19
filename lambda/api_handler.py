@@ -311,7 +311,10 @@ def identify_plant_handler(event, origin):
                 'family': family_name,
                 'genus': genus_info.get('scientificNameWithoutAuthor', ''),
                 'score': round(r.get('score', 0) * 100, 1),
-                'images': [img.get('url', {}).get('s', '') for img in r.get('images', [])[:3]],
+                'images': [
+                    img.get('url', {}).get('m', '') or img.get('url', {}).get('s', '') or img.get('url', {}).get('o', '')
+                    for img in r.get('images', [])[:3]
+                ],
                 'care': {
                     'preset': preset['name'],
                     'start_pct': preset['start_pct'],
