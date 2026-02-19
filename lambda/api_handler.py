@@ -759,6 +759,7 @@ def save_plant_profile(user_id, event, origin):
 
         # Auto-detach current plant (seamless — no user action needed)
         plant_library, detached_name = _auto_detach_plant(device, current_time)
+        plant_library = _enforce_library_limit(plant_library)
 
         # Generate plant_id if not provided (for data isolation)
         if not plant_data.get('plant_id'):
@@ -868,9 +869,10 @@ def unarchive_plant_profile(user_id, device_id, origin, event=None):
     """
     POST /plants/{device_id}/unarchive?plant_id=xxx
     Restore plant from plant_library back to device.plant.
-    With plant_id — restores specific plant.
-    Without plant_id — restores most recent archived (backward compat).
+    With plant_id — restores specific plant (archived or detached).
+    Without plant_id — restores most recent archived plant (backward compat).
     If device has an active plant — auto-detach it first (seamless).
+    Deleted plants cannot be restored (admin-only visibility).
     """
     try:
         if not device_id.startswith('Polivalka-'):
@@ -998,6 +1000,12 @@ def delete_plant_profile(user_id, device_id, origin, event=None):
                     'headers': cors_headers(origin),
                     'body': json.dumps({'error': f'Plant {target_plant_id} not found in library'})
                 }
+            if target.get('deleted'):
+                return {
+                    'statusCode': 400,
+                    'headers': cors_headers(origin),
+                    'body': json.dumps({'error': f'Plant {target_plant_id} is already deleted'})
+                }
             plant_name = target.get('common_name') or target.get('scientific', 'Unknown')
             # Mark as deleted (don't remove from library)
             target['deleted'] = True
@@ -1065,6 +1073,7 @@ def _plant_to_entry(plant, device_id, device, active=True):
         'created_at': plant.get('created_at'),
         'saved_at': plant.get('saved_at'),
         'archived': plant.get('archived', False),
+        'deleted': plant.get('deleted', False),
         'active': active,
         'device_id': device_id,
         'device_location': device.get('location', ''),
@@ -1218,8 +1227,9 @@ def assign_plant_to_device(user_id, device_id, event, origin):
 
         # Two cases: same device (single update) or different devices (transaction)
         if source_device_id == device_id and not source_is_active:
-            # Source is in library of the SAME device as target
-            # Remove source from target_library (it was already included via _auto_detach)
+            # Source is in library of the SAME device as target — single update
+            # target_library contains: auto-detached active plant + old library entries including source
+            # Remove source from library since it becomes the new active plant
             target_library = [p for p in target_library if p.get('plant_id') != source_plant_id]
             devices_table.update_item(
                 Key={'user_id': user_id, 'device_id': device_id},
