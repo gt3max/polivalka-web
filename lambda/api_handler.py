@@ -641,10 +641,31 @@ def add_device_history(device_id, event_type, user_email, details=None):
         print(f"[History] Error adding history: {e}")  # Non-fatal
 
 
+def _auto_detach_plant(device, current_time):
+    """
+    Auto-detach current plant from device into plant_library.
+    Returns updated plant_library list and detached plant name (or None).
+    Called automatically when saving/assigning a new plant — seamless, no user action.
+    """
+    existing_plant = device.get('plant')
+    plant_library = list(device.get('plant_library', []))
+
+    if existing_plant and existing_plant.get('plant_id') and not existing_plant.get('archived'):
+        existing_plant['ended_at'] = current_time
+        existing_plant['detached_at'] = current_time
+        plant_library.append(existing_plant)
+        plant_name = existing_plant.get('common_name') or existing_plant.get('scientific', 'Unknown')
+        print(f"[PLANTS] Auto-detached: {plant_name} (plant_id={existing_plant['plant_id']})")
+        return plant_library, plant_name
+
+    return plant_library, None
+
+
 def save_plant_profile(user_id, event, origin):
     """
     POST /plants/save
     Save plant profile to device record.
+    If device already has a plant — auto-detach it to plant_library (seamless).
     Body: { device_id: "Polivalka-BB00C1", plant: {...} }
     """
     try:
@@ -663,7 +684,7 @@ def save_plant_profile(user_id, event, origin):
         if not device_id.startswith('Polivalka-'):
             device_id = f'Polivalka-{device_id}'
 
-        # Verify user owns this device (use get_item with both keys for exact match)
+        # Verify user owns this device
         response = devices_table.get_item(
             Key={'user_id': user_id, 'device_id': device_id}
         )
@@ -674,8 +695,13 @@ def save_plant_profile(user_id, event, origin):
                 'body': json.dumps({'error': f'Device {device_id} not found for your account'})
             }
 
-        # Generate plant_id if not provided (for data isolation)
+        device = response['Item']
         current_time = int(time.time())
+
+        # Auto-detach current plant (seamless — no user action needed)
+        plant_library, detached_name = _auto_detach_plant(device, current_time)
+
+        # Generate plant_id if not provided (for data isolation)
         if not plant_data.get('plant_id'):
             plant_data['plant_id'] = f"plant_{int(current_time * 1000)}"
             plant_data['started_at'] = current_time
@@ -685,15 +711,17 @@ def save_plant_profile(user_id, event, origin):
         # Add/update saved_at timestamp
         plant_data['saved_at'] = current_time
 
-        # Update device record with plant profile
+        # Update device: new plant + updated library
         devices_table.update_item(
             Key={'user_id': user_id, 'device_id': device_id},
-            UpdateExpression='SET plant = :plant',
-            ExpressionAttributeValues={':plant': plant_data}
+            UpdateExpression='SET plant = :plant, plant_library = :library',
+            ExpressionAttributeValues={':plant': plant_data, ':library': plant_library}
         )
 
         # Add to device history
         plant_name = plant_data.get('common_name') or plant_data.get('scientific', 'Unknown')
+        if detached_name:
+            add_device_history(device_id, 'plant_detached', user_id, detached_name)
         add_device_history(device_id, 'plant_saved', user_id, plant_name)
 
         print(f"[PLANTS] Saved plant profile for {device_id}: {plant_data.get('scientific', 'unknown')}")
@@ -716,14 +744,13 @@ def archive_plant_profile(user_id, device_id, origin):
     """
     POST /plants/{device_id}/archive
     Archive current plant profile.
-    Sets archived=true flag and resets started_at for data isolation.
+    Moves plant from device.plant → device.plant_library with archived flag.
+    Device becomes free (plant = null).
     """
     try:
-        # Normalize device_id
         if not device_id.startswith('Polivalka-'):
             device_id = f'Polivalka-{device_id}'
 
-        # Get THIS user's device record (use get_item for exact match)
         response = devices_table.get_item(
             Key={'user_id': user_id, 'device_id': device_id}
         )
@@ -743,19 +770,21 @@ def archive_plant_profile(user_id, device_id, origin):
                 'body': json.dumps({'error': 'No plant profile to archive'})
             }
 
-        # Archive current profile
+        # Archive: move to library, free up device
         current_time = int(time.time())
         plant['archived'] = True
         plant['archived_at'] = current_time
         plant['ended_at'] = current_time
 
+        plant_library = list(device.get('plant_library', []))
+        plant_library.append(plant)
+
         devices_table.update_item(
             Key={'user_id': user_id, 'device_id': device_id},
-            UpdateExpression='SET plant = :plant',
-            ExpressionAttributeValues={':plant': plant}
+            UpdateExpression='SET plant_library = :library REMOVE plant',
+            ExpressionAttributeValues={':library': plant_library}
         )
 
-        # Add to device history
         plant_name = plant.get('common_name') or plant.get('scientific', 'Unknown')
         add_device_history(device_id, 'plant_archived', user_id, plant_name)
 
@@ -778,13 +807,13 @@ def archive_plant_profile(user_id, device_id, origin):
 def unarchive_plant_profile(user_id, device_id, origin):
     """
     POST /plants/{device_id}/unarchive
-    Restore plant profile from archive.
+    Restore most recent archived plant from plant_library back to device.plant.
+    If device has an active plant — auto-detach it first (seamless).
     """
     try:
         if not device_id.startswith('Polivalka-'):
             device_id = f'Polivalka-{device_id}'
 
-        # Get THIS user's device record (use get_item for exact match)
         response = devices_table.get_item(
             Key={'user_id': user_id, 'device_id': device_id}
         )
@@ -796,28 +825,52 @@ def unarchive_plant_profile(user_id, device_id, origin):
             }
 
         device = response['Item']
-        plant = device.get('plant')
-        if not plant:
+        plant_library = list(device.get('plant_library', []))
+
+        # Find most recent archived plant in library
+        archived_plants = [p for p in plant_library if p.get('archived')]
+        if not archived_plants:
             return {
                 'statusCode': 404,
                 'headers': cors_headers(origin),
-                'body': json.dumps({'error': 'No plant profile to unarchive'})
+                'body': json.dumps({'error': 'No archived plant to restore'})
             }
 
-        # Remove archived flag
+        # Take the most recent archived plant
+        archived_plants.sort(key=lambda p: p.get('archived_at', 0), reverse=True)
+        plant = archived_plants[0]
+
+        # Remove from library
+        plant_library = [p for p in plant_library if p.get('plant_id') != plant.get('plant_id')]
+
+        # Auto-detach current plant if exists
+        current_time = int(time.time())
+        existing_plant = device.get('plant')
+        if existing_plant and existing_plant.get('plant_id'):
+            existing_plant['ended_at'] = current_time
+            existing_plant['detached_at'] = current_time
+            plant_library.append(existing_plant)
+            detached_name = existing_plant.get('common_name') or existing_plant.get('scientific', 'Unknown')
+            add_device_history(device_id, 'plant_detached', user_id, detached_name)
+
+        # Restore: remove archive flags, set new started_at
         plant.pop('archived', None)
         plant.pop('archived_at', None)
+        plant.pop('ended_at', None)
+        plant.pop('detached_at', None)
+        plant['started_at'] = current_time
+        plant['saved_at'] = current_time
 
         devices_table.update_item(
             Key={'user_id': user_id, 'device_id': device_id},
-            UpdateExpression='SET plant = :plant',
-            ExpressionAttributeValues={':plant': plant}
+            UpdateExpression='SET plant = :plant, plant_library = :library',
+            ExpressionAttributeValues={':plant': plant, ':library': plant_library}
         )
 
         plant_name = plant.get('common_name') or plant.get('scientific', 'Unknown')
         add_device_history(device_id, 'plant_unarchived', user_id, plant_name)
 
-        print(f"[PLANTS] Unarchived plant profile for {device_id}")
+        print(f"[PLANTS] Unarchived plant profile for {device_id}: {plant_name}")
         return {
             'statusCode': 200,
             'headers': cors_headers(origin),
@@ -833,17 +886,16 @@ def unarchive_plant_profile(user_id, device_id, origin):
         }
 
 
-def delete_plant_profile(user_id, device_id, origin):
+def delete_plant_profile(user_id, device_id, origin, event=None):
     """
-    DELETE /plants/{device_id}
-    Delete plant profile from device.
+    DELETE /plants/{device_id}?plant_id=xxx
+    Delete plant profile. Without plant_id — deletes active plant.
+    With plant_id — deletes from plant_library.
     """
     try:
-        # Normalize device_id
         if not device_id.startswith('Polivalka-'):
             device_id = f'Polivalka-{device_id}'
 
-        # Get THIS user's device record (use get_item for exact match)
         response = devices_table.get_item(
             Key={'user_id': user_id, 'device_id': device_id}
         )
@@ -855,20 +907,38 @@ def delete_plant_profile(user_id, device_id, origin):
             }
 
         device = response['Item']
-        # Get plant name for history before deleting
-        plant = device.get('plant', {})
-        plant_name = plant.get('common_name') or plant.get('scientific', 'Unknown')
+        query_params = (event.get('queryStringParameters', {}) or {}) if event else {}
+        target_plant_id = query_params.get('plant_id')
 
-        # Remove plant profile from device
-        devices_table.update_item(
-            Key={'user_id': user_id, 'device_id': device_id},
-            UpdateExpression='REMOVE plant'
-        )
+        if target_plant_id:
+            # Delete specific plant from plant_library
+            plant_library = list(device.get('plant_library', []))
+            target = next((p for p in plant_library if p.get('plant_id') == target_plant_id), None)
+            if not target:
+                return {
+                    'statusCode': 404,
+                    'headers': cors_headers(origin),
+                    'body': json.dumps({'error': f'Plant {target_plant_id} not found in library'})
+                }
+            plant_name = target.get('common_name') or target.get('scientific', 'Unknown')
+            plant_library = [p for p in plant_library if p.get('plant_id') != target_plant_id]
+            devices_table.update_item(
+                Key={'user_id': user_id, 'device_id': device_id},
+                UpdateExpression='SET plant_library = :library',
+                ExpressionAttributeValues={':library': plant_library}
+            )
+        else:
+            # Delete active plant from device
+            plant = device.get('plant', {})
+            plant_name = plant.get('common_name') or plant.get('scientific', 'Unknown')
+            devices_table.update_item(
+                Key={'user_id': user_id, 'device_id': device_id},
+                UpdateExpression='REMOVE plant'
+            )
 
-        # Add to device history
         add_device_history(device_id, 'plant_deleted', user_id, plant_name)
 
-        print(f"[PLANTS] Deleted plant profile for {device_id}")
+        print(f"[PLANTS] Deleted plant profile for {device_id}: {plant_name}")
         return {
             'statusCode': 200,
             'headers': cors_headers(origin),
@@ -884,42 +954,59 @@ def delete_plant_profile(user_id, device_id, origin):
         }
 
 
+def _plant_to_entry(plant, device_id, device, active=True):
+    """Helper: convert plant data to library entry format."""
+    return {
+        'plant_id': plant.get('plant_id'),
+        'scientific': plant.get('scientific'),
+        'common_name': plant.get('common_name'),
+        'family': plant.get('family'),
+        'image_url': plant.get('image_url'),
+        'preset': plant.get('preset'),
+        'start_pct': plant.get('start_pct'),
+        'stop_pct': plant.get('stop_pct'),
+        'poisonous_to_pets': plant.get('poisonous_to_pets'),
+        'poisonous_to_humans': plant.get('poisonous_to_humans'),
+        'toxicity_note': plant.get('toxicity_note'),
+        'started_at': plant.get('started_at'),
+        'ended_at': plant.get('ended_at'),
+        'created_at': plant.get('created_at'),
+        'saved_at': plant.get('saved_at'),
+        'archived': plant.get('archived', False),
+        'active': active,
+        'device_id': device_id,
+        'device_location': device.get('location', ''),
+        'device_room': device.get('room', ''),
+    }
+
+
 def get_plant_library(user_id, origin):
     """
     GET /plants/library
-    Get all plant profiles for this user (from all their devices).
-    Returns list of plants with device associations.
+    Get all plant profiles for this user (active + library from all devices).
+    Returns list with 'active' flag to distinguish current vs detached/archived.
     """
     try:
-        # Query all devices for this user
         response = devices_table.query(
             KeyConditionExpression=Key('user_id').eq(user_id)
         )
 
         plants = []
         for device in response.get('Items', []):
-            plant = device.get('plant')
-            if plant:
-                # Add device info to plant
-                plant_entry = {
-                    'plant_id': plant.get('plant_id'),
-                    'scientific': plant.get('scientific'),
-                    'common_name': plant.get('common_name'),
-                    'image_url': plant.get('image_url'),
-                    'preset': plant.get('preset'),
-                    'start_pct': plant.get('start_pct'),
-                    'stop_pct': plant.get('stop_pct'),
-                    'started_at': plant.get('started_at'),
-                    'saved_at': plant.get('saved_at'),
-                    'archived': plant.get('archived', False),
-                    'device_id': device.get('device_id'),
-                    'device_location': device.get('location', ''),
-                    'device_room': device.get('room', '')
-                }
-                plants.append(plant_entry)
+            device_id = device.get('device_id')
 
-        # Sort by saved_at descending (most recent first)
-        plants.sort(key=lambda x: x.get('saved_at', 0), reverse=True)
+            # Active plant on device
+            plant = device.get('plant')
+            if plant and plant.get('plant_id'):
+                plants.append(_plant_to_entry(plant, device_id, device, active=True))
+
+            # Detached/archived plants in library
+            for lib_plant in device.get('plant_library', []):
+                if lib_plant.get('plant_id'):
+                    plants.append(_plant_to_entry(lib_plant, device_id, device, active=False))
+
+        # Sort: active first, then by saved_at descending
+        plants.sort(key=lambda x: (not x.get('active', False), -(x.get('saved_at', 0) or 0)))
 
         print(f"[PLANTS] Library for {user_id}: {len(plants)} plants")
         return {
@@ -972,7 +1059,7 @@ def assign_plant_to_device(user_id, device_id, event, origin):
                 'body': json.dumps({'error': f'Device {device_id} not found for your account'})
             }
 
-        # Find source plant in user's library (search all their devices)
+        # Find source plant in user's library (search active plants + plant_library)
         all_devices = devices_table.query(
             KeyConditionExpression=Key('user_id').eq(user_id)
         )
@@ -980,10 +1067,19 @@ def assign_plant_to_device(user_id, device_id, event, origin):
         source_plant = None
         source_device_id = None
         for device in all_devices.get('Items', []):
+            # Check active plant
             plant = device.get('plant')
             if plant and plant.get('plant_id') == source_plant_id:
                 source_plant = plant
                 source_device_id = device.get('device_id')
+                break
+            # Check plant_library
+            for lib_plant in device.get('plant_library', []):
+                if lib_plant.get('plant_id') == source_plant_id:
+                    source_plant = lib_plant
+                    source_device_id = device.get('device_id')
+                    break
+            if source_plant:
                 break
 
         if not source_plant:
@@ -995,6 +1091,10 @@ def assign_plant_to_device(user_id, device_id, event, origin):
 
         # Copy plant profile to target device with new timestamps
         current_time = int(time.time())
+        target_device = target_response['Item']
+
+        # Auto-detach current plant on target device (seamless)
+        plant_library, detached_name = _auto_detach_plant(target_device, current_time)
 
         # Build device_history: copy from source + add new device
         source_history = source_plant.get('device_history', [])
@@ -1020,11 +1120,14 @@ def assign_plant_to_device(user_id, device_id, event, origin):
             'device_history': new_history,
         }
 
-        # Save to target device
+        # Save to target device with auto-detached library
+        if detached_name:
+            add_device_history(device_id, 'plant_detached', user_id, detached_name)
+
         devices_table.update_item(
             Key={'user_id': user_id, 'device_id': device_id},
-            UpdateExpression='SET plant = :plant',
-            ExpressionAttributeValues={':plant': new_plant}
+            UpdateExpression='SET plant = :plant, plant_library = :library',
+            ExpressionAttributeValues={':plant': new_plant, ':library': plant_library}
         )
 
         # Add to device history
@@ -1704,7 +1807,7 @@ def lambda_handler(event, context):
     # DELETE /plants/{device_id} - Delete plant profile
     if path.startswith('/plants/Polivalka-') and http_method == 'DELETE':
         device_id = path.split('/')[-1]  # Extract device_id from path
-        return delete_plant_profile(user_id, device_id, origin)
+        return delete_plant_profile(user_id, device_id, origin, event)
 
     # ============ Whitelist Check & Claim Routes (Security Migration 2026-01-20) ============
     # These are NOT admin-only - any authenticated user can check their whitelist status
