@@ -609,7 +609,6 @@ s3_client = boto3.client('s3',
                         config=boto3.session.Config(signature_version='s3v4'))
 
 # Table names (from environment)
-import os
 DEVICES_TABLE = os.environ.get('DEVICES_TABLE', 'polivalka_devices')
 TELEMETRY_TABLE = os.environ.get('TELEMETRY_TABLE', 'polivalka_telemetry')
 COMMANDS_TABLE = os.environ.get('COMMANDS_TABLE', 'polivalka_commands')
@@ -643,7 +642,6 @@ def add_device_history(device_id, event_type, user_email, details=None):
 
 def _to_dynamo_type(value):
     """Convert Python value to DynamoDB low-level type format for transact_write_items."""
-    from decimal import Decimal
     if value is None:
         return {'NULL': True}
     elif isinstance(value, bool):
@@ -1939,7 +1937,7 @@ def lambda_handler(event, context):
         return get_plant_library(user_id, origin)
 
     # GET /plants/{device_id} - Get plant profile from device
-    if path.startswith('/plants/Polivalka-') and http_method == 'GET':
+    if path.startswith('/plants/Polivalka-') and http_method == 'GET' and path.count('/') == 2:
         device_id = path.split('/')[-1]  # Extract device_id from path
         return get_plant_profile(user_id, device_id, origin)
 
@@ -1959,7 +1957,7 @@ def lambda_handler(event, context):
         return assign_plant_to_device(user_id, device_id, event, origin)
 
     # DELETE /plants/{device_id} - Delete plant profile
-    if path.startswith('/plants/Polivalka-') and http_method == 'DELETE':
+    if path.startswith('/plants/Polivalka-') and http_method == 'DELETE' and path.count('/') == 2:
         device_id = path.split('/')[-1]  # Extract device_id from path
         return delete_plant_profile(user_id, device_id, origin, event)
 
