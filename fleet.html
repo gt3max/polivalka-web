@@ -719,11 +719,16 @@ function createExpandableRow(device, isOnline, hasWarnings, isCritical) {
     div.className = 'device-card transferred';
     div.setAttribute('data-device-id', device.device_id);
     div.innerHTML = `
-      <div class="device-row transferred-row">
-        <span class="device-name">📤 ${device.device_id}</span>
+      <div class="device-row transferred-row" onclick="toggleDeviceExpand(this, '${device.device_id}')">
+        <span class="expand-icon">▶</span>
+        <span class="device-name">📤 ${device.device_id} <span style="color:#1565c0;font-size:11px;font-weight:600">Assigned</span></span>
         <div class="device-quick-info">
-          <span style="color:#1565c0;font-weight:600">📧 Assigned to: ${device.transferred_to}</span>
           <span class="device-status" style="background:#e3f2fd;color:#1565c0">Transferred</span>
+        </div>
+      </div>
+      <div class="device-details" id="details-${device.device_id}">
+        <div class="detail-row" style="margin-top:8px">
+          <span class="detail-item" style="color:#1565c0">📧 Assigned to: ${device.transferred_to}</span>
         </div>
       </div>
     `;
@@ -828,7 +833,7 @@ function createExpandableRow(device, isOnline, hasWarnings, isCritical) {
     <div class="device-row ${hasWarnings ? 'has-warnings' : ''}" onclick="toggleDeviceExpand(this, '${device.device_id}')">
       <span class="expand-icon">▶</span>
       ${hasWarnings ? '<span class="warning-badge">⚠️</span>' : ''}
-      <span class="device-name">🌱 ${device.device_id}</span>
+      <span class="device-name">🌱 ${device.device_id}${isAdmin() && device.owner && device.owner !== 'admin' ? ' <span style="color:#1565c0;font-size:11px;font-weight:600">Assigned</span>' : ''}</span>
       <div class="device-quick-info">
         ${plantName ? `<span style="font-weight:600">${plantName}</span>` : ''}
         <span style="color:${moistureColor}">💧${moisturePct !== null ? Math.round(moisturePct) + '%' : '—'}</span>
