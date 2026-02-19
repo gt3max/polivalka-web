@@ -633,7 +633,13 @@ function renderPlantLibrary(plants) {
           </div>
           <div style="font-size:12px;color:#666">${plant.preset || 'Standard'} • ${deviceInfo}${timeInfo}</div>
         </div>
-        <div style="color:#2c5f2d;font-size:18px">→</div>
+        <div style="display:flex;align-items:center;gap:8px">
+          <button onclick="event.stopPropagation();deleteLibraryPlant('${plant.plant_id}','${plant.device_id}','${(plant.common_name || plant.scientific || '').replace(/'/g, "\\'")}')"
+                  style="background:none;border:none;cursor:pointer;font-size:16px;padding:4px;opacity:0.5;transition:opacity 0.2s"
+                  onmouseover="this.style.opacity='1'" onmouseout="this.style.opacity='0.5'"
+                  title="Remove from library">🗑️</button>
+          <div style="color:#2c5f2d;font-size:18px">→</div>
+        </div>
       </div>
     `;
   }).join('');
@@ -643,6 +649,29 @@ function toggleLibrary() {
   libraryExpanded = !libraryExpanded;
   document.getElementById('library-content').style.display = libraryExpanded ? 'block' : 'none';
   document.getElementById('library-toggle').textContent = libraryExpanded ? '▲' : '▼';
+}
+
+async function deleteLibraryPlant(plantId, deviceId, plantName) {
+  if (!confirm(`Remove "${plantName}" from your library? It will be saved in your history.`)) return;
+
+  try {
+    const resp = await fetch(`${CONFIG.apiUrl}/plants/${deviceId}?plant_id=${plantId}`, {
+      method: 'DELETE',
+      headers: {
+        'Authorization': `Bearer ${localStorage.getItem('id_token')}`
+      }
+    });
+    const data = await resp.json();
+
+    if (resp.ok && data.success) {
+      showToast('Plant removed from library', 'success');
+      loadPlantLibrary();
+    } else {
+      showToast(data.error || 'Failed to remove plant', 'error');
+    }
+  } catch (e) {
+    showToast('Error: ' + e.message, 'error');
+  }
 }
 
 async function assignPlantFromLibrary(plantId) {
