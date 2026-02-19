@@ -27,10 +27,8 @@ from boto3.dynamodb.conditions import Key
 
 dynamodb = boto3.resource('dynamodb', region_name='eu-central-1')
 COMMANDS_TABLE = os.environ.get('COMMANDS_TABLE', 'polivalka_commands')
-TELEMETRY_TABLE = os.environ.get('TELEMETRY_TABLE', 'polivalka_telemetry')
 DEVICES_TABLE = os.environ.get('DEVICES_TABLE', 'polivalka_devices')
 commands_table = dynamodb.Table(COMMANDS_TABLE)
-telemetry_table = dynamodb.Table(TELEMETRY_TABLE)
 devices_table = dynamodb.Table(DEVICES_TABLE)
 
 def convert_floats(obj):
@@ -157,9 +155,35 @@ def lambda_handler(event, context):
     if device_id and not device_id.startswith('Polivalka-'):
         device_id = f'Polivalka-{device_id}'
 
+    # ESP32 get_status wraps data in 'data' field - extract it FIRST
+    if isinstance(result, dict) and 'data' in result and isinstance(result['data'], dict):
+        result = result['data']
+        print(f"Extracted nested data from response.data: keys={list(result.keys())}")
+
     # Normalize flat ESP32 response to nested format (sensor/battery/system/pump)
+    # NOTE: After extracting 'data', result is already nested (has sensor/battery/system keys)
+    # normalize_flat_response will return it unchanged
     if isinstance(result, dict):
         result = normalize_flat_response(result)
+
+    # Normalize sensor field names to match periodic telemetry
+    # ESP32 get_status uses: moisture, adc
+    # Periodic telemetry uses: moisture_percent, adc_raw
+    if isinstance(result, dict) and 'sensor' in result:
+        s = result['sensor']
+        if 'moisture' in s and 'moisture_percent' not in s:
+            s['moisture_percent'] = s['moisture']
+        if 'adc' in s and 'adc_raw' not in s:
+            s['adc_raw'] = s['adc']
+
+    # Merge sensor2 into sensor for consistency with periodic telemetry
+    # API expects sensor2_adc/sensor2_percent INSIDE latest.sensor
+    if isinstance(result, dict) and 'sensor2' in result and 'sensor' in result:
+        s2 = result['sensor2']
+        result['sensor']['sensor2_adc'] = s2.get('adc')
+        result['sensor']['sensor2_percent'] = s2.get('percent')
+        result['sensor']['sensor2_percent_float'] = s2.get('percent_float')
+        print(f"Merged sensor2 into sensor: adc={s2.get('adc')}, percent={s2.get('percent')}")
 
     if not command_id:
         print(f"No command_id in response (device_id={device_id})")
@@ -206,57 +230,6 @@ def lambda_handler(event, context):
 
         print(f"Updated command {command_id} for device {device_id}: {status}")
 
-        # Update telemetry table (proves device is online + fresh sensor data)
-        try:
-            current_time = int(time.time())
-            update_expr = 'SET last_update = :ts'
-            expr_values = {':ts': current_time}
-
-            # If result has data from get_status, update telemetry (timestamp=0 record)
-            # IMPORTANT: Each data type gets its own 'updated_at' timestamp
-            # so stale data doesn't appear "fresh" when last_update is bumped
-            # by unrelated command responses (e.g. stop_pump bumps last_update
-            # but doesn't update sensor data → old sensor data looked "newer"
-            # than real telemetry, causing 0% moisture bug)
-            if isinstance(result, dict):
-                # Sensor: DO NOT save from command responses to ts=0 record.
-                # IoT Rule flatten loses sensor2 nested data (resistive J7),
-                # so ts=0 sensor record overwrites periodic telemetry (which has sensor2)
-                # in get_latest_telemetry() — causing "Sensor not connected" for sensor2.
-                # Periodic sensor telemetry is source of truth.
-
-                # Battery: DO NOT save from command responses to ts=0 record.
-                # get_status battery percent is unreliable (v1.0.33: 0% at 4.16V,
-                # v1.0.104: 81% at 4.18V). Periodic battery telemetry is source of truth.
-                # Saving here would override correct periodic data in get_latest_telemetry().
-
-                # System data (mode, state, firmware)
-                # Note: command response has 'firmware', periodic telemetry has 'firmware_version'
-                # We normalize to 'firmware_version' for consistency with get_latest_telemetry()
-                if 'system' in result:
-                    system = result.get('system', {})
-                    system_save = {
-                        'mode': system.get('mode'),
-                        'state': system.get('state'),
-                        'updated_at': current_time
-                    }
-                    # Normalize firmware field name
-                    fw = system.get('firmware') or system.get('firmware_version')
-                    if fw:
-                        system_save['firmware_version'] = fw
-                    update_expr += ', system_data = :system'
-                    expr_values[':system'] = convert_floats(system_save)
-                    print(f"Updating system telemetry: mode={system.get('mode')}, state={system.get('state')}")
-
-            telemetry_table.update_item(
-                Key={'device_id': device_id, 'timestamp': 0},  # timestamp=0 is "latest" record
-                UpdateExpression=update_expr,
-                ExpressionAttributeValues=expr_values
-            )
-            print(f"Updated telemetry for {device_id}: last_update={current_time}")
-        except Exception as e:
-            print(f"Failed to update telemetry: {e}")  # Non-fatal, continue
-
         # ============ FLEET ARCHITECTURE: Update devices.latest ============
         # This provides single source of truth for Fleet display
         if isinstance(result, dict) and result:
@@ -293,6 +266,15 @@ def lambda_handler(event, context):
                                 if dtype in result and result[dtype]:
                                     data_copy = convert_floats(result[dtype].copy())
                                     data_copy['updated_at'] = current_time
+
+                                    # Normalize sensor: ADC < 100 = capacitive sensor not connected
+                                    # Write null instead of fake 100% moisture (ADC=0 → formula gives 100%)
+                                    if dtype == 'sensor':
+                                        adc = data_copy.get('adc_raw') or data_copy.get('adc')
+                                        if adc is not None and int(adc) < 100:
+                                            data_copy['moisture_percent'] = None
+                                            data_copy['percent_float'] = None
+                                            print(f"Sensor disconnected (ADC={adc}): writing moisture_percent=null")
                                     try:
                                         # PROTECTION: Only update if new timestamp > existing
                                         devices_table.update_item(

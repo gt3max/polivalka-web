@@ -1467,8 +1467,7 @@ def lambda_handler(event, context):
 
                 # Deep watering runtime stats from devices.latest (Phase 3)
                 latest = device_info.get('latest') or {}
-                if not latest:
-                    latest = get_latest_telemetry(device_id)  # Legacy fallback
+                # devices.latest is populated by dual-write (iot_rule_telemetry + iot_rule_response)
                 system_data = latest.get('system', {})
 
                 # Return config matching ESP32 /api/sensor/preset format
@@ -1558,8 +1557,7 @@ def lambda_handler(event, context):
                 # FLEET ARCHITECTURE: Read from devices.latest (single source of truth)
                 device_info = get_device_info(device_id, user_id)
                 latest = device_info.get('latest') or {}
-                if not latest:
-                    latest = get_latest_telemetry(device_id)  # Legacy fallback
+                # devices.latest is populated by dual-write (iot_rule_telemetry + iot_rule_response)
                 mode = latest.get('system', {}).get('mode', 'manual')
                 state = latest.get('system', {}).get('state', 'DISABLED')
                 # Sensor data with ADC < 100 check (defense against pre-fix data)
@@ -1645,8 +1643,7 @@ def lambda_handler(event, context):
                 # FLEET ARCHITECTURE: Read from devices.latest (single source of truth)
                 device_info = get_device_info(device_id, user_id)
                 latest = device_info.get('latest') or {}
-                if not latest:
-                    latest = get_latest_telemetry(device_id)  # Legacy fallback
+                # devices.latest is populated by dual-write (iot_rule_telemetry + iot_rule_response)
                 mode = latest.get('system', {}).get('mode', 'manual')
                 state = latest.get('system', {}).get('state', 'DISABLED')
 
@@ -1683,8 +1680,7 @@ def lambda_handler(event, context):
                 # FLEET ARCHITECTURE: Read from devices.latest
                 device_info = get_device_info(device_id, user_id)
                 latest = device_info.get('latest') or {}
-                if not latest:
-                    latest = get_latest_telemetry(device_id)  # Legacy fallback
+                # devices.latest is populated by dual-write (iot_rule_telemetry + iot_rule_response)
                 time_set = latest.get('system', {}).get('time_set', False)
                 tz_string = device_info.get('timezone', 'Europe/Warsaw')
 
@@ -2145,22 +2141,7 @@ def get_devices(user_id):
 
         try:
             # FLEET ARCHITECTURE: Read from devices.latest (single source of truth)
-            # Fallback to get_latest_telemetry() for devices without latest field yet
             latest = item.get('latest') or {}
-            if not latest:
-                # Legacy fallback - device hasn't received telemetry since Phase 2 deploy
-                latest = get_latest_telemetry(device_id)
-                print(f"[DEBUG] Device {device_id} using legacy get_latest_telemetry()")
-            else:
-                print(f"[DEBUG] Device {device_id} using devices.latest")
-                # Partial fallback: if battery missing in latest, get from telemetry
-                # (battery publishes every 60 min, may not be in devices.latest yet)
-                if 'battery' not in latest:
-                    legacy = get_latest_telemetry(device_id)
-                    if legacy.get('battery'):
-                        latest['battery'] = legacy['battery']
-                        print(f"[DEBUG] Device {device_id} battery from telemetry fallback")
-            print(f"[DEBUG] Processing device {device_id}, telemetry keys: {list(latest.keys())}")
 
             # Merge device metadata + telemetry
             # Migration: "off" → "manual" (backward compatibility with old firmware)
@@ -2305,10 +2286,7 @@ def get_device_status(device_id, user_id):
     # FLEET ARCHITECTURE: Read from devices.latest (single source of truth)
     # This was migrated from get_latest_telemetry() which read from telemetry table
     latest = device_meta.get('latest') or {}
-    if not latest:
-        # Fallback for legacy devices without devices.latest
-        print(f"[DEBUG] Device {device_id} has no devices.latest, falling back to telemetry table")
-        latest = get_latest_telemetry(device_id)
+    # devices.latest is populated by dual-write (iot_rule_telemetry + iot_rule_response)
 
     # Migration: "off" → "manual" (backward compatibility)
     mode = latest.get('system', {}).get('mode', 'manual')
@@ -2892,11 +2870,9 @@ def get_battery_status(device_id, user_id):
         return {'statusCode': 403, 'headers': cors_headers(),
                 'body': json.dumps({'error': 'Access denied'})}
 
-    # FLEET ARCHITECTURE Phase 3: Read from devices.latest
+    # FLEET ARCHITECTURE: Read from devices.latest (single source of truth)
     device_info = get_device_info(device_id, user_id)
     latest = (device_info.get('latest') or {}) if device_info else {}
-    if not latest:
-        latest = get_latest_telemetry(device_id)  # Legacy fallback
     battery = latest.get('battery')
 
     # No battery telemetry at all - return available:false
@@ -2976,94 +2952,6 @@ def get_battery_history(device_id, user_id, days=7):
 
 
 # === Helper Functions ===
-
-def get_latest_telemetry(device_id):
-    """Get latest sensor, battery, system data for device.
-
-    Merges data from two sources:
-    1. timestamp=0 record - updated by command responses (iot_rule_response.py)
-    2. Recent telemetry records - periodic publishes from ESP32
-
-    For each data type (sensor, battery, system, pump), uses the NEWEST data
-    based on timestamp comparison.
-    """
-
-    latest = {}
-    latest_timestamps = {}  # Track timestamps for each data type
-    telem_device_id = get_telemetry_device_id(device_id)
-
-    # First, get the "latest" record (timestamp=0) which has last_update from command responses
-    # IMPORTANT: Use telem_device_id (Polivalka-XX) because iot_rule_response.py saves with full ID
-    try:
-        latest_record = telemetry_table.get_item(
-            Key={'device_id': telem_device_id, 'timestamp': 0}
-        )
-        if 'Item' in latest_record:
-            item = latest_record['Item']
-            # last_update = time of LAST command response (any command type)
-            record_timestamp = int(item.get('last_update', 0))
-            if record_timestamp > 0:
-                latest['last_update'] = record_timestamp
-            # Extract per-type data from timestamp=0 record (saved by iot_rule_response.py)
-            # BUG FIX: Use per-type 'updated_at' timestamp instead of generic 'last_update'
-            # Without this, a non-sensor command (e.g. stop_pump) bumps last_update
-            # but doesn't update sensor data → stale sensor data appears "newer"
-            # than real periodic telemetry → shows wrong moisture (e.g. 0% instead of 100%)
-            if 'sensor' in item:
-                sensor_data = dict(item['sensor'])
-                sensor_ts = int(sensor_data.get('updated_at', 0))
-                latest['sensor'] = sensor_data
-                latest['sensor']['timestamp'] = sensor_ts
-                latest_timestamps['sensor'] = sensor_ts
-
-            # Battery: DO NOT read from ts=0 record!
-            # iot_rule_response.py explicitly does NOT save battery to ts=0 because
-            # get_status battery percent is unreliable (v1.0.33: 0% at 4.16V, v1.0.104: 81% at 4.18V).
-            # Any existing ts=0 battery data is stale from before this fix.
-            # Periodic battery telemetry (timestamp > 0) is the only source of truth.
-            # See iot_rule_response.py lines 221-226 for reasoning.
-
-            # System from command response (stored as 'system_data' to avoid DynamoDB reserved word)
-            if 'system_data' in item:
-                system_data = dict(item['system_data'])
-                system_ts = int(system_data.get('updated_at', 0))
-                latest['system'] = system_data
-                latest['system']['timestamp'] = system_ts
-                latest_timestamps['system'] = system_ts
-    except Exception as e:
-        print(f"Error getting latest record: {e}")
-
-    # Query recent records (schema: device_id + timestamp)
-    # Data types stored as top-level Maps: system, pump, sensor, battery
-    cutoff = int(time.time()) - 86400  # Last 24 hours
-
-    response = telemetry_table.query(
-        KeyConditionExpression=Key('device_id').eq(telem_device_id) &
-                               Key('timestamp').gt(cutoff),
-        ScanIndexForward=False,  # Newest first
-        Limit=100  # Get recent records to find latest of each type
-    )
-
-    # Extract latest of each data type - compare timestamps to use NEWEST data
-    for item in response.get('Items', []):
-        timestamp = int(item.get('timestamp', 0))
-
-        # Check each data type and keep the NEWEST (by timestamp)
-        for data_type in ['sensor', 'battery', 'system', 'pump']:
-            if data_type in item:
-                existing_ts = latest_timestamps.get(data_type, 0)
-                # Use this record if it's NEWER than existing data
-                if timestamp > existing_ts:
-                    data = dict(item[data_type])  # Copy to avoid mutation
-                    data['timestamp'] = timestamp  # Add record timestamp to data
-                    latest[data_type] = data
-                    latest_timestamps[data_type] = timestamp
-                    # Update last_update if this record is newer
-                    if 'last_update' not in latest or timestamp > latest['last_update']:
-                        latest['last_update'] = timestamp
-
-    return latest
-
 
 def verify_device_access(device_id, user_id):
     """Check if user owns this device (admins have access to all devices)"""
