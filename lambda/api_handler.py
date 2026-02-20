@@ -2207,6 +2207,10 @@ def get_devices(user_id):
                 'room': item.get('room', '—'),
                 'moisture_pct': None,
                 'adc_raw': None,
+                'percent_float': None,
+                'sensor2_adc': None,
+                'sensor2_percent': None,
+                'sensor2_percent_float': None,
                 'battery_pct': None,
                 'battery_charging': False,
                 'battery_no_data': True,
@@ -2227,6 +2231,9 @@ def get_devices(user_id):
                 'pump_calibration': 1.0,  # CALIBRATION_DEFAULT
                 'pump_speed': 100,
                 'sensor_calibration': {'water': 1200, 'dry_soil': 2400, 'air': 2800},
+                'total_water_ml': None,
+                'pump_runtime_sec': None,
+                'pump_running': False,
                 'owner': item.get('user_id')
             })
 
