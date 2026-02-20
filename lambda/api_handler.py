@@ -2193,6 +2193,10 @@ def get_devices(user_id):
                 # ADC < 100 = capacitive sensor not connected (same check as ESP32 sensor_is_connected)
                 'moisture_pct': latest.get('sensor', {}).get('moisture_percent') if not (latest.get('sensor', {}).get('adc_raw') is not None and latest.get('sensor', {}).get('adc_raw') < 100) else None,
                 'adc_raw': latest.get('sensor', {}).get('adc_raw'),
+                'percent_float': latest.get('sensor', {}).get('percent_float'),
+                'sensor2_adc': latest.get('sensor', {}).get('sensor2_adc'),
+                'sensor2_percent': latest.get('sensor', {}).get('sensor2_percent'),
+                'sensor2_percent_float': latest.get('sensor', {}).get('sensor2_percent_float'),
                 'battery_pct': battery_pct,
                 'battery_charging': battery_charging,
                 'battery_no_data': battery_no_data,  # True = no telemetry yet
@@ -4519,43 +4523,52 @@ def get_sensor_realtime(device_id, user_id):
 
             # Check if command completed (success or error)
             if status in ['success', 'error', 'completed']:
-                # FLEET ARCHITECTURE Phase 3: Read from devices.latest (single source of truth)
-                # iot_rule_response.py already updated devices.latest with normalized data
-                # (ADC < 100 → moisture_percent=null, battery from periodic telemetry only, etc.)
-                # No need to parse raw command result — devices.latest is authoritative.
-                device_info = get_device_info(device_id, user_id)
-                latest_data = device_info.get('latest', {}) if device_info else {}
+                # Parse command result directly (avoids race condition with iot_rule_response.py
+                # which updates devices.latest AFTER setting command status to 'success')
+                cmd_result = item.get('result', {})
+                sensor = cmd_result.get('sensor', {})
+                system = cmd_result.get('system', {})
+                pump = cmd_result.get('pump', {})
 
-                sensor = latest_data.get('sensor', {})
-                battery = latest_data.get('battery', {})
-                system = latest_data.get('system', {})
-                pump = latest_data.get('pump', {})
+                # Normalize sensor: ADC < 100 = disconnected
+                adc_raw = sensor.get('adc_raw') or sensor.get('adc')
+                if adc_raw is not None and int(adc_raw) < 100:
+                    sensor_moisture = None
+                    sensor_pct_float = None
+                else:
+                    sensor_moisture = sensor.get('moisture_percent') or sensor.get('moisture')
+                    sensor_pct_float = sensor.get('percent_float')
+
+                # Battery: percent from command response is unreliable (firmware bug)
+                # Use percent from devices.latest (periodic telemetry), but charging from command (reliable)
+                cmd_battery = cmd_result.get('battery', {})
+                device_info = get_device_info(device_id, user_id)
+                latest_battery = (device_info.get('latest', {}) if device_info else {}).get('battery', {})
+                battery = {
+                    'percent': latest_battery.get('percent'),
+                    'voltage': cmd_battery.get('voltage') or latest_battery.get('voltage'),
+                    'charging': cmd_battery.get('charging', latest_battery.get('charging', False))
+                }
 
                 # Convert battery percent -1 to null (indicates AC power, no battery)
-                if battery and (battery.get('percent') == -1 or battery.get('percent') == -1.0):
-                    battery = {**battery, 'percent': None}
+                if battery.get('percent') == -1 or battery.get('percent') == -1.0:
+                    battery['percent'] = None
 
                 return {
                     'statusCode': 200,
                     'headers': cors_headers(),
                     'body': json.dumps({
-                        # Sensor — already normalized by iot_rule_response.py
-                        # (ADC < 100 → moisture_percent=null, no fake 100%)
-                        'moisture_pct': sensor.get('moisture_percent'),
-                        'adc_raw': sensor.get('adc_raw'),
-                        'percent_float': sensor.get('percent_float'),
+                        'moisture_pct': sensor_moisture,
+                        'adc_raw': adc_raw,
+                        'percent_float': sensor_pct_float,
                         'sensor_calibration': sensor.get('calibration'),
-                        # Sensor2 (J7 resistive) — merged into sensor by iot_rule_response.py
                         'sensor2_adc': sensor.get('sensor2_adc'),
                         'sensor2_percent': sensor.get('sensor2_percent'),
                         'sensor2_percent_float': sensor.get('sensor2_percent_float'),
-                        # Battery — from periodic telemetry only (reliable source)
-                        'battery': battery if battery else None,
-                        # Pump
+                        'battery': battery,
                         'pump_running': pump.get('running', False),
                         'pump_calibration': pump.get('calibration'),
                         'pump_speed': pump.get('speed'),
-                        # System
                         'mode': system.get('mode', 'manual'),
                         'state': system.get('state', 'DISABLED'),
                         'firmware_version': system.get('firmware_version') or system.get('firmware'),

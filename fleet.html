@@ -1195,6 +1195,7 @@ async function refreshSensor(deviceId) {
       // Sensor2 (J7 resistive)
       if (result.sensor2_adc !== undefined) device.sensor2_adc = result.sensor2_adc;
       if (result.sensor2_percent !== undefined) device.sensor2_percent = result.sensor2_percent;
+      if (result.sensor2_percent_float !== undefined) device.sensor2_percent_float = result.sensor2_percent_float;
       // Mode and state - only update if present
       if (result.mode) device.mode = result.mode;
       if (result.state) device.state = result.state;
@@ -1252,6 +1253,7 @@ async function refreshSensorSilent(deviceId) {
       // Sensor2 (J7 resistive)
       if (result.sensor2_adc !== undefined) device.sensor2_adc = result.sensor2_adc;
       if (result.sensor2_percent !== undefined) device.sensor2_percent = result.sensor2_percent;
+      if (result.sensor2_percent_float !== undefined) device.sensor2_percent_float = result.sensor2_percent_float;
       // Mode and state - only update if present
       if (result.mode) device.mode = result.mode;
       if (result.state) device.state = result.state;
@@ -1504,6 +1506,7 @@ async function bulkAction(action) {
         // Sensor2 (J7 resistive)
         if (result.sensor2_adc !== undefined) device.sensor2_adc = result.sensor2_adc;
         if (result.sensor2_percent !== undefined) device.sensor2_percent = result.sensor2_percent;
+        if (result.sensor2_percent_float !== undefined) device.sensor2_percent_float = result.sensor2_percent_float;
         // Mode and state
         device.mode = result.mode || device.mode || 'manual';
         device.state = result.state || device.state || 'DISABLED';
