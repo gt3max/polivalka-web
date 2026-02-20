@@ -1314,9 +1314,9 @@ def get_plant_profile(user_id, device_id, origin):
     GET /plants/{device_id}
     Get plant profile from device record.
 
-    IMPORTANT: Each user has their OWN device record with their own plant profile.
-    When device is transferred, new user has separate record with no plant profile.
-    This ensures data isolation between users.
+    SINGLE RECORD ARCHITECTURE: One device = one record in DynamoDB.
+    When device is transferred, old record is deleted and new one is created for new owner.
+    Plant profile of previous owner is archived into plant_library.
     """
     try:
         # Normalize device_id
@@ -2097,43 +2097,9 @@ def get_devices(user_id):
     print(f"[DEBUG] get_devices: Found {len(items)} devices before filter: {[i['device_id'] for i in items]}")
 
     # Filter out archived and deleted devices
-    # For admin: keep transferred devices (show who they're assigned to)
-    # For regular users: filter out transferred devices
     is_admin = user_id in ADMIN_EMAILS
-    if is_admin:
-        # Admin sees all devices including transferred (to show assignments)
-        items = [i for i in items if not i.get('archived') and not i.get('deleted')]
-    else:
-        # Regular users don't see transferred devices
-        items = [i for i in items if not i.get('archived') and not i.get('deleted') and not i.get('transferred')]
+    items = [i for i in items if not i.get('archived') and not i.get('deleted')]
     print(f"[DEBUG] get_devices: {len(items)} devices after filter (is_admin={is_admin})")
-
-    # Admin: group by device_id to avoid duplicates (same device may have multiple owners)
-    is_admin = user_id in ADMIN_EMAILS
-    if is_admin:
-        device_groups = {}
-        for item in items:
-            did = item['device_id']
-            if did not in device_groups:
-                device_groups[did] = []
-            device_groups[did].append(item)
-
-        # For each group, pick primary item (prefer non-admin owner, then newest claimed_at)
-        items = []
-        for did, group in device_groups.items():
-            group.sort(key=lambda x: (x['user_id'] in ADMIN_EMAILS, -(x.get('claimed_at') or 0)))
-            primary = group[0]
-            primary['_all_owners'] = [i['user_id'] for i in group]
-            # Merge metadata from all records (device_name, location, room may be in any)
-            for other in group[1:]:
-                if not primary.get('device_name') and other.get('device_name'):
-                    primary['device_name'] = other['device_name']
-                if not primary.get('location') and other.get('location'):
-                    primary['location'] = other['location']
-                if not primary.get('room') and other.get('room'):
-                    primary['room'] = other['room']
-            items.append(primary)
-        print(f"[DEBUG] get_devices: Admin grouped to {len(items)} unique devices")
 
     devices = []
     for item in items:
@@ -2223,10 +2189,7 @@ def get_devices(user_id):
                 'pump_running': latest.get('pump', {}).get('running', False),  # For state display
                 # Owner info (for admin fleet view)
                 'owner': item.get('user_id'),
-                'all_owners': item.get('_all_owners', [item.get('user_id')]) if is_admin else None,
-                # Transfer status (for admin to see where device went)
-                'transferred': item.get('transferred', False),
-                'transferred_to': item.get('transferred_to')
+                # Single record: admin sees owner directly, no transferred flags needed
             }
 
             devices.append(device_data)
@@ -2264,8 +2227,7 @@ def get_devices(user_id):
                 'pump_calibration': 1.0,  # CALIBRATION_DEFAULT
                 'pump_speed': 100,
                 'sensor_calibration': {'water': 1200, 'dry_soil': 2400, 'air': 2800},
-                'owner': item.get('user_id'),
-                'all_owners': item.get('_all_owners', [item.get('user_id')]) if is_admin else None
+                'owner': item.get('user_id')
             })
 
     print(f"[DEBUG] get_devices: Returning {len(devices)} devices")
@@ -2985,11 +2947,7 @@ def get_device_info(device_id, user_id):
             KeyConditionExpression=Key('device_id').eq(device_id)
         )
         items = response.get('Items', [])
-        # Prefer active (non-transferred) record — transferred records have stale devices.latest
-        # because iot_rule_response.py and iot_rule_telemetry.py skip transferred records
-        active = [i for i in items if not i.get('transferred')]
-        if active:
-            return active[0]
+        # Single record architecture: one device = one record
         return items[0] if items else {}
     else:
         # Regular user: query by user_id + device_id
@@ -3698,29 +3656,32 @@ def claim_device(user_id, event, origin):
 
         user_record_exists = False
         if 'Item' in existing:
-            # Check if it's a transferred record (user reclaiming)
-            if not existing['Item'].get('transferred'):
-                user_record_exists = True
-                print(f"[Transfer] User {user_id} already has record for {device_id}, but CONTINUING to process transfers")
+            user_record_exists = True
+            print(f"[Transfer] User {user_id} already has record for {device_id}, but CONTINUING to process transfers")
                 # DON'T RETURN EARLY! Must still process transfers for OTHER owners
 
         current_time = int(time.time())
 
-        # ============ DEVICE TRANSFER ARCHITECTURE ============
-        # Find ALL existing records for this device (all owners)
+        # ============ SINGLE RECORD ARCHITECTURE ============
+        # One device = one record. Transfer = move ownership (delete old + create new).
+        # Find ALL existing records for this device
         all_records = devices_table.query(
             IndexName='device_id-index',
             KeyConditionExpression=Key('device_id').eq(device_id)
         )
 
+        # Collect data from previous owner's record to carry over
+        carried_latest = {}
+        carried_plant_library = []
+        carried_data = {}  # reboot_count, ota_count, calibration, etc.
         transfer_count = 0
-        # Archive previous owners' data and mark as transferred
+
         for record in all_records.get('Items', []):
             prev_owner = record['user_id']
             if prev_owner == user_id:
-                continue  # Skip if same user
+                continue  # Skip if same user (reclaim scenario)
 
-            # Move plant to plant_library (same format as _auto_detach_plant)
+            # Archive previous owner's active plant into plant_library
             plant = record.get('plant')
             plant_library = list(record.get('plant_library', []))
             if plant and plant.get('plant_id'):
@@ -3728,61 +3689,89 @@ def claim_device(user_id, event, origin):
                 plant['detached_at'] = current_time
                 plant['archived'] = True
                 plant['archived_at'] = current_time
+                plant['previous_owner'] = prev_owner
                 plant_library.append(plant)
                 plant_library = _enforce_library_limit(plant_library)
 
-            # Mark record as transferred (preserves history, stops latest updates)
+            # Carry over data from previous owner's record
+            carried_latest = record.get('latest', {})
+            carried_plant_library = plant_library
+            carried_data = {
+                'reboot_count': record.get('reboot_count'),
+                'clean_restarts': record.get('clean_restarts'),
+                'unexpected_restarts': record.get('unexpected_restarts'),
+                'ota_count': record.get('ota_count'),
+                'ota_last_timestamp': record.get('ota_last_timestamp'),
+                'total_water_ml': record.get('total_water_ml'),
+                'pump_runtime_sec': record.get('pump_runtime_sec'),
+                'last_watering_timestamp': record.get('last_watering_timestamp'),
+            }
+
+            # DELETE previous owner's record (not mark as transferred!)
             try:
-                update_expr = 'SET transferred = :t, transferred_to = :to, transferred_at = :at'
-                expr_values = {
-                    ':t': True,
-                    ':to': user_id,
-                    ':at': current_time
-                }
-
-                if plant_library:
-                    update_expr += ', plant_library = :lib'
-                    expr_values[':lib'] = plant_library
-
-                # Remove latest field (no longer updated for transferred records)
-                update_expr += ' REMOVE plant, latest'
-
-                devices_table.update_item(
-                    Key={'user_id': prev_owner, 'device_id': device_id},
-                    UpdateExpression=update_expr,
-                    ExpressionAttributeValues=expr_values
+                devices_table.delete_item(
+                    Key={'user_id': prev_owner, 'device_id': device_id}
                 )
                 transfer_count += 1
-                print(f"[Transfer] *** ARCHIVED *** {prev_owner}'s data for {device_id} (#{transfer_count})")
+                print(f"[Transfer] DELETED {prev_owner}'s record for {device_id}")
                 add_device_history(device_id, 'transferred', prev_owner,
                                    {'transferred_to': user_id, 'plant_archived': plant is not None})
             except Exception as e:
-                print(f"[Transfer] Error archiving {prev_owner}: {e}")
+                print(f"[Transfer] Error deleting {prev_owner}'s record: {e}")
 
-        # Create new device record for this user (skip if record already exists)
+        # Build the new single record for the new owner
+        new_record = {
+            'user_id': user_id,
+            'device_id': device_id,
+            'device_name': 'Polivalka',
+            'claimed_at': current_time,
+            'previous_owner': all_records['Items'][0]['user_id'] if all_records.get('Items') and all_records['Items'][0]['user_id'] != user_id else None,
+            'location': 'Home',
+            'room': 'Room',
+        }
+
+        # Copy carried-over data (latest, counters, library)
+        if carried_latest:
+            new_record['latest'] = carried_latest
+        if carried_plant_library:
+            new_record['plant_library'] = carried_plant_library
+        for key, value in carried_data.items():
+            if value is not None:
+                new_record[key] = value
+
+        # Remove None values (DynamoDB doesn't accept None for top-level attrs)
+        new_record = {k: v for k, v in new_record.items() if v is not None}
+
         if not user_record_exists:
-            devices_table.put_item(Item={
-                'user_id': user_id,
-                'device_id': device_id,
-                'device_name': 'Polivalka',  # Default name for new owner
-                'claimed_at': current_time,
-                'location': 'Home',
-                'room': 'Room'
-                # plant = None - user will set via identify.html
-            })
-            print(f"[Claim] Created new record for {user_id} -> {device_id}")
+            devices_table.put_item(Item=new_record)
+            print(f"[Claim] Created single record for {user_id} -> {device_id} (carried latest={bool(carried_latest)}, library={len(carried_plant_library)} items)")
         else:
-            # User record exists - update claimed_at to reset data isolation cutoff
-            # NOTE: Do NOT remove plant here - user may want to keep their plant profile
+            # User record exists (reclaim) — update it with carried data
+            update_parts = ['claimed_at = :ca', 'device_name = :dn']
+            expr_values = {':ca': current_time, ':dn': 'Polivalka'}
+
+            if carried_latest:
+                update_parts.append('latest = :lat')
+                expr_values[':lat'] = carried_latest
+            if carried_plant_library:
+                update_parts.append('plant_library = :lib')
+                expr_values[':lib'] = carried_plant_library
+            for key, value in carried_data.items():
+                if value is not None:
+                    safe_key = key.replace('-', '_')
+                    update_parts.append(f'{safe_key} = :{safe_key}')
+                    expr_values[f':{safe_key}'] = value
+
+            # Clean up legacy transferred fields (migration safety)
+            remove_parts = ['transferred', 'transferred_to', 'transferred_at']
+            update_expr = 'SET ' + ', '.join(update_parts) + ' REMOVE ' + ', '.join(remove_parts)
+
             devices_table.update_item(
                 Key={'user_id': user_id, 'device_id': device_id},
-                UpdateExpression='SET claimed_at = :ca, device_name = :dn REMOVE transferred',
-                ExpressionAttributeValues={
-                    ':ca': current_time,
-                    ':dn': 'Polivalka'
-                }
+                UpdateExpression=update_expr,
+                ExpressionAttributeValues=expr_values
             )
-            print(f"[Claim] Updated existing record for {user_id} -> {device_id}, reset claimed_at for data isolation")
+            print(f"[Claim] Updated existing record for {user_id} -> {device_id}")
 
         # Send MQTT command to ESP32 to reset device_name
         # Command is update_device_info (not set_device_name!)
@@ -3999,11 +3988,11 @@ def admin_delete_whitelist(email):
 def admin_revoke_device(event):
     """POST /admin/revoke-device - Revoke device from user, transfer back to admin
 
-    This is a CRITICAL operation that:
-    1. Marks user's record as transferred (back to admin)
-    2. Archives user's plant profile
-    3. Removes user's latest field (stops Fleet display)
-    4. Restores admin's record (removes transferred flag)
+    SINGLE RECORD: Moves device ownership from user back to admin.
+    1. Archives user's plant profile into plant_library
+    2. Creates admin's record with ALL carried data (latest, counters, library)
+    3. Deletes user's record
+    4. Removes device from user's whitelist
     5. Logs the revocation event
     """
     try:
@@ -4037,7 +4026,7 @@ def admin_revoke_device(event):
 
         print(f"[Revoke] *** DEVICE REVOCATION STARTED *** {device_id} from {user_email} to {admin_email}")
 
-        # ============ STEP 1: Mark user's record as transferred ============
+        # ============ SINGLE RECORD: Revoke = move ownership back to admin ============
         user_record = devices_table.get_item(
             Key={'user_id': user_email, 'device_id': device_id}
         )
@@ -4051,15 +4040,7 @@ def admin_revoke_device(event):
 
         user_item = user_record['Item']
 
-        # Check if already transferred
-        if user_item.get('transferred'):
-            return {
-                'statusCode': 400,
-                'headers': cors_headers(),
-                'body': json.dumps({'error': f'Device already transferred from {user_email}'})
-            }
-
-        # Move plant to plant_library (consistent with claim_device)
+        # Archive user's active plant into plant_library
         plant = user_item.get('plant')
         plant_library = list(user_item.get('plant_library', []))
         if plant and plant.get('plant_id'):
@@ -4067,61 +4048,46 @@ def admin_revoke_device(event):
             plant['detached_at'] = current_time
             plant['archived'] = True
             plant['archived_at'] = current_time
+            plant['previous_owner'] = user_email
             plant_library.append(plant)
             plant_library = _enforce_library_limit(plant_library)
 
-        # Mark user's record as transferred
-        update_expr = 'SET transferred = :t, transferred_to = :to, transferred_at = :at, revoked_by = :rb'
-        expr_values = {
-            ':t': True,
-            ':to': admin_email,
-            ':at': current_time,
-            ':rb': admin_email
+        # Build admin's new record with ALL data from user's record
+        admin_record = {
+            'user_id': admin_email,
+            'device_id': device_id,
+            'device_name': user_item.get('device_name', 'Polivalka'),
+            'claimed_at': current_time,
+            'previous_owner': user_email,
+            'location': user_item.get('location', 'Home'),
+            'room': user_item.get('room', 'Room'),
         }
 
+        # Carry over all device data
+        if user_item.get('latest'):
+            admin_record['latest'] = user_item['latest']
         if plant_library:
-            update_expr += ', plant_library = :lib'
-            expr_values[':lib'] = plant_library
+            admin_record['plant_library'] = plant_library
+        for key in ['reboot_count', 'clean_restarts', 'unexpected_restarts',
+                     'ota_count', 'ota_last_timestamp', 'total_water_ml',
+                     'pump_runtime_sec', 'last_watering_timestamp']:
+            if user_item.get(key) is not None:
+                admin_record[key] = user_item[key]
 
-        # Remove latest and plant
-        update_expr += ' REMOVE plant, latest'
+        # Remove None values
+        admin_record = {k: v for k, v in admin_record.items() if v is not None}
 
-        devices_table.update_item(
-            Key={'user_id': user_email, 'device_id': device_id},
-            UpdateExpression=update_expr,
-            ExpressionAttributeValues=expr_values
+        # DELETE user's record, CREATE admin's record
+        devices_table.delete_item(
+            Key={'user_id': user_email, 'device_id': device_id}
         )
+        devices_table.put_item(Item=admin_record)
 
-        print(f"[Revoke] *** ARCHIVED *** {user_email}'s data for {device_id}")
+        print(f"[Revoke] MOVED {device_id}: {user_email} → {admin_email} (library={len(plant_library)} items)")
         add_device_history(device_id, 'revoked', user_email, {
             'revoked_by': admin_email,
             'plant_archived': plant is not None
         })
-
-        # ============ STEP 2: Restore admin's record ============
-        admin_record = devices_table.get_item(
-            Key={'user_id': admin_email, 'device_id': device_id}
-        )
-
-        if 'Item' in admin_record:
-            # Admin record exists - just remove transferred flag
-            devices_table.update_item(
-                Key={'user_id': admin_email, 'device_id': device_id},
-                UpdateExpression='REMOVE transferred, transferred_to, transferred_at'
-            )
-            print(f"[Revoke] Restored admin record for {device_id}")
-        else:
-            # Create new admin record
-            devices_table.put_item(Item={
-                'user_id': admin_email,
-                'device_id': device_id,
-                'device_name': 'Polivalka',
-                'claimed_at': current_time,
-                'location': 'Home',
-                'room': 'Room'
-            })
-            print(f"[Revoke] Created new admin record for {device_id}")
-
         add_device_history(device_id, 'reclaimed', admin_email, {
             'reclaimed_from': user_email
         })

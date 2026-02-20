@@ -246,10 +246,6 @@ def lambda_handler(event, context):
 
                     for item in query_response['Items']:
                         owner_id = item['user_id']
-                        # Skip transferred records - they are archived, only active owner gets updates
-                        if item.get('transferred'):
-                            print(f"Skipping transferred record for {owner_id}/{device_id}")
-                            continue
 
                         try:
                             # Step 1: Ensure 'latest' Map exists (idempotent)
