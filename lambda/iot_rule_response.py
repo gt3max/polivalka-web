@@ -73,7 +73,8 @@ def normalize_flat_response(flat):
     if 'sensor2_adc' in flat or 'sensor2_percent' in flat:
         result['sensor2'] = {
             'adc': flat.get('sensor2_adc'),
-            'percent': flat.get('sensor2_percent')
+            'percent': flat.get('sensor2_percent'),
+            'percent_float': flat.get('sensor2_percent_float')
         }
 
     # Battery data
