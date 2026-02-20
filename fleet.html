@@ -1625,6 +1625,12 @@ async function massOTAUpdate() {
       console.log('[OTA] Firmware URL:', firmwareUrl);
       showToast('✅ Firmware uploaded to S3', 'success');
 
+      // Save firmware versions before OTA for verification
+      const versionsBefore = {};
+      for (const device of onlineDevices) {
+        versionsBefore[device.device_id] = device.firmware_version || 'unknown';
+      }
+
       // Step 3: Trigger OTA for all online devices
       console.log('[OTA] Triggering OTA for', onlineDevices.length, 'devices');
       const results = [];
@@ -1673,22 +1679,67 @@ async function massOTAUpdate() {
         if (!cmd.done) results.push({device_id: cmd.device_id, success: false, error: 'No response (timeout)'});
       }
 
-      // Step 4: Show results
-      const successful = results.filter(r => r.success).length;
-      const failed = results.filter(r => !r.success).length;
+      // Step 4: Verify actual firmware versions
+      // "success" only means device STARTED downloading — not that OTA completed
+      const started = results.filter(r => r.success);
+      if (started.length > 0) {
+        // Wait for devices to download, flash, and reboot (~45s)
+        for (let countdown = 45; countdown > 0; countdown--) {
+          showToast(`⏳ Verifying firmware... ${countdown}s`, 'info');
+          await new Promise(r => setTimeout(r, 1000));
+        }
 
-      let resultMsg = `📦 OTA Update Results\n\n✅ Accepted: ${successful}\n❌ Failed/Rejected: ${failed}\n\n`;
-
-      if (failed > 0) {
-        resultMsg += 'Failed devices:\n';
-        results.filter(r => !r.success).forEach(r => {
-          resultMsg += `- ${r.device_id}: ${r.error}\n`;
-        });
+        // Check actual firmware versions in parallel via get_status
+        showToast('🔍 Checking firmware versions...', 'info');
+        await Promise.allSettled(started.map(async (r) => {
+          try {
+            const status = await API.get(`/device/${r.device_id}/sensor`);
+            const newVersion = status.firmware_version || 'unknown';
+            const oldVersion = versionsBefore[r.device_id] || 'unknown';
+            r.newVersion = newVersion;
+            r.oldVersion = oldVersion;
+            r.verified = (newVersion !== oldVersion);
+          } catch(e) {
+            r.oldVersion = versionsBefore[r.device_id] || 'unknown';
+            r.verified = false;
+            r.verifyError = e.message;
+          }
+        }));
       }
+
+      // Step 5: Show results
+      const verified = results.filter(r => r.verified === true).length;
+      const unverified = results.filter(r => r.success && r.verified === false).length;
+      const rejected = results.filter(r => !r.success).length;
+
+      let resultMsg = '📦 OTA Update Results\n\n';
+      if (verified > 0) resultMsg += `✅ Updated: ${verified}\n`;
+      if (unverified > 0) resultMsg += `⚠️ NOT updated: ${unverified}\n`;
+      if (rejected > 0) resultMsg += `❌ Rejected: ${rejected}\n`;
+      resultMsg += '\n';
+
+      results.filter(r => r.verified === true).forEach(r => {
+        resultMsg += `✅ ${r.device_id}: ${r.oldVersion} → ${r.newVersion}\n`;
+      });
+      results.filter(r => r.success && r.verified === false).forEach(r => {
+        resultMsg += r.verifyError
+          ? `⚠️ ${r.device_id}: Cannot verify (${r.verifyError})\n`
+          : `⚠️ ${r.device_id}: Still ${r.oldVersion} — OTA failed!\n`;
+      });
+      results.filter(r => !r.success).forEach(r => {
+        resultMsg += `❌ ${r.device_id}: ${r.error}\n`;
+      });
 
       alert(resultMsg);
 
-      showToast(failed > 0 ? `⚠️ OTA: ${successful} OK, ${failed} failed` : `✅ All ${successful} devices accepted OTA`, failed > 0 ? 'error' : 'success');
+      const totalProblems = unverified + rejected;
+      showToast(totalProblems > 0
+        ? `⚠️ OTA: ${verified} updated, ${totalProblems} problems`
+        : `✅ All ${verified} devices updated successfully`,
+        totalProblems > 0 ? 'error' : 'success');
+
+      // Refresh fleet to show new versions
+      loadDevices();
 
     } catch(e) {
       console.error('Mass OTA failed:', e);
