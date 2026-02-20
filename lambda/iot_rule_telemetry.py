@@ -132,6 +132,15 @@ def lambda_handler(event, context):
             latest_data = convert_floats_to_decimal(data.copy())
             latest_data['updated_at'] = timestamp
 
+            # Normalize sensor: ADC < 100 = capacitive sensor not connected
+            # Write null instead of fake 100% moisture (ADC=0 → formula gives 100%)
+            if data_type == 'sensor':
+                adc = latest_data.get('adc_raw') or latest_data.get('adc')
+                if adc is not None and int(adc) < 100:
+                    latest_data['moisture_percent'] = None
+                    latest_data['percent_float'] = None
+                    print(f"Sensor disconnected (ADC={adc}): writing moisture_percent=null to devices.latest")
+
             # PUMP: Convert 'action' (start/stop) to 'running' (true/false)
             # API expects pump.running but telemetry sends pump.action
             if data_type == 'pump' and 'action' in data:
