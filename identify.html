@@ -1048,10 +1048,15 @@ function renderResults(results) {
     div.onclick = () => selectResult(index);
 
     let imagesHtml = '';
+    const wikiName = encodeURIComponent(result.scientific.replace(/ /g, '_'));
+    // Show PlantNet images with Wikipedia fallback if PlantNet CDN is down
     if (result.images && result.images.length > 0) {
       imagesHtml = '<div class="result-images">' +
-        result.images.map(url => `<img src="${url}" alt="" onerror="this.style.display='none'">`).join('') +
+        result.images.map(url => `<img src="${url}" alt="" onerror="this.onerror=null;fetch('https://en.wikipedia.org/api/rest_v1/page/summary/${wikiName}').then(r=>r.json()).then(d=>{if(d.thumbnail)this.src=d.thumbnail.source;else this.style.display='none'}).catch(()=>this.style.display='none')">`).join('') +
         '</div>';
+    } else {
+      // No PlantNet images at all — try Wikipedia directly
+      imagesHtml = `<div class="result-images"><img src="" alt="" data-wiki="${wikiName}" onerror="this.style.display='none'"></div>`;
     }
 
     // Show care preset badge
@@ -1112,8 +1117,20 @@ function showPlantCard(result) {
   selectedPlant = plantData;
   selectedResult = result;  // Store full result for saveToProfile
 
-  // Populate card
-  document.getElementById('card-photo').src = plantData.photos[0] || '';
+  // Populate card photo: try PlantNet first, fallback to Wikipedia thumbnail
+  const cardPhoto = document.getElementById('card-photo');
+  const plantNetUrl = plantData.photos[0] || '';
+  cardPhoto.src = plantNetUrl;
+  cardPhoto.onerror = function() {
+    // PlantNet image server (bs.plantnet.org) may be down — fetch Wikipedia thumbnail
+    this.onerror = null;
+    const wikiName = encodeURIComponent(result.scientific.replace(/ /g, '_'));
+    fetch(`https://en.wikipedia.org/api/rest_v1/page/summary/${wikiName}`)
+      .then(r => r.json())
+      .then(d => { if (d.thumbnail) { this.src = d.thumbnail.source; selectedPlant.wikiImage = d.thumbnail.source; } })
+      .catch(() => {});
+  };
+  if (!plantNetUrl) cardPhoto.onerror();
   document.getElementById('card-name').textContent = plantData.scientific;  // Scientific = primary
   document.getElementById('card-scientific').textContent = plantData.names.en || '';  // Common = secondary
 
@@ -1372,8 +1389,8 @@ async function saveToProfile() {
     poisonous_to_humans: toxicity.poisonous_to_humans,
     poisonous_to_pets: toxicity.poisonous_to_pets,
     toxicity_note: toxicity.toxicity_note,
-    // Image URL (external, not blob)
-    image_url: selectedPlant.photos?.[0] || ''
+    // Image URL: prefer Wikipedia (reliable) over PlantNet (bs.plantnet.org may be down)
+    image_url: selectedPlant.wikiImage || selectedPlant.photos?.[0] || ''
   };
 
   try {
