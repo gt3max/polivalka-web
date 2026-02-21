@@ -1666,7 +1666,7 @@ async function archiveDevice() {
   }
 
   const shortId = selectedDeviceId.replace('Polivalka-', '');
-  if (!confirm(`Archive device ${shortId}?\n\nIt will be hidden from Fleet but continue to work and send data.`)) {
+  if (!confirm(`Archive device ${shortId}?\n\nDevice will be hidden from Fleet.\nYou can restore it anytime from Archived Devices.`)) {
     return;
   }
 
