@@ -801,16 +801,20 @@ async function approveClaim(index) {
 
   // 1. Add/update user in whitelist with the device
   const existingUser = whitelistData.users?.[claim.email];
+  let whitelistOk = false;
   if (existingUser) {
-    // User exists - add device to their list
     const devices = existingUser.devices || [];
     if (!devices.includes(claim.device_id)) {
       devices.push(claim.device_id);
     }
-    await updateUserInWhitelist(claim.email, { devices });
+    whitelistOk = await updateUserInWhitelist(claim.email, { devices });
   } else {
-    // New user - add to whitelist with device
-    await addUserToWhitelist(claim.email, { devices: [claim.device_id] });
+    whitelistOk = await addUserToWhitelist(claim.email, { devices: [claim.device_id] });
+  }
+
+  if (!whitelistOk) {
+    alert('Failed to update whitelist. Claim NOT processed.');
+    return;
   }
 
   // 2. Delete the claim
@@ -1254,7 +1258,11 @@ function renderUsersList() {
         <button onclick="banUser('${email}')" style="font-size:11px;padding:4px 8px">Ban</button>
       `;
     } else {
-      actions = `<button onclick="deleteUser('${email}')" style="font-size:11px;padding:4px 8px">Delete</button>`;
+      // Unverified users: can add to whitelist or ban
+      actions = `
+        <button onclick="addToWhitelist('${email}')" style="font-size:11px;padding:4px 8px;background:#4caf50;color:#fff;border-color:#4caf50">+ Whitelist</button>
+        <button onclick="banUser('${email}')" style="font-size:11px;padding:4px 8px">Ban</button>
+      `;
     }
 
     // Devices section (expandable) - show for Admin and Whitelisted users
@@ -1475,7 +1483,7 @@ function showAssignDeviceDialog(email) {
 
   const options = availableDevices.map(d => {
     const shortId = d.device_id.replace('Polivalka-', '');
-    const name = d.device_name && d.device_name !== d.device_id ? ` (${d.device_name})` : '';
+    const name = d.name && d.name !== d.device_id ? ` (${d.name})` : '';
     // Value uses full format, display uses short
     return `<option value="${d.device_id}">${shortId}${name}</option>`;
   }).join('');
@@ -1612,7 +1620,7 @@ async function loadArchivedDevices() {
         <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid #333">
           <div>
             <span class="mono" style="color:#ff9800">${shortId}</span>
-            <span class="muted" style="margin-left:8px">${d.name !== d.device_id ? d.name : ''}</span>
+            <span class="muted" style="margin-left:8px">${d.name && d.name !== d.device_id ? d.name : ''}</span>
             <div class="muted" style="font-size:11px">Archived: ${date}</div>
           </div>
           <button onclick="restoreArchived('${d.device_id}')" style="font-size:12px;padding:4px 8px">Restore</button>
@@ -1646,7 +1654,7 @@ async function loadDeletedDevices() {
         <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid #333">
           <div>
             <span class="mono" style="color:#f44">${shortId}</span>
-            <span class="muted" style="margin-left:8px">${d.name !== d.device_id ? d.name : ''}</span>
+            <span class="muted" style="margin-left:8px">${d.name && d.name !== d.device_id ? d.name : ''}</span>
             <div class="muted" style="font-size:11px">Deleted: ${date}</div>
           </div>
           <button onclick="restoreDeleted('${d.device_id}')" style="font-size:12px;padding:4px 8px">Restore</button>
@@ -1679,10 +1687,13 @@ async function archiveDevice() {
 
     if (res.ok) {
       alert(`✓ Device ${shortId} archived`);
-      loadDevices();  // Refresh device list
-      loadArchivedDevices();  // Refresh archived list
+      selectedDeviceId = null;
+      loadDevices();
+      loadArchivedDevices();
       document.getElementById('device-select').value = '';
       document.getElementById('device-info').style.display = 'none';
+      document.getElementById('device-stats-card').style.display = 'none';
+      document.getElementById('device-history-card').style.display = 'none';
       updateDangerButtons(false);
     } else {
       alert('Error: ' + (data.error || 'Unknown error'));
@@ -1718,10 +1729,13 @@ async function deleteDevice() {
 
     if (res.ok) {
       alert(`✓ Device ${shortId} deleted\n\nCertificate deactivated.`);
+      selectedDeviceId = null;
       loadDevices();
       loadDeletedDevices();
       document.getElementById('device-select').value = '';
       document.getElementById('device-info').style.display = 'none';
+      document.getElementById('device-stats-card').style.display = 'none';
+      document.getElementById('device-history-card').style.display = 'none';
       updateDangerButtons(false);
     } else {
       alert('Error: ' + (data.error || 'Unknown error'));
