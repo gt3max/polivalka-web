@@ -633,8 +633,7 @@ function renderPlantLibrary(plants) {
   listDiv.innerHTML = libraryPlants.map(plant => {
     const archivedBadge = plant.archived ? '<span style="background:#ff9800;color:#fff;font-size:10px;padding:1px 4px;border-radius:4px;margin-left:4px">Archived</span>' : '';
     const activeBadge = plant.active ? '<span style="background:#4caf50;color:#fff;font-size:10px;padding:1px 4px;border-radius:4px;margin-left:4px">Active</span>' : '';
-    const deviceMac = plant.device_id.replace('Polivalka-', '');
-    const deviceLabel = plant.device_room ? `${plant.device_room} (${deviceMac})` : deviceMac;
+    const deviceLabel = plant.device_id.replace('Polivalka-', '');
 
     // Show device + time period
     let timeInfo = '';
