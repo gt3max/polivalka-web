@@ -633,6 +633,7 @@ function renderPlantLibrary(plants) {
   listDiv.innerHTML = libraryPlants.map(plant => {
     const archivedBadge = plant.archived ? '<span style="background:#ff9800;color:#fff;font-size:10px;padding:1px 4px;border-radius:4px;margin-left:4px">Archived</span>' : '';
     const activeBadge = plant.active ? '<span style="background:#4caf50;color:#fff;font-size:10px;padding:1px 4px;border-radius:4px;margin-left:4px">Active</span>' : '';
+    const ownerBadge = plant.owner ? `<span style="background:#2196f3;color:#fff;font-size:10px;padding:1px 4px;border-radius:4px;margin-left:4px">${plant.owner}</span>` : '';
     const deviceLabel = plant.device_id.replace('Polivalka-', '');
 
     // Show device + time period
@@ -655,7 +656,7 @@ function renderPlantLibrary(plants) {
              onerror="wikiImgFallback(this)">
         <div style="flex:1;min-width:0">
           <div style="font-weight:600;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">
-            ${plant.common_name || plant.scientific}${archivedBadge}${activeBadge}
+            ${plant.common_name || plant.scientific}${archivedBadge}${activeBadge}${ownerBadge}
           </div>
           <div style="font-size:12px;color:#666">${plant.preset || 'Standard'} • 📟 ${deviceLabel}${timeInfo}</div>
         </div>
