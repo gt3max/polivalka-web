@@ -256,18 +256,19 @@ def lambda_handler(event, context):
                             )
 
                             # Step 2: Update each data type SEPARATELY with timestamp protection
-                            # NOTE: Battery percent is unreliable from get_status (firmware bug).
-                            # But charging status IS reliable and changes when user plugs/unplugs charger.
-                            # So we update ONLY battery.charging, NOT battery.percent.
-                            for dtype in ['sensor', 'system', 'pump']:
+                            # Battery included: firmware bug (percent=0 with high voltage) is already
+                            # filtered in normalize_flat_response(). Current firmware (v1.0.121+, battery.c FROZEN)
+                            # sends reliable battery data.
+                            for dtype in ['sensor', 'system', 'pump', 'battery']:
                                 if dtype in result and result[dtype]:
                                     data_copy = convert_floats(result[dtype].copy())
                                     data_copy['updated_at'] = current_time
 
                                     # Normalize sensor: ADC < 100 = capacitive sensor not connected
                                     # Write null instead of fake 100% moisture (ADC=0 → formula gives 100%)
+                                    # NOTE: Use `is not None` instead of `or` — ADC=0 is valid (falsy in Python!)
                                     if dtype == 'sensor':
-                                        adc = data_copy.get('adc_raw') or data_copy.get('adc')
+                                        adc = data_copy.get('adc_raw') if data_copy.get('adc_raw') is not None else data_copy.get('adc')
                                         if adc is not None and int(adc) < 100:
                                             data_copy['moisture_percent'] = None
                                             data_copy['percent_float'] = None
@@ -283,21 +284,6 @@ def lambda_handler(event, context):
                                         )
                                     except dynamodb.meta.client.exceptions.ConditionalCheckFailedException:
                                         print(f"Skipping stale {dtype} for {owner_id}/{device_id}: ts={current_time} not newer")
-
-                            # Battery: Update ONLY charging status (reliable), NOT percent (unreliable firmware bug)
-                            if 'battery' in result and result['battery']:
-                                battery = result['battery']
-                                charging = battery.get('charging')
-                                if charging is not None:
-                                    try:
-                                        devices_table.update_item(
-                                            Key={'user_id': owner_id, 'device_id': device_id},
-                                            UpdateExpression='SET latest.battery.charging = :c',
-                                            ExpressionAttributeValues={':c': charging}
-                                        )
-                                        print(f"Updated battery.charging={charging} for {owner_id}/{device_id}")
-                                    except Exception as e:
-                                        print(f"Error updating battery.charging: {e}")
 
                             # Always update last_update for online status (no condition - always want latest)
                             devices_table.update_item(

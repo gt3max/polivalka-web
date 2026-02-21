@@ -28,6 +28,7 @@ Output (to DynamoDB polivalka_telemetry):
 import json
 import boto3
 import os
+import time
 from decimal import Decimal
 from boto3.dynamodb.conditions import Key
 
@@ -61,6 +62,13 @@ def lambda_handler(event, context):
     # СТАНДАРТ: device_id ВСЕГДА в формате "Polivalka-BC67E9" (с префиксом!)
     device_id = event.get('device_id', '')  # "Polivalka-BB00C1"
     timestamp = event.get('timestamp', 0)
+
+    # FIX: If timestamp=0 (NTP not synced on ESP32), use Lambda's own time
+    # Without this, ConditionExpression rejects the update because old updated_at > 0
+    # This causes stale data in devices.latest after reboot/erase-flash
+    if not timestamp or timestamp == 0:
+        timestamp = int(time.time())
+        print(f"[WARN] timestamp=0 from {device_id} (NTP not synced) — using Lambda time: {timestamp}")
 
     # Determine data type (sensor, battery, pump, system)
     data_type = None
@@ -134,8 +142,9 @@ def lambda_handler(event, context):
 
             # Normalize sensor: ADC < 100 = capacitive sensor not connected
             # Write null instead of fake 100% moisture (ADC=0 → formula gives 100%)
+            # NOTE: Use `is not None` instead of `or` — ADC=0 is a valid value (falsy in Python!)
             if data_type == 'sensor':
-                adc = latest_data.get('adc_raw') or latest_data.get('adc')
+                adc = latest_data.get('adc_raw') if latest_data.get('adc_raw') is not None else latest_data.get('adc')
                 if adc is not None and int(adc) < 100:
                     latest_data['moisture_percent'] = None
                     latest_data['percent_float'] = None

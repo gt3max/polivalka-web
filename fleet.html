@@ -1195,10 +1195,15 @@ async function refreshSensor(deviceId) {
       // Recalculate controller_enabled based on new state (same logic as get_devices)
       device.controller_enabled = device.state !== 'DISABLED';
       if (result.pump_running !== undefined) device.pump_running = result.pump_running;
-      // Battery: percent is unreliable from command response (firmware bug)
-      // BUT charging status IS reliable and should be updated
-      if (result.battery && result.battery.charging !== undefined) {
-        device.battery_charging = result.battery.charging;
+      // Battery: update percent + charging from command response
+      // Firmware bug (percent=0 with high voltage) is filtered server-side in normalize_flat_response()
+      if (result.battery) {
+        if (result.battery.percent !== undefined && result.battery.percent !== null) {
+          device.battery_pct = result.battery.percent;
+        }
+        if (result.battery.charging !== undefined) {
+          device.battery_charging = result.battery.charging;
+        }
       }
       // Pump calibration and speed (for water volume calculation)
       if (result.pump_calibration !== undefined) device.pump_calibration = result.pump_calibration;
@@ -1216,7 +1221,7 @@ async function refreshSensor(deviceId) {
       renderDevices(allDevices);
       updateStats(allDevices);
 
-      // Show success feedback with updated values (no battery - unreliable from command response)
+      // Show success feedback with updated values
       const moistureDisplay = device.moisture_pct !== undefined && device.moisture_pct !== null ? Math.round(device.moisture_pct) + '%' : '—';
       showToast(`✅ ${deviceId}: ${moistureDisplay} | ${device.state}`, 'success');
     }
@@ -1253,10 +1258,14 @@ async function refreshSensorSilent(deviceId) {
       // Recalculate controller_enabled based on new state (same logic as get_devices)
       device.controller_enabled = device.state !== 'DISABLED';
       if (result.pump_running !== undefined) device.pump_running = result.pump_running;
-      // Battery: percent is unreliable from command response (firmware bug)
-      // BUT charging status IS reliable and should be updated
-      if (result.battery && result.battery.charging !== undefined) {
-        device.battery_charging = result.battery.charging;
+      // Battery: update percent + charging from command response
+      if (result.battery) {
+        if (result.battery.percent !== undefined && result.battery.percent !== null) {
+          device.battery_pct = result.battery.percent;
+        }
+        if (result.battery.charging !== undefined) {
+          device.battery_charging = result.battery.charging;
+        }
       }
       // Pump calibration and speed (for water volume calculation)
       if (result.pump_calibration !== undefined) device.pump_calibration = result.pump_calibration;
@@ -1506,9 +1515,14 @@ async function bulkAction(action) {
         // Recalculate controller_enabled based on new state
         device.controller_enabled = device.state !== 'DISABLED';
         if (result.pump_running !== undefined) device.pump_running = result.pump_running;
-        // Battery: percent is unreliable (firmware bug), BUT charging status IS reliable
-        if (result.battery && result.battery.charging !== undefined) {
-          device.battery_charging = result.battery.charging;
+        // Battery: update percent + charging from command response
+        if (result.battery) {
+          if (result.battery.percent !== undefined && result.battery.percent !== null) {
+            device.battery_pct = result.battery.percent;
+          }
+          if (result.battery.charging !== undefined) {
+            device.battery_charging = result.battery.charging;
+          }
         }
         // Pump calibration and speed
         if (result.pump_calibration !== undefined) device.pump_calibration = result.pump_calibration;

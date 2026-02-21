@@ -4504,22 +4504,23 @@ def get_sensor_realtime(device_id, user_id):
                 pump = cmd_result.get('pump', {})
 
                 # Normalize sensor: ADC < 100 = disconnected
-                adc_raw = sensor.get('adc_raw') or sensor.get('adc')
+                # NOTE: Use `is not None` instead of `or` — 0 and 0.0 are valid values!
+                adc_raw = sensor.get('adc_raw') if sensor.get('adc_raw') is not None else sensor.get('adc')
                 if adc_raw is not None and int(adc_raw) < 100:
                     sensor_moisture = None
                     sensor_pct_float = None
                 else:
-                    sensor_moisture = sensor.get('moisture_percent') or sensor.get('moisture')
+                    sensor_moisture = sensor.get('moisture_percent') if sensor.get('moisture_percent') is not None else sensor.get('moisture')
                     sensor_pct_float = sensor.get('percent_float')
 
-                # Battery: percent from command response is unreliable (firmware bug)
-                # Use percent from devices.latest (periodic telemetry), but charging from command (reliable)
+                # Battery: use command response (reliable in current firmware v1.0.121+)
+                # with fallback to devices.latest (periodic telemetry)
                 cmd_battery = cmd_result.get('battery', {})
                 device_info = get_device_info(device_id, user_id)
                 latest_battery = (device_info.get('latest', {}) if device_info else {}).get('battery', {})
                 battery = {
-                    'percent': latest_battery.get('percent'),
-                    'voltage': cmd_battery.get('voltage') or latest_battery.get('voltage'),
+                    'percent': cmd_battery.get('percent') if cmd_battery.get('percent') is not None else latest_battery.get('percent'),
+                    'voltage': cmd_battery.get('voltage') if cmd_battery.get('voltage') is not None else latest_battery.get('voltage'),
                     'charging': cmd_battery.get('charging', latest_battery.get('charging', False))
                 }
 
