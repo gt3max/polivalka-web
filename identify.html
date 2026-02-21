@@ -1085,6 +1085,16 @@ function renderResults(results) {
 
     container.appendChild(div);
   });
+
+  // Timeout fallback: if PlantNet images don't load in 2s (DNS hang), force Wikipedia
+  container.querySelectorAll('img[data-wiki-names]').forEach(img => {
+    const tid = setTimeout(() => {
+      if (!img.complete || img.naturalWidth === 0) {
+        wikiImgFallback(img);
+      }
+    }, 2000);
+    img.addEventListener('load', () => clearTimeout(tid));
+  });
 }
 
 function selectResult(index) {
@@ -1136,14 +1146,25 @@ function showPlantCard(result) {
       })
       .catch(() => tryWikiImage(el, names, idx + 1));
   }
-  cardPhoto.src = plantNetUrl;
   cardPhoto.onerror = function() {
     this.onerror = null;
-    // Fallback chain: scientific name → genus → family
     const names = [result.scientific, result.genus, result.family].filter(Boolean).map(n => n.replace(/ /g, '_'));
     tryWikiImage(this, names, 0);
   };
-  if (!plantNetUrl) cardPhoto.onerror();
+  if (plantNetUrl) {
+    cardPhoto.src = plantNetUrl;
+    // Timeout fallback: if PlantNet doesn't load in 2s (DNS hang), force Wikipedia
+    const cardTimeout = setTimeout(() => {
+      if (!cardPhoto.complete || cardPhoto.naturalWidth === 0) {
+        cardPhoto.onerror();
+      }
+    }, 2000);
+    cardPhoto.addEventListener('load', () => clearTimeout(cardTimeout), { once: true });
+  } else {
+    // No PlantNet URL at all — go straight to Wikipedia
+    const names = [result.scientific, result.genus, result.family].filter(Boolean).map(n => n.replace(/ /g, '_'));
+    tryWikiImage(cardPhoto, names, 0);
+  }
   document.getElementById('card-name').textContent = plantData.scientific;  // Scientific = primary
   document.getElementById('card-scientific').textContent = plantData.names.en || '';  // Common = secondary
 
