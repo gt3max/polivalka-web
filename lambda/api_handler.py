@@ -2189,7 +2189,7 @@ def get_devices(user_id):
                 'pump_running': latest.get('pump', {}).get('running', False),  # For state display
                 # Owner info (for admin fleet view)
                 'owner': item.get('user_id'),
-                # Single record: admin sees owner directly, no transferred flags needed
+                'claimed_at': item.get('claimed_at')
             }
 
             devices.append(device_data)

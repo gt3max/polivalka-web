@@ -695,11 +695,12 @@ function renderDevices(devices) {
     return;
   }
 
-  // Sort: 1) Assigned (users), 2) Admin online, 3) Admin offline with data, 4) Admin no data
+  // Sort: 1) Assigned by claimed_at, 2) Admin online, 3) Admin offline with data, 4) No data
   devices.sort((a, b) => {
     const aAssigned = a.owner && a.owner !== 'admin' ? 0 : 1;
     const bAssigned = b.owner && b.owner !== 'admin' ? 0 : 1;
     if (aAssigned !== bAssigned) return aAssigned - bAssigned;
+    if (!aAssigned && !bAssigned) return (a.claimed_at || 0) - (b.claimed_at || 0);
     const aNoData = a.battery_no_data && a.moisture_pct == null;
     const bNoData = b.battery_no_data && b.moisture_pct == null;
     if (aNoData !== bNoData) return aNoData ? 1 : -1;
