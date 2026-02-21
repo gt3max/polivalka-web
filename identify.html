@@ -739,7 +739,7 @@ async function assignPlantFromLibrary(plantId) {
 }
 
 async function archivePlant() {
-  if (!confirm('Archive this plant? Historical data will be preserved.')) return;
+  if (!confirm('Archive this plant profile?\n\nThe device will continue collecting data, but it won\'t be linked to this plant.\n\nTip: remove the device from the plant physically before archiving.')) return;
 
   const deviceId = getDeviceId();
   if (!deviceId) return;
