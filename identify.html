@@ -634,17 +634,15 @@ function renderPlantLibrary(plants) {
     const archivedBadge = plant.archived ? '<span style="background:#ff9800;color:#fff;font-size:10px;padding:1px 4px;border-radius:4px;margin-left:4px">Archived</span>' : '';
     const activeBadge = plant.active ? '<span style="background:#4caf50;color:#fff;font-size:10px;padding:1px 4px;border-radius:4px;margin-left:4px">Active</span>' : '';
     const deviceLabel = plant.device_room || plant.device_id.replace('Polivalka-', '');
-    const isOtherDevice = plant.device_id !== currentDeviceId;
-    const deviceInfo = isOtherDevice ? deviceLabel : 'this device';
 
-    // Show when plant was active / detached
+    // Show device + time period
     let timeInfo = '';
-    if (plant.ended_at) {
-      const d = new Date(plant.ended_at * 1000);
-      timeInfo = ` • detached ${d.toLocaleDateString()}`;
+    if (plant.started_at && plant.ended_at) {
+      const s = new Date(plant.started_at * 1000).toLocaleDateString();
+      const e = new Date(plant.ended_at * 1000).toLocaleDateString();
+      timeInfo = ` • ${s} — ${e}`;
     } else if (plant.started_at) {
-      const d = new Date(plant.started_at * 1000);
-      timeInfo = ` • since ${d.toLocaleDateString()}`;
+      timeInfo = ` • since ${new Date(plant.started_at * 1000).toLocaleDateString()}`;
     }
 
     return `
@@ -659,7 +657,7 @@ function renderPlantLibrary(plants) {
           <div style="font-weight:600;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">
             ${plant.common_name || plant.scientific}${archivedBadge}${activeBadge}
           </div>
-          <div style="font-size:12px;color:#666">${plant.preset || 'Standard'} • ${deviceInfo}${timeInfo}</div>
+          <div style="font-size:12px;color:#666">${plant.preset || 'Standard'} • 📟 ${deviceLabel}${timeInfo}</div>
         </div>
         <div style="display:flex;align-items:center;gap:8px">
           <button onclick="event.stopPropagation();deleteLibraryPlant('${plant.plant_id}','${plant.device_id}','${(plant.common_name || plant.scientific || '').replace(/'/g, "\\'")}')"
