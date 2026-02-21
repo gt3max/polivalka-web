@@ -760,6 +760,8 @@ async function archivePlant() {
       document.getElementById('archived-badge').style.display = 'inline';
       document.getElementById('btn-archive').style.display = 'none';
       document.getElementById('btn-unarchive').style.display = 'block';
+      // Refresh library to show archived plant
+      loadPlantLibrary();
     } else {
       showToast(data.error || 'Failed to archive', 'error');
     }
@@ -787,6 +789,8 @@ async function unarchivePlant() {
       document.getElementById('archived-badge').style.display = 'none';
       document.getElementById('btn-archive').style.display = 'block';
       document.getElementById('btn-unarchive').style.display = 'none';
+      // Refresh library
+      loadPlantLibrary();
     } else {
       showToast(data.error || 'Failed to restore', 'error');
     }
@@ -810,6 +814,8 @@ async function deletePlant() {
     if (resp.ok) {
       showToast('Plant deleted', 'success');
       document.getElementById('step-current').style.display = 'none';
+      // Refresh library
+      loadPlantLibrary();
     } else {
       showToast(data.error || 'Failed to delete', 'error');
     }
