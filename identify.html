@@ -188,7 +188,7 @@
     <div class="upload-area" id="upload-area">
       <div class="upload-icon">📷</div>
       <div class="upload-text">Drag & drop a photo or click to upload</div>
-      <div class="upload-hint">Supports JPG, PNG (max 5MB)</div>
+      <div class="upload-hint">Supports JPG, PNG, HEIC, WebP (max 20MB)</div>
       <div class="upload-buttons">
         <button type="button" class="primary" onclick="document.getElementById('file-input').click()">
           📁 Choose File
@@ -463,6 +463,19 @@ document.addEventListener('visibilitychange', () => {
 updateStatus();
 startPolling();
 
+// ============ Wikipedia Image Fallback ============
+function wikiImgFallback(el) {
+  el.onerror = null;
+  const names = JSON.parse(el.dataset.wikiNames || '[]');
+  (function tryNext(img, arr, i) {
+    if (i >= arr.length) { img.style.display = 'none'; return; }
+    fetch('https://en.wikipedia.org/api/rest_v1/page/summary/' + arr[i])
+      .then(function(r) { return r.ok ? r.json() : null; })
+      .then(function(d) { if (d && d.thumbnail) img.src = d.thumbnail.source; else tryNext(img, arr, i + 1); })
+      .catch(function() { tryNext(img, arr, i + 1); });
+  })(el, names, 0);
+}
+
 // ============ State ============
 let selectedFiles = [];
 let identificationResults = [];
@@ -657,9 +670,7 @@ async function deleteLibraryPlant(plantId, deviceId, plantName) {
   try {
     const resp = await fetch(`${CONFIG.apiUrl}/plants/${deviceId}?plant_id=${plantId}`, {
       method: 'DELETE',
-      headers: {
-        'Authorization': `Bearer ${localStorage.getItem('id_token')}`
-      }
+      headers: API.getAuthHeaders()
     });
     const data = await resp.json();
 
@@ -684,7 +695,7 @@ async function assignPlantFromLibrary(plantId) {
     const resp = await fetch(`${CONFIG.apiUrl}/plants/${deviceId}/assign`, {
       method: 'POST',
       headers: {
-        'Authorization': `Bearer ${localStorage.getItem('id_token')}`,
+        ...API.getAuthHeaders(),
         'Content-Type': 'application/json'
       },
       body: JSON.stringify({ plant_id: plantId })
@@ -713,7 +724,7 @@ async function archivePlant() {
     const resp = await fetch(`${CONFIG.apiUrl}/plants/${deviceId}/archive`, {
       method: 'POST',
       headers: {
-        'Authorization': `Bearer ${localStorage.getItem('id_token')}`,
+        ...API.getAuthHeaders(),
         'Content-Type': 'application/json'
       }
     });
@@ -740,7 +751,7 @@ async function unarchivePlant() {
     const resp = await fetch(`${CONFIG.apiUrl}/plants/${deviceId}/unarchive`, {
       method: 'POST',
       headers: {
-        'Authorization': `Bearer ${localStorage.getItem('id_token')}`,
+        ...API.getAuthHeaders(),
         'Content-Type': 'application/json'
       }
     });
@@ -768,9 +779,7 @@ async function deletePlant() {
   try {
     const resp = await fetch(`${CONFIG.apiUrl}/plants/${deviceId}`, {
       method: 'DELETE',
-      headers: {
-        'Authorization': `Bearer ${localStorage.getItem('id_token')}`
-      }
+      headers: API.getAuthHeaders()
     });
     const data = await resp.json();
     if (resp.ok) {
@@ -1050,10 +1059,9 @@ function renderResults(results) {
     let imagesHtml = '';
     // Show PlantNet images with Wikipedia fallback chain (scientific → genus → family)
     const wikiNames = [result.scientific, result.genus, result.family].filter(Boolean).map(n => encodeURIComponent(n.replace(/ /g, '_')));
-    const fallbackJs = `this.onerror=null;var ns=${JSON.stringify(wikiNames)};(function t(e,a,i){if(i>=a.length){e.style.display='none';return}fetch('https://en.wikipedia.org/api/rest_v1/page/summary/'+a[i]).then(function(r){return r.ok?r.json():null}).then(function(d){if(d&&d.thumbnail)e.src=d.thumbnail.source;else t(e,a,i+1)}).catch(function(){t(e,a,i+1)})})(this,ns,0)`;
     if (result.images && result.images.length > 0) {
       imagesHtml = '<div class="result-images">' +
-        result.images.map(url => `<img src="${url}" alt="" onerror="${fallbackJs}">`).join('') +
+        result.images.map(url => `<img src="${url}" alt="" data-wiki-names='${JSON.stringify(wikiNames)}' onerror="wikiImgFallback(this)">`).join('') +
         '</div>';
     }
 
@@ -1165,27 +1173,31 @@ function showPlantCard(result) {
   const toxicPetsItem = document.getElementById('toxic-pets-item');
   let showSafety = false;
 
+  // Reset safety section: remove dynamic notes, hide items
+  safetySection.querySelectorAll('.toxicity-note').forEach(el => el.remove());
+  toxicHumansItem.style.display = 'none';
+  toxicPetsItem.style.display = 'none';
+
   const toxicity = result.toxicity;
   if (toxicity) {
     if (toxicity.toxicity_note) {
-      // Show detailed note (friendlier than "TOXIC")
       const noteEl = document.createElement('div');
+      noteEl.className = 'toxicity-note';
       noteEl.style.cssText = 'font-size:12px;color:#e65100;background:#fff3e0;padding:8px 10px;border-radius:6px;margin-bottom:8px';
-      let noteText = `⚠️ ${toxicity.toxicity_note}`;
-      if (toxicity.poisonous_to_pets) noteText += ' • Keep away from pets';
+      let noteText = `${toxicity.toxicity_note}`;
+      if (toxicity.poisonous_to_pets) noteText += ' - Keep away from pets';
       noteEl.textContent = noteText;
-      safetySection.insertBefore(noteEl, safetySection.firstChild);
+      safetySection.insertBefore(noteEl, safetySection.querySelector('.care-grid'));
       showSafety = true;
     } else {
-      // No note - show simple labels
       if (toxicity.poisonous_to_humans === true) {
         toxicHumansItem.style.display = '';
-        document.getElementById('toxic-humans').textContent = '⚠️ Caution';
+        document.getElementById('toxic-humans').textContent = 'Caution';
         showSafety = true;
       }
       if (toxicity.poisonous_to_pets === true) {
         toxicPetsItem.style.display = '';
-        document.getElementById('toxic-pets').textContent = '⚠️ Keep away from pets';
+        document.getElementById('toxic-pets').textContent = 'Keep away from pets';
         showSafety = true;
       }
     }
@@ -1193,9 +1205,12 @@ function showPlantCard(result) {
 
   safetySection.style.display = showSafety ? '' : 'none';
 
-  // Plant info section
+  // Plant info section — reset all optional items first
   const infoSection = document.getElementById('info-section');
   let showInfo = false;
+  ['size-item','growth-item','cycle-item','difficulty-item','hardiness-item','indoor-item'].forEach(id => {
+    document.getElementById(id).style.display = 'none';
+  });
 
   if (details.dimension) {
     document.getElementById('size-item').style.display = '';
@@ -1232,9 +1247,12 @@ function showPlantCard(result) {
   }
   infoSection.style.display = showInfo ? '' : 'none';
 
-  // Propagation section
+  // Propagation section — reset all optional items first
   const propSection = document.getElementById('propagation-section');
   let showProp = false;
+  ['propagation-item','pruning-item','soil-item','pests-item'].forEach(id => {
+    document.getElementById(id).style.display = 'none';
+  });
 
   if (details.propagation && details.propagation.length > 0) {
     document.getElementById('propagation-item').style.display = '';
@@ -1482,17 +1500,6 @@ function getDeviceId() {
   // Get from URL or localStorage
   const params = new URLSearchParams(window.location.search);
   return params.get('device') || localStorage.getItem('selected_device_id');
-}
-
-async function apiCall(endpoint, data) {
-  // Use existing api-adapter.js if available
-  if (typeof callCloudAPI === 'function') {
-    return await callCloudAPI(endpoint, data);
-  }
-
-  // Fallback for mock mode
-  console.log('[API Mock]', endpoint, data);
-  return { success: true };
 }
 
 console.log('[Identify] Script loaded');
