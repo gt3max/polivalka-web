@@ -544,7 +544,20 @@ async function loadSavedProfile() {
 }
 
 function showCurrentPlant(plant) {
-  document.getElementById('current-plant-img').src = plant.image_url || '';
+  const currentImg = document.getElementById('current-plant-img');
+  currentImg.src = plant.image_url || '';
+  // Timeout fallback: if saved image URL hangs (PlantNet DNS down), try Wikipedia
+  if (plant.image_url && plant.scientific) {
+    const tid = setTimeout(() => {
+      if (!currentImg.complete || currentImg.naturalWidth === 0) {
+        currentImg.onerror = null;
+        const names = [plant.scientific, plant.family].filter(Boolean).map(n => encodeURIComponent(n.replace(/ /g, '_')));
+        currentImg.dataset.wikiNames = JSON.stringify(names);
+        wikiImgFallback(currentImg);
+      }
+    }, 2000);
+    currentImg.addEventListener('load', () => clearTimeout(tid), { once: true });
+  }
   document.getElementById('current-plant-name').textContent = plant.common_name || plant.scientific;
   document.getElementById('current-plant-scientific').textContent = plant.scientific || '';
 
@@ -639,7 +652,9 @@ function renderPlantLibrary(plants) {
            onclick="assignPlantFromLibrary('${plant.plant_id}')"
            onmouseover="this.style.borderColor='#2c5f2d';this.style.background='#f9fff9'"
            onmouseout="this.style.borderColor='#ddd';this.style.background='#fff'">
-        <img src="${plant.image_url || ''}" style="width:50px;height:50px;border-radius:8px;object-fit:cover;background:#f0f0f0" onerror="this.style.display='none'">
+        <img src="${plant.image_url || ''}" style="width:50px;height:50px;border-radius:8px;object-fit:cover;background:#f0f0f0"
+             data-wiki-names='${JSON.stringify([plant.scientific, plant.family].filter(Boolean).map(n => encodeURIComponent(n.replace(/ /g, "_"))))}'
+             onerror="wikiImgFallback(this)">
         <div style="flex:1;min-width:0">
           <div style="font-weight:600;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">
             ${plant.common_name || plant.scientific}${archivedBadge}${activeBadge}
@@ -656,6 +671,16 @@ function renderPlantLibrary(plants) {
       </div>
     `;
   }).join('');
+
+  // Timeout fallback for library images with PlantNet URLs
+  listDiv.querySelectorAll('img[data-wiki-names]').forEach(img => {
+    const tid = setTimeout(() => {
+      if (!img.complete || img.naturalWidth === 0) {
+        wikiImgFallback(img);
+      }
+    }, 2000);
+    img.addEventListener('load', () => clearTimeout(tid), { once: true });
+  });
 }
 
 function toggleLibrary() {
