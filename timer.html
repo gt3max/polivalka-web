@@ -1,4 +1,5 @@
-<!doctype html><html><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width, initial-scale=1"><title>Polivalka — Schedule</title>
+<!doctype html><html><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width, initial-scale=1"><title>PlantApp — Timer</title>
+<link rel="icon" href="favicon.svg" type="image/svg+xml">
 <style>
     body{font-family:system-ui,Arial;margin:0;padding:0;max-width:100%}
     .header{position:sticky;top:0;z-index:1000;background:#2c5f2d;color:#fff;padding:8px 10px;display:flex;justify-content:space-between;align-items:center;gap:8px}
@@ -35,13 +36,13 @@
     .modal.show{display:flex}
     .modal-content{background:#fff;padding:20px;border-radius:12px;max-width:500px;width:90%;max-height:80vh;overflow-y:auto}
   </style>
-</head><body><div class="header"><div><h1 id="device-id-text" style="margin:0;font-size:18px">🌱 Polivalka</h1><div style="font-size:11px;opacity:0.8">📍 <span id="location-text">Home</span> / <span id="room-text">Room</span> / <span id="custom-name-suffix">Plant</span></div></div><div class="header-info"><div id="header-time" class="mono" style="font-size:11px;color:#fff">00:00</div><div style="font-size:11px" id="header-mode"><span id="mode-badge" class="status-badge status-manual">Manual</span></div><div style="font-size:11px" id="header-conn">📡 <span id="conn-text">Offline</span></div></div></div><div class="nav"><a href="fleet.html">Home</a><a href="/timer" class="active">Timer</a><a href="/sensor">Sensor</a><a href="/settings">Settings</a><a href="/calibration">Calibration</a><a href="/online">Online</a><a href="/trends">Trends</a><a href="/update">Update</a><a href="/hub">Hub</a></div><div class="container"><div class="card"><h3>Timer Mode</h3><p class="muted">Water on a schedule. Add up to 8 schedules with specific days and times.</p><div class="row"><button id="add-schedule-btn" class="primary" onclick="showModalWithCheck()">+ Add Schedule</button><span id="schedule-limit-info" class="muted" style="margin-left:8px"></span></div></div><div class="card"><h3>Active Schedules <span id="schedule-count" class="muted" style="font-weight:400;font-size:14px"></span></h3><div id="schedules-list"><div class="muted">No schedules configured. Click "+ Add Schedule" to create one.</div></div></div></div><div id="modal" class="modal"><div class="modal-content"><h3 id="modal-title">Add Schedule</h3><div style="margin:12px 0"><label>Time</label><br><input id="edit-time" type="time" value="07:00" style="width:150px;font-size:16px"></div><div style="margin:12px 0"><label>Days</label><br><div id="days-selector" style="margin-top:8px"><span class="day-btn" data-day="1">M</span><span class="day-btn" data-day="2">T</span><span class="day-btn" data-day="3">W</span><span class="day-btn" data-day="4">T</span><span class="day-btn" data-day="5">F</span><span class="day-btn" data-day="6">S</span><span class="day-btn" data-day="7">S</span></div><button onclick="selectAllDays()" style="margin-top:8px;font-size:12px">Every day</button><button onclick="selectWeekdays()" style="margin-top:8px;font-size:12px">Weekdays</button></div><div style="margin:12px 0"><label>Duration</label><br><input id="edit-duration" type="number" min="1" max="300" value="30" style="width:100px;text-align:left;font-size:16px"><select id="edit-unit" style="width:100px" onchange="updateDurationLimit()"><option value="sec">seconds</option><option value="min">minutes</option></select><div id="duration-hint" class="muted" style="font-size:11px;margin-top:4px">Max: 5 minutes (300 sec)</div></div><div style="margin:12px 0"><label><input id="edit-enabled" type="checkbox" checked>
+</head><body><div class="header"><div><h1 id="device-id-header" style="margin:0;font-size:15px">🌱 Polivalka</h1><div style="font-size:13px">📍 <span id="location-text">—</span> / <span id="room-text">—</span><span id="custom-name-suffix"></span></div><div style="font-size:11px;margin-top:4px"><span id="battery-status">🔋 —</span> · <span id="header-state">💤 Standby</span></div></div><div class="header-info"><div id="header-time" class="mono" style="font-size:11px">--:--</div><div style="font-size:11px" id="header-mode"><span id="mode-badge" class="status-badge">—</span></div><div style="font-size:11px" id="header-conn">📡 <span id="conn-text" style="transition:color 0.3s">...</span></div></div></div></div><div class="nav"><a href="fleet.html">Fleet</a><a href="home.html">Home</a><a href="identify.html" style="background:#e8f5e9">🌱 Plant</a><a href="timer.html" class="active">Timer</a><a href="sensor.html">Sensor</a><a href="settings.html">Settings</a><a href="calibration.html">Calibration</a><a href="online.html">Online</a><a href="trends.html">Trends</a><a href="ota.html">Update</a><a href="admin.html" id="admin-nav-link" style="display:none">Admin</a></div><div class="container"><div class="card"><h3>Timer Mode</h3><p class="muted">Water on a schedule. Add up to 8 schedules with specific days and times.</p><div class="row"><button id="add-schedule-btn" class="primary" onclick="showModalWithCheck()">+ Add Schedule</button><span id="schedule-limit-info" class="muted" style="margin-left:8px"></span></div></div><div class="card"><h3>Active Schedules <span id="schedule-count" class="muted" style="font-weight:400;font-size:14px"></span></h3><div id="schedules-list"><div class="muted">No schedules configured. Click "+ Add Schedule" to create one.</div></div></div></div><div id="modal" class="modal"><div class="modal-content"><h3 id="modal-title">Add Schedule</h3><div style="margin:12px 0"><label>Time</label><br><input id="edit-time" type="time" value="07:00" style="width:150px;font-size:16px"></div><div style="margin:12px 0"><label>Days</label><br><div id="days-selector" style="margin-top:8px"><span class="day-btn" data-day="1">M</span><span class="day-btn" data-day="2">T</span><span class="day-btn" data-day="3">W</span><span class="day-btn" data-day="4">T</span><span class="day-btn" data-day="5">F</span><span class="day-btn" data-day="6">S</span><span class="day-btn" data-day="7">S</span></div><button onclick="selectAllDays()" style="margin-top:8px;font-size:12px">Every day</button><button onclick="selectWeekdays()" style="margin-top:8px;font-size:12px">Weekdays</button></div><div style="margin:12px 0"><label>Duration</label><br><input id="edit-duration" type="number" min="1" max="300" value="30" style="width:100px;text-align:left;font-size:16px"><select id="edit-unit" style="width:100px" onchange="updateDurationLimit()"><option value="sec">seconds</option><option value="min">minutes</option></select><div id="duration-hint" class="muted" style="font-size:11px;margin-top:4px">Max: 5 minutes (300 sec)</div></div><div style="margin:12px 0"><label><input id="edit-enabled" type="checkbox" checked>
 Enabled
 </label></div><div class="row" style="margin-top:16px"><button class="primary" onclick="saveSchedule()">Save</button><button onclick="closeModal()">Cancel</button></div></div></div>
 <script src="api-adapter.js"></script>
 <script src="common.js"></script>
 <script>
-(function(){var d=localStorage.getItem('hdr_did');if(d)document.getElementById('device-id-text').textContent=d;var l=localStorage.getItem('hdr_loc');if(l)document.getElementById('location-text').textContent=l;var r=localStorage.getItem('hdr_room');if(r)document.getElementById('room-text').textContent=r;var c=localStorage.getItem('hdr_cn');if(c)document.getElementById('custom-name-suffix').textContent=c;})();
+(function(){var d=localStorage.getItem('hdr_did');if(d)document.getElementById('device-id-header').textContent=d;var l=localStorage.getItem('hdr_loc');if(l)document.getElementById('location-text').textContent=l;var r=localStorage.getItem('hdr_room');if(r)document.getElementById('room-text').textContent=r;var c=localStorage.getItem('hdr_cn');if(c)document.getElementById('custom-name-suffix').textContent=' / '+c;})();
 let editingId = null;
 
 async function loadSchedules(){
@@ -303,20 +304,49 @@ async function updateTime(){
 }
 
 async function updateHeader(){
-  try{
-    const s=await API.get('/status');
-    if(s.system_state?.device_id){var dt='🌱 '+s.system_state.device_id;document.getElementById('device-id-text').textContent=dt;localStorage.setItem('hdr_did',dt);}
-    if(s.system_state?.location){document.getElementById('location-text').textContent=s.system_state.location;localStorage.setItem('hdr_loc',s.system_state.location);}
-    if(s.system_state?.room){document.getElementById('room-text').textContent=s.system_state.room;localStorage.setItem('hdr_room',s.system_state.room);}
-    var cn=s.system_state?.device_name||'';var cnv=(cn&&cn!=='Polivalka'&&!cn.toLowerCase().startsWith('polivalka-'))?cn:'Plant';document.getElementById('custom-name-suffix').textContent=cnv;localStorage.setItem('hdr_cn',cnv);
-    const mode=s.system_state?.mode||'manual';
-    const mb=document.getElementById('mode-badge');
-    mb.textContent=mode.charAt(0).toUpperCase()+mode.slice(1);
-    mb.className='status-badge status-'+mode;
-    const ct=document.getElementById('conn-text');
-    if(s.wifi_connected){ct.textContent='Online';ct.style.color='#fff';}
-    else{ct.textContent='Offline';ct.style.color='#999';}
-  }catch(e){}
+  try {
+    const s = await API.get('/status');
+
+    // Battery
+    const batteryStatus = document.getElementById('battery-status');
+    if (s.battery && s.battery.percent !== null && s.battery.percent !== undefined && s.battery.percent >= 0) {
+      batteryStatus.textContent = `🔋 ${Math.round(s.battery.percent)}%${s.battery.charging ? ' ⚡' : ''}`;
+    } else {
+      batteryStatus.textContent = '⚡ AC';
+    }
+
+    // Location, Room, Custom Name
+    if (s.system_state?.location) {
+      document.getElementById('location-text').textContent = s.system_state.location;
+    }
+    if (s.system_state?.room) {
+      document.getElementById('room-text').textContent = s.system_state.room;
+    }
+    let customName = s.system_state?.device_name || 'Plant';
+    if (customName === 'Polivalka' || customName.toLowerCase().startsWith('polivalka-')) {
+      customName = 'Plant';
+    }
+    document.getElementById('custom-name-suffix').textContent = ' / ' + customName;
+
+    // Mode
+    const mode = s.system_state?.mode || 'manual';
+    const mb = document.getElementById('mode-badge');
+    mb.textContent = mode.charAt(0).toUpperCase() + mode.slice(1);
+    mb.className = 'status-badge status-' + mode;
+
+    // Connection
+    const ct = document.getElementById('conn-text');
+    if (s.wifi_connected) { ct.textContent = 'Online'; ct.style.color = '#fff'; }
+    else { ct.textContent = 'Offline'; ct.style.color = '#999'; }
+
+    // Header state
+    const rawState = s.system_state?.state || 'OFF';
+    const displayState = mapStateToDisplay(rawState, s.pump_running);
+    const headerStateEl = document.getElementById('header-state');
+    if (headerStateEl) headerStateEl.textContent = `${displayState.emoji} ${displayState.text}`;
+  } catch(e) {
+    console.error('Status update failed:', e);
+  }
 }
 
 // Smart polling: Cloud 60s, Local 5s (matches home.html pattern)
@@ -348,7 +378,7 @@ document.addEventListener('visibilitychange', () => {
 
 // Cloud mode: show device ID immediately
 if (IS_CLOUD && DEVICE_ID) {
-  document.getElementById('device-id-text').textContent = '🌱 ' + DEVICE_ID;
+  document.getElementById('device-id-header').textContent = '🌱 ' + DEVICE_ID;
   document.title = `${DEVICE_ID} — Timer`;
 }
 
