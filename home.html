@@ -209,16 +209,19 @@ async function updateStatus(){
   const s = await updateHeader();
   if (!s) return;
   try {
-    // Sensor data (Capacitive - primary sensor) - use float for 0.1% precision
-    // Check both undefined AND null (API returns null when data missing in DynamoDB)
-    const moisturePct = (s.percent_float !== undefined && s.percent_float !== null)
-      ? s.percent_float.toFixed(1)
-      : (s.percent !== null && s.percent !== undefined ? s.percent : '—');
-    // Check if sensor is disconnected (ADC < 100 = not connected) - update global state
-    sensor1Disconnected = (s.adc !== null && s.adc !== undefined && s.adc < 100);
-    const sensor1Warning = sensor1Disconnected ? '<br><span style="color:#e65100;font-size:12px">⚠️ Sensor not connected</span>' : '';
-    document.getElementById('sensor-vals').innerHTML =
-      `ADC: ${s.adc !== null && s.adc !== undefined ? s.adc : '—'}<br>Moisture: ${moisturePct} %${sensor1Warning}`;
+    // Sensor data (Capacitive - primary sensor) - use authoritative health check if available
+    sensor1Disconnected = s.sensor_health ? !s.sensor_health.j6_connected
+      : (s.adc !== null && s.adc !== undefined && (s.adc < 100 || s.adc > 4000));
+    if (sensor1Disconnected) {
+      document.getElementById('sensor-vals').innerHTML =
+        'ADC: —<br>Moisture: — %<br><span style="color:#e65100;font-size:12px">⚠️ Sensor not connected</span>';
+    } else {
+      const moisturePct = (s.percent_float !== undefined && s.percent_float !== null)
+        ? s.percent_float.toFixed(1)
+        : (s.percent !== null && s.percent !== undefined ? s.percent : '—');
+      document.getElementById('sensor-vals').innerHTML =
+        `ADC: ${s.adc !== null && s.adc !== undefined ? s.adc : '—'}<br>Moisture: ${moisturePct} %`;
+    }
     // Hide auto-watering warning when sensor is connected
     if (!sensor1Disconnected) {
       hideSensorDisconnectedWarning();
