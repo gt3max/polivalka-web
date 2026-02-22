@@ -547,13 +547,26 @@ async function toggleTimerAuto(checked){
         document.getElementById('timer-auto-toggle').checked = false;
         return;
       }
-      // In Cloud mode, wait for ESP32 to publish updated telemetry
-      if (IS_CLOUD) await sleep(2000);
+      // Cloud: optimistic countdown - show LAUNCH immediately
+      if (IS_CLOUD) {
+        lastTimerState = 'LAUNCH';
+        timerLaunchStartTime = Date.now();
+        document.getElementById('timer-arming-cancel-section').style.display = 'block';
+        document.getElementById('timer-arming-countdown-display').textContent = TIMER_LAUNCH_DURATION;
+        const stateEl = document.getElementById('current-state');
+        if (stateEl) { stateEl.textContent = `⏰ LAUNCH ${TIMER_LAUNCH_DURATION}s`; stateEl.style.color = '#f57c00'; }
+        await sleep(2000);  // Still wait for DynamoDB sync
+      }
     } else {
       // Disable timer controller (but keep mode as timer)
       await API.post('/timer/controller/disable');
-      // In Cloud mode, wait for ESP32 to publish updated telemetry
-      if (IS_CLOUD) await sleep(2000);
+      // Cloud: optimistic UI - hide countdown immediately
+      if (IS_CLOUD) {
+        lastTimerState = 'DISABLED';
+        timerLaunchStartTime = null;
+        document.getElementById('timer-arming-cancel-section').style.display = 'none';
+        await sleep(2000);
+      }
     }
     updateStatus();
     updateControllerStatus(); // Update UI
@@ -613,13 +626,26 @@ async function toggleSensorAuto(checked){
         sensorCommandPending = false;
         return;
       }
-      // In Cloud mode, wait for ESP32 to publish updated telemetry
-      if (IS_CLOUD) await sleep(3000);  // Increased to 3s for reliability
+      // Cloud: optimistic countdown - show LAUNCH immediately (don't wait for DynamoDB round-trip)
+      if (IS_CLOUD) {
+        lastSensorState = 'LAUNCH';
+        sensorLaunchStartTime = Date.now();
+        document.getElementById('arming-cancel-section').style.display = 'block';
+        document.getElementById('arming-countdown-display').textContent = SENSOR_LAUNCH_DURATION;
+        const stateEl = document.getElementById('current-state');
+        if (stateEl) { stateEl.innerHTML = `🚀 LAUNCH IN ${SENSOR_LAUNCH_DURATION}s`; stateEl.style.color = '#f57c00'; }
+        await sleep(3000);  // Still wait for DynamoDB sync
+      }
     } else {
       // Disable sensor controller (but keep mode as sensor)
       await API.post('/sensor/controller/disable');
-      // In Cloud mode, wait for ESP32 to publish updated telemetry
-      if (IS_CLOUD) await sleep(3000);
+      // Cloud: optimistic UI - hide countdown immediately
+      if (IS_CLOUD) {
+        lastSensorState = 'DISABLED';
+        sensorLaunchStartTime = null;
+        document.getElementById('arming-cancel-section').style.display = 'none';
+        await sleep(3000);
+      }
     }
     updateStatus();
     updateControllerStatus(); // Update UI
