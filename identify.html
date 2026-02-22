@@ -661,6 +661,11 @@ function renderPlantLibrary(plants) {
           <div style="font-size:12px;color:#666">${plant.preset || 'Standard'} • 📟 ${deviceLabel}${timeInfo}</div>
         </div>
         <div style="display:flex;align-items:center;gap:8px">
+          ${plant.archived && plant.started_at && plant.ended_at && plant.device_id ? `<a href="trends.html?device=${encodeURIComponent(plant.device_id)}&start=${plant.started_at}&end=${plant.ended_at}&plant_name=${encodeURIComponent(plant.common_name || plant.scientific || '')}"
+                  onclick="event.stopPropagation()"
+                  style="background:none;border:none;cursor:pointer;font-size:16px;padding:4px;opacity:0.5;transition:opacity 0.2s;text-decoration:none"
+                  onmouseover="this.style.opacity='1'" onmouseout="this.style.opacity='0.5'"
+                  title="View archived trends">📊</a>` : ''}
           <button onclick="event.stopPropagation();deleteLibraryPlant('${plant.plant_id}','${plant.device_id}','${(plant.common_name || plant.scientific || '').replace(/'/g, "\\'")}')"
                   style="background:none;border:none;cursor:pointer;font-size:16px;padding:4px;opacity:0.5;transition:opacity 0.2s"
                   onmouseover="this.style.opacity='1'" onmouseout="this.style.opacity='0.5'"

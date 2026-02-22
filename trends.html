@@ -245,6 +245,13 @@
 </div>
 
 <script>
+// Archive mode: parse URL params
+const urlParams = new URLSearchParams(window.location.search);
+const ARCHIVE_START = urlParams.get('start') ? parseInt(urlParams.get('start')) : null;
+const ARCHIVE_END = urlParams.get('end') ? parseInt(urlParams.get('end')) : null;
+const ARCHIVE_PLANT_NAME = urlParams.get('plant_name') || null;
+const IS_ARCHIVE_MODE = !!(ARCHIVE_START && ARCHIVE_END);
+
 // State
 let currentPeriod = 7; // days
 let chartType = 'line'; // 'line' (connected) or 'scatter' (points only)
@@ -381,9 +388,15 @@ function setChartType(type) {
   document.getElementById('btn-line').classList.toggle('active', type === 'line');
   document.getElementById('btn-scatter').classList.toggle('active', type === 'scatter');
   // Re-render charts with new type
-  const cutoff = Date.now() - (currentPeriod * 24 * 60 * 60 * 1000);
-  const filteredSensor = sensorData.filter(d => d.timestamp * 1000 > cutoff);
-  const filteredBattery = batteryData.filter(d => d.timestamp * 1000 > cutoff);
+  let filteredSensor, filteredBattery;
+  if (IS_ARCHIVE_MODE) {
+    filteredSensor = sensorData;
+    filteredBattery = batteryData;
+  } else {
+    const cutoff = Date.now() - (currentPeriod * 24 * 60 * 60 * 1000);
+    filteredSensor = sensorData.filter(d => d.timestamp * 1000 > cutoff);
+    filteredBattery = batteryData.filter(d => d.timestamp * 1000 > cutoff);
+  }
   renderMoistureChart(filteredSensor);
   renderBatteryChart(filteredBattery);
 }
@@ -408,12 +421,20 @@ async function loadSensorHistory() {
   error.style.display = 'none';
 
   try {
-    const data = await API.get('/sensor/history');
+    const path = IS_ARCHIVE_MODE
+      ? `/sensor/history?start=${ARCHIVE_START}&end=${ARCHIVE_END}`
+      : '/sensor/history';
+    const data = await API.get(path);
     sensorData = data || [];
 
-    // Filter by period
-    const cutoff = Date.now() - (currentPeriod * 24 * 60 * 60 * 1000);
-    const filtered = sensorData.filter(d => d.timestamp * 1000 > cutoff);
+    // Archive mode: show all data (no client-side period filter)
+    let filtered;
+    if (IS_ARCHIVE_MODE) {
+      filtered = sensorData;
+    } else {
+      const cutoff = Date.now() - (currentPeriod * 24 * 60 * 60 * 1000);
+      filtered = sensorData.filter(d => d.timestamp * 1000 > cutoff);
+    }
 
     loading.style.display = 'none';
     renderMoistureChart(filtered);
@@ -433,11 +454,19 @@ async function loadBatteryHistory() {
   error.style.display = 'none';
 
   try {
-    const data = await API.get('/battery/history');
+    const path = IS_ARCHIVE_MODE
+      ? `/battery/history?start=${ARCHIVE_START}&end=${ARCHIVE_END}`
+      : '/battery/history';
+    const data = await API.get(path);
     batteryData = data || [];
 
-    const cutoff = Date.now() - (currentPeriod * 24 * 60 * 60 * 1000);
-    const filtered = batteryData.filter(d => d.timestamp * 1000 > cutoff);
+    let filtered;
+    if (IS_ARCHIVE_MODE) {
+      filtered = batteryData;
+    } else {
+      const cutoff = Date.now() - (currentPeriod * 24 * 60 * 60 * 1000);
+      filtered = batteryData.filter(d => d.timestamp * 1000 > cutoff);
+    }
 
     loading.style.display = 'none';
     renderBatteryChart(filtered);
@@ -464,11 +493,19 @@ async function loadActivity() {
   wateringLoading.style.display = 'block';
 
   try {
-    const data = await API.get('/activity');
+    const path = IS_ARCHIVE_MODE
+      ? `/activity?start=${ARCHIVE_START}&end=${ARCHIVE_END}`
+      : '/activity';
+    const data = await API.get(path);
     activityData = data.activity || [];
 
-    const cutoff = Date.now() / 1000 - (currentPeriod * 24 * 60 * 60);
-    const filtered = activityData.filter(a => a.timestamp > cutoff);
+    let filtered;
+    if (IS_ARCHIVE_MODE) {
+      filtered = activityData;
+    } else {
+      const cutoff = Date.now() / 1000 - (currentPeriod * 24 * 60 * 60);
+      filtered = activityData.filter(a => a.timestamp > cutoff);
+    }
 
     loading.style.display = 'none';
     wateringLoading.style.display = 'none';
@@ -1163,7 +1200,8 @@ function renderActivityList(events) {
 
 // Update summary stats
 function updateStats() {
-  const cutoff = Date.now() / 1000 - (currentPeriod * 24 * 60 * 60);
+  // Archive mode: use all data (no period filter)
+  const cutoff = IS_ARCHIVE_MODE ? 0 : Date.now() / 1000 - (currentPeriod * 24 * 60 * 60);
 
   // Watering count and volume from activity
   const pumpEvents = activityData.filter(a => a.type === 'PUMP' && a.timestamp > cutoff && a.message.includes('started'));
@@ -1300,6 +1338,15 @@ let longTermPeriod = 26; // 6 months by default
 // Filter data by period
 function filterLongTermData(weeks) {
   if (longTermData.length === 0) return [];
+
+  // Archive mode: filter by overlap with archive period
+  if (IS_ARCHIVE_MODE) {
+    const startDate = new Date(ARCHIVE_START * 1000).toISOString().slice(0, 10);
+    const endDate = new Date(ARCHIVE_END * 1000).toISOString().slice(0, 10);
+    return longTermData
+      .filter(w => w.end_date >= startDate && w.start_date <= endDate)
+      .sort((a, b) => a.week.localeCompare(b.week));
+  }
 
   // Sort by week descending
   const sorted = [...longTermData].sort((a, b) => b.week.localeCompare(a.week));
@@ -1993,6 +2040,48 @@ if (IS_CLOUD && DEVICE_ID) {
   document.getElementById('device-id-header').textContent = '🌱 ' + DEVICE_ID;
   document.title = `${DEVICE_ID} — Trends`;
 
+  // Archive mode setup
+  if (IS_ARCHIVE_MODE) {
+    const startStr = new Date(ARCHIVE_START * 1000).toLocaleDateString();
+    const endStr = new Date(ARCHIVE_END * 1000).toLocaleDateString();
+    const plantLabel = ARCHIVE_PLANT_NAME || 'Archived Plant';
+    document.title = `${plantLabel} — Archive Trends`;
+    document.getElementById('device-id-header').textContent = plantLabel;
+
+    // Insert archive banner after header
+    const banner = document.createElement('div');
+    banner.id = 'archive-banner';
+    banner.style.cssText = 'background:#fff3e0;border:1px solid #ff9800;border-radius:8px;padding:10px 14px;margin:0 0 12px;display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap';
+    banner.innerHTML = `<span style="font-size:14px">📦 <b>${plantLabel}</b> · ${startStr} — ${endStr} · 📟 ${DEVICE_ID.replace('Polivalka-','')}</span><a href="identify.html" style="font-size:13px;color:#e65100;text-decoration:none">← Back to Plants</a>`;
+    const container = document.querySelector('.container');
+    container.insertBefore(banner, container.firstChild);
+
+    // Replace period selector with "Full period" label
+    const days = Math.ceil((ARCHIVE_END - ARCHIVE_START) / 86400);
+    const periodSelector = document.querySelector('.period-selector');
+    if (periodSelector) {
+      periodSelector.innerHTML = `<span style="font-size:13px;color:#666">Full period (${days} days)</span>`;
+    }
+    document.getElementById('period-label').textContent = `${days} days (archived)`;
+
+    // Auto-select longest long-term period to cover archive range
+    const weeksNeeded = Math.ceil(days / 7) + 4; // add buffer
+    if (weeksNeeded > 104) longTermPeriod = 156;
+    else if (weeksNeeded > 52) longTermPeriod = 104;
+    else if (weeksNeeded > 26) longTermPeriod = 52;
+    else longTermPeriod = 26;
+
+    // No-data hint for expired TTL (> 7 days ago)
+    const sevenDaysAgo = Date.now() / 1000 - 604800;
+    if (ARCHIVE_END < sevenDaysAgo) {
+      // All data expired from DynamoDB — show hint
+      const hint = document.createElement('div');
+      hint.style.cssText = 'background:#f5f5f5;border:1px solid #ddd;border-radius:8px;padding:10px 14px;margin:0 0 12px;font-size:13px;color:#666';
+      hint.textContent = 'Short-term data older than 7 days has expired — see weekly summaries below for long-term trends.';
+      container.insertBefore(hint, container.children[1]); // after banner
+    }
+  }
+
   // Load presets first (for chart axes), then data
   (async () => {
     await updateHeader(); // calib data ready before charts render
@@ -2001,15 +2090,16 @@ if (IS_CLOUD && DEVICE_ID) {
   })();
   updateBattery();
 
-  // Auto-refresh every 5 minutes
-  setInterval(refreshAll, 300000);
-  setInterval(updateHeader, 30000);
-  setInterval(updateBattery, 60000);
-  setInterval(loadLongTermData, 3600000); // Refresh long-term data every hour
-  // Refresh on tab return
-  document.addEventListener('visibilitychange', () => {
-    if (!document.hidden) { updateHeader(); refreshAll(); }
-  });
+  // No auto-refresh in archive mode (data is static)
+  if (!IS_ARCHIVE_MODE) {
+    setInterval(refreshAll, 300000);
+    setInterval(updateHeader, 30000);
+    setInterval(updateBattery, 60000);
+    setInterval(loadLongTermData, 3600000);
+    document.addEventListener('visibilitychange', () => {
+      if (!document.hidden) { updateHeader(); refreshAll(); }
+    });
+  }
 } else {
   // AP mode - show message
   document.querySelector('.container').innerHTML = `
