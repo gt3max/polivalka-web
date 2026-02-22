@@ -109,7 +109,7 @@ let sensorCommandPendingUntil = 0;
 let timerCommandPendingUntil = 0;
 // Block mode override from stale DynamoDB after mode change
 let lastModeChangeTime = 0;
-const COMMAND_PROTECTION_MS = 8000; // 8 sec protection window (DynamoDB round-trip = 5-7 sec)
+const COMMAND_PROTECTION_MS = 30000; // 30 sec protection (auto-releases when DynamoDB confirms)
 
 // Track sensor disconnection state (ADC < 100 = not connected)
 let sensor1Disconnected = false;
@@ -286,7 +286,15 @@ async function updateStatus(){
     document.getElementById('current-mode').textContent = modeText;
 
     // Mode selector - highlight current mode (skip if mode change is pending — stale DynamoDB)
-    const modeProtected = (Date.now() - lastModeChangeTime < COMMAND_PROTECTION_MS);
+    let modeProtected = (Date.now() - lastModeChangeTime < COMMAND_PROTECTION_MS);
+    if (modeProtected) {
+      // Early release: if DynamoDB mode matches our optimistic selection, protection done
+      const selectedMode = document.querySelector('.mode-btn.selected')?.dataset.mode;
+      if (mode === selectedMode) {
+        lastModeChangeTime = 0;
+        modeProtected = false;
+      }
+    }
     if (!modeProtected) {
       document.querySelectorAll('.mode-btn').forEach(btn => {
         btn.classList.toggle('selected', btn.dataset.mode === mode);
@@ -849,16 +857,92 @@ async function updateSensorControllerStatus() {
     // Fetch sensor controller status
     const sc = await API.get('/sensor/controller/status');
 
-    // Save state globally for badge indication
-    // Cloud mode: track LAUNCH start time for local countdown
-    if (IS_CLOUD && sc.state === 'LAUNCH' && lastSensorState !== 'LAUNCH') {
-      sensorLaunchStartTime = Date.now();  // Just entered LAUNCH
-    } else if (sc.state !== 'LAUNCH') {
-      sensorLaunchStartTime = null;  // Exited LAUNCH
+    // Protection: freeze ALL state-dependent UI during command processing
+    let sensorProtected = (Date.now() < sensorCommandPendingUntil);
+    if (sensorProtected) {
+      // Early release: if DynamoDB state matches our toggle, protection done
+      const toggleChecked = document.getElementById('sensor-auto-toggle').checked;
+      const dbEnabled = (sc.state !== 'DISABLED');
+      if (dbEnabled === toggleChecked) {
+        sensorCommandPendingUntil = 0;
+        sensorProtected = false;
+      }
     }
-    lastSensorState = sc.state;
 
-    // Fetch preset config (cache for 10 seconds to reduce load)
+    // State tracking and UI — ONLY when not protected
+    if (!sensorProtected) {
+      if (IS_CLOUD && sc.state === 'LAUNCH' && lastSensorState !== 'LAUNCH') {
+        sensorLaunchStartTime = Date.now();
+      } else if (sc.state !== 'LAUNCH') {
+        sensorLaunchStartTime = null;
+      }
+      lastSensorState = sc.state;
+
+      // State display
+      if (mode === 'sensor') {
+        const stateEl = document.getElementById('current-state');
+        let stateText = sc.state;
+        let stateColor = '#333';
+        if (sc.state === 'LAUNCH') {
+          let countdown = sc.arming_countdown;
+          if (IS_CLOUD && sensorLaunchStartTime) {
+            const elapsed = Math.floor((Date.now() - sensorLaunchStartTime) / 1000);
+            countdown = Math.max(0, SENSOR_LAUNCH_DURATION - elapsed);
+          }
+          stateText = `🚀 LAUNCH IN ${countdown}s`;
+          stateColor = '#f57c00';
+        } else if (sc.state === 'STANDBY') {
+          stateText = '👀 Monitoring';
+          stateColor = '#2c5f2d';
+        } else if (sc.state === 'PULSE') {
+          stateText = '💧 Watering';
+          stateColor = '#1976d2';
+        } else if (sc.state === 'SETTLE') {
+          stateText = '⏳ Absorbing';
+          stateColor = '#9c27b0';
+        } else if (sc.state === 'CHECK') {
+          stateText = '🔍 Checking';
+          stateColor = '#ff9800';
+        } else if (sc.state === 'COOLDOWN') {
+          const cooldownMin = Math.floor(sc.cooldown_remaining / 60);
+          stateText = `😴 Resting (${cooldownMin}m)`;
+          stateColor = '#607d8b';
+        } else if (sc.state === 'DISABLED') {
+          stateText = '⏸️ Disabled';
+          stateColor = '#999';
+        }
+        stateEl.innerHTML = stateText;
+        stateEl.style.color = stateColor;
+      }
+
+      // Arming section
+      const armingSection = document.getElementById('arming-cancel-section');
+      if (sc.state === 'LAUNCH') {
+        armingSection.style.display = 'block';
+        if (!IS_CLOUD || !sensorLaunchStartTime) {
+          document.getElementById('arming-countdown-display').textContent = sc.arming_countdown;
+        }
+      } else {
+        armingSection.style.display = 'none';
+      }
+
+      // Toggle
+      const currentModeEl = document.querySelector('.mode-btn.selected');
+      if (currentModeEl && currentModeEl.getAttribute('data-mode') === 'sensor') {
+        const toggleEl = document.getElementById('sensor-auto-toggle');
+        const toggleRowEl = document.getElementById('sensor-toggle-row');
+        const shouldBeChecked = (sc.state !== 'DISABLED');
+        updatingSensorToggle = true;
+        toggleEl.checked = shouldBeChecked;
+        updatingSensorToggle = false;
+        if (toggleRowEl) toggleRowEl.style.visibility = 'visible';
+        if (sc.state !== 'DISABLED' && sensor1Disconnected) {
+          showSensorDisconnectedWarning();
+        }
+      }
+    }
+
+    // Fetch preset config (safe, not state-dependent)
     if (!sensorPresetCache || Date.now() - sensorPresetCache.timestamp > 10000) {
       const preset = await API.get('/sensor/preset');
       sensorPresetCache = {data: preset, timestamp: Date.now()};
@@ -868,66 +952,21 @@ async function updateSensorControllerStatus() {
     // Show sensor details section
     detailsSection.style.display = 'block';
 
-    // Only update State field if we're actually in sensor mode!
-    if (mode === 'sensor') {
-      const stateEl = document.getElementById('current-state');
-      let stateText = sc.state;
-      let stateColor = '#333';
-
-      if (sc.state === 'LAUNCH') {
-        // Cloud mode: calculate local countdown (API always returns 60)
-        let countdown = sc.arming_countdown;
-        if (IS_CLOUD && sensorLaunchStartTime) {
-          const elapsed = Math.floor((Date.now() - sensorLaunchStartTime) / 1000);
-          countdown = Math.max(0, SENSOR_LAUNCH_DURATION - elapsed);
-        }
-        stateText = `🚀 LAUNCH IN ${countdown}s`;
-        stateColor = '#f57c00';
-      } else if (sc.state === 'STANDBY') {
-        stateText = '👀 Monitoring';
-        stateColor = '#2c5f2d';
-      } else if (sc.state === 'PULSE') {
-        stateText = '💧 Watering';
-        stateColor = '#1976d2';
-      } else if (sc.state === 'SETTLE') {
-        stateText = '⏳ Absorbing';
-        stateColor = '#9c27b0';
-      } else if (sc.state === 'CHECK') {
-        stateText = '🔍 Checking';
-        stateColor = '#ff9800';
-      } else if (sc.state === 'COOLDOWN') {
-        const cooldownMin = Math.floor(sc.cooldown_remaining / 60);
-        stateText = `😴 Resting (${cooldownMin}m)`;
-        stateColor = '#607d8b';
-      } else if (sc.state === 'DISABLED') {
-        stateText = '⏸️ Disabled';
-        stateColor = '#999';
-      }
-
-      stateEl.innerHTML = stateText;
-      stateEl.style.color = stateColor;
-    }
-
-    // Current Moisture (use float for precision if available)
-    // Check both undefined AND null (API returns null when data missing)
+    // Sensor data — always safe to update (not state-dependent)
     const scMoisture = (sc.moisture_pct_float !== undefined && sc.moisture_pct_float !== null)
       ? sc.moisture_pct_float.toFixed(1)
       : (sc.moisture_pct !== undefined && sc.moisture_pct !== null ? sc.moisture_pct : '—');
     document.getElementById('status-current-moisture').textContent = scMoisture + '%';
 
-    // Target Range
     if (preset && preset.start_pct && preset.stop_pct) {
       document.getElementById('status-target-range').textContent =
         `${preset.start_pct}-${preset.stop_pct}%`;
     }
 
-    // Daily Water
     if (preset && preset.max_water_day_ml) {
       const dailyText = `${sc.daily_water_ml} / ${preset.max_water_day_ml} ml`;
       const dailyEl = document.getElementById('status-daily-water');
       dailyEl.textContent = dailyText;
-
-      // Color code if approaching or exceeding limit
       if (sc.daily_hard_limit_reached) {
         dailyEl.style.color = '#b00';
         dailyEl.style.fontWeight = '600';
@@ -939,66 +978,27 @@ async function updateSensorControllerStatus() {
       }
     }
 
-    // Watering Progress (show only during active watering cycle)
+    // Watering Progress
     const progressRow = document.getElementById('status-progress-row');
-    if (sc.state === 'PULSE' || sc.state === 'SETTLE' || sc.state === 'CHECK') {
+    if (!sensorProtected && (sc.state === 'PULSE' || sc.state === 'SETTLE' || sc.state === 'CHECK')) {
       progressRow.style.display = 'block';
       const progressText = `Pulse ${sc.pulses_delivered}, ${sc.total_water_ml} / ${preset.max_water_cycle_ml || '?'} ml`;
       document.getElementById('status-watering-progress').textContent = progressText;
-    } else {
+    } else if (!sensorProtected) {
       progressRow.style.display = 'none';
     }
 
     // Warning display
     const warningRow = document.getElementById('status-warning-row');
     const headerWarning = document.getElementById('header-warning');
-
     if (sc.warning_active && sc.warning_msg) {
       warningRow.style.display = 'block';
       document.getElementById('status-warning-message').textContent = sc.warning_msg;
-
-      // Show warning in header
       headerWarning.style.display = 'flex';
       document.getElementById('warning-text').textContent = sc.warning_msg.substring(0, 40) + (sc.warning_msg.length > 40 ? '...' : '');
     } else {
       warningRow.style.display = 'none';
       headerWarning.style.display = 'none';
-    }
-
-    // Launch cancel section (show only during LAUNCH state)
-    const armingSection = document.getElementById('arming-cancel-section');
-    if (sc.state === 'LAUNCH') {
-      armingSection.style.display = 'block';
-      // Cloud mode: don't overwrite local countdown with API value (API always returns 60)
-      // Local countdown is managed by countdownTick() and is more accurate
-      if (!IS_CLOUD || !sensorLaunchStartTime) {
-        document.getElementById('arming-countdown-display').textContent = sc.arming_countdown;
-      }
-    } else {
-      armingSection.style.display = 'none';
-    }
-
-    // Update toggle state ONLY if we're actually in sensor mode AND no command pending
-    const currentModeEl = document.querySelector('.mode-btn.selected');
-    if (currentModeEl && currentModeEl.getAttribute('data-mode') === 'sensor') {
-      const toggleEl = document.getElementById('sensor-auto-toggle');
-      const toggleRowEl = document.getElementById('sensor-toggle-row');
-
-      // Skip toggle sync during protection window (prevents bounce from stale DynamoDB)
-      if (Date.now() >= sensorCommandPendingUntil) {
-        const shouldBeChecked = (sc.state !== 'DISABLED');
-        updatingSensorToggle = true;
-        toggleEl.checked = shouldBeChecked;
-        updatingSensorToggle = false;
-      }
-
-      // Always show the toggle row
-      if (toggleRowEl) toggleRowEl.style.visibility = 'visible';
-
-      // Show warning in Automation Control if sensor mode is ACTIVE but sensor disconnected
-      if (sc.state !== 'DISABLED' && sensor1Disconnected) {
-        showSensorDisconnectedWarning();
-      }
     }
 
   } catch(e) {
@@ -1023,63 +1023,93 @@ async function updateTimerControllerStatus() {
       return;
     }
 
-    // Note: don't skip entire function during command pending — still update schedules, warnings etc.
-    // Only skip toggle update (below) using timerCommandPendingUntil
-
     // Fetch timer controller status
     const tc = await API.get('/timer/controller/status');
 
-    // Save state globally for badge indication
-    // Cloud mode: track LAUNCH start time for local countdown
-    if (IS_CLOUD && tc.state === 'LAUNCH' && lastTimerState !== 'LAUNCH') {
-      timerLaunchStartTime = Date.now();  // Just entered LAUNCH
-    } else if (tc.state !== 'LAUNCH') {
-      timerLaunchStartTime = null;  // Exited LAUNCH
+    // Protection: freeze ALL state-dependent UI during command processing
+    let timerProtected = (Date.now() < timerCommandPendingUntil);
+    if (timerProtected) {
+      // Early release: if DynamoDB state matches our toggle, protection done
+      const toggleChecked = document.getElementById('timer-auto-toggle').checked;
+      const dbEnabled = (tc.state !== 'DISABLED');
+      if (dbEnabled === toggleChecked) {
+        timerCommandPendingUntil = 0;
+        timerProtected = false;
+      }
     }
-    lastTimerState = tc.state;
 
-    // Fetch schedules count
+    // State tracking and UI — ONLY when not protected (prevents stale DynamoDB override)
+    if (!timerProtected) {
+      // Save state globally for badge indication
+      if (IS_CLOUD && tc.state === 'LAUNCH' && lastTimerState !== 'LAUNCH') {
+        timerLaunchStartTime = Date.now();
+      } else if (tc.state !== 'LAUNCH') {
+        timerLaunchStartTime = null;
+      }
+      lastTimerState = tc.state;
+
+      // State display
+      if (mode === 'timer') {
+        const stateEl = document.getElementById('current-state');
+        let stateText = tc.state;
+        let stateColor = '#333';
+        if (tc.state === 'LAUNCH') {
+          let countdown = tc.arming_countdown_sec;
+          if (IS_CLOUD && timerLaunchStartTime) {
+            const elapsed = Math.floor((Date.now() - timerLaunchStartTime) / 1000);
+            countdown = Math.max(0, TIMER_LAUNCH_DURATION - elapsed);
+          }
+          stateText = `⏰ LAUNCH ${countdown}s`;
+          stateColor = '#f57c00';
+        } else if (tc.state === 'ACTIVE') {
+          stateText = '⏰ Active';
+          stateColor = '#2c5f2d';
+        } else if (tc.state === 'WATERING') {
+          stateText = '💧 Watering';
+          stateColor = '#1976d2';
+        } else if (tc.state === 'DISABLED') {
+          stateText = '✋ Disabled';
+          stateColor = '#666';
+        }
+        stateEl.textContent = stateText;
+        stateEl.style.color = stateColor;
+      }
+
+      // Arming section
+      const armingSection = document.getElementById('timer-arming-cancel-section');
+      if (tc.state === 'LAUNCH') {
+        armingSection.style.display = 'block';
+        if (!IS_CLOUD || !timerLaunchStartTime) {
+          document.getElementById('timer-arming-countdown-display').textContent = tc.arming_countdown_sec;
+        }
+      } else {
+        armingSection.style.display = 'none';
+      }
+
+      // Toggle
+      const currentModeEl = document.querySelector('.mode-btn.selected');
+      if (currentModeEl && currentModeEl.getAttribute('data-mode') === 'timer') {
+        const toggleEl = document.getElementById('timer-auto-toggle');
+        const toggleRowEl = document.getElementById('timer-toggle-row');
+        const shouldBeChecked = (tc.state !== 'DISABLED');
+        updatingTimerToggle = true;
+        toggleEl.checked = shouldBeChecked;
+        updatingTimerToggle = false;
+        if (toggleRowEl) toggleRowEl.style.visibility = 'visible';
+      }
+    }
+
+    // Fetch schedules count (safe to update always)
     const schedules = await API.get('/schedules');
 
     // Show timer details section
     detailsSection.style.display = 'block';
 
-    // Only update State field if we're actually in timer mode!
-    if (mode === 'timer') {
-      const stateEl = document.getElementById('current-state');
-      let stateText = tc.state;
-      let stateColor = '#333';
-
-      if (tc.state === 'LAUNCH') {
-        // Cloud mode: calculate local countdown (API always returns 15)
-        let countdown = tc.arming_countdown_sec;
-        if (IS_CLOUD && timerLaunchStartTime) {
-          const elapsed = Math.floor((Date.now() - timerLaunchStartTime) / 1000);
-          countdown = Math.max(0, TIMER_LAUNCH_DURATION - elapsed);
-        }
-        stateText = `⏰ LAUNCH ${countdown}s`;
-        stateColor = '#f57c00';
-      } else if (tc.state === 'ACTIVE') {
-        stateText = '⏰ Active';
-        stateColor = '#2c5f2d';
-      } else if (tc.state === 'WATERING') {
-        stateText = '💧 Watering';
-        stateColor = '#1976d2';
-      } else if (tc.state === 'DISABLED') {
-        stateText = '✋ Disabled';
-        stateColor = '#666';
-      }
-
-      stateEl.textContent = stateText;
-      stateEl.style.color = stateColor;
-    }
-
-    // Update timer details
+    // Schedule info — always safe to update (not state-dependent)
     document.getElementById('status-next-watering').textContent = tc.next_watering_str || 'No schedules';
     document.getElementById('status-schedule-count').textContent = tc.schedule_exists ? `${schedules.count} active` : 'None';
     document.getElementById('timer-daily-water').textContent = tc.daily_water_ml + ' ml';
 
-    // Show "no watering today" if next watering > 24h away AND schedules exist
     const noWateringToday = document.getElementById('timer-no-watering-today');
     if (noWateringToday) {
       if (tc.next_watering_sec > 86400 && tc.schedule_exists) {
@@ -1089,24 +1119,21 @@ async function updateTimerControllerStatus() {
       }
     }
 
-    // Watering duration (if currently watering)
+    // Watering duration
     const wateringRow = document.getElementById('timer-watering-row');
-    if (tc.state === 'WATERING' && tc.current_duration_sec > 0) {
+    if (!timerProtected && tc.state === 'WATERING' && tc.current_duration_sec > 0) {
       wateringRow.style.display = 'block';
       document.getElementById('timer-watering-duration').textContent = `${tc.current_duration_sec}s`;
-    } else {
+    } else if (!timerProtected) {
       wateringRow.style.display = 'none';
     }
 
     // Warning display
     const warningRow = document.getElementById('timer-warning-row');
     const headerWarning = document.getElementById('header-warning');
-
     if (tc.warning_active && tc.warning_msg) {
       warningRow.style.display = 'block';
       document.getElementById('timer-warning-message').textContent = tc.warning_msg;
-
-      // Show warning in header (if sensor not already showing one)
       if (mode === 'timer') {
         headerWarning.style.display = 'flex';
         document.getElementById('warning-text').textContent = tc.warning_msg.substring(0, 40) + (tc.warning_msg.length > 40 ? '...' : '');
@@ -1116,37 +1143,6 @@ async function updateTimerControllerStatus() {
       if (mode === 'timer') {
         headerWarning.style.display = 'none';
       }
-    }
-
-    // Launch cancel section (show only during LAUNCH state)
-    const armingSection = document.getElementById('timer-arming-cancel-section');
-    if (tc.state === 'LAUNCH') {
-      armingSection.style.display = 'block';
-      // Cloud mode: don't overwrite local countdown with API value (API always returns 15)
-      // Local countdown is managed by countdownTick() and is more accurate
-      if (!IS_CLOUD || !timerLaunchStartTime) {
-        document.getElementById('timer-arming-countdown-display').textContent = tc.arming_countdown_sec;
-      }
-    } else {
-      armingSection.style.display = 'none';
-    }
-
-    // Update toggle state ONLY if we're actually in timer mode AND no command pending
-    const currentModeEl = document.querySelector('.mode-btn.selected');
-    if (currentModeEl && currentModeEl.getAttribute('data-mode') === 'timer') {
-      const toggleEl = document.getElementById('timer-auto-toggle');
-      const toggleRowEl = document.getElementById('timer-toggle-row');
-
-      // Skip toggle sync during protection window (prevents bounce from stale DynamoDB)
-      if (Date.now() >= timerCommandPendingUntil) {
-        const shouldBeChecked = (tc.state !== 'DISABLED');
-        updatingTimerToggle = true;
-        toggleEl.checked = shouldBeChecked;
-        updatingTimerToggle = false;
-      }
-
-      // Always show the toggle row
-      if (toggleRowEl) toggleRowEl.style.visibility = 'visible';
     }
 
   } catch(e) {
