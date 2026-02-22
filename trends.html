@@ -83,6 +83,7 @@
     <button onclick="showTab('battery')">🔋 Battery</button>
     <button onclick="showTab('watering')">🚿 Watering</button>
     <button onclick="showTab('activity')">📝 Activity</button>
+    <button onclick="showTab('health')">🔧 Health</button>
   </div>
 
   <!-- Period & Chart Controls (right above charts) -->
@@ -162,6 +163,29 @@
       <div id="activity-list"></div>
       <div id="activity-loading" class="loading">Loading activity...</div>
     </div>
+  </div>
+
+  <!-- Device Health -->
+  <div id="tab-health" class="tab-content">
+    <div class="card">
+      <h3 style="margin-top:0">📡 WiFi Signal (RSSI)</h3>
+      <div class="chart-container">
+        <canvas id="rssi-chart"></canvas>
+      </div>
+      <div id="rssi-nodata" class="muted" style="display:none;text-align:center;padding:40px">No system data for this period</div>
+    </div>
+    <div class="card">
+      <h3 style="margin-top:0">🔧 Device Diagnostics</h3>
+      <div class="stats-grid">
+        <div class="stat-box"><div class="stat-value" id="stat-wifi-disconnects">—</div><div class="stat-label">WiFi Disconnects</div></div>
+        <div class="stat-box"><div class="stat-value" id="stat-restarts">—</div><div class="stat-label">Restarts</div></div>
+        <div class="stat-box"><div class="stat-value" id="stat-crashes">—</div><div class="stat-label">Crashes</div></div>
+        <div class="stat-box"><div class="stat-value" id="stat-avg-rssi">—</div><div class="stat-label">Avg RSSI</div></div>
+      </div>
+      <div id="health-warnings" style="margin-top:12px"></div>
+    </div>
+    <div id="health-loading" class="loading">Loading device health...</div>
+    <div id="health-error" class="error-msg" style="display:none"></div>
   </div>
 
   <!-- Long-term Trends (from GitHub JSON) -->
@@ -398,6 +422,15 @@ function setChartType(type) {
   }
   renderMoistureChart(filteredSensor);
   renderBatteryChart(filteredBattery);
+  // Re-render RSSI chart too
+  let filteredHealth;
+  if (IS_ARCHIVE_MODE) {
+    filteredHealth = systemHealthData;
+  } else {
+    const cutoffH = Date.now() - (currentPeriod * 24 * 60 * 60 * 1000);
+    filteredHealth = systemHealthData.filter(d => d.timestamp * 1000 > cutoffH);
+  }
+  renderRssiChart(filteredHealth);
 }
 
 // Tab switching
@@ -519,6 +552,155 @@ async function loadActivity() {
     loading.style.display = 'none';
     wateringLoading.style.display = 'none';
     document.getElementById('activity-list').innerHTML = '<div class="error-msg">Failed to load activity</div>';
+  }
+}
+
+// Load system health data (WiFi RSSI, disconnects, restarts)
+let systemHealthData = [];
+let rssiChart = null;
+
+async function loadSystemHealth() {
+  const loading = document.getElementById('health-loading');
+  const error = document.getElementById('health-error');
+  loading.style.display = 'block';
+  error.style.display = 'none';
+
+  try {
+    const path = IS_ARCHIVE_MODE
+      ? `/system/history?start=${ARCHIVE_START}&end=${ARCHIVE_END}`
+      : '/system/history';
+    const data = await API.get(path);
+    systemHealthData = data || [];
+
+    let filtered;
+    if (IS_ARCHIVE_MODE) {
+      filtered = systemHealthData;
+    } else {
+      const cutoff = Date.now() - (currentPeriod * 24 * 60 * 60 * 1000);
+      filtered = systemHealthData.filter(d => d.timestamp * 1000 > cutoff);
+    }
+
+    loading.style.display = 'none';
+    renderRssiChart(filtered);
+    renderHealthStats(filtered);
+  } catch(e) {
+    loading.style.display = 'none';
+    error.style.display = 'block';
+    error.textContent = 'Failed to load health data: ' + e.message;
+  }
+}
+
+function renderRssiChart(data) {
+  const canvas = document.getElementById('rssi-chart');
+  const nodata = document.getElementById('rssi-nodata');
+
+  if (rssiChart) { rssiChart.destroy(); rssiChart = null; }
+
+  const rssiPoints = data.filter(d => d.sta_rssi != null && d.sta_rssi !== 0);
+  if (rssiPoints.length === 0) {
+    canvas.style.display = 'none';
+    nodata.style.display = 'block';
+    return;
+  }
+
+  canvas.style.display = 'block';
+  nodata.style.display = 'none';
+
+  rssiPoints.sort((a, b) => a.timestamp - b.timestamp);
+  const labels = rssiPoints.map(d => new Date(d.timestamp * 1000));
+  const values = rssiPoints.map(d => d.sta_rssi);
+
+  const isScatter = chartType === 'scatter';
+
+  rssiChart = new Chart(canvas.getContext('2d'), {
+    type: isScatter ? 'scatter' : 'line',
+    data: {
+      labels: labels,
+      datasets: [{
+        label: 'RSSI (dBm)',
+        data: isScatter ? rssiPoints.map(d => ({ x: new Date(d.timestamp * 1000), y: d.sta_rssi })) : values,
+        borderColor: '#2196f3',
+        backgroundColor: isScatter ? '#2196f3' : 'rgba(33, 150, 243, 0.1)',
+        fill: !isScatter,
+        tension: 0.3,
+        pointRadius: isScatter ? 6 : 3,
+        spanGaps: false
+      }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      interaction: { mode: 'nearest', axis: 'x', intersect: false },
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          callbacks: {
+            title: (items) => items.length > 0 ? new Date(items[0].parsed.x).toLocaleString() : '',
+            label: (item) => `RSSI: ${item.parsed.y} dBm`
+          }
+        }
+      },
+      scales: {
+        x: {
+          type: 'time',
+          time: { unit: currentPeriod === 1 ? 'hour' : 'day', displayFormats: { hour: 'HH:mm', day: 'MMM d' } },
+          grid: { display: false }
+        },
+        y: {
+          type: 'linear',
+          min: -90, max: -20,
+          title: { display: true, text: 'dBm' },
+          ticks: {
+            callback: v => {
+              if (v === -30) return '-30 (Excellent)';
+              if (v === -50) return '-50 (Good)';
+              if (v === -70) return '-70 (Fair)';
+              if (v === -80) return '-80 (Weak)';
+              return v;
+            }
+          }
+        }
+      }
+    }
+  });
+}
+
+function renderHealthStats(data) {
+  if (data.length === 0) return;
+
+  // RSSI average (exclude 0 = not connected)
+  const rssiValues = data.map(d => d.sta_rssi).filter(v => v != null && v !== 0);
+  const avgRssi = rssiValues.length > 0 ? Math.round(rssiValues.reduce((a, b) => a + b, 0) / rssiValues.length) : null;
+  document.getElementById('stat-avg-rssi').textContent = avgRssi !== null ? avgRssi + ' dBm' : '—';
+
+  // WiFi disconnects: difference between max and min (cumulative counter)
+  const wifiCounts = data.map(d => d.wifi_disconnect_count).filter(v => v != null);
+  const wifiDisconnects = wifiCounts.length >= 2 ? Math.max(...wifiCounts) - Math.min(...wifiCounts) : 0;
+  const wifiEl = document.getElementById('stat-wifi-disconnects');
+  wifiEl.textContent = wifiDisconnects;
+  if (wifiDisconnects > 10) { wifiEl.style.color = '#b00'; } else if (wifiDisconnects > 3) { wifiEl.style.color = '#f57c00'; }
+
+  // Restarts: same logic
+  const rebootCounts = data.map(d => d.reboot_count).filter(v => v != null);
+  const restarts = rebootCounts.length >= 2 ? Math.max(...rebootCounts) - Math.min(...rebootCounts) : 0;
+  document.getElementById('stat-restarts').textContent = restarts;
+
+  // Crashes (unexpected restarts)
+  const crashCounts = data.map(d => d.unexpected_restarts).filter(v => v != null);
+  const crashes = crashCounts.length >= 2 ? Math.max(...crashCounts) - Math.min(...crashCounts) : 0;
+  const crashEl = document.getElementById('stat-crashes');
+  crashEl.textContent = crashes;
+  if (crashes > 0) { crashEl.style.color = '#b00'; }
+
+  // Warnings list
+  const warnings = data.filter(d => d.warning_active && d.warning_msg);
+  const warningsEl = document.getElementById('health-warnings');
+  if (warnings.length > 0) {
+    const uniqueWarnings = [...new Set(warnings.map(d => d.warning_msg))];
+    warningsEl.innerHTML = uniqueWarnings.map(w =>
+      `<div style="padding:8px;background:#fff3cd;border-radius:8px;border:1px solid #ffc107;margin-bottom:8px;font-size:13px;color:#856404">⚠️ ${w}</div>`
+    ).join('');
+  } else {
+    warningsEl.innerHTML = '';
   }
 }
 
@@ -1279,7 +1461,8 @@ async function refreshAll() {
   await Promise.all([
     loadSensorHistory(),
     loadBatteryHistory(),
-    loadActivity()
+    loadActivity(),
+    loadSystemHealth()
   ]);
 }
 
