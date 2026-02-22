@@ -185,7 +185,7 @@ async function updateHeader(){
     document.getElementById('custom-name-suffix').textContent = ' / ' + customName;
 
     // Mode badge
-    const mode = s.system_state?.mode || 'off';
+    const mode = s.system_state?.mode || 'manual';
     const mb = document.getElementById('mode-badge');
     mb.textContent = mode.charAt(0).toUpperCase() + mode.slice(1);
     mb.className = 'status-badge status-' + mode;
@@ -252,7 +252,7 @@ async function updateStatus(){
     stateEl.style.color = displayState.color;
 
     // Mode badge с учётом state контроллера (enhanced badge overrides basic one from updateHeader)
-    const mode = s.system_state?.mode || 'off';
+    const mode = s.system_state?.mode || 'manual';
     const modeBadge = document.getElementById('mode-badge');
     const modeText = mode.charAt(0).toUpperCase() + mode.slice(1);
     modeBadge.textContent = modeText;
@@ -276,7 +276,7 @@ async function updateStatus(){
         badgeClass += ' status-timer'; // Обычный timer (голубой)
       }
     } else {
-      badgeClass += ' status-off'; // Серый (OFF)
+      badgeClass += ' status-manual'; // Серый (Manual)
     }
     modeBadge.className = badgeClass;
 
@@ -858,7 +858,7 @@ async function updateSensorControllerStatus() {
     const progressRow = document.getElementById('status-progress-row');
     if (sc.state === 'PULSE' || sc.state === 'SETTLE' || sc.state === 'CHECK') {
       progressRow.style.display = 'block';
-      const progressText = `${sc.total_water_ml} / ${preset.max_water_cycle_ml || '?'} ml this cycle`;
+      const progressText = `Pulse ${sc.pulses_delivered}, ${sc.total_water_ml} / ${preset.max_water_cycle_ml || '?'} ml`;
       document.getElementById('status-watering-progress').textContent = progressText;
     } else {
       progressRow.style.display = 'none';
