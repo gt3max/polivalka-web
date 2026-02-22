@@ -2211,6 +2211,20 @@ function renderHistoryList(data) {
     const volume = w.watering?.total_ml ?? 0;
     const online = w.system?.online_hours != null ? Math.round(w.system.online_hours) + 'h' : '—';
 
+    // Health diagnostics line (only if data exists)
+    let healthLine = '';
+    if (w.health) {
+      const parts = [];
+      if (w.health.avg_rssi != null) parts.push(`📶 RSSI: ${w.health.avg_rssi}dBm`);
+      if (w.health.wifi_disconnects) parts.push(`📡 WiFi disc: ${w.health.wifi_disconnects}`);
+      if (w.health.unexpected_restarts) parts.push(`⚡ Restarts: ${w.health.unexpected_restarts}`);
+      if (w.health.brownouts) parts.push(`🔴 Brownouts: ${w.health.brownouts}`);
+      if (w.health.crashes) parts.push(`💥 Crashes: ${w.health.crashes}`);
+      if (parts.length > 0) {
+        healthLine = `<div style="display:flex;gap:16px;margin-top:4px;font-size:13px;color:#888">${parts.map(p => `<span>${p}</span>`).join('')}</div>`;
+      }
+    }
+
     html += `<div class="event-row event-system" style="flex-direction:column;align-items:stretch">
       <div style="display:flex;justify-content:space-between;align-items:center">
         <strong>Week ${w.week}</strong>
@@ -2222,6 +2236,7 @@ function renderHistoryList(data) {
         <span>🚿 ${waterings} waterings (${volume}ml)</span>
         <span>📡 Online: ${online}</span>
       </div>
+      ${healthLine}
     </div>`;
   }
 
@@ -2235,14 +2250,15 @@ function exportLongTermCSV() {
     return;
   }
 
-  let csv = 'week,start_date,end_date,moisture_avg,moisture_min,moisture_max,battery_avg,battery_min,battery_max,waterings,total_ml,auto_events,manual_events,online_hours,offline_hours,restarts,firmware\n';
+  let csv = 'week,start_date,end_date,moisture_avg,moisture_min,moisture_max,battery_avg,battery_min,battery_max,waterings,total_ml,auto_events,manual_events,online_hours,offline_hours,restarts,firmware,avg_rssi,min_rssi,wifi_disconnects,unexpected_restarts,brownouts,crashes\n';
 
   for (const w of longTermData) {
     csv += `${w.week},${w.start_date},${w.end_date},`;
     csv += `${w.moisture?.avg_percent || ''},${w.moisture?.min_percent || ''},${w.moisture?.max_percent || ''},`;
     csv += `${w.battery?.avg_percent || ''},${w.battery?.min_percent || ''},${w.battery?.max_percent || ''},`;
     csv += `${w.watering?.events_count || 0},${w.watering?.total_ml || 0},${w.watering?.auto_events || 0},${w.watering?.manual_events || 0},`;
-    csv += `${w.system?.online_hours || ''},${w.system?.offline_hours || ''},${w.system?.restarts || 0},${w.system?.firmware_version || ''}\n`;
+    csv += `${w.system?.online_hours || ''},${w.system?.offline_hours || ''},${w.system?.restarts || 0},${w.system?.firmware_version || ''},`;
+    csv += `${w.health?.avg_rssi || ''},${w.health?.min_rssi || ''},${w.health?.wifi_disconnects || 0},${w.health?.unexpected_restarts || 0},${w.health?.brownouts || 0},${w.health?.crashes || 0}\n`;
   }
 
   // Download with standardized filename: DeviceID_date_type-period.csv

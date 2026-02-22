@@ -176,10 +176,24 @@ def extract_raw_points(items):
                 point['src'] = source
             pump_points.append(point)
 
+    # Health raw points (RSSI timeline for long-term chart)
+    health_points = []
+
+    for item in items:
+        ts = int(item.get('timestamp', 0))
+        if not ts:
+            continue
+
+        system = item.get('system', {})
+        rssi = system.get('sta_rssi')
+        if rssi is not None:
+            health_points.append({'ts': ts, 'rssi': int(rssi)})
+
     return {
         'sensor': sensor_points,
         'battery': battery_points,
-        'pump': pump_points
+        'pump': pump_points,
+        'health': health_points
     }
 
 
@@ -374,6 +388,61 @@ def aggregate_device_data(device_id, start_ts, end_ts):
         'firmware_version': firmware_version
     }
 
+    # Aggregate health diagnostics
+    rssi_values = []
+    wifi_disconnect_values = []
+    unexpected_restart_values = []
+    heap_values = []
+    brownout_count = 0
+    crash_count = 0
+
+    for item in items:
+        system = item.get('system', {})
+
+        rssi = system.get('sta_rssi')
+        if rssi is not None:
+            rssi_values.append(int(rssi))
+
+        wdc = system.get('wifi_disconnect_count')
+        if wdc is not None:
+            wifi_disconnect_values.append(int(wdc))
+
+        ur = system.get('unexpected_restarts')
+        if ur is not None:
+            unexpected_restart_values.append(int(ur))
+
+        heap = system.get('heap_free')
+        if heap is not None:
+            heap_values.append(int(heap))
+
+        # Count brownouts and crashes from boot_type/reset_reason
+        bt = system.get('boot_type', '')
+        rr = system.get('reset_reason', '')
+        if bt and 'BROWNOUT' in str(bt).upper():
+            brownout_count += 1
+        if rr and any(x in str(rr).upper() for x in ['PANIC', 'CRASH', 'WATCHDOG']):
+            crash_count += 1
+
+    health_stats = None
+    if rssi_values or wifi_disconnect_values or brownout_count or crash_count:
+        health_stats = {}
+        if rssi_values:
+            health_stats['avg_rssi'] = round(sum(rssi_values) / len(rssi_values))
+            health_stats['min_rssi'] = min(rssi_values)
+            health_stats['max_rssi'] = max(rssi_values)
+        if wifi_disconnect_values:
+            # Cumulative counter: delta = max - min for the period
+            health_stats['wifi_disconnects'] = max(wifi_disconnect_values) - min(wifi_disconnect_values)
+        if unexpected_restart_values:
+            health_stats['unexpected_restarts'] = max(unexpected_restart_values) - min(unexpected_restart_values)
+        if heap_values:
+            health_stats['avg_heap_free'] = round(sum(heap_values) / len(heap_values))
+            health_stats['min_heap_free'] = min(heap_values)
+        if brownout_count:
+            health_stats['brownouts'] = brownout_count
+        if crash_count:
+            health_stats['crashes'] = crash_count
+
     result = {
         'moisture': moisture_stats,
         'battery': battery_stats,
@@ -385,6 +454,10 @@ def aggregate_device_data(device_id, start_ts, end_ts):
     # Add sensor2 if present
     if sensor2_stats:
         result['sensor2'] = sensor2_stats
+
+    # Add health diagnostics if present
+    if health_stats:
+        result['health'] = health_stats
 
     return result
 
