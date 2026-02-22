@@ -36,6 +36,12 @@
     .modal{display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.5);z-index:1000;align-items:center;justify-content:center}
     .modal.show{display:flex}
     .modal-content{background:#fff;padding:20px;border-radius:12px;max-width:500px;width:90%;max-height:80vh;overflow-y:auto}
+    .toggle-switch{position:relative;display:inline-block;width:51px;height:31px;flex-shrink:0}
+    .toggle-switch input{opacity:0;width:0;height:0}
+    .toggle-slider{position:absolute;cursor:pointer;top:0;left:0;right:0;bottom:0;background:#ccc;border-radius:31px;transition:0.3s}
+    .toggle-slider:before{position:absolute;content:"";height:27px;width:27px;left:2px;bottom:2px;background:#fff;border-radius:50%;transition:0.3s}
+    input:checked+.toggle-slider{background:#34c759}
+    input:checked+.toggle-slider:before{transform:translateX(20px)}
   </style>
 </head><body><div class="header"><div><h1 id="device-id-header" style="margin:0;font-size:15px">🌱 Polivalka</h1><div style="font-size:13px">📍 <span id="location-text">—</span> / <span id="room-text">—</span><span id="custom-name-suffix"></span></div><div style="font-size:11px;margin-top:4px"><span id="battery-status">🔋 —</span> · <span id="header-state">💤 Standby</span></div></div><div class="header-info"><div id="header-time" class="mono" style="font-size:11px">--:--</div><div style="font-size:11px" id="header-mode"><span id="mode-badge" class="status-badge">—</span></div><div style="font-size:11px" id="header-conn">📡 <span id="conn-text" style="transition:color 0.3s">...</span></div></div></div></div><div class="nav"><a href="fleet.html">Fleet</a><a href="home.html">Home</a><a href="identify.html" style="background:#e8f5e9">🌱 Plant</a><a href="timer.html" class="active">Timer</a><a href="sensor.html">Sensor</a><a href="settings.html">Settings</a><a href="calibration.html">Calibration</a><a href="online.html">Online</a><a href="trends.html">Trends</a><a href="ota.html">Update</a><a href="admin.html" id="admin-nav-link" style="display:none">Admin</a></div><div class="container"><div class="card"><h3>Timer Mode</h3><p class="muted">Water on a schedule. Add up to 8 schedules with specific days and times.</p><div class="row"><button id="add-schedule-btn" class="primary" onclick="showModalWithCheck()">+ Add Schedule</button><span id="schedule-limit-info" class="muted" style="margin-left:8px"></span></div></div><div class="card"><h3>Active Schedules <span id="schedule-count" class="muted" style="font-weight:400;font-size:14px"></span></h3><div id="schedules-list"><div class="muted">No schedules configured. Click "+ Add Schedule" to create one.</div></div></div></div><div id="modal" class="modal"><div class="modal-content"><h3 id="modal-title">Add Schedule</h3><div style="margin:12px 0"><label>Time</label><br><input id="edit-time" type="time" value="07:00" style="width:150px;font-size:16px"></div><div style="margin:12px 0"><label>Days</label><br><div id="days-selector" style="margin-top:8px"><span class="day-btn" data-day="1">M</span><span class="day-btn" data-day="2">T</span><span class="day-btn" data-day="3">W</span><span class="day-btn" data-day="4">T</span><span class="day-btn" data-day="5">F</span><span class="day-btn" data-day="6">S</span><span class="day-btn" data-day="7">S</span></div><button onclick="selectAllDays()" style="margin-top:8px;font-size:12px">Every day</button><button onclick="selectWeekdays()" style="margin-top:8px;font-size:12px">Weekdays</button></div><div style="margin:12px 0"><label>Duration</label><br><input id="edit-duration" type="number" min="1" max="300" value="30" style="width:100px;text-align:left;font-size:16px"><select id="edit-unit" style="width:100px" onchange="updateDurationLimit()"><option value="sec">seconds</option><option value="min">minutes</option></select><div id="duration-hint" class="muted" style="font-size:11px;margin-top:4px">Max: 5 minutes (300 sec)</div></div><div style="margin:12px 0"><label><input id="edit-enabled" type="checkbox" checked>
 Enabled
@@ -77,13 +83,15 @@ async function loadSchedules(){
       normalizeSchedule(s);
       const daysText = formatDays(s.days);
       const durationText = `${s.duration} ${s.unit}`;
-      const statusIcon = s.enabled ? '✅' : '❌';
 
       return `
         <div class="schedule-item ${s.enabled?'':'disabled'}">
           <div class="schedule-header">
-            <div>
-              <span style="font-size:24px">${statusIcon}</span>
+            <div style="display:flex;align-items:center;gap:10px">
+              <label class="toggle-switch">
+                <input type="checkbox" ${s.enabled?'checked':''} onchange="toggleSchedule(${s.id}, this.checked)">
+                <span class="toggle-slider"></span>
+              </label>
               <span class="schedule-time">${s.time}</span>
               <span class="muted">• ${durationText}</span>
             </div>
@@ -297,6 +305,35 @@ async function saveSchedule() {
   } catch(e) {
     console.error('Save error:', e);
     alert('Error saving schedule: ' + e.message);
+  }
+}
+
+async function toggleSchedule(id, enabled) {
+  try {
+    // Get current schedule data to preserve all fields
+    const data = await API.get('/schedules');
+    const s = data.schedules.find(x => x.id === id);
+    if (!s) return;
+
+    normalizeSchedule(s);
+    s.enabled = enabled;
+
+    const result = await API.post('/schedule/set', s);
+    if (!result.success) {
+      showToast('Failed to update schedule', 'error');
+      loadSchedules(); // Revert UI
+      return;
+    }
+
+    showToast(enabled ? 'Schedule enabled' : 'Schedule disabled', enabled ? 'success' : 'warning');
+
+    if (IS_CLOUD) {
+      await sleep(3000);
+    }
+    loadSchedules();
+  } catch(e) {
+    showToast('Error: ' + e.message, 'error');
+    loadSchedules(); // Revert UI
   }
 }
 
