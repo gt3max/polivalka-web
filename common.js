@@ -196,17 +196,6 @@ function navigateTo(page) {
   }
 }
 
-/**
- * Get RSSI display info
- */
-function getRssiDisplay(rssi) {
-  if (!rssi || rssi === 0) return { icon: '', color: '#999', text: '' };
-  if (rssi >= -50) return { icon: '📶', color: '#0a0', text: rssi + ' dBm' };
-  if (rssi >= -60) return { icon: '📶', color: '#2e7d32', text: rssi + ' dBm' };
-  if (rssi >= -70) return { icon: '📶', color: '#f57c00', text: rssi + ' dBm' };
-  return { icon: '📶', color: '#c62828', text: rssi + ' dBm' };
-}
-
 // ============ Header Updates ============
 /**
  * Update common header elements (time, battery, state, mode, connection)
