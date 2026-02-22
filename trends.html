@@ -245,8 +245,7 @@
 </div>
 
 <script>
-// Archive mode: parse URL params
-const urlParams = new URLSearchParams(window.location.search);
+// Archive mode: parse URL params (urlParams defined in api-adapter.js)
 const ARCHIVE_START = urlParams.get('start') ? parseInt(urlParams.get('start')) : null;
 const ARCHIVE_END = urlParams.get('end') ? parseInt(urlParams.get('end')) : null;
 const ARCHIVE_PLANT_NAME = urlParams.get('plant_name') || null;
