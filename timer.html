@@ -24,6 +24,7 @@
     .status-badge{display:inline-block;padding:4px 10px;border-radius:12px;font-size:13px;font-weight:600}
     .status-timer{background:#e3f2fd;color:#1976d2}
     .status-sensor{background:#fff3e0;color:#f57c00}
+    .status-off{background:#fce4ec;color:#c2185b}
     .status-manual{background:#e0e0e0;color:#616161}
     .schedule-item{border:1px solid #e0e0e0;padding:12px;border-radius:8px;margin:8px 0;background:#fafafa}
     .schedule-item.disabled{opacity:0.6}
@@ -267,6 +268,13 @@ async function saveSchedule() {
     }
 
     closeModal();
+
+    // Cloud: wait for MQTT → ESP32 → telemetry → DynamoDB sync
+    if (IS_CLOUD) {
+      showToast('Schedule saved. Syncing...', 'info');
+      await sleep(3000);
+    }
+
     loadSchedules();
   } catch(e) {
     console.error('Save error:', e);
@@ -278,7 +286,14 @@ async function deleteSchedule(id) {
   if (!confirm('Delete this schedule?')) return;
 
   try {
-    await API.post('/schedule/delete?id=' + id);
+    await API.post('/schedule/delete', { id });
+
+    // Cloud: wait for MQTT → ESP32 → telemetry → DynamoDB sync
+    if (IS_CLOUD) {
+      showToast('Schedule deleted. Syncing...', 'info');
+      await sleep(3000);
+    }
+
     loadSchedules();
   } catch(e) {
     alert('Error deleting schedule: ' + e.message);
