@@ -54,29 +54,6 @@
 <div class="nav"><a href="fleet.html">Fleet</a><a href="home.html">Home</a><a href="identify.html" style="background:#e8f5e9">🌱 Plant</a><a href="timer.html">Timer</a><a href="sensor.html">Sensor</a><a href="settings.html">Settings</a><a href="calibration.html">Calibration</a><a href="online.html">Online</a><a href="trends.html" class="active">Trends</a><a href="ota.html">Update</a><a href="admin.html" id="admin-nav-link" style="display:none">Admin</a></div>
 
 <div class="container">
-  <!-- Stats Summary -->
-  <div class="card">
-    <h3 style="margin-top:0">📊 Summary (<span id="period-label">7 days</span>)</h3>
-    <div class="stats-grid">
-      <div class="stat-box">
-        <div class="stat-value" id="stat-waterings">—</div>
-        <div class="stat-label">Waterings</div>
-      </div>
-      <div class="stat-box">
-        <div class="stat-value" id="stat-volume">—</div>
-        <div class="stat-label">Total ml</div>
-      </div>
-      <div class="stat-box">
-        <div class="stat-value" id="stat-avg-moisture">—</div>
-        <div class="stat-label">Avg Moisture</div>
-      </div>
-      <div class="stat-box">
-        <div class="stat-value" id="stat-min-battery">—</div>
-        <div class="stat-label">Min Battery</div>
-      </div>
-    </div>
-  </div>
-
   <!-- Tabs -->
   <div class="tab-buttons">
     <button class="active" onclick="showTab('moisture')">💧 Moisture</button>
@@ -190,6 +167,29 @@
     </div>
     <div id="health-loading" class="loading">Loading device health...</div>
     <div id="health-error" class="error-msg" style="display:none"></div>
+  </div>
+
+  <!-- Stats Summary (below tabs - user sees graph first) -->
+  <div class="card">
+    <h3 style="margin-top:0">📊 Summary (<span id="period-label">7 days</span>)</h3>
+    <div class="stats-grid">
+      <div class="stat-box">
+        <div class="stat-value" id="stat-waterings">—</div>
+        <div class="stat-label">Waterings</div>
+      </div>
+      <div class="stat-box">
+        <div class="stat-value" id="stat-volume">—</div>
+        <div class="stat-label">Total ml</div>
+      </div>
+      <div class="stat-box">
+        <div class="stat-value" id="stat-avg-moisture">—</div>
+        <div class="stat-label">Avg Moisture</div>
+      </div>
+      <div class="stat-box">
+        <div class="stat-value" id="stat-min-battery">—</div>
+        <div class="stat-label">Min Battery</div>
+      </div>
+    </div>
   </div>
 
   <!-- Long-term Trends (from GitHub JSON) -->
