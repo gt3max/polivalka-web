@@ -141,6 +141,11 @@ if (IS_CLOUD) {
           stateEl.innerHTML = `🚀 Starting...`;
         }
       }
+      // Auto-hide arming section after countdown expires (grace period 5s)
+      if (remaining === 0 && elapsed > SENSOR_LAUNCH_DURATION + 5) {
+        document.getElementById('arming-cancel-section').style.display = 'none';
+        sensorLaunchStartTime = null;
+      }
     }
     // Timer countdown
     if (lastTimerState === 'LAUNCH' && timerLaunchStartTime) {
@@ -154,6 +159,11 @@ if (IS_CLOUD) {
         } else {
           stateEl.textContent = `⏰ Starting...`;
         }
+      }
+      // Auto-hide arming section after countdown expires (grace period 3s)
+      if (remaining === 0 && elapsed > TIMER_LAUNCH_DURATION + 3) {
+        document.getElementById('timer-arming-cancel-section').style.display = 'none';
+        timerLaunchStartTime = null;
       }
     }
   }, 1000);
@@ -376,29 +386,15 @@ async function updateStatus(){
         instruction.style.display = 'block';
       }
 
-      // Pre-init toggle state from /status to eliminate visibility delay
-      const preInitState = s.system_state?.state;
-      if (preInitState) {
-        const isEnabled = (preInitState !== 'DISABLED');
-        if (mode === 'sensor' && Date.now() >= sensorCommandPendingUntil) {
-          const toggleEl = document.getElementById('sensor-auto-toggle');
-          const toggleRow = document.getElementById('sensor-toggle-row');
-          if (toggleEl && toggleRow) {
-            updatingSensorToggle = true;
-            toggleEl.checked = isEnabled;
-            updatingSensorToggle = false;
-            toggleRow.style.visibility = 'visible';
-          }
-        } else if (mode === 'timer' && Date.now() >= timerCommandPendingUntil) {
-          const toggleEl = document.getElementById('timer-auto-toggle');
-          const toggleRow = document.getElementById('timer-toggle-row');
-          if (toggleEl && toggleRow) {
-            updatingTimerToggle = true;
-            toggleEl.checked = isEnabled;
-            updatingTimerToggle = false;
-            toggleRow.style.visibility = 'visible';
-          }
-        }
+      // Pre-init: make toggle row visible (don't set checked — system_state.state
+      // is shared between modes and may reflect the WRONG controller's state)
+      // Actual toggle state is set by updateTimerControllerStatus/updateSensorControllerStatus
+      if (mode === 'sensor') {
+        const toggleRow = document.getElementById('sensor-toggle-row');
+        if (toggleRow) toggleRow.style.visibility = 'visible';
+      } else if (mode === 'timer') {
+        const toggleRow = document.getElementById('timer-toggle-row');
+        if (toggleRow) toggleRow.style.visibility = 'visible';
       }
     }
   } catch(e) {
@@ -454,6 +450,13 @@ async function selectMode(mode) {
     // Hide both arming sections immediately when changing mode
     document.getElementById('arming-cancel-section').style.display = 'none';
     document.getElementById('timer-arming-cancel-section').style.display = 'none';
+    // Reset toggles to OFF — controllers always start DISABLED on mode change
+    updatingTimerToggle = true;
+    document.getElementById('timer-auto-toggle').checked = false;
+    updatingTimerToggle = false;
+    updatingSensorToggle = true;
+    document.getElementById('sensor-auto-toggle').checked = false;
+    updatingSensorToggle = false;
     // Optimistic UI update - immediately show selected mode + correct control section
     document.querySelectorAll('.mode-btn').forEach(btn => {
       btn.classList.toggle('selected', btn.dataset.mode === mode);
