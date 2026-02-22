@@ -1688,8 +1688,8 @@ async function massOTAUpdate() {
       // "success" only means device STARTED downloading — not that OTA completed
       const started = results.filter(r => r.success);
       if (started.length > 0) {
-        // Wait for devices to download, flash, and reboot (~45s)
-        for (let countdown = 45; countdown > 0; countdown--) {
+        // Wait for devices to download, flash, and reboot (~60s)
+        for (let countdown = 60; countdown > 0; countdown--) {
           showToast(`⏳ Verifying firmware... ${countdown}s`, 'info');
           await new Promise(r => setTimeout(r, 1000));
         }
