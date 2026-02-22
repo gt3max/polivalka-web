@@ -70,10 +70,18 @@ async function loadAllData(){
 const s=await updateHeader();
 if(!s)return;
 try{
-document.getElementById('live-adc').textContent=`ADC: ${s.adc}`;
-const moistureEl=document.getElementById('live-moisture');
-const pctVal=(s.percent_float!==undefined&&s.percent_float!==null)?s.percent_float.toFixed(1):(s.percent!==null&&s.percent!==undefined?s.percent:'—');
-if(pctVal!==null&&pctVal!==undefined&&pctVal!=='—'){moistureEl.textContent=`${pctVal}%`;}else{moistureEl.textContent='Not calibrated';}
+// Sensor connection check (ADC < 100 = disconnected)
+const adcVal = s.adc;
+const sensorDisconnected = adcVal !== null && adcVal !== undefined && (adcVal < 100 || adcVal > 4000);
+if (sensorDisconnected) {
+  document.getElementById('live-adc').textContent = 'ADC: —';
+  document.getElementById('live-moisture').innerHTML = '<span style="color:#e65100">⚠️ Sensor not connected</span>';
+} else {
+  document.getElementById('live-adc').textContent = `ADC: ${adcVal !== null && adcVal !== undefined ? adcVal : '—'}`;
+  const moistureEl = document.getElementById('live-moisture');
+  const pctVal = (s.percent_float !== undefined && s.percent_float !== null) ? s.percent_float.toFixed(1) : (s.percent !== null && s.percent !== undefined ? s.percent : '—');
+  if (pctVal !== null && pctVal !== undefined && pctVal !== '—') { moistureEl.textContent = `${pctVal}%`; } else { moistureEl.textContent = '—'; }
+}
 // Update sensor2 from main status (Cloud mode - no separate /sensor2/status endpoint)
 if(s.sensor2_adc!==undefined&&s.sensor2_adc!==null){
 const s2pct=(s.sensor2_percent_float!==undefined&&s.sensor2_percent_float!==null)?s.sensor2_percent_float.toFixed(1):(s.sensor2_percent!==null&&s.sensor2_percent!==undefined?s.sensor2_percent:'—');
@@ -90,11 +98,14 @@ document.getElementById('calib').textContent=`adc_air=${air}  adc_water=${water}
 const sensorBadge=document.getElementById('sensor-cal-badge');
 if(s.sensor_calibrated){sensorBadge.textContent='✓ Calibrated';sensorBadge.style.background='#e8f5e9';sensorBadge.style.color='#2e7d32';}
 else{sensorBadge.textContent='⚠️ Presets';sensorBadge.style.background='#fff3e0';sensorBadge.style.color='#f57c00';}
-if(air!==null&&soil!==null&&air!=='—'&&soil!=='—'){
+// Warning only for user-calibrated values (not presets)
+if(s.sensor_calibrated&&air!==null&&soil!==null&&air!=='—'&&soil!=='—'){
 const diff=Math.abs(air-soil);const warningDiv=document.getElementById('calib-warning');
 const warningText=document.getElementById('warning-text');
-if(diff>200){warningText.textContent=`Air (${air}) vs Soil (${soil}) >200! Dry soil first`;warningDiv.style.display='block';}
-else{warningDiv.style.display='none';}}
+if(diff<200){warningText.textContent=`Air (${air}) vs Soil (${soil}) too close (diff ${diff})! Re-calibrate`;warningDiv.style.display='block';}
+else if(air<soil){warningText.textContent=`Air (${air}) < Soil (${soil}) — values may be inverted!`;warningDiv.style.display='block';}
+else{warningDiv.style.display='none';}
+}else{document.getElementById('calib-warning').style.display='none';}
 }catch(e){}}
 async function updateCalibration(){
 const btn=event?event.target:document.querySelector('button[onclick*="updateCalibration"]');

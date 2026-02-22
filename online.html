@@ -860,6 +860,18 @@ if (IS_CLOUD) {
       const deviceSuffix = DEVICE_ID ? DEVICE_ID.replace('Polivalka-', '') : 'XXXXXX';
       const apPassword = 'ms' + deviceSuffix;
 
+      // WiFi signal strength (RSSI)
+      const staRssi = status.sta_rssi;
+      let rssiText = '—';
+      let rssiColor = '#666';
+      if (staRssi !== null && staRssi !== undefined) {
+        const rssi = parseInt(staRssi);
+        if (rssi >= -50) { rssiText = `${rssi} dBm (Excellent)`; rssiColor = '#0a0'; }
+        else if (rssi >= -60) { rssiText = `${rssi} dBm (Good)`; rssiColor = '#0a0'; }
+        else if (rssi >= -70) { rssiText = `${rssi} dBm (Fair)`; rssiColor = '#f57c00'; }
+        else { rssiText = `${rssi} dBm (Weak)`; rssiColor = '#b00'; }
+      }
+
       // Calculate last seen from timestamp
       const lastTimestamp = status.timestamp;
       let lastSeenText = '—';
@@ -901,6 +913,10 @@ if (IS_CLOUD) {
             <div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid #eee">
               <span class="muted">Connection:</span>
               <span style="color:${isOnline ? '#0a0' : '#b00'}">${isOnline ? '✅ Online' : '❌ Offline'}</span>
+            </div>
+            <div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid #eee">
+              <span class="muted">WiFi Signal:</span>
+              <span class="mono" style="color:${rssiColor}">${rssiText}</span>
             </div>
             <div style="display:flex;justify-content:space-between;padding:8px 0">
               <span class="muted">Last Seen:</span>
