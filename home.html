@@ -352,28 +352,10 @@ async function updateStatus(){
       sensorControl.style.display = 'none';
       instruction.style.display = 'none';
 
-      // Pre-initialize toggle state from /status to eliminate OFF→ON flicker
-      if (s.system_state?.state && s.system_state.state !== 'DISABLED' && !timerCommandPending) {
-        updatingTimerToggle = true;
-        document.getElementById('timer-auto-toggle').checked = true;
-        updatingTimerToggle = false;
-        const toggleRow = document.getElementById('timer-toggle-row');
-        if (toggleRow) toggleRow.style.visibility = 'visible';
-      }
     } else if (mode === 'sensor') {
       timerControl.style.display = 'none';
       sensorControl.style.display = 'block';
       instruction.style.display = 'none';
-
-      // Pre-initialize toggle state from /status to eliminate OFF→ON flicker
-      // (controller/status will provide exact data later, but toggle shows correct state immediately)
-      if (s.system_state?.state && s.system_state.state !== 'DISABLED' && !sensorCommandPending) {
-        updatingSensorToggle = true;
-        document.getElementById('sensor-auto-toggle').checked = true;
-        updatingSensorToggle = false;
-        const toggleRow = document.getElementById('sensor-toggle-row');
-        if (toggleRow) toggleRow.style.visibility = 'visible';
-      }
     } else {
       timerControl.style.display = 'none';
       sensorControl.style.display = 'none';
