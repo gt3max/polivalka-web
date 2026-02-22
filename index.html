@@ -2424,17 +2424,28 @@
             btn.disabled = true;
             btn.innerHTML = '<span class="wl-spinner"></span>';
 
-            fetch('https://formsubmit.co/ajax/mahin84@gmail.com', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
-                body: JSON.stringify({
-                    email: email,
-                    _subject: 'PlantApp Waitlist: ' + email,
-                    message: 'New waitlist signup from ' + email
+            // Send to both admins in parallel
+            var payload = JSON.stringify({
+                email: email,
+                _subject: 'PlantApp Waitlist: ' + email,
+                message: 'New waitlist signup from ' + email
+            });
+            var headers = { 'Content-Type': 'application/json', 'Accept': 'application/json' };
+
+            Promise.all([
+                fetch('https://formsubmit.co/ajax/mrmaximshurigin@gmail.com', {
+                    method: 'POST', headers: headers, body: payload
+                }),
+                fetch('https://formsubmit.co/ajax/mahin84@gmail.com', {
+                    method: 'POST', headers: headers, body: payload
                 })
-            })
+            ])
             .then(function() { showWaitlistSuccess(); })
-            .catch(function() { showWaitlistSuccess(); });
+            .catch(function() {
+                btn.disabled = false;
+                btn.textContent = 'Retry';
+                alert('Failed to submit. Please try again.');
+            });
 
             return false;
         }
