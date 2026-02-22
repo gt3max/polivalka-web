@@ -1724,7 +1724,7 @@ async function massOTAUpdate() {
 
       let resultMsg = '📦 OTA Update Results\n\n';
       if (verified > 0) resultMsg += `✅ Updated: ${verified}\n`;
-      if (unverified > 0) resultMsg += `⚠️ NOT updated: ${unverified}\n`;
+      if (unverified > 0) resultMsg += `⏳ Pending verification: ${unverified}\n`;
       if (rejected > 0) resultMsg += `❌ Rejected: ${rejected}\n`;
       resultMsg += '\n';
 
@@ -1733,8 +1733,8 @@ async function massOTAUpdate() {
       });
       results.filter(r => r.success && r.verified === false).forEach(r => {
         resultMsg += r.verifyError
-          ? `⚠️ ${r.device_id}: Cannot verify (${r.verifyError})\n`
-          : `⚠️ ${r.device_id}: Still ${r.oldVersion} — OTA failed!\n`;
+          ? `⏳ ${r.device_id}: Rebooting (${r.verifyError})\n`
+          : `⚠️ ${r.device_id}: Still ${r.oldVersion} — OTA may have failed\n`;
       });
       results.filter(r => !r.success).forEach(r => {
         resultMsg += `❌ ${r.device_id}: ${r.error}\n`;
@@ -1742,11 +1742,10 @@ async function massOTAUpdate() {
 
       alert(resultMsg);
 
-      const totalProblems = unverified + rejected;
-      showToast(totalProblems > 0
-        ? `⚠️ OTA: ${verified} updated, ${totalProblems} problems`
-        : `✅ All ${verified} devices updated successfully`,
-        totalProblems > 0 ? 'error' : 'success');
+      showToast(rejected > 0
+        ? `⚠️ OTA: ${verified} updated, ${rejected} rejected`
+        : `✅ OTA sent to all ${verified + unverified} devices`,
+        rejected > 0 ? 'error' : 'success');
 
       // Refresh fleet to show new versions
       loadDevices();
