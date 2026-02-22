@@ -544,28 +544,6 @@ function renderMoistureChart(data) {
   const adcMin = Math.max(0, deviceCalib.adc_water - 200);
   const adcMax = Math.min(4095, deviceCalib.adc_air + 200);
 
-  // Preset reference lines for J6 capacitive sensor
-  function buildJ6Annotations() {
-    const lbl = (text, color) => ({ display: true, content: text, position: 'end', font: { size: 9 }, color: color, backgroundColor: 'transparent', padding: 2 });
-    return {
-      waterLine: {
-        type: 'line', yMin: deviceCalib.adc_water, yMax: deviceCalib.adc_water, yScaleID: 'y1',
-        borderColor: 'rgba(33, 150, 243, 0.4)', borderWidth: 1, borderDash: [6, 3],
-        label: lbl('Water', 'rgba(33, 150, 243, 0.6)')
-      },
-      drySoilLine: {
-        type: 'line', yMin: deviceCalib.adc_dry_soil, yMax: deviceCalib.adc_dry_soil, yScaleID: 'y1',
-        borderColor: 'rgba(255, 152, 0, 0.4)', borderWidth: 1, borderDash: [6, 3],
-        label: lbl('Dry Soil', 'rgba(255, 152, 0, 0.6)')
-      },
-      airLine: {
-        type: 'line', yMin: deviceCalib.adc_air, yMax: deviceCalib.adc_air, yScaleID: 'y1',
-        borderColor: 'rgba(244, 67, 54, 0.4)', borderWidth: 1, borderDash: [6, 3],
-        label: lbl('Air', 'rgba(244, 67, 54, 0.6)')
-      }
-    };
-  }
-
   // Chart options template
   const chartOptions = () => ({
     responsive: true,
@@ -573,7 +551,6 @@ function renderMoistureChart(data) {
     interaction: { mode: 'nearest', axis: 'x', intersect: false },
     plugins: {
       legend: { position: 'top' },
-      annotation: { annotations: buildJ6Annotations() },
       tooltip: {
         enabled: true,
         position: 'nearest',
@@ -698,18 +675,6 @@ function renderMoistureChart(data) {
         interaction: { mode: 'nearest', axis: 'x', intersect: false },
         plugins: {
           legend: { position: 'top' },
-          annotation: { annotations: {
-            dryLine: {
-              type: 'line', yMin: sensor2Calib.dry, yMax: sensor2Calib.dry, yScaleID: 'y1',
-              borderColor: 'rgba(255, 152, 0, 0.4)', borderWidth: 1, borderDash: [6, 3],
-              label: { display: true, content: 'Dry', position: 'end', font: { size: 9 }, color: 'rgba(255, 152, 0, 0.6)', backgroundColor: 'transparent', padding: 2 }
-            },
-            wetLine: {
-              type: 'line', yMin: sensor2Calib.wet, yMax: sensor2Calib.wet, yScaleID: 'y1',
-              borderColor: 'rgba(33, 150, 243, 0.4)', borderWidth: 1, borderDash: [6, 3],
-              label: { display: true, content: 'Wet', position: 'end', font: { size: 9 }, color: 'rgba(33, 150, 243, 0.6)', backgroundColor: 'transparent', padding: 2 }
-            }
-          }},
           tooltip: {
             enabled: true, position: 'nearest',
             filter: (item) => item.parsed.y !== null,
@@ -1552,13 +1517,7 @@ function renderLtMoistureChart(weeks) {
   const ltAdcMin = Math.max(0, deviceCalib.adc_water - 200);
   const ltAdcMax = Math.min(4095, deviceCalib.adc_air + 200);
 
-  // Merge week boundaries + preset reference lines
   const weekAnnotations = buildWeekAnnotations(weeks);
-  const allAnnotations = Object.assign({}, weekAnnotations, {
-    waterLine: { type: 'line', yMin: deviceCalib.adc_water, yMax: deviceCalib.adc_water, yScaleID: 'y1', borderColor: 'rgba(33, 150, 243, 0.4)', borderWidth: 1, borderDash: [6, 3], label: { display: true, content: 'Water', position: 'end', font: { size: 9 }, color: 'rgba(33, 150, 243, 0.6)', backgroundColor: 'transparent', padding: 2 } },
-    drySoilLine: { type: 'line', yMin: deviceCalib.adc_dry_soil, yMax: deviceCalib.adc_dry_soil, yScaleID: 'y1', borderColor: 'rgba(255, 152, 0, 0.4)', borderWidth: 1, borderDash: [6, 3], label: { display: true, content: 'Dry Soil', position: 'end', font: { size: 9 }, color: 'rgba(255, 152, 0, 0.6)', backgroundColor: 'transparent', padding: 2 } },
-    airLine: { type: 'line', yMin: deviceCalib.adc_air, yMax: deviceCalib.adc_air, yScaleID: 'y1', borderColor: 'rgba(244, 67, 54, 0.4)', borderWidth: 1, borderDash: [6, 3], label: { display: true, content: 'Air', position: 'end', font: { size: 9 }, color: 'rgba(244, 67, 54, 0.6)', backgroundColor: 'transparent', padding: 2 } }
-  });
 
   ltMoistureChart = new Chart(canvas.getContext('2d'), {
     type: isScatter ? 'scatter' : 'line',
@@ -1595,7 +1554,7 @@ function renderLtMoistureChart(weeks) {
       interaction: { mode: 'nearest', axis: 'x', intersect: false },
       plugins: {
         legend: { position: 'top' },
-        annotation: { annotations: allAnnotations },
+        annotation: { annotations: weekAnnotations },
         tooltip: {
           enabled: true,
           position: 'nearest',
@@ -1661,12 +1620,7 @@ function renderLtSensor2Chart(weeks) {
   const ltS2AdcMin = Math.max(0, sensor2Calib.dry - 100);
   const ltS2AdcMax = Math.min(4095, sensor2Calib.wet + 200);
 
-  // Merge week boundaries + sensor2 preset lines
   const weekAnnotations = buildWeekAnnotations(weeks);
-  const s2Annotations = Object.assign({}, weekAnnotations, {
-    dryLine: { type: 'line', yMin: sensor2Calib.dry, yMax: sensor2Calib.dry, yScaleID: 'y1', borderColor: 'rgba(255, 152, 0, 0.4)', borderWidth: 1, borderDash: [6, 3], label: { display: true, content: 'Dry', position: 'end', font: { size: 9 }, color: 'rgba(255, 152, 0, 0.6)', backgroundColor: 'transparent', padding: 2 } },
-    wetLine: { type: 'line', yMin: sensor2Calib.wet, yMax: sensor2Calib.wet, yScaleID: 'y1', borderColor: 'rgba(33, 150, 243, 0.4)', borderWidth: 1, borderDash: [6, 3], label: { display: true, content: 'Wet', position: 'end', font: { size: 9 }, color: 'rgba(33, 150, 243, 0.6)', backgroundColor: 'transparent', padding: 2 } }
-  });
 
   ltSensor2Chart = new Chart(canvas.getContext('2d'), {
     type: isScatter ? 'scatter' : 'line',
@@ -1703,7 +1657,7 @@ function renderLtSensor2Chart(weeks) {
       interaction: { mode: 'nearest', axis: 'x', intersect: false },
       plugins: {
         legend: { position: 'top' },
-        annotation: { annotations: s2Annotations },
+        annotation: { annotations: weekAnnotations },
         tooltip: {
           filter: (item) => item.parsed.y !== null,
           callbacks: {
