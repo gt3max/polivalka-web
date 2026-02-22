@@ -158,9 +158,9 @@ async function updateHeader(){
       document.getElementById('room-text').textContent = s.system_state.room;
     }
     // Custom name suffix
-    let customName = s.system_state?.device_name || 'Plant';
+    let customName = s.system_state?.device_name || 'Device';
     if (customName === 'Polivalka' || customName.toLowerCase().startsWith('polivalka-')) {
-      customName = 'Plant';
+      customName = 'Device';
     }
     document.getElementById('custom-name-suffix').textContent = ' / ' + customName;
 

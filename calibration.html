@@ -51,8 +51,8 @@ if(s.battery&&s.battery.percent!==null&&s.battery.percent!==undefined&&s.battery
 // Location, Room, Custom Name
 if(s.system_state?.location)document.getElementById('location-text').textContent=s.system_state.location;
 if(s.system_state?.room)document.getElementById('room-text').textContent=s.system_state.room;
-let customName=s.system_state?.device_name||'Plant';
-if(customName==='Polivalka'||customName.toLowerCase().startsWith('polivalka-'))customName='Plant';
+let customName=s.system_state?.device_name||'Device';
+if(customName==='Polivalka'||customName.toLowerCase().startsWith('polivalka-'))customName='Device';
 document.getElementById('custom-name-suffix').textContent=' / '+customName;
 // Mode badge
 const mode=s.system_state?.mode||'off';const mb=document.getElementById('mode-badge');
