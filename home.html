@@ -104,9 +104,12 @@
 let updatingTimerToggle = false;
 let updatingSensorToggle = false;
 
-// Block toggle sync while command is being processed (prevents bounce)
-let sensorCommandPending = false;
-let timerCommandPending = false;
+// Block toggle sync while command is being processed (timestamp-based, auto-expires)
+let sensorCommandPendingUntil = 0;
+let timerCommandPendingUntil = 0;
+// Block mode override from stale DynamoDB after mode change
+let lastModeChangeTime = 0;
+const COMMAND_PROTECTION_MS = 8000; // 8 sec protection window (DynamoDB round-trip = 5-7 sec)
 
 // Track sensor disconnection state (ADC < 100 = not connected)
 let sensor1Disconnected = false;
@@ -282,10 +285,13 @@ async function updateStatus(){
 
     document.getElementById('current-mode').textContent = modeText;
 
-    // Mode selector - highlight current mode
-    document.querySelectorAll('.mode-btn').forEach(btn => {
-      btn.classList.toggle('selected', btn.dataset.mode === mode);
-    });
+    // Mode selector - highlight current mode (skip if mode change is pending — stale DynamoDB)
+    const modeProtected = (Date.now() - lastModeChangeTime < COMMAND_PROTECTION_MS);
+    if (!modeProtected) {
+      document.querySelectorAll('.mode-btn').forEach(btn => {
+        btn.classList.toggle('selected', btn.dataset.mode === mode);
+      });
+    }
 
     // Last watering
     if (s.system_state?.last_watering) {
@@ -342,48 +348,48 @@ async function updateStatus(){
       manualBtn.style.borderColor = '';
     }
 
-    // Automation Control - показываем нужную секцию
-    const timerControl = document.getElementById('timer-auto-control');
-    const sensorControl = document.getElementById('sensor-auto-control');
-    const instruction = document.getElementById('auto-instruction');
+    // Automation Control - показываем нужную секцию (skip if mode change pending)
+    if (!modeProtected) {
+      const timerControl = document.getElementById('timer-auto-control');
+      const sensorControl = document.getElementById('sensor-auto-control');
+      const instruction = document.getElementById('auto-instruction');
 
-    if (mode === 'timer') {
-      timerControl.style.display = 'block';
-      sensorControl.style.display = 'none';
-      instruction.style.display = 'none';
+      if (mode === 'timer') {
+        timerControl.style.display = 'block';
+        sensorControl.style.display = 'none';
+        instruction.style.display = 'none';
+      } else if (mode === 'sensor') {
+        timerControl.style.display = 'none';
+        sensorControl.style.display = 'block';
+        instruction.style.display = 'none';
+      } else {
+        timerControl.style.display = 'none';
+        sensorControl.style.display = 'none';
+        instruction.style.display = 'block';
+      }
 
-    } else if (mode === 'sensor') {
-      timerControl.style.display = 'none';
-      sensorControl.style.display = 'block';
-      instruction.style.display = 'none';
-    } else {
-      timerControl.style.display = 'none';
-      sensorControl.style.display = 'none';
-      instruction.style.display = 'block';
-    }
-
-    // Pre-init toggle state from /status to eliminate visibility delay
-    // updateControllerStatus() will refine with detailed controller data
-    const preInitState = s.system_state?.state;
-    if (preInitState) {
-      const isEnabled = (preInitState !== 'DISABLED');
-      if (mode === 'sensor' && !sensorCommandPending) {
-        const toggleEl = document.getElementById('sensor-auto-toggle');
-        const toggleRow = document.getElementById('sensor-toggle-row');
-        if (toggleEl && toggleRow) {
-          updatingSensorToggle = true;
-          toggleEl.checked = isEnabled;
-          updatingSensorToggle = false;
-          toggleRow.style.visibility = 'visible';
-        }
-      } else if (mode === 'timer' && !timerCommandPending) {
-        const toggleEl = document.getElementById('timer-auto-toggle');
-        const toggleRow = document.getElementById('timer-toggle-row');
-        if (toggleEl && toggleRow) {
-          updatingTimerToggle = true;
-          toggleEl.checked = isEnabled;
-          updatingTimerToggle = false;
-          toggleRow.style.visibility = 'visible';
+      // Pre-init toggle state from /status to eliminate visibility delay
+      const preInitState = s.system_state?.state;
+      if (preInitState) {
+        const isEnabled = (preInitState !== 'DISABLED');
+        if (mode === 'sensor' && Date.now() >= sensorCommandPendingUntil) {
+          const toggleEl = document.getElementById('sensor-auto-toggle');
+          const toggleRow = document.getElementById('sensor-toggle-row');
+          if (toggleEl && toggleRow) {
+            updatingSensorToggle = true;
+            toggleEl.checked = isEnabled;
+            updatingSensorToggle = false;
+            toggleRow.style.visibility = 'visible';
+          }
+        } else if (mode === 'timer' && Date.now() >= timerCommandPendingUntil) {
+          const toggleEl = document.getElementById('timer-auto-toggle');
+          const toggleRow = document.getElementById('timer-toggle-row');
+          if (toggleEl && toggleRow) {
+            updatingTimerToggle = true;
+            toggleEl.checked = isEnabled;
+            updatingTimerToggle = false;
+            toggleRow.style.visibility = 'visible';
+          }
         }
       }
     }
@@ -435,10 +441,12 @@ async function updateBattery(){
 
 async function selectMode(mode) {
   try {
+    // Protect optimistic UI from stale DynamoDB overrides
+    lastModeChangeTime = Date.now();
     // Hide both arming sections immediately when changing mode
     document.getElementById('arming-cancel-section').style.display = 'none';
     document.getElementById('timer-arming-cancel-section').style.display = 'none';
-    // Optimistic UI update - immediately show selected mode
+    // Optimistic UI update - immediately show selected mode + correct control section
     document.querySelectorAll('.mode-btn').forEach(btn => {
       btn.classList.toggle('selected', btn.dataset.mode === mode);
     });
@@ -446,6 +454,28 @@ async function selectMode(mode) {
     const modeBadge = document.getElementById('mode-badge');
     modeBadge.textContent = mode.charAt(0).toUpperCase() + mode.slice(1);
     modeBadge.className = 'status-badge status-' + mode;
+
+    // Immediately show correct control section (don't wait for DynamoDB)
+    const timerControl = document.getElementById('timer-auto-control');
+    const sensorControl = document.getElementById('sensor-auto-control');
+    const instruction = document.getElementById('auto-instruction');
+    if (mode === 'timer') {
+      timerControl.style.display = 'block';
+      sensorControl.style.display = 'none';
+      instruction.style.display = 'none';
+    } else if (mode === 'sensor') {
+      timerControl.style.display = 'none';
+      sensorControl.style.display = 'block';
+      instruction.style.display = 'none';
+    } else {
+      timerControl.style.display = 'none';
+      sensorControl.style.display = 'none';
+      instruction.style.display = 'block';
+    }
+
+    // Hide status details for the other mode
+    document.getElementById('timer-status-details').style.display = 'none';
+    document.getElementById('sensor-status-details').style.display = 'none';
 
     await API.post('/mode', {mode: mode});
 
@@ -456,6 +486,7 @@ async function selectMode(mode) {
     updateStatus();
     updateControllerStatus();
   } catch(e) {
+    lastModeChangeTime = 0; // Release protection on error
     alert('Error setting mode: ' + e.message);
     // Revert optimistic update on error
     updateStatus();
@@ -530,8 +561,8 @@ async function toggleTimerAuto(checked){
   // Ignore programmatic changes
   if (updatingTimerToggle) return;
 
-  // Block toggle sync while command is processing (prevents bounce from stale DynamoDB data)
-  timerCommandPending = true;
+  // Block toggle sync while command is processing (timestamp-based, auto-expires)
+  timerCommandPendingUntil = Date.now() + COMMAND_PROTECTION_MS;
   try {
     if (checked) {
       // Check if schedules exist before enabling
@@ -578,10 +609,9 @@ async function toggleTimerAuto(checked){
     updateStatus();
     updateControllerStatus(); // Update UI
   } catch(e) {
+    timerCommandPendingUntil = 0; // Release protection on error
     alert('Error: ' + e.message);
     document.getElementById('timer-auto-toggle').checked = !checked; // revert on error
-  } finally {
-    timerCommandPending = false;
   }
 }
 
@@ -622,8 +652,8 @@ async function toggleSensorAuto(checked){
     return;
   }
 
-  // Block toggle sync while command is processing (prevents bounce)
-  sensorCommandPending = true;
+  // Block toggle sync while command is processing (timestamp-based, auto-expires)
+  sensorCommandPendingUntil = Date.now() + COMMAND_PROTECTION_MS;
 
   try {
     if (checked) {
@@ -632,7 +662,7 @@ async function toggleSensorAuto(checked){
       if (!resp.success) {
         alert(resp.message || 'Failed to enable sensor controller');
         document.getElementById('sensor-auto-toggle').checked = false;
-        sensorCommandPending = false;
+        sensorCommandPendingUntil = 0;
         return;
       }
       // Hide timer arming section (mutual exclusivity)
@@ -661,10 +691,9 @@ async function toggleSensorAuto(checked){
     updateStatus();
     updateControllerStatus(); // Update UI
   } catch(e) {
+    sensorCommandPendingUntil = 0; // Release protection on error
     alert('Error: ' + e.message);
     document.getElementById('sensor-auto-toggle').checked = !checked; // revert on error
-  } finally {
-    sensorCommandPending = false;
   }
 }
 
@@ -949,22 +978,21 @@ async function updateSensorControllerStatus() {
       armingSection.style.display = 'none';
     }
 
-    // Update toggle state ONLY if we're actually in sensor mode
-    // This prevents fighting between timer and sensor toggles
+    // Update toggle state ONLY if we're actually in sensor mode AND no command pending
     const currentModeEl = document.querySelector('.mode-btn.selected');
     if (currentModeEl && currentModeEl.getAttribute('data-mode') === 'sensor') {
       const toggleEl = document.getElementById('sensor-auto-toggle');
       const toggleRowEl = document.getElementById('sensor-toggle-row');
-      const shouldBeChecked = (sc.state !== 'DISABLED');
 
-      // Don't update toggle while command is being processed (prevents bounce)
-      if (!sensorCommandPending) {
+      // Skip toggle sync during protection window (prevents bounce from stale DynamoDB)
+      if (Date.now() >= sensorCommandPendingUntil) {
+        const shouldBeChecked = (sc.state !== 'DISABLED');
         updatingSensorToggle = true;
         toggleEl.checked = shouldBeChecked;
         updatingSensorToggle = false;
       }
 
-      // Now show the toggle row (was hidden to prevent OFF→ON flicker)
+      // Always show the toggle row
       if (toggleRowEl) toggleRowEl.style.visibility = 'visible';
 
       // Show warning in Automation Control if sensor mode is ACTIVE but sensor disconnected
@@ -995,8 +1023,8 @@ async function updateTimerControllerStatus() {
       return;
     }
 
-    // Skip update while command is being processed (prevents stale DynamoDB data from overriding optimistic UI)
-    if (timerCommandPending) return;
+    // Note: don't skip entire function during command pending — still update schedules, warnings etc.
+    // Only skip toggle update (below) using timerCommandPendingUntil
 
     // Fetch timer controller status
     const tc = await API.get('/timer/controller/status');
@@ -1103,20 +1131,21 @@ async function updateTimerControllerStatus() {
       armingSection.style.display = 'none';
     }
 
-    // Update toggle state ONLY if we're actually in timer mode
-    // This prevents fighting between timer and sensor toggles
+    // Update toggle state ONLY if we're actually in timer mode AND no command pending
     const currentModeEl = document.querySelector('.mode-btn.selected');
     if (currentModeEl && currentModeEl.getAttribute('data-mode') === 'timer') {
       const toggleEl = document.getElementById('timer-auto-toggle');
       const toggleRowEl = document.getElementById('timer-toggle-row');
-      const shouldBeChecked = (tc.state !== 'DISABLED');
 
-      // Set correct state BEFORE showing toggle (prevents visual flicker)
-      updatingTimerToggle = true;
-      toggleEl.checked = shouldBeChecked;
-      updatingTimerToggle = false;
+      // Skip toggle sync during protection window (prevents bounce from stale DynamoDB)
+      if (Date.now() >= timerCommandPendingUntil) {
+        const shouldBeChecked = (tc.state !== 'DISABLED');
+        updatingTimerToggle = true;
+        toggleEl.checked = shouldBeChecked;
+        updatingTimerToggle = false;
+      }
 
-      // Now show the toggle row (was hidden to prevent OFF→ON flicker)
+      // Always show the toggle row
       if (toggleRowEl) toggleRowEl.style.visibility = 'visible';
     }
 
