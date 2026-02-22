@@ -150,7 +150,7 @@
         <div class="stat-box"><div class="stat-value" id="watering-total-ml">—</div><div class="stat-label">Total ml</div></div>
         <div class="stat-box"><div class="stat-value" id="watering-total-sec">—</div><div class="stat-label">Total sec</div></div>
       </div>
-      <div id="watering-list"></div>
+      <div id="watering-list" style="max-height:300px;overflow-y:auto"></div>
       <div id="watering-nodata" class="muted" style="display:none;text-align:center;padding:20px">No watering events in this period</div>
       <div id="watering-loading" class="loading">Loading watering events...</div>
     </div>
@@ -160,7 +160,7 @@
   <div id="tab-activity" class="tab-content">
     <div class="card">
       <h3 style="margin-top:0">📝 Activity Log</h3>
-      <div id="activity-list"></div>
+      <div id="activity-list" style="max-height:400px;overflow-y:auto"></div>
       <div id="activity-loading" class="loading">Loading activity...</div>
     </div>
   </div>
@@ -186,7 +186,7 @@
     </div>
     <div class="card">
       <h3 style="margin-top:0">⚡ Power Events</h3>
-      <div id="power-events"><span class="muted">No boot events in this period</span></div>
+      <div id="power-events" style="max-height:300px;overflow-y:auto"><span class="muted">No boot events in this period</span></div>
     </div>
     <div id="health-loading" class="loading">Loading device health...</div>
     <div id="health-error" class="error-msg" style="display:none"></div>
@@ -268,7 +268,7 @@
       <h3 style="margin:0">📋 Weekly History</h3>
       <button onclick="exportLongTermCSV()" style="padding:6px 10px;font-size:13px">📥 Export CSV</button>
     </div>
-    <div id="history-list" style="margin-top:12px"></div>
+    <div id="history-list" style="margin-top:12px;max-height:400px;overflow-y:auto"></div>
   </div>
 </div>
 
