@@ -184,6 +184,10 @@
       </div>
       <div id="health-warnings" style="margin-top:12px"></div>
     </div>
+    <div class="card">
+      <h3 style="margin-top:0">⚡ Power Events</h3>
+      <div id="power-events"><span class="muted">No boot events in this period</span></div>
+    </div>
     <div id="health-loading" class="loading">Loading device health...</div>
     <div id="health-error" class="error-msg" style="display:none"></div>
   </div>
@@ -701,6 +705,43 @@ function renderHealthStats(data) {
     ).join('');
   } else {
     warningsEl.innerHTML = '';
+  }
+
+  // Power events (boot_type is only sent on first heartbeat after boot)
+  const bootEvents = data.filter(d => d.boot_type).sort((a, b) => b.timestamp - a.timestamp);
+  const powerEl = document.getElementById('power-events');
+  if (bootEvents.length > 0) {
+    const icons = {
+      'BROWNOUT_BOOT': '🔴', 'CRASH_BOOT': '🔴', 'LOW_POWER_WAKE': '🟡',
+      'POWER_ON': '🟢', 'REBOOT': '🟢', 'OTA_BOOT': '🔵',
+      'DEEPSLEEP': '⚪', 'SYSTEM_BOOT': '⚪'
+    };
+    const labels = {
+      'BROWNOUT_BOOT': 'Brownout (power drop)',
+      'CRASH_BOOT': 'Crash (software error)',
+      'LOW_POWER_WAKE': 'Low power wake',
+      'POWER_ON': 'Power on',
+      'REBOOT': 'Reboot (command)',
+      'OTA_BOOT': 'Firmware update',
+      'DEEPSLEEP': 'Deep sleep wake',
+      'SYSTEM_BOOT': 'System boot'
+    };
+    powerEl.innerHTML = bootEvents.map(e => {
+      const icon = icons[e.boot_type] || '⚪';
+      const label = labels[e.boot_type] || e.boot_type;
+      const time = new Date(e.timestamp * 1000).toLocaleString();
+      const reason = e.reset_reason ? ` <span class="muted">(${e.reset_reason})</span>` : '';
+      const isBad = e.boot_type === 'BROWNOUT_BOOT' || e.boot_type === 'CRASH_BOOT';
+      return `<div style="padding:6px 10px;margin-bottom:4px;border-radius:6px;font-size:13px;${isBad ? 'background:#ffebee;color:#c62828' : 'background:#f5f5f5;color:#333'}">${icon} <span class="mono" style="font-size:12px">${time}</span> — ${label}${reason}</div>`;
+    }).join('');
+
+    // Summary: count brownouts
+    const brownouts = bootEvents.filter(e => e.boot_type === 'BROWNOUT_BOOT').length;
+    if (brownouts > 0) {
+      powerEl.innerHTML = `<div style="padding:8px;background:#ffebee;border-radius:8px;border:1px solid #ef9a9a;margin-bottom:8px;font-size:13px;color:#c62828">⚡ ${brownouts} brownout(s) — unstable power supply detected</div>` + powerEl.innerHTML;
+    }
+  } else {
+    powerEl.innerHTML = '<span class="muted">No boot events in this period</span>';
   }
 }
 
