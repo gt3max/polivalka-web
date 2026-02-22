@@ -74,6 +74,7 @@ async function loadSchedules(){
     }
 
     list.innerHTML = data.schedules.map(s => {
+      normalizeSchedule(s);
       const daysText = formatDays(s.days);
       const durationText = `${s.duration} ${s.unit}`;
       const statusIcon = s.enabled ? '✅' : '❌';
@@ -100,7 +101,29 @@ async function loadSchedules(){
   }
 }
 
+// Normalize schedule from ESP32/DynamoDB format to display format
+function normalizeSchedule(s) {
+  // days_mask (bitmask) → days array
+  if (!s.days && s.days_mask !== undefined) {
+    s.days = [];
+    for (let i = 0; i < 7; i++) {
+      if (s.days_mask & (1 << i)) s.days.push(i + 1);
+    }
+  }
+  if (!s.days) s.days = [];
+  // hour/minute → "HH:MM" time string
+  if (!s.time && s.hour !== undefined) {
+    s.time = String(s.hour).padStart(2, '0') + ':' + String(s.minute || 0).padStart(2, '0');
+  }
+  // unit number → string
+  if (typeof s.unit === 'number') {
+    s.unit = ['sec', 'min', 'hr'][s.unit] || 'sec';
+  }
+  return s;
+}
+
 function formatDays(days) {
+  if (!days || !days.length) return 'No days';
   const dayNames = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
   if (days.length === 7) return 'Every day';
   if (days.length === 5 && days.every(d => d <= 5)) return 'Weekdays';
@@ -133,21 +156,16 @@ function showModal(id = null) {
       .then(data => {
         const s = data.schedules.find(x => x.id === id);
         if (s) {
+          normalizeSchedule(s);
           document.getElementById('edit-time').value = s.time;
           document.getElementById('edit-duration').value = s.duration;
           document.getElementById('edit-unit').value = s.unit;
           document.getElementById('edit-enabled').checked = s.enabled;
 
-          // Set days (handle both days array and days_mask)
-          let days = s.days || [];
-          if (!days.length && s.days_mask !== undefined) {
-            for (let i = 0; i < 7; i++) {
-              if (s.days_mask & (1 << i)) days.push(i + 1);
-            }
-          }
+          // Set days
           document.querySelectorAll('.day-btn').forEach(btn => {
             const day = parseInt(btn.dataset.day);
-            btn.classList.toggle('active', days.includes(day));
+            btn.classList.toggle('active', s.days.includes(day));
           });
 
           // Open modal AFTER data is loaded
