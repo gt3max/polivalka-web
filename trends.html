@@ -257,6 +257,10 @@ let moistureChart = null;
 let batteryChart = null;
 let pumpChart = null;
 
+// Preset reference values (defaults, updated from /status calib data)
+let deviceCalib = { adc_water: 1200, adc_dry_soil: 2400, adc_air: 2800 };
+let sensor2Calib = { dry: 100, wet: 3000 };
+
 // Gap detection for blackout/offline periods
 // If gap between data points > threshold, insert null to break the line
 const GAP_THRESHOLD_SECONDS = 7200; // 2 hours
@@ -319,6 +323,10 @@ async function updateHeader() {
     const modeBadge = document.getElementById('mode-badge');
     modeBadge.textContent = mode.charAt(0).toUpperCase() + mode.slice(1);
     modeBadge.className = 'status-badge status-' + mode;
+
+    // Save preset/calib data for chart axes
+    if (s.calib) deviceCalib = s.calib;
+    if (s.sensor2_calib) sensor2Calib = s.sensor2_calib;
 
     const ct = document.getElementById('conn-text');
     if (s.wifi_connected) { ct.textContent = 'Online'; ct.style.color = '#fff'; }
@@ -520,6 +528,43 @@ function renderMoistureChart(data) {
   const sensor2PctValues = data.map(d => d.sensor2_percent);
   const hasSensor2 = sensor2AdcValues.some(v => v != null && v !== undefined);
 
+  // Dynamic moisture % axis range from data
+  const pctValues = data.map(d => d.moisture_percent).filter(v => v != null);
+  let pctMin = 0, pctMax = 100;
+  if (pctValues.length > 0) {
+    const rawMin = Math.min(...pctValues);
+    const rawMax = Math.max(...pctValues);
+    if (rawMax - rawMin >= 10) {
+      pctMin = Math.max(0, Math.floor(rawMin - 5));
+      pctMax = Math.min(100, Math.ceil(rawMax + 5));
+    }
+  }
+
+  // Dynamic ADC axis range from presets
+  const adcMin = Math.max(0, deviceCalib.adc_water - 200);
+  const adcMax = Math.min(4095, deviceCalib.adc_air + 200);
+
+  // Preset reference lines for J6 capacitive sensor
+  function buildJ6Annotations() {
+    return {
+      waterLine: {
+        type: 'line', yMin: deviceCalib.adc_water, yMax: deviceCalib.adc_water, yScaleID: 'y1',
+        borderColor: 'rgba(33, 150, 243, 0.5)', borderWidth: 1.5, borderDash: [6, 3],
+        label: { display: true, content: 'Water ' + deviceCalib.adc_water, position: 'start', backgroundColor: 'rgba(33, 150, 243, 0.7)', font: { size: 10 } }
+      },
+      drySoilLine: {
+        type: 'line', yMin: deviceCalib.adc_dry_soil, yMax: deviceCalib.adc_dry_soil, yScaleID: 'y1',
+        borderColor: 'rgba(255, 152, 0, 0.5)', borderWidth: 1.5, borderDash: [6, 3],
+        label: { display: true, content: 'Dry Soil ' + deviceCalib.adc_dry_soil, position: 'start', backgroundColor: 'rgba(255, 152, 0, 0.7)', font: { size: 10 } }
+      },
+      airLine: {
+        type: 'line', yMin: deviceCalib.adc_air, yMax: deviceCalib.adc_air, yScaleID: 'y1',
+        borderColor: 'rgba(244, 67, 54, 0.5)', borderWidth: 1.5, borderDash: [6, 3],
+        label: { display: true, content: 'Air ' + deviceCalib.adc_air, position: 'start', backgroundColor: 'rgba(244, 67, 54, 0.7)', font: { size: 10 } }
+      }
+    };
+  }
+
   // Chart options template
   const chartOptions = () => ({
     responsive: true,
@@ -527,6 +572,7 @@ function renderMoistureChart(data) {
     interaction: { mode: 'nearest', axis: 'x', intersect: false },
     plugins: {
       legend: { position: 'top' },
+      annotation: { annotations: buildJ6Annotations() },
       tooltip: {
         enabled: true,
         position: 'nearest',
@@ -551,8 +597,8 @@ function renderMoistureChart(data) {
         },
         grid: { display: false }
       },
-      y: { type: 'linear', position: 'left', min: 0, max: 100, title: { display: true, text: 'Moisture %' }, ticks: { callback: v => v + '%' } },
-      y1: { type: 'linear', position: 'right', min: 0, max: 4095, title: { display: true, text: 'ADC' }, grid: { drawOnChartArea: false } }
+      y: { type: 'linear', position: 'left', min: pctMin, max: pctMax, title: { display: true, text: 'Moisture %' }, ticks: { callback: v => v + '%' } },
+      y1: { type: 'linear', position: 'right', min: adcMin, max: adcMax, title: { display: true, text: 'ADC' }, grid: { drawOnChartArea: false } }
     }
   });
 
@@ -603,6 +649,20 @@ function renderMoistureChart(data) {
     const sensor2PctWithGaps = insertGapsForTimeSeries(data, d => d.sensor2_percent);
     const sensor2AdcWithGaps = insertGapsForTimeSeries(data, d => d.sensor2_adc);
 
+    // Sensor2 dynamic axes
+    const s2PctVals = data.map(d => d.sensor2_percent).filter(v => v != null);
+    let s2PctMin = 0, s2PctMax = 100;
+    if (s2PctVals.length > 0) {
+      const s2RawMin = Math.min(...s2PctVals);
+      const s2RawMax = Math.max(...s2PctVals);
+      if (s2RawMax - s2RawMin >= 10) {
+        s2PctMin = Math.max(0, Math.floor(s2RawMin - 5));
+        s2PctMax = Math.min(100, Math.ceil(s2RawMax + 5));
+      }
+    }
+    const s2AdcMin = Math.max(0, sensor2Calib.dry - 100);
+    const s2AdcMax = Math.min(4095, sensor2Calib.wet + 200);
+
     window.sensor2Chart = new Chart(ctx2, {
       type: isScatter ? 'scatter' : 'line',
       data: {
@@ -617,7 +677,7 @@ function renderMoistureChart(data) {
             tension: 0.3,
             pointRadius: isScatter ? 6 : 3,
             yAxisID: 'y',
-            spanGaps: false  // Break line at null (blackout/offline periods)
+            spanGaps: false
           },
           {
             label: 'ADC',
@@ -628,11 +688,47 @@ function renderMoistureChart(data) {
             tension: 0.3,
             pointRadius: isScatter ? 5 : 2,
             yAxisID: 'y1',
-            spanGaps: false  // Break line at null (blackout/offline periods)
+            spanGaps: false
           }
         ]
       },
-      options: chartOptions()
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        interaction: { mode: 'nearest', axis: 'x', intersect: false },
+        plugins: {
+          legend: { position: 'top' },
+          annotation: { annotations: {
+            dryLine: {
+              type: 'line', yMin: sensor2Calib.dry, yMax: sensor2Calib.dry, yScaleID: 'y1',
+              borderColor: 'rgba(255, 152, 0, 0.5)', borderWidth: 1.5, borderDash: [6, 3],
+              label: { display: true, content: 'Dry ' + sensor2Calib.dry, position: 'start', backgroundColor: 'rgba(255, 152, 0, 0.7)', font: { size: 10 } }
+            },
+            wetLine: {
+              type: 'line', yMin: sensor2Calib.wet, yMax: sensor2Calib.wet, yScaleID: 'y1',
+              borderColor: 'rgba(33, 150, 243, 0.5)', borderWidth: 1.5, borderDash: [6, 3],
+              label: { display: true, content: 'Wet ' + sensor2Calib.wet, position: 'start', backgroundColor: 'rgba(33, 150, 243, 0.7)', font: { size: 10 } }
+            }
+          }},
+          tooltip: {
+            enabled: true, position: 'nearest',
+            filter: (item) => item.parsed.y !== null,
+            callbacks: {
+              title: (items) => items.length > 0 ? new Date(items[0].parsed.x).toLocaleString() : '',
+              label: (item) => {
+                if (item.parsed.y === null) return null;
+                const label = item.dataset.label;
+                if (label.includes('%')) return `${label}: ${item.parsed.y}%`;
+                return `${label}: ${item.parsed.y}`;
+              }
+            }
+          }
+        },
+        scales: {
+          x: { type: 'time', time: { unit: currentPeriod === 1 ? 'hour' : 'day', displayFormats: { hour: 'HH:mm', day: 'MMM d' } }, grid: { display: false } },
+          y: { type: 'linear', position: 'left', min: s2PctMin, max: s2PctMax, title: { display: true, text: 'Moisture %' }, ticks: { callback: v => v + '%' } },
+          y1: { type: 'linear', position: 'right', min: s2AdcMin, max: s2AdcMax, title: { display: true, text: 'ADC' }, grid: { drawOnChartArea: false } }
+        }
+      }
     });
   } else {
     sensor2Card.style.display = 'none';
@@ -1444,7 +1540,24 @@ function renderLtMoistureChart(weeks) {
   const labels = moistureWithGaps.labels;
   const hasAdc = data.some(d => d.adc_raw != null);
   const isScatter = ltChartType === 'scatter';
+
+  // Dynamic axes
+  const ltPctValues = data.map(d => d.moisture_percent).filter(v => v != null);
+  let ltPctMin = 0, ltPctMax = 100;
+  if (ltPctValues.length > 0) {
+    const rMin = Math.min(...ltPctValues), rMax = Math.max(...ltPctValues);
+    if (rMax - rMin >= 10) { ltPctMin = Math.max(0, Math.floor(rMin - 5)); ltPctMax = Math.min(100, Math.ceil(rMax + 5)); }
+  }
+  const ltAdcMin = Math.max(0, deviceCalib.adc_water - 200);
+  const ltAdcMax = Math.min(4095, deviceCalib.adc_air + 200);
+
+  // Merge week boundaries + preset reference lines
   const weekAnnotations = buildWeekAnnotations(weeks);
+  const allAnnotations = Object.assign({}, weekAnnotations, {
+    waterLine: { type: 'line', yMin: deviceCalib.adc_water, yMax: deviceCalib.adc_water, yScaleID: 'y1', borderColor: 'rgba(33, 150, 243, 0.5)', borderWidth: 1.5, borderDash: [6, 3], label: { display: true, content: 'Water ' + deviceCalib.adc_water, position: 'start', backgroundColor: 'rgba(33, 150, 243, 0.7)', font: { size: 10 } } },
+    drySoilLine: { type: 'line', yMin: deviceCalib.adc_dry_soil, yMax: deviceCalib.adc_dry_soil, yScaleID: 'y1', borderColor: 'rgba(255, 152, 0, 0.5)', borderWidth: 1.5, borderDash: [6, 3], label: { display: true, content: 'Dry Soil ' + deviceCalib.adc_dry_soil, position: 'start', backgroundColor: 'rgba(255, 152, 0, 0.7)', font: { size: 10 } } },
+    airLine: { type: 'line', yMin: deviceCalib.adc_air, yMax: deviceCalib.adc_air, yScaleID: 'y1', borderColor: 'rgba(244, 67, 54, 0.5)', borderWidth: 1.5, borderDash: [6, 3], label: { display: true, content: 'Air ' + deviceCalib.adc_air, position: 'start', backgroundColor: 'rgba(244, 67, 54, 0.7)', font: { size: 10 } } }
+  });
 
   ltMoistureChart = new Chart(canvas.getContext('2d'), {
     type: isScatter ? 'scatter' : 'line',
@@ -1481,7 +1594,7 @@ function renderLtMoistureChart(weeks) {
       interaction: { mode: 'nearest', axis: 'x', intersect: false },
       plugins: {
         legend: { position: 'top' },
-        annotation: { annotations: weekAnnotations },
+        annotation: { annotations: allAnnotations },
         tooltip: {
           enabled: true,
           position: 'nearest',
@@ -1506,8 +1619,8 @@ function renderLtMoistureChart(weeks) {
           },
           grid: { display: false }
         },
-        y: { type: 'linear', position: 'left', min: 0, max: 100, title: { display: true, text: 'Moisture %' }, ticks: { callback: v => v + '%' } },
-        y1: { type: 'linear', position: 'right', min: 0, max: 4095, title: { display: true, text: 'ADC' }, grid: { drawOnChartArea: false } }
+        y: { type: 'linear', position: 'left', min: ltPctMin, max: ltPctMax, title: { display: true, text: 'Moisture %' }, ticks: { callback: v => v + '%' } },
+        y1: { type: 'linear', position: 'right', min: ltAdcMin, max: ltAdcMax, title: { display: true, text: 'ADC' }, grid: { drawOnChartArea: false } }
       }
     }
   });
@@ -1536,7 +1649,23 @@ function renderLtSensor2Chart(weeks) {
   const labels = s2PctWithGaps.labels;
   const hasAdc = data.some(d => d.sensor2_adc != null);
   const isScatter = ltChartType === 'scatter';
+
+  // Dynamic axes for sensor2
+  const ltS2PctVals = data.map(d => d.sensor2_percent).filter(v => v != null);
+  let ltS2PctMin = 0, ltS2PctMax = 100;
+  if (ltS2PctVals.length > 0) {
+    const rMin = Math.min(...ltS2PctVals), rMax = Math.max(...ltS2PctVals);
+    if (rMax - rMin >= 10) { ltS2PctMin = Math.max(0, Math.floor(rMin - 5)); ltS2PctMax = Math.min(100, Math.ceil(rMax + 5)); }
+  }
+  const ltS2AdcMin = Math.max(0, sensor2Calib.dry - 100);
+  const ltS2AdcMax = Math.min(4095, sensor2Calib.wet + 200);
+
+  // Merge week boundaries + sensor2 preset lines
   const weekAnnotations = buildWeekAnnotations(weeks);
+  const s2Annotations = Object.assign({}, weekAnnotations, {
+    dryLine: { type: 'line', yMin: sensor2Calib.dry, yMax: sensor2Calib.dry, yScaleID: 'y1', borderColor: 'rgba(255, 152, 0, 0.5)', borderWidth: 1.5, borderDash: [6, 3], label: { display: true, content: 'Dry ' + sensor2Calib.dry, position: 'start', backgroundColor: 'rgba(255, 152, 0, 0.7)', font: { size: 10 } } },
+    wetLine: { type: 'line', yMin: sensor2Calib.wet, yMax: sensor2Calib.wet, yScaleID: 'y1', borderColor: 'rgba(33, 150, 243, 0.5)', borderWidth: 1.5, borderDash: [6, 3], label: { display: true, content: 'Wet ' + sensor2Calib.wet, position: 'start', backgroundColor: 'rgba(33, 150, 243, 0.7)', font: { size: 10 } } }
+  });
 
   ltSensor2Chart = new Chart(canvas.getContext('2d'), {
     type: isScatter ? 'scatter' : 'line',
@@ -1573,7 +1702,7 @@ function renderLtSensor2Chart(weeks) {
       interaction: { mode: 'nearest', axis: 'x', intersect: false },
       plugins: {
         legend: { position: 'top' },
-        annotation: { annotations: weekAnnotations },
+        annotation: { annotations: s2Annotations },
         tooltip: {
           filter: (item) => item.parsed.y !== null,
           callbacks: {
@@ -1593,8 +1722,8 @@ function renderLtSensor2Chart(weeks) {
           time: { unit: longTermPeriod <= 4 ? 'day' : 'week', displayFormats: { day: 'MMM d', week: 'MMM d' } },
           grid: { display: false }
         },
-        y: { type: 'linear', position: 'left', min: 0, max: 100, title: { display: true, text: 'Moisture %' }, ticks: { callback: v => v + '%' } },
-        y1: { type: 'linear', position: 'right', min: 0, max: 4095, title: { display: true, text: 'ADC' }, grid: { drawOnChartArea: false } }
+        y: { type: 'linear', position: 'left', min: ltS2PctMin, max: ltS2PctMax, title: { display: true, text: 'Moisture %' }, ticks: { callback: v => v + '%' } },
+        y1: { type: 'linear', position: 'right', min: ltS2AdcMin, max: ltS2AdcMax, title: { display: true, text: 'ADC' }, grid: { drawOnChartArea: false } }
       }
     }
   });
@@ -1909,11 +2038,13 @@ if (IS_CLOUD && DEVICE_ID) {
   document.getElementById('device-id-header').textContent = '🌱 ' + DEVICE_ID;
   document.title = `${DEVICE_ID} — Trends`;
 
-  // Load data (time handled by common.js universal clock)
-  refreshAll();
-  updateHeader();
+  // Load presets first (for chart axes), then data
+  (async () => {
+    await updateHeader(); // calib data ready before charts render
+    refreshAll();
+    loadLongTermData(); // Load weekly summaries from GitHub
+  })();
   updateBattery();
-  loadLongTermData(); // Load weekly summaries from GitHub
 
   // Auto-refresh every 5 minutes
   setInterval(refreshAll, 300000);
