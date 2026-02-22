@@ -361,6 +361,32 @@ async function updateStatus(){
       sensorControl.style.display = 'none';
       instruction.style.display = 'block';
     }
+
+    // Pre-init toggle state from /status to eliminate visibility delay
+    // updateControllerStatus() will refine with detailed controller data
+    const preInitState = s.system_state?.state;
+    if (preInitState) {
+      const isEnabled = (preInitState !== 'DISABLED');
+      if (mode === 'sensor' && !sensorCommandPending) {
+        const toggleEl = document.getElementById('sensor-auto-toggle');
+        const toggleRow = document.getElementById('sensor-toggle-row');
+        if (toggleEl && toggleRow) {
+          updatingSensorToggle = true;
+          toggleEl.checked = isEnabled;
+          updatingSensorToggle = false;
+          toggleRow.style.visibility = 'visible';
+        }
+      } else if (mode === 'timer' && !timerCommandPending) {
+        const toggleEl = document.getElementById('timer-auto-toggle');
+        const toggleRow = document.getElementById('timer-toggle-row');
+        if (toggleEl && toggleRow) {
+          updatingTimerToggle = true;
+          toggleEl.checked = isEnabled;
+          updatingTimerToggle = false;
+          toggleRow.style.visibility = 'visible';
+        }
+      }
+    }
   } catch(e) {
     // Suppress noisy network errors (ERR_INTERNET_DISCONNECTED, Failed to fetch)
     if (!e.message?.includes('fetch')) {
@@ -503,6 +529,17 @@ async function toggleTimerAuto(checked){
 
   try {
     if (checked) {
+      // Check if schedules exist before enabling
+      try {
+        const sched = await API.get('/schedules');
+        if (!sched.count || sched.count === 0) {
+          if (!confirm('No watering schedules configured!\n\nTimer will be active but won\'t water until you add schedules on the Timer page.\n\nContinue?')) {
+            document.getElementById('timer-auto-toggle').checked = false;
+            return;
+          }
+        }
+      } catch(e) { /* proceed anyway if schedule check fails */ }
+
       // Enable timer controller (starts LAUNCH countdown)
       const resp = await API.post('/timer/controller/enable');
       if (!resp.success) {
