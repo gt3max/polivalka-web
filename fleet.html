@@ -1118,9 +1118,8 @@ function filterDevices() {
     // Location filter
     if (location && device.location !== location) return false;
 
-    // Status filter (45 min threshold - same as API is_device_online())
-    const lastUpdateMs = device.last_update < 10000000000 ? device.last_update * 1000 : device.last_update;
-    const isOnline = (Date.now() - lastUpdateMs) < 45 * 60 * 1000;
+    // Status filter - use API's online flag (consistent with device cards)
+    const isOnline = device.online === true;
     const hasWarnings = device.warnings.length > 0 || (device.battery_pct !== null && device.battery_pct < 10) || (device.moisture_pct !== null && device.moisture_pct < 20);
     if (status === 'online' && !isOnline) return false;
     if (status === 'offline' && isOnline) return false;
