@@ -228,7 +228,7 @@
   <div class="header">
     <div>
       <h1>🌱 PlantApp Fleet</h1>
-      <div style="font-size:11px;opacity:0.8" id="user-info">Admin Dashboard</div>
+      <div style="font-size:11px;opacity:0.8" id="user-info">My Devices</div>
     </div>
     <div class="header-info">
       <div id="header-time" class="mono" style="font-size:11px">--:--</div>
@@ -264,7 +264,7 @@
     </div>
 
     <!-- Admin Controls (only for admin) - compact single line -->
-    <div id="admin-controls" class="admin-controls" style="display:flex;align-items:center;flex-wrap:wrap;gap:8px">
+    <div id="admin-controls" class="admin-controls" style="display:none;align-items:center;flex-wrap:wrap;gap:8px">
       <h3>🔧 Admin</h3>
       <button onclick="bulkAction('refresh')" style="padding:4px 8px;font-size:12px">🔄 Refresh All</button>
       <button onclick="bulkAction('ota')" style="padding:4px 8px;font-size:12px">📦 Update All Online</button>
@@ -571,8 +571,12 @@ function loginSuccess(email) {
   // Uses isAdmin() from common.js
   if (isAdmin()) {
     document.getElementById('admin-link').innerHTML = '<a href="admin.html" style="color:#fff;text-decoration:none">⚙️ Admin</a> | ';
+    document.getElementById('admin-controls').style.display = 'flex';
+    document.getElementById('user-info').textContent = 'Admin Dashboard';
     // Show debug console toggle for admins
     document.getElementById('consoleToggle').style.display = 'block';
+  } else {
+    document.getElementById('user-info').textContent = 'My Devices';
   }
 
   // Load devices (time handled by common.js universal clock)
@@ -608,8 +612,12 @@ function initUserDisplay() {
     try {
       if (typeof isAdmin === 'function' && isAdmin()) {
         document.getElementById('admin-link').innerHTML = '<a href="admin.html" style="color:#fff;text-decoration:none">⚙️ Admin</a> | ';
+        document.getElementById('admin-controls').style.display = 'flex';
+        document.getElementById('user-info').textContent = 'Admin Dashboard';
         const consoleToggle = document.getElementById('consoleToggle');
         if (consoleToggle) consoleToggle.style.display = 'block';
+      } else {
+        document.getElementById('user-info').textContent = 'My Devices';
       }
     } catch (e) {
       console.error('Admin check failed:', e);
