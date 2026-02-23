@@ -1762,8 +1762,43 @@ async function massOTAUpdate() {
 }
 
 function exportData() {
-  console.log('Export data');
-  alert('Export all data (TODO: implement)');
+  if (allDevices.length === 0) {
+    alert('No devices to export');
+    return;
+  }
+
+  // CSV header
+  let csv = 'device_id,name,location,room,mode,controller_enabled,state,moisture_pct,battery_pct,battery_charging,firmware_version,online,last_update,last_watering,clean_restarts,unexpected_restarts\n';
+
+  for (const d of allDevices) {
+    const name = (d.name || '').replace(/,/g, ';');
+    const location = (d.location || '').replace(/,/g, ';');
+    const room = (d.room || '').replace(/,/g, ';');
+    const mode = d.mode || '';
+    const controllerEnabled = d.controller_enabled === true ? 'yes' : 'no';
+    const state = d.state || '';
+    const moisture = d.moisture_pct !== null && d.moisture_pct !== undefined ? Math.round(d.moisture_pct) : '';
+    const battery = d.battery_pct !== null && d.battery_pct !== undefined ? Math.round(d.battery_pct) : '';
+    const charging = d.battery_charging ? 'yes' : 'no';
+    const firmware = d.firmware_version || '';
+    const online = d.online ? 'yes' : 'no';
+    const lastUpdate = d.last_update ? new Date(d.last_update < 10000000000 ? d.last_update * 1000 : d.last_update).toISOString() : '';
+    const lastWatering = d.last_watering ? new Date(d.last_watering < 10000000000 ? d.last_watering * 1000 : d.last_watering).toISOString() : '';
+    const cleanRestarts = d.clean_restarts !== null && d.clean_restarts !== undefined ? d.clean_restarts : '';
+    const unexpectedRestarts = d.unexpected_restarts !== null && d.unexpected_restarts !== undefined ? d.unexpected_restarts : '';
+
+    csv += `${d.device_id},"${name}","${location}","${room}",${mode},${controllerEnabled},${state},${moisture},${battery},${charging},${firmware},${online},${lastUpdate},${lastWatering},${cleanRestarts},${unexpectedRestarts}\n`;
+  }
+
+  // Download with standardized filename
+  const blob = new Blob([csv], { type: 'text/csv' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  const date = new Date().toISOString().split('T')[0];
+  a.download = `fleet_${date}_${allDevices.length}-devices.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
 }
 
 async function viewLogs(deviceId) {
