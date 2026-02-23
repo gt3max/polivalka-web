@@ -579,7 +579,8 @@ async function toggleTimerAuto(checked){
       // Check if schedules exist before enabling
       try {
         const sched = await API.get('/schedules');
-        if (!sched.count || sched.count === 0) {
+        const schedCount = sched.count || (sched.schedules ? sched.schedules.length : 0);
+        if (!schedCount || schedCount === 0) {
           if (!confirm('No watering schedules configured!\n\nTimer will be active but won\'t water until you add schedules on the Timer page.\n\nContinue?')) {
             document.getElementById('timer-auto-toggle').checked = false;
             return;
@@ -1110,7 +1111,8 @@ async function updateTimerControllerStatus() {
 
     // Schedule info — always safe to update (not state-dependent)
     document.getElementById('status-next-watering').textContent = tc.next_watering_str || 'No schedules';
-    document.getElementById('status-schedule-count').textContent = tc.schedule_exists ? `${schedules.count} active` : 'None';
+    const activeCount = schedules.count || (schedules.schedules ? schedules.schedules.length : 0);
+    document.getElementById('status-schedule-count').textContent = activeCount > 0 ? `${activeCount} active` : 'None';
     document.getElementById('timer-daily-water').textContent = tc.daily_water_ml + ' ml';
 
     const noWateringToday = document.getElementById('timer-no-watering-today');
