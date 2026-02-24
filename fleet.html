@@ -2214,6 +2214,28 @@ window.addEventListener('DOMContentLoaded', () => {
   logToConsole('Fleet Management Console initialized', 'success');
 });
 
+// Auto-refresh: re-read DynamoDB every 5 min (telemetry updates every 30-60 min)
+// This is a cheap GET /devices read, NOT MQTT commands
+var fleetRefreshId = setInterval(() => {
+  if (!document.hidden) loadDevices();
+}, 300000); // 5 minutes
+
+// Visibility change: refresh on tab return if stale, pause when hidden
+var lastFleetRefresh = Date.now();
+document.addEventListener('visibilitychange', () => {
+  if (!document.hidden && Date.now() - lastFleetRefresh > 120000) {
+    loadDevices();
+    lastFleetRefresh = Date.now();
+  }
+});
+
+// Track refresh time
+const origLoadDevices = loadDevices;
+loadDevices = async function() {
+  lastFleetRefresh = Date.now();
+  return origLoadDevices();
+};
+
 // Handle bfcache (back-forward cache) - refresh data when page restored from cache
 // This fixes stale data when user navigates back to Fleet
 window.addEventListener('pageshow', (event) => {
@@ -2222,8 +2244,8 @@ window.addEventListener('pageshow', (event) => {
     loadDevices();
   }
 });
-// Cleanup pump timers on page unload
-window.addEventListener('beforeunload',()=>{Object.values(pumpTimers).forEach(clearInterval);});
+// Cleanup on page unload
+window.addEventListener('beforeunload',()=>{Object.values(pumpTimers).forEach(clearInterval);if(fleetRefreshId)clearInterval(fleetRefreshId);});
 </script>
 
 <!-- Claim Device Modal -->
