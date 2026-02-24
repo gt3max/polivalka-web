@@ -806,15 +806,18 @@ function stopPolling() {
   }
 }
 
-// Visibility change: pause polling when tab is hidden
+// Visibility change: pause ALL polling when tab is hidden (saves API Gateway costs!)
 document.addEventListener('visibilitychange', () => {
   if (document.hidden) {
     stopPolling();
-    console.log('Tab hidden - polling paused');
+    stopControllerPolling();
+    console.log('Tab hidden - all polling paused');
   } else {
-    updateStatus(); // Immediate update when tab becomes visible
+    updateStatus();
+    updateControllerStatus();
     startPolling();
-    console.log('Tab visible - polling resumed');
+    startControllerPolling();
+    console.log('Tab visible - all polling resumed');
   }
 });
 
@@ -1205,12 +1208,24 @@ async function updateControllerStatus() {
 }
 
 // Single update loop for controller status (saves energy, prevents conflicts)
+// Cloud: 60s (data from DynamoDB updates every 30-60 min, no point polling faster)
+// Local: 2s (ESP32 is local, fast feedback for pump/arming state changes)
+const CONTROLLER_INTERVAL = IS_CLOUD ? 60000 : 2000;
 let controllerRunning = false;
-let controllerIntervalId = setInterval(async () => {
-  if (controllerRunning) return; // skip if previous call still running
-  controllerRunning = true;
-  try { await updateControllerStatus(); } finally { controllerRunning = false; }
-}, 2000);
+let controllerIntervalId = null;
+
+function startControllerPolling() {
+  if (controllerIntervalId) return;
+  controllerIntervalId = setInterval(async () => {
+    if (controllerRunning) return;
+    controllerRunning = true;
+    try { await updateControllerStatus(); } finally { controllerRunning = false; }
+  }, CONTROLLER_INTERVAL);
+}
+function stopControllerPolling() {
+  if (controllerIntervalId) { clearInterval(controllerIntervalId); controllerIntervalId = null; }
+}
+startControllerPolling();
 // Initial call chained after updateStatus() above (needs mode to be set first)
 
 // Fallback: show toggles after 5 seconds even if API fails
@@ -1225,8 +1240,8 @@ setTimeout(() => {
 // Cleanup intervals on page unload to prevent memory leaks
 window.addEventListener('beforeunload', () => {
   if (window.pumpCountdownInterval) clearInterval(window.pumpCountdownInterval);
-  if (typeof statusIntervalId !== 'undefined' && statusIntervalId) clearInterval(statusIntervalId);
-  if (typeof controllerIntervalId !== 'undefined' && controllerIntervalId) clearInterval(controllerIntervalId);
+  stopPolling();
+  stopControllerPolling();
 });
 
 // Pump speed control
