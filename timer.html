@@ -311,6 +311,9 @@ async function saveSchedule() {
 }
 
 async function toggleSchedule(id, enabled) {
+  // Disable all schedule toggles during API call (prevents double-click)
+  const allToggles = document.querySelectorAll('.schedule-item input[type="checkbox"]');
+  allToggles.forEach(t => t.disabled = true);
   try {
     // Get current schedule data to preserve all fields
     const data = await API.get('/schedules');
@@ -336,6 +339,8 @@ async function toggleSchedule(id, enabled) {
   } catch(e) {
     showToast('Error: ' + e.message, 'error');
     loadSchedules(); // Revert UI
+  } finally {
+    allToggles.forEach(t => t.disabled = false);
   }
 }
 
