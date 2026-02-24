@@ -389,16 +389,8 @@ async function updateStatus(){
         instruction.style.display = 'block';
       }
 
-      // Pre-init: make toggle row visible (don't set checked — system_state.state
-      // is shared between modes and may reflect the WRONG controller's state)
-      // Actual toggle state is set by updateTimerControllerStatus/updateSensorControllerStatus
-      if (mode === 'sensor') {
-        const toggleRow = document.getElementById('sensor-toggle-row');
-        if (toggleRow) toggleRow.style.visibility = 'visible';
-      } else if (mode === 'timer') {
-        const toggleRow = document.getElementById('timer-toggle-row');
-        if (toggleRow) toggleRow.style.visibility = 'visible';
-      }
+      // Toggle row visibility is set by updateControllerStatus (after checked state is set)
+      // This prevents the user from seeing toggle in OFF state before it flips to ON
     }
   } catch(e) {
     // Suppress noisy network errors (ERR_INTERNET_DISCONNECTED, Failed to fetch)
@@ -950,7 +942,7 @@ async function updateSensorControllerStatus() {
         armingSection.style.display = 'none';
       }
 
-      // Toggle
+      // Toggle — set checked BEFORE making visible, then remove no-transition after render
       const currentModeEl = document.querySelector('.mode-btn.selected');
       if (currentModeEl && currentModeEl.getAttribute('data-mode') === 'sensor') {
         const toggleEl = document.getElementById('sensor-auto-toggle');
@@ -961,7 +953,8 @@ async function updateSensorControllerStatus() {
         updatingSensorToggle = false;
         if (toggleRowEl) {
           toggleRowEl.style.visibility = 'visible';
-          requestAnimationFrame(() => { toggleEl.closest('.toggle-switch')?.classList.remove('no-transition'); });
+          // Double rAF: ensure checked state is rendered before enabling transitions
+          requestAnimationFrame(() => { requestAnimationFrame(() => { toggleEl.closest('.toggle-switch')?.classList.remove('no-transition'); }); });
         }
         if (sc.state !== 'DISABLED' && sensor1Disconnected) {
           showSensorDisconnectedWarning();
@@ -1113,7 +1106,7 @@ async function updateTimerControllerStatus() {
         armingSection.style.display = 'none';
       }
 
-      // Toggle
+      // Toggle — set checked BEFORE making visible, then remove no-transition after render
       const currentModeEl = document.querySelector('.mode-btn.selected');
       if (currentModeEl && currentModeEl.getAttribute('data-mode') === 'timer') {
         const toggleEl = document.getElementById('timer-auto-toggle');
@@ -1124,7 +1117,8 @@ async function updateTimerControllerStatus() {
         updatingTimerToggle = false;
         if (toggleRowEl) {
           toggleRowEl.style.visibility = 'visible';
-          requestAnimationFrame(() => { toggleEl.closest('.toggle-switch')?.classList.remove('no-transition'); });
+          // Double rAF: ensure checked state is rendered before enabling transitions
+          requestAnimationFrame(() => { requestAnimationFrame(() => { toggleEl.closest('.toggle-switch')?.classList.remove('no-transition'); }); });
         }
       }
     }
