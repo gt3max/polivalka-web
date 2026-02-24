@@ -2215,13 +2215,16 @@ window.addEventListener('DOMContentLoaded', () => {
 });
 
 // Auto-refresh: re-read DynamoDB every 5 min (telemetry updates every 30-60 min)
-// This is a cheap GET /devices read, NOT MQTT commands
+// loadDevices() is a cheap GET /devices from DynamoDB, NOT MQTT commands to devices
+var lastFleetRefresh = Date.now();
 var fleetRefreshId = setInterval(() => {
-  if (!document.hidden) loadDevices();
+  if (!document.hidden) {
+    loadDevices();
+    lastFleetRefresh = Date.now();
+  }
 }, 300000); // 5 minutes
 
-// Visibility change: refresh on tab return if stale, pause when hidden
-var lastFleetRefresh = Date.now();
+// Visibility change: refresh on tab return if data > 2 min stale
 document.addEventListener('visibilitychange', () => {
   if (!document.hidden && Date.now() - lastFleetRefresh > 120000) {
     loadDevices();
@@ -2229,19 +2232,12 @@ document.addEventListener('visibilitychange', () => {
   }
 });
 
-// Track refresh time
-const origLoadDevices = loadDevices;
-loadDevices = async function() {
-  lastFleetRefresh = Date.now();
-  return origLoadDevices();
-};
-
 // Handle bfcache (back-forward cache) - refresh data when page restored from cache
-// This fixes stale data when user navigates back to Fleet
 window.addEventListener('pageshow', (event) => {
   if (event.persisted) {
     console.log('[Fleet] Page restored from bfcache - refreshing data');
     loadDevices();
+    lastFleetRefresh = Date.now();
   }
 });
 // Cleanup on page unload
