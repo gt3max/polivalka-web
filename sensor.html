@@ -432,11 +432,12 @@ document.addEventListener('visibilitychange', () => {
   }
 });
 
-setInterval(updateBattery, 60000);  // Battery: every minute
+var _intervals=[];
+_intervals.push(setInterval(updateBattery, 60000));
 updateBattery();
 if (!IS_CLOUD) {
-  setInterval(updateTime, 60000);  // Time: only in local mode (cloud uses common.js clock)
-  setInterval(monitorWiFiMode, 5000);
+  _intervals.push(setInterval(updateTime, 60000));
+  _intervals.push(setInterval(monitorWiFiMode, 5000));
   updateTime();
   monitorWiFiMode();
 }
@@ -444,6 +445,7 @@ updateHeader();
 startPolling();
 loadSensorSettings();
 loadPumpCalibration();
+window.addEventListener('beforeunload',()=>{stopPolling();_intervals.forEach(clearInterval);});
 
 // Cloud mode: show info notice (editing via MQTT is now supported!)
 if (IS_CLOUD) {

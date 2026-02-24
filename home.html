@@ -43,6 +43,7 @@
     .toggle-slider:before{position:absolute;content:"";height:27px;width:27px;left:2px;bottom:2px;background:#fff;border-radius:50%;transition:0.3s}
     input:checked+.toggle-slider{background:#34c759}
     input:checked+.toggle-slider:before{transform:translateX(20px)}
+    .no-transition .toggle-slider,.no-transition .toggle-slider:before{transition:none!important}
 
     /* Adaptive layout for narrow screens */
     @media (max-width: 400px) {
@@ -97,7 +98,7 @@
 <a href="identify.html" style="padding:8px 12px;background:#2c5f2d;color:#fff;border-radius:8px;font-size:12px;text-decoration:none">🌱 Change Plant</a>
 </div>
 </div>
-</div><div class="card"><h3>💧 Capacitive Sensor (J6)</h3><div class="mono" style="font-size:14px;margin:8px 0" id="sensor-vals">ADC: —<br>Moisture: — %</div><div class="row"><button onclick="navigateTo('calibration.html')">Calibrate Sensor</button></div></div><div class="card"><h3>🌡️ Resistive Sensor (J7)</h3><div class="mono" style="font-size:14px;margin:8px 0;color:#9c27b0" id="sensor2-vals">ADC: —<br>Moisture: — %</div></div><div class="card"><h3>🚰 Manual Control</h3><div style="display:flex;gap:12px"><div style="flex:1"><div class="row"><label>Duration:</label><input id="manual-duration" type="number" min="1" max="300" value="5" style="width:80px"><select id="manual-unit" style="padding:6px"><option value="sec">seconds</option><option value="min">minutes</option></select></div><div class="row" style="margin-top:10px"><button id="btn-manual" onclick="manualWater()">Water Now</button><button id="btn-stop" onclick="stopPump()" style="background:#b00;color:#fff;border-color:#900" disabled>STOP</button></div><div id="pump-running" style="display:none;margin-top:12px;padding:10px;background:#e8f5e9;border-radius:8px;border:2px solid #2c5f2d"><div style="font-weight:600;color:#2c5f2d">💧 Pump Running</div><div class="mono" style="font-size:13px;margin-top:4px"><span id="pump-elapsed">0s</span> / <span id="pump-total">0s</span><span id="pump-remaining" style="margin-left:8px">(—)</span></div></div><div class="row" style="margin-top:12px"><button onclick="navigateTo('calibration.html#pump')" style="font-size:12px;padding:6px 10px">Calibrate Pump</button></div></div><div style="display:flex;flex-direction:column;align-items:center;padding:8px 12px;background:#f5f5f5;border-radius:8px;min-width:50px"><div class="muted" style="font-size:11px;margin-bottom:4px">Speed</div><div class="mono" style="font-size:14px;font-weight:600;color:#2c5f2d" id="speed-display">100%</div><input type="range" class="vertical" id="speed-slider" min="0" max="100" value="100" oninput="speedPreview(this.value)" onchange="setSpeed(this.value)" style="margin:8px 0"><div style="display:flex;flex-direction:column;font-size:10px;color:#666;text-align:center"><span>0</span></div></div></div></div><div class="card"><h3>Operating Mode</h3><p class="muted">Select how the system should water your plants</p><div class="mode-selector"><div class="mode-btn" data-mode="manual" onclick="selectMode('manual')"><div class="mode-icon">✋</div><div class="mode-name">Manual</div><div class="muted" style="font-size:11px">Manual watering only</div></div><div class="mode-btn" data-mode="timer" onclick="selectMode('timer')"><div class="mode-icon">⏰</div><div class="mode-name">Timer</div><div class="muted" style="font-size:11px">Schedule-based</div></div><div class="mode-btn" data-mode="sensor" onclick="selectMode('sensor')"><div class="mode-icon">💧</div><div class="mode-name">Sensor</div><div class="muted" style="font-size:11px">Moisture-based</div></div></div><p class="muted" style="margin-top:12px;font-size:12px"> ℹ️ Configure schedules on <b>Timer</b> page, sensor settings on <b>Sensor</b> page, and calibration on <b>Calibration</b> page.</p></div><div class="card" style="padding:12px"><h3 style="margin-top:0">System Status</h3><div style="display:flex;gap:16px;flex-wrap:wrap;margin-bottom:12px"><div style="flex:1;min-width:100px"><div class="muted" style="font-size:12px">State</div><div id="current-state" class="mono" style="font-size:14px">—</div></div><div style="flex:1;min-width:100px"><div class="muted" style="font-size:12px">Mode</div><div id="current-mode" style="font-size:14px">—</div></div><div style="flex:1;min-width:120px"><div class="muted" style="font-size:12px">Last Watering</div><div id="last-watering" class="mono" style="font-size:14px">—</div></div></div><div id="sensor-status-details" style="display:none;border-top:1px solid #ddd;padding-top:12px;margin-top:4px"><div style="display:flex;gap:16px;flex-wrap:wrap;margin-bottom:8px"><div style="flex:1;min-width:100px"><div class="muted" style="font-size:12px">Current Moisture</div><div id="status-current-moisture" class="mono" style="font-size:14px">—</div></div><div style="flex:1;min-width:100px"><div class="muted" style="font-size:12px">Target Range</div><div id="status-target-range" class="mono" style="font-size:14px">—</div></div><div style="flex:1;min-width:120px"><div class="muted" style="font-size:12px">Daily Water</div><div id="status-daily-water" class="mono" style="font-size:14px">—</div></div></div><div id="status-progress-row" style="display:none;margin-bottom:8px"><div class="muted" style="font-size:12px">Watering Progress</div><div id="status-watering-progress" class="mono" style="font-size:14px">—</div></div><div id="status-warning-row" style="display:none;padding:8px;background:#fff3cd;border-radius:8px;border:1px solid #ffc107"><div style="font-weight:600;color:#856404">⚠️ Warning</div><div id="status-warning-message" style="font-size:13px;color:#856404;margin-top:4px">—</div></div></div><div id="timer-status-details" style="display:none;border-top:1px solid #ddd;padding-top:12px;margin-top:4px"><div style="display:flex;gap:16px;flex-wrap:wrap;margin-bottom:8px"><div style="flex:1;min-width:100px"><div class="muted" style="font-size:12px">Next Watering</div><div id="status-next-watering" class="mono" style="font-size:14px">—</div></div><div style="flex:1;min-width:100px"><div class="muted" style="font-size:12px">Schedules</div><div id="status-schedule-count" class="mono" style="font-size:14px">—</div></div><div style="flex:1;min-width:120px"><div class="muted" style="font-size:12px">Daily Water</div><div id="timer-daily-water" class="mono" style="font-size:14px">—</div></div></div><div id="timer-no-watering-today" style="display:none;padding:8px;background:#fff3e0;border-radius:8px;border:1px solid #ff9800;margin-bottom:8px"><span style="color:#e65100;font-size:13px">No watering scheduled for today</span></div><div id="timer-watering-row" style="display:none;margin-bottom:8px"><div class="muted" style="font-size:12px">Watering Duration</div><div id="timer-watering-duration" class="mono" style="font-size:14px">—</div></div><div id="timer-warning-row" style="display:none;padding:8px;background:#fff3cd;border-radius:8px;border:1px solid #ffc107"><div style="font-weight:600;color:#856404">⚠️ Warning</div><div id="timer-warning-message" style="font-size:13px;color:#856404;margin-top:4px">—</div></div></div></div> <script>
+</div><div class="card"><h3>💧 Capacitive Sensor (J6)</h3><div class="mono" style="font-size:14px;margin:8px 0" id="sensor-vals">ADC: —<br>Moisture: — %</div><div class="row"><button onclick="navigateTo('calibration.html')">Calibrate Sensor</button></div></div><div class="card"><h3>🌡️ Resistive Sensor (J7)</h3><div class="mono" style="font-size:14px;margin:8px 0;color:#9c27b0" id="sensor2-vals">ADC: —<br>Moisture: — %</div></div><div class="card"><h3>🚰 Manual Control</h3><div style="display:flex;gap:12px"><div style="flex:1"><div class="row"><label>Duration:</label><input id="manual-duration" type="number" min="1" max="600" value="5" style="width:80px"><select id="manual-unit" style="padding:6px" onchange="updateManualLimit()"><option value="sec">seconds</option><option value="min">minutes</option></select></div><div class="row" style="margin-top:10px"><button id="btn-manual" onclick="manualWater()">Water Now</button><button id="btn-stop" onclick="stopPump()" style="background:#b00;color:#fff;border-color:#900" disabled>STOP</button></div><div id="pump-running" style="display:none;margin-top:12px;padding:10px;background:#e8f5e9;border-radius:8px;border:2px solid #2c5f2d"><div style="font-weight:600;color:#2c5f2d">💧 Pump Running</div><div class="mono" style="font-size:13px;margin-top:4px"><span id="pump-elapsed">0s</span> / <span id="pump-total">0s</span><span id="pump-remaining" style="margin-left:8px">(—)</span></div></div><div class="row" style="margin-top:12px"><button onclick="navigateTo('calibration.html#pump')" style="font-size:12px;padding:6px 10px">Calibrate Pump</button></div></div><div style="display:flex;flex-direction:column;align-items:center;padding:8px 12px;background:#f5f5f5;border-radius:8px;min-width:50px"><div class="muted" style="font-size:11px;margin-bottom:4px">Speed</div><div class="mono" style="font-size:14px;font-weight:600;color:#2c5f2d" id="speed-display">100%</div><input type="range" class="vertical" id="speed-slider" min="0" max="100" value="100" oninput="speedPreview(this.value)" onchange="setSpeed(this.value)" style="margin:8px 0"><div style="display:flex;flex-direction:column;font-size:10px;color:#666;text-align:center"><span>0</span></div></div></div></div><div class="card"><h3>Operating Mode</h3><p class="muted">Select how the system should water your plants</p><div class="mode-selector"><div class="mode-btn" data-mode="manual" onclick="selectMode('manual')"><div class="mode-icon">✋</div><div class="mode-name">Manual</div><div class="muted" style="font-size:11px">Manual watering only</div></div><div class="mode-btn" data-mode="timer" onclick="selectMode('timer')"><div class="mode-icon">⏰</div><div class="mode-name">Timer</div><div class="muted" style="font-size:11px">Schedule-based</div></div><div class="mode-btn" data-mode="sensor" onclick="selectMode('sensor')"><div class="mode-icon">💧</div><div class="mode-name">Sensor</div><div class="muted" style="font-size:11px">Moisture-based</div></div></div><p class="muted" style="margin-top:12px;font-size:12px"> ℹ️ Configure schedules on <b>Timer</b> page, sensor settings on <b>Sensor</b> page, and calibration on <b>Calibration</b> page.</p></div><div class="card" style="padding:12px"><h3 style="margin-top:0">System Status</h3><div style="display:flex;gap:16px;flex-wrap:wrap;margin-bottom:12px"><div style="flex:1;min-width:100px"><div class="muted" style="font-size:12px">State</div><div id="current-state" class="mono" style="font-size:14px">—</div></div><div style="flex:1;min-width:100px"><div class="muted" style="font-size:12px">Mode</div><div id="current-mode" style="font-size:14px">—</div></div><div style="flex:1;min-width:120px"><div class="muted" style="font-size:12px">Last Watering</div><div id="last-watering" class="mono" style="font-size:14px">—</div></div></div><div id="sensor-status-details" style="display:none;border-top:1px solid #ddd;padding-top:12px;margin-top:4px"><div style="display:flex;gap:16px;flex-wrap:wrap;margin-bottom:8px"><div style="flex:1;min-width:100px"><div class="muted" style="font-size:12px">Current Moisture</div><div id="status-current-moisture" class="mono" style="font-size:14px">—</div></div><div style="flex:1;min-width:100px"><div class="muted" style="font-size:12px">Target Range</div><div id="status-target-range" class="mono" style="font-size:14px">—</div></div><div style="flex:1;min-width:120px"><div class="muted" style="font-size:12px">Daily Water</div><div id="status-daily-water" class="mono" style="font-size:14px">—</div></div></div><div id="status-progress-row" style="display:none;margin-bottom:8px"><div class="muted" style="font-size:12px">Watering Progress</div><div id="status-watering-progress" class="mono" style="font-size:14px">—</div></div><div id="status-warning-row" style="display:none;padding:8px;background:#fff3cd;border-radius:8px;border:1px solid #ffc107"><div style="font-weight:600;color:#856404">⚠️ Warning</div><div id="status-warning-message" style="font-size:13px;color:#856404;margin-top:4px">—</div></div></div><div id="timer-status-details" style="display:none;border-top:1px solid #ddd;padding-top:12px;margin-top:4px"><div style="display:flex;gap:16px;flex-wrap:wrap;margin-bottom:8px"><div style="flex:1;min-width:100px"><div class="muted" style="font-size:12px">Next Watering</div><div id="status-next-watering" class="mono" style="font-size:14px">—</div></div><div style="flex:1;min-width:100px"><div class="muted" style="font-size:12px">Schedules</div><div id="status-schedule-count" class="mono" style="font-size:14px">—</div></div><div style="flex:1;min-width:120px"><div class="muted" style="font-size:12px">Daily Water</div><div id="timer-daily-water" class="mono" style="font-size:14px">—</div></div></div><div id="timer-no-watering-today" style="display:none;padding:8px;background:#fff3e0;border-radius:8px;border:1px solid #ff9800;margin-bottom:8px"><span style="color:#e65100;font-size:13px">No watering scheduled for today</span></div><div id="timer-watering-row" style="display:none;margin-bottom:8px"><div class="muted" style="font-size:12px">Watering Duration</div><div id="timer-watering-duration" class="mono" style="font-size:14px">—</div></div><div id="timer-warning-row" style="display:none;padding:8px;background:#fff3cd;border-radius:8px;border:1px solid #ffc107"><div style="font-weight:600;color:#856404">⚠️ Warning</div><div id="timer-warning-message" style="font-size:13px;color:#856404;margin-top:4px">—</div></div></div></div> <script>
 // Admin nav link, sleep(), mapStateToDisplay(), navigateTo() - moved to common.js
 
 // Флаги для предотвращения рекурсии при программном изменении toggles
@@ -107,6 +108,8 @@ let updatingSensorToggle = false;
 // Block toggle sync while command is being processed (timestamp-based, auto-expires)
 let sensorCommandPendingUntil = 0;
 let timerCommandPendingUntil = 0;
+// Suppress toggle animation on initial load (prevents gray→green flicker)
+document.querySelectorAll('.toggle-switch').forEach(el => el.classList.add('no-transition'));
 // Block mode override from stale DynamoDB after mode change
 let lastModeChangeTime = 0;
 const COMMAND_PROTECTION_MS = 30000; // 30 sec protection (auto-releases when DynamoDB confirms)
@@ -504,10 +507,18 @@ async function selectMode(mode) {
   }
 }
 
+function updateManualLimit(){
+  const unit = document.getElementById('manual-unit').value;
+  const input = document.getElementById('manual-duration');
+  if(unit==='min'){input.max=10;if(parseInt(input.value)>10)input.value=10;}
+  else{input.max=600;if(parseInt(input.value)>600)input.value=600;}
+}
+
 async function manualWater(){
   const duration = parseInt(document.getElementById('manual-duration').value);
   const unit = document.getElementById('manual-unit').value;
   const sec = unit === 'min' ? duration * 60 : duration;
+  if(sec>600){alert('Maximum 10 minutes (600 seconds)');return;}
 
   const btn = document.getElementById('btn-manual');
   const stopBtn = document.getElementById('btn-stop');
@@ -572,6 +583,8 @@ async function toggleTimerAuto(checked){
   // Ignore programmatic changes
   if (updatingTimerToggle) return;
 
+  const toggleEl = document.getElementById('timer-auto-toggle');
+  toggleEl.disabled = true; // Prevent double-press during API call
   // Block toggle sync while command is processing (timestamp-based, auto-expires)
   timerCommandPendingUntil = Date.now() + COMMAND_PROTECTION_MS;
   try {
@@ -582,7 +595,7 @@ async function toggleTimerAuto(checked){
         const schedCount = sched.count || (sched.schedules ? sched.schedules.length : 0);
         if (!schedCount || schedCount === 0) {
           if (!confirm('No watering schedules configured!\n\nTimer will be active but won\'t water until you add schedules on the Timer page.\n\nContinue?')) {
-            document.getElementById('timer-auto-toggle').checked = false;
+            toggleEl.checked = false;
             return;
           }
         }
@@ -592,7 +605,7 @@ async function toggleTimerAuto(checked){
       const resp = await API.post('/timer/controller/enable');
       if (!resp.success) {
         alert(resp.message || 'Failed to enable timer controller');
-        document.getElementById('timer-auto-toggle').checked = false;
+        toggleEl.checked = false;
         return;
       }
       // Hide sensor arming section (mutual exclusivity)
@@ -623,7 +636,9 @@ async function toggleTimerAuto(checked){
   } catch(e) {
     timerCommandPendingUntil = 0; // Release protection on error
     alert('Error: ' + e.message);
-    document.getElementById('timer-auto-toggle').checked = !checked; // revert on error
+    toggleEl.checked = !checked; // revert on error
+  } finally {
+    toggleEl.disabled = false; // Re-enable toggle
   }
 }
 
@@ -657,13 +672,16 @@ async function toggleSensorAuto(checked){
   // Ignore programmatic changes
   if (updatingSensorToggle) return;
 
+  const toggleEl = document.getElementById('sensor-auto-toggle');
+
   // Block if sensor is disconnected - show inline warning instead of alert
   if (checked && sensor1Disconnected) {
     showSensorDisconnectedWarning();
-    document.getElementById('sensor-auto-toggle').checked = false;
+    toggleEl.checked = false;
     return;
   }
 
+  toggleEl.disabled = true; // Prevent double-press during API call
   // Block toggle sync while command is processing (timestamp-based, auto-expires)
   sensorCommandPendingUntil = Date.now() + COMMAND_PROTECTION_MS;
 
@@ -673,7 +691,7 @@ async function toggleSensorAuto(checked){
       const resp = await API.post('/sensor/controller/enable');
       if (!resp.success) {
         alert(resp.message || 'Failed to enable sensor controller');
-        document.getElementById('sensor-auto-toggle').checked = false;
+        toggleEl.checked = false;
         sensorCommandPendingUntil = 0;
         return;
       }
@@ -705,7 +723,9 @@ async function toggleSensorAuto(checked){
   } catch(e) {
     sensorCommandPendingUntil = 0; // Release protection on error
     alert('Error: ' + e.message);
-    document.getElementById('sensor-auto-toggle').checked = !checked; // revert on error
+    toggleEl.checked = !checked; // revert on error
+  } finally {
+    toggleEl.disabled = false; // Re-enable toggle
   }
 }
 
@@ -833,8 +853,8 @@ if (IS_CLOUD && DEVICE_ID) {
   throw new Error('Missing device_id parameter in cloud mode');
 }
 
-// Первая загрузка: последовательно с задержками
-updateStatus();
+// Первая загрузка: controller status chained after status (needs mode to be set first)
+updateStatus().then(() => updateControllerStatus());
 
 // Time/Battery/WiFi только для локального режима
 if (!IS_CLOUD) {
@@ -939,7 +959,10 @@ async function updateSensorControllerStatus() {
         updatingSensorToggle = true;
         toggleEl.checked = shouldBeChecked;
         updatingSensorToggle = false;
-        if (toggleRowEl) toggleRowEl.style.visibility = 'visible';
+        if (toggleRowEl) {
+          toggleRowEl.style.visibility = 'visible';
+          requestAnimationFrame(() => { toggleEl.closest('.toggle-switch')?.classList.remove('no-transition'); });
+        }
         if (sc.state !== 'DISABLED' && sensor1Disconnected) {
           showSensorDisconnectedWarning();
         }
@@ -1099,7 +1122,10 @@ async function updateTimerControllerStatus() {
         updatingTimerToggle = true;
         toggleEl.checked = shouldBeChecked;
         updatingTimerToggle = false;
-        if (toggleRowEl) toggleRowEl.style.visibility = 'visible';
+        if (toggleRowEl) {
+          toggleRowEl.style.visibility = 'visible';
+          requestAnimationFrame(() => { toggleEl.closest('.toggle-switch')?.classList.remove('no-transition'); });
+        }
       }
     }
 
@@ -1185,8 +1211,13 @@ async function updateControllerStatus() {
 }
 
 // Single update loop for controller status (saves energy, prevents conflicts)
-setInterval(updateControllerStatus, 2000); // every 2 seconds
-setTimeout(updateControllerStatus, 1000); // initial load after 1 sec
+let controllerRunning = false;
+let controllerIntervalId = setInterval(async () => {
+  if (controllerRunning) return; // skip if previous call still running
+  controllerRunning = true;
+  try { await updateControllerStatus(); } finally { controllerRunning = false; }
+}, 2000);
+// Initial call chained after updateStatus() above (needs mode to be set first)
 
 // Fallback: show toggles after 5 seconds even if API fails
 setTimeout(() => {
@@ -1194,12 +1225,14 @@ setTimeout(() => {
   const timerToggle = document.getElementById('timer-toggle-row');
   if (sensorToggle) sensorToggle.style.visibility = 'visible';
   if (timerToggle) timerToggle.style.visibility = 'visible';
+  document.querySelectorAll('.toggle-switch').forEach(el => el.classList.remove('no-transition'));
 }, 5000);
 
 // Cleanup intervals on page unload to prevent memory leaks
 window.addEventListener('beforeunload', () => {
   if (window.pumpCountdownInterval) clearInterval(window.pumpCountdownInterval);
-  if (typeof statusIntervalId !== 'undefined') clearInterval(statusIntervalId);
+  if (typeof statusIntervalId !== 'undefined' && statusIntervalId) clearInterval(statusIntervalId);
+  if (typeof controllerIntervalId !== 'undefined' && controllerIntervalId) clearInterval(controllerIntervalId);
 });
 
 // Pump speed control

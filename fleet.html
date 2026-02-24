@@ -2222,6 +2222,8 @@ window.addEventListener('pageshow', (event) => {
     loadDevices();
   }
 });
+// Cleanup pump timers on page unload
+window.addEventListener('beforeunload',()=>{Object.values(pumpTimers).forEach(clearInterval);});
 </script>
 
 <!-- Claim Device Modal -->

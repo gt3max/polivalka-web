@@ -42,8 +42,9 @@
     .toggle-slider:before{position:absolute;content:"";height:27px;width:27px;left:2px;bottom:2px;background:#fff;border-radius:50%;transition:0.3s}
     input:checked+.toggle-slider{background:#34c759}
     input:checked+.toggle-slider:before{transform:translateX(20px)}
+    .no-transition .toggle-slider,.no-transition .toggle-slider:before{transition:none!important}
   </style>
-</head><body><div class="header"><div><h1 id="device-id-header" style="margin:0;font-size:15px">🌱 Polivalka</h1><div style="font-size:13px">📍 <span id="location-text">—</span> / <span id="room-text">—</span><span id="custom-name-suffix"></span></div><div style="font-size:11px;margin-top:4px"><span id="battery-status">🔋 —</span> · <span id="header-state">💤 Standby</span></div></div><div class="header-info"><div id="header-time" class="mono" style="font-size:11px">--:--</div><div style="font-size:11px" id="header-mode"><span id="mode-badge" class="status-badge">—</span></div><div style="font-size:11px" id="header-conn">📡 <span id="conn-text" style="transition:color 0.3s">...</span></div></div></div></div><div class="nav"><a href="fleet.html">Fleet</a><a href="home.html">Home</a><a href="identify.html" style="background:#e8f5e9">🌱 Plant</a><a href="timer.html" class="active">Timer</a><a href="sensor.html">Sensor</a><a href="settings.html">Settings</a><a href="calibration.html">Calibration</a><a href="online.html">Online</a><a href="trends.html">Trends</a><a href="ota.html">Update</a><a href="admin.html" id="admin-nav-link" style="display:none">Admin</a></div><div class="container"><div class="card"><h3>Timer Mode</h3><p class="muted">Water on a schedule. Add up to 8 schedules with specific days and times.</p><div class="row"><button id="add-schedule-btn" class="primary" onclick="showModalWithCheck()">+ Add Schedule</button><span id="schedule-limit-info" class="muted" style="margin-left:8px"></span></div></div><div class="card"><h3>Active Schedules <span id="schedule-count" class="muted" style="font-weight:400;font-size:14px"></span></h3><div id="schedules-list"><div class="muted">No schedules configured. Click "+ Add Schedule" to create one.</div></div></div></div><div id="modal" class="modal"><div class="modal-content"><h3 id="modal-title">Add Schedule</h3><div style="margin:12px 0"><label>Time</label><br><input id="edit-time" type="time" value="07:00" style="width:150px;font-size:16px"></div><div style="margin:12px 0"><label>Days</label><br><div id="days-selector" style="margin-top:8px"><span class="day-btn" data-day="1">M</span><span class="day-btn" data-day="2">T</span><span class="day-btn" data-day="3">W</span><span class="day-btn" data-day="4">T</span><span class="day-btn" data-day="5">F</span><span class="day-btn" data-day="6">S</span><span class="day-btn" data-day="7">S</span></div><button onclick="selectAllDays()" style="margin-top:8px;font-size:12px">Every day</button><button onclick="selectWeekdays()" style="margin-top:8px;font-size:12px">Weekdays</button></div><div style="margin:12px 0"><label>Duration</label><br><input id="edit-duration" type="number" min="1" max="300" value="30" style="width:100px;text-align:left;font-size:16px"><select id="edit-unit" style="width:100px" onchange="updateDurationLimit()"><option value="sec">seconds</option><option value="min">minutes</option></select><div id="duration-hint" class="muted" style="font-size:11px;margin-top:4px">Max: 5 minutes (300 sec)</div></div><div style="margin:12px 0"><label><input id="edit-enabled" type="checkbox" checked>
+</head><body><div class="header"><div><h1 id="device-id-header" style="margin:0;font-size:15px">🌱 Polivalka</h1><div style="font-size:13px">📍 <span id="location-text">—</span> / <span id="room-text">—</span><span id="custom-name-suffix"></span></div><div style="font-size:11px;margin-top:4px"><span id="battery-status">🔋 —</span> · <span id="header-state">💤 Standby</span></div></div><div class="header-info"><div id="header-time" class="mono" style="font-size:11px">--:--</div><div style="font-size:11px" id="header-mode"><span id="mode-badge" class="status-badge">—</span></div><div style="font-size:11px" id="header-conn">📡 <span id="conn-text" style="transition:color 0.3s">...</span></div></div></div></div><div class="nav"><a href="fleet.html">Fleet</a><a href="home.html">Home</a><a href="identify.html" style="background:#e8f5e9">🌱 Plant</a><a href="timer.html" class="active">Timer</a><a href="sensor.html">Sensor</a><a href="settings.html">Settings</a><a href="calibration.html">Calibration</a><a href="online.html">Online</a><a href="trends.html">Trends</a><a href="ota.html">Update</a><a href="admin.html" id="admin-nav-link" style="display:none">Admin</a></div><div class="container"><div class="card"><h3>Timer Mode</h3><p class="muted">Water on a schedule. Add up to 8 schedules with specific days and times.</p><div class="row"><button id="add-schedule-btn" class="primary" onclick="showModalWithCheck()">+ Add Schedule</button><span id="schedule-limit-info" class="muted" style="margin-left:8px"></span></div></div><div class="card"><h3>Active Schedules <span id="schedule-count" class="muted" style="font-weight:400;font-size:14px"></span></h3><div id="schedules-list"><div class="muted">No schedules configured. Click "+ Add Schedule" to create one.</div></div></div></div><div id="modal" class="modal"><div class="modal-content"><h3 id="modal-title">Add Schedule</h3><div style="margin:12px 0"><label>Time</label><br><input id="edit-time" type="time" value="07:00" style="width:150px;font-size:16px"></div><div style="margin:12px 0"><label>Days</label><br><div id="days-selector" style="margin-top:8px"><span class="day-btn" data-day="1">M</span><span class="day-btn" data-day="2">T</span><span class="day-btn" data-day="3">W</span><span class="day-btn" data-day="4">T</span><span class="day-btn" data-day="5">F</span><span class="day-btn" data-day="6">S</span><span class="day-btn" data-day="7">S</span></div><button onclick="selectAllDays()" style="margin-top:8px;font-size:12px">Every day</button><button onclick="selectWeekdays()" style="margin-top:8px;font-size:12px">Weekdays</button></div><div style="margin:12px 0"><label>Duration</label><br><input id="edit-duration" type="number" min="1" max="600" value="30" style="width:100px;text-align:left;font-size:16px"><select id="edit-unit" style="width:100px" onchange="updateDurationLimit()"><option value="sec">seconds</option><option value="min">minutes</option></select><div id="duration-hint" class="muted" style="font-size:11px;margin-top:4px">Max: 10 minutes (600 sec)</div></div><div style="margin:12px 0"><label><input id="edit-enabled" type="checkbox" checked>
 Enabled
 </label></div><div class="row" style="margin-top:16px"><button class="primary" onclick="saveSchedule()">Save</button><button onclick="closeModal()">Cancel</button></div></div></div>
 <script src="api-adapter.js"></script>
@@ -88,7 +89,7 @@ async function loadSchedules(){
         <div class="schedule-item ${s.enabled?'':'disabled'}">
           <div class="schedule-header">
             <div style="display:flex;align-items:center;gap:10px">
-              <label class="toggle-switch">
+              <label class="toggle-switch no-transition">
                 <input type="checkbox" ${s.enabled?'checked':''} onchange="toggleSchedule(${s.id}, this.checked)">
                 <span class="toggle-slider"></span>
               </label>
@@ -104,6 +105,7 @@ async function loadSchedules(){
         </div>
       `;
     }).join('');
+    requestAnimationFrame(()=>{list.querySelectorAll('.no-transition').forEach(el=>el.classList.remove('no-transition'));});
   } catch(e) {
     console.error('Load schedules failed:', e);
   }
@@ -235,13 +237,13 @@ function updateDurationLimit() {
   const input = document.getElementById('edit-duration');
   const hint = document.getElementById('duration-hint');
   if (unit === 'min') {
-    input.max = 5;
-    hint.textContent = 'Max: 5 minutes';
-    if (parseInt(input.value) > 5) input.value = 5;
+    input.max = 10;
+    hint.textContent = 'Max: 10 minutes';
+    if (parseInt(input.value) > 10) input.value = 10;
   } else {
-    input.max = 300;
-    hint.textContent = 'Max: 300 seconds (5 min)';
-    if (parseInt(input.value) > 300) input.value = 300;
+    input.max = 600;
+    hint.textContent = 'Max: 600 seconds (10 min)';
+    if (parseInt(input.value) > 600) input.value = 600;
   }
 }
 
@@ -251,10 +253,10 @@ async function saveSchedule() {
   const unit = document.getElementById('edit-unit').value;
   const enabled = document.getElementById('edit-enabled').checked;
 
-  // Validate duration (max 300 seconds = 5 minutes)
+  // Validate duration (max 600 seconds = 10 minutes)
   const durationSec = unit === 'min' ? duration * 60 : duration;
-  if (durationSec > 300) {
-    alert('Maximum duration is 5 minutes (300 seconds)');
+  if (durationSec > 600) {
+    alert('Maximum duration is 10 minutes (600 seconds)');
     return;
   }
 
@@ -457,5 +459,7 @@ updateHeader();
 loadSchedules();
 startPolling();
 if (!IS_CLOUD) { updateTime(); }
+// Cleanup on page unload
+window.addEventListener('beforeunload',()=>{stopPolling();});
 </script>
 </body></html>

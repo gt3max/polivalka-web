@@ -2331,13 +2331,15 @@ if (IS_CLOUD && DEVICE_ID) {
 
   // No auto-refresh in archive mode (data is static)
   if (!IS_ARCHIVE_MODE) {
-    setInterval(refreshAll, 300000);
-    setInterval(updateHeader, 30000);
-    setInterval(updateBattery, 60000);
-    setInterval(loadLongTermData, 3600000);
+    var _intervals=[];
+    _intervals.push(setInterval(refreshAll, 300000));
+    _intervals.push(setInterval(updateHeader, 30000));
+    _intervals.push(setInterval(updateBattery, 60000));
+    _intervals.push(setInterval(loadLongTermData, 3600000));
     document.addEventListener('visibilitychange', () => {
       if (!document.hidden) { updateHeader(); refreshAll(); }
     });
+    window.addEventListener('beforeunload',()=>{_intervals.forEach(clearInterval);});
   }
 } else {
   // AP mode - show message
