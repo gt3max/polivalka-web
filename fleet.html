@@ -1695,37 +1695,57 @@ async function massOTAUpdate() {
       // "success" only means device STARTED downloading — not that OTA completed
       const started = results.filter(r => r.success);
       if (started.length > 0) {
-        // Wait for devices to download, flash, and reboot (~60s)
-        for (let countdown = 60; countdown > 0; countdown--) {
-          showToast(`⏳ Verifying firmware... ${countdown}s`, 'info');
-          await new Promise(r => setTimeout(r, 1000));
+        // Poll firmware versions every 15s (up to 90s max)
+        // As soon as device reports new version — mark verified, stop waiting
+        for (const r of started) {
+          r.oldVersion = versionsBefore[r.device_id] || 'unknown';
         }
-
-        // Check actual firmware versions in parallel via get_status
-        showToast('🔍 Checking firmware versions...', 'info');
-        await Promise.allSettled(started.map(async (r) => {
-          try {
-            const status = await API.get(`/device/${r.device_id}/sensor`);
-            const newVersion = status.firmware_version || 'unknown';
-            const oldVersion = versionsBefore[r.device_id] || 'unknown';
-            r.newVersion = newVersion;
-            r.oldVersion = oldVersion;
-            r.verified = (newVersion !== oldVersion);
-          } catch(e) {
-            r.oldVersion = versionsBefore[r.device_id] || 'unknown';
-            r.verified = false;
-            r.verifyError = e.message;
+        const maxWait = 90, pollInterval = 15;
+        // Initial wait for devices to reboot (minimum 30s for OTA flash + restart)
+        showToast(`⏳ Waiting for devices to reboot... 30s`, 'info');
+        await new Promise(r => setTimeout(r, 30000));
+        for (let elapsed = 30; elapsed <= maxWait; elapsed += pollInterval) {
+          const verifiedCount = started.filter(r=>r.verified).length;
+          const remaining = maxWait - elapsed;
+          showToast(`⏳ Verifying firmware... ${verifiedCount}/${started.length} verified${remaining > 0 ? ` (${remaining}s left)` : ''}`, 'info');
+          await Promise.allSettled(started.filter(r => !r.verified && !r.verifyError).map(async (r) => {
+            try {
+              const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 12000));
+              const status = await Promise.race([API.get(`/device/${r.device_id}/sensor`), timeoutPromise]);
+              const newVersion = status.firmware_version || 'unknown';
+              r.newVersion = newVersion;
+              if (newVersion !== r.oldVersion) {
+                r.verified = true;
+              }
+            } catch(e) { /* device still rebooting or timeout */ }
+          }));
+          if (started.every(r => r.verified)) break;
+          if (elapsed + pollInterval <= maxWait) {
+            await new Promise(r => setTimeout(r, pollInterval * 1000));
           }
-        }));
+        }
+        // Mark remaining unverified
+        for (const r of started) {
+          if (!r.verified) {
+            r.verified = false;
+            if (!r.newVersion) {
+              r.verifyError = 'Device not responding';
+            } else {
+              r.alreadyUpToDate = true;
+            }
+          }
+        }
       }
 
       // Step 5: Show results
       const verified = results.filter(r => r.verified === true).length;
-      const unverified = results.filter(r => r.success && r.verified === false).length;
+      const alreadyOk = results.filter(r => r.success && !r.verified && r.alreadyUpToDate).length;
+      const unverified = results.filter(r => r.success && r.verified === false && !r.alreadyUpToDate).length;
       const rejected = results.filter(r => !r.success).length;
 
       let resultMsg = '📦 OTA Update Results\n\n';
       if (verified > 0) resultMsg += `✅ Updated: ${verified}\n`;
+      if (alreadyOk > 0) resultMsg += `✅ Already up to date: ${alreadyOk}\n`;
       if (unverified > 0) resultMsg += `⏳ Pending verification: ${unverified}\n`;
       if (rejected > 0) resultMsg += `❌ Rejected: ${rejected}\n`;
       resultMsg += '\n';
@@ -1734,9 +1754,13 @@ async function massOTAUpdate() {
         resultMsg += `✅ ${r.device_id}: ${r.oldVersion} → ${r.newVersion}\n`;
       });
       results.filter(r => r.success && r.verified === false).forEach(r => {
-        resultMsg += r.verifyError
-          ? `⏳ ${r.device_id}: Rebooting (${r.verifyError})\n`
-          : `⚠️ ${r.device_id}: Still ${r.oldVersion} — OTA may have failed\n`;
+        if (r.verifyError) {
+          resultMsg += `⏳ ${r.device_id}: Rebooting (${r.verifyError})\n`;
+        } else if (r.alreadyUpToDate) {
+          resultMsg += `✅ ${r.device_id}: Already on ${r.oldVersion}\n`;
+        } else {
+          resultMsg += `⚠️ ${r.device_id}: Still ${r.oldVersion} — OTA may have failed\n`;
+        }
       });
       results.filter(r => !r.success).forEach(r => {
         resultMsg += `❌ ${r.device_id}: ${r.error}\n`;

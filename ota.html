@@ -233,8 +233,32 @@ async function startOTA() {
         uploadBtn.disabled = false;
         return;
       } else if (deviceResponse && deviceResponse.ok) {
-        updateProgress(100, 'Device accepted OTA!');
-        showStatus('✅ OTA update accepted! Device will restart in ~60 seconds.', 'success');
+        updateProgress(70, 'OTA accepted, waiting for reboot...');
+        // Verify actual firmware version after reboot
+        const oldVersion = document.getElementById('current-version').textContent || 'unknown';
+        showStatus('⏳ Device is updating and rebooting... verifying firmware version.', 'success');
+        await new Promise(r => setTimeout(r, 30000)); // Wait 30s for reboot
+        let verified = false;
+        for (let attempt = 0; attempt < 4; attempt++) {
+          updateProgress(75 + attempt * 5, `Verifying firmware... (attempt ${attempt + 1}/4)`);
+          try {
+            const timeoutP = new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 12000));
+            const status = await Promise.race([API.get('/sensor'), timeoutP]);
+            const newVer = status.firmware_version || 'unknown';
+            if (newVer !== oldVersion && newVer !== 'unknown') {
+              updateProgress(100, 'Update verified!');
+              showStatus(`✅ Firmware updated: ${oldVersion} → ${newVer}`, 'success');
+              document.getElementById('current-version').textContent = newVer;
+              verified = true;
+              break;
+            }
+          } catch(e) { /* device still rebooting */ }
+          if (attempt < 3) await new Promise(r => setTimeout(r, 15000));
+        }
+        if (!verified) {
+          updateProgress(100, 'Update sent');
+          showStatus(`⏳ OTA accepted but could not verify new version yet. Device may still be rebooting. Current: ${oldVersion}`, 'success');
+        }
         progressSection.style.display = 'none';
         return;
       }
