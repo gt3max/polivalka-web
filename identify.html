@@ -368,10 +368,18 @@
       <ul class="tips-list" id="care-tips"></ul>
     </div>
 
-    <div class="actions">
+    <div class="actions" id="plant-actions">
       <button class="primary" onclick="confirmPlant()" style="width:100%;padding:14px;font-size:16px">
         ✓ Use This Plant
       </button>
+    </div>
+    <div id="no-device-promo" style="display:none">
+      <div style="background:#f1f8e9;border:1px solid #c5e1a5;border-radius:12px;padding:16px;text-align:center">
+        <div style="font-size:32px;margin-bottom:8px">🌿</div>
+        <div style="font-weight:600;font-size:15px;margin-bottom:6px">Get a Polivalka device</div>
+        <div style="font-size:13px;color:#555;margin-bottom:12px">Save plant profiles, automate watering, and track soil moisture — all from your phone.</div>
+        <a href="fleet.html" style="text-decoration:none"><button class="primary" style="padding:12px 24px;font-size:14px">Go to My Devices</button></a>
+      </div>
     </div>
   </div>
 
@@ -479,8 +487,10 @@ document.addEventListener('visibilitychange', () => {
   }
 });
 
-updateStatus();
-startPolling();
+if (getDeviceId()) {
+  updateStatus();
+  startPolling();
+}
 
 // ============ Wikipedia Image Fallback ============
 function wikiImgFallback(el) {
@@ -527,10 +537,17 @@ document.addEventListener('DOMContentLoaded', function() {
     document.getElementById('camera-btn').style.display = 'none';
   }
 
-  // Load saved plant profile
-  loadSavedProfile();
+  // Load saved plant profile (only with device)
+  if (getDeviceId()) {
+    loadSavedProfile();
+  } else {
+    // No device mode: hide device-dependent sections
+    document.getElementById('device-status').style.display = 'none';
+    document.getElementById('step-current').style.display = 'none';
+    document.getElementById('plant-library').style.display = 'none';
+  }
 
-  console.log('[Identify] Page initialized, mockMode:', CONFIG.mockMode);
+  console.log('[Identify] Page initialized, mockMode:', CONFIG.mockMode, 'device:', getDeviceId() || 'none');
 });
 
 // ============ Plant Profile Loading ============
@@ -1516,6 +1533,9 @@ function showStep(step) {
 
   if (step === 'card') {
     document.getElementById('step-card').classList.add('visible');
+    const hasDevice = !!getDeviceId();
+    document.getElementById('plant-actions').style.display = hasDevice ? '' : 'none';
+    document.getElementById('no-device-promo').style.display = hasDevice ? 'none' : 'block';
   }
 }
 
