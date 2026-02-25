@@ -70,9 +70,9 @@ async function loadAllData(){
 const s=await updateHeader();
 if(!s)return;
 try{
-// Sensor connection check (ADC < 100 = disconnected)
+// Sensor connection check: API flag first, threshold fallback
 const adcVal = s.adc;
-const sensorDisconnected = adcVal !== null && adcVal !== undefined && (adcVal < 100 || adcVal > 4000);
+const sensorDisconnected = s.sensor_health ? !s.sensor_health.j6_connected : (adcVal !== null && adcVal !== undefined && (adcVal < 100 || adcVal > 4000));
 if (sensorDisconnected) {
   document.getElementById('live-adc').textContent = 'ADC: —';
   document.getElementById('live-moisture').innerHTML = '<span style="color:#e65100">⚠️ Sensor not connected</span>';
@@ -83,7 +83,11 @@ if (sensorDisconnected) {
   if (pctVal !== null && pctVal !== undefined && pctVal !== '—') { moistureEl.textContent = `${pctVal}%`; } else { moistureEl.textContent = '—'; }
 }
 // Update sensor2 from main status (Cloud mode - no separate /sensor2/status endpoint)
-if(s.sensor2_adc!==undefined&&s.sensor2_adc!==null){
+const s2Disconnected = s.sensor_health ? !s.sensor_health.j7_connected : (s.sensor2_adc === -1 || s.sensor2_adc === null || s.sensor2_adc === undefined);
+if(s2Disconnected){
+document.getElementById('s2-live-adc').innerHTML='ADC: —';
+document.getElementById('s2-live-moisture').innerHTML='<span style="color:#e65100">⚠️ Sensor not connected</span>';
+}else if(s.sensor2_adc!==undefined&&s.sensor2_adc!==null){
 const s2pct=(s.sensor2_percent_float!==undefined&&s.sensor2_percent_float!==null)?s.sensor2_percent_float.toFixed(1):(s.sensor2_percent!==null&&s.sensor2_percent!==undefined?s.sensor2_percent:'—');
 document.getElementById('s2-live-adc').textContent='ADC: '+s.sensor2_adc;
 document.getElementById('s2-live-moisture').textContent=s2pct+'%';}
