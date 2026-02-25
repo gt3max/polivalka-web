@@ -542,10 +542,7 @@ async function loadSavedProfile() {
   }
 
   try {
-    const url = `${CONFIG.apiUrl}/plants/${deviceId}`;
-    const response = await fetch(url, {
-      headers: API.getAuthHeaders()
-    });
+    const response = await API.fetch(`/plants/${deviceId}`);
     const data = await response.json();
 
     if (data.success && data.plant) {
@@ -587,18 +584,20 @@ function showCurrentPlant(plant) {
 
   // Current plant card details
   const currentImg = document.getElementById('current-plant-img');
-  currentImg.src = plant.image_url || '';
-  // Timeout fallback: if saved image URL hangs (PlantNet DNS down), try Wikipedia
-  if (plant.image_url && plant.scientific) {
+  const wikiNames = [plant.scientific, plant.family].filter(Boolean).map(n => encodeURIComponent(n.replace(/ /g, '_')));
+  currentImg.dataset.wikiNames = JSON.stringify(wikiNames);
+  if (plant.image_url) {
+    currentImg.src = plant.image_url;
+    // Timeout fallback: if saved image URL hangs (PlantNet DNS down), try Wikipedia
     const tid = setTimeout(() => {
       if (!currentImg.complete || currentImg.naturalWidth === 0) {
         currentImg.onerror = null;
-        const names = [plant.scientific, plant.family].filter(Boolean).map(n => encodeURIComponent(n.replace(/ /g, '_')));
-        currentImg.dataset.wikiNames = JSON.stringify(names);
         wikiImgFallback(currentImg);
       }
     }, 2000);
     currentImg.addEventListener('load', () => clearTimeout(tid), { once: true });
+  } else if (wikiNames.length) {
+    wikiImgFallback(currentImg);
   }
   document.getElementById('current-plant-name').textContent = plant.common_name || plant.scientific;
   document.getElementById('current-plant-scientific').textContent = plant.scientific || '';
@@ -624,13 +623,11 @@ function showCurrentPlant(plant) {
 
 // ============ Plant Library ============
 let libraryExpanded = false;
+let _plantBusy = false;
 
 async function loadPlantLibrary() {
   try {
-    const url = `${CONFIG.apiUrl}/plants/library`;
-    const response = await fetch(url, {
-      headers: API.getAuthHeaders()
-    });
+    const response = await API.fetch('/plants/library');
     const data = await response.json();
 
     if (data.success && data.plants) {
@@ -736,140 +733,91 @@ function toggleLibrary() {
 }
 
 async function deleteLibraryPlant(plantId, deviceId, plantName) {
+  if (_plantBusy) return;
   if (!confirm(`Remove "${plantName}" from your library? It will be saved in your history.`)) return;
-
+  _plantBusy = true;
   try {
-    const resp = await fetch(`${CONFIG.apiUrl}/plants/${deviceId}?plant_id=${plantId}`, {
-      method: 'DELETE',
-      headers: API.getAuthHeaders()
-    });
-    const data = await resp.json();
-
-    if (resp.ok && data.success) {
-      showToast('Plant removed from library', 'success');
-      loadPlantLibrary();
-    } else {
-      showToast(data.error || 'Failed to remove plant', 'error');
-    }
+    await API.fetch(`/plants/${deviceId}?plant_id=${plantId}`, { method: 'DELETE' });
+    showToast('Plant removed from library', 'success');
+    loadPlantLibrary();
   } catch (e) {
     showToast('Error: ' + e.message, 'error');
-  }
+  } finally { _plantBusy = false; }
 }
 
 async function assignPlantFromLibrary(plantId) {
+  if (_plantBusy) return;
   if (!confirm('Assign this plant to current device? This will replace the current plant profile.')) return;
-
   const deviceId = getDeviceId();
   if (!deviceId) return;
-
+  _plantBusy = true;
   try {
-    const resp = await fetch(`${CONFIG.apiUrl}/plants/${deviceId}/assign`, {
+    await API.fetch(`/plants/${deviceId}/assign`, {
       method: 'POST',
-      headers: {
-        ...API.getAuthHeaders(),
-        'Content-Type': 'application/json'
-      },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ plant_id: plantId })
     });
-    const data = await resp.json();
-
-    if (resp.ok && data.success) {
-      showToast('Plant assigned successfully!', 'success');
-      // Reload the page to show new plant
-      setTimeout(() => location.reload(), 1000);
-    } else {
-      showToast(data.error || 'Failed to assign plant', 'error');
-    }
+    showToast('Plant assigned successfully!', 'success');
+    setTimeout(() => location.reload(), 1000);
   } catch (e) {
     showToast('Error: ' + e.message, 'error');
-  }
+  } finally { _plantBusy = false; }
 }
 
 async function archivePlant() {
+  if (_plantBusy) return;
   if (!confirm('Archive this plant profile?\n\nThe device will continue collecting data, but it won\'t be linked to this plant.\n\nTip: remove the device from the plant physically before archiving.')) return;
-
   const deviceId = getDeviceId();
   if (!deviceId) return;
-
+  _plantBusy = true;
   try {
-    const resp = await fetch(`${CONFIG.apiUrl}/plants/${deviceId}/archive`, {
-      method: 'POST',
-      headers: {
-        ...API.getAuthHeaders(),
-        'Content-Type': 'application/json'
-      }
-    });
-    const data = await resp.json();
-    if (resp.ok) {
-      showToast('Plant archived', 'success');
-      // Update status bar + details
-      document.getElementById('device-status').style.borderLeftColor = '#ff9800';
-      document.getElementById('status-archived-badge').style.display = 'inline';
-      document.getElementById('archived-badge').style.display = 'inline';
-      document.getElementById('btn-archive').style.display = 'none';
-      document.getElementById('btn-unarchive').style.display = 'block';
-      loadPlantLibrary();
-    } else {
-      showToast(data.error || 'Failed to archive', 'error');
-    }
+    await API.fetch(`/plants/${deviceId}/archive`, { method: 'POST' });
+    showToast('Plant archived', 'success');
+    document.getElementById('device-status').style.borderLeftColor = '#ff9800';
+    document.getElementById('status-archived-badge').style.display = 'inline';
+    document.getElementById('archived-badge').style.display = 'inline';
+    document.getElementById('btn-archive').style.display = 'none';
+    document.getElementById('btn-unarchive').style.display = 'block';
+    loadPlantLibrary();
   } catch (e) {
     showToast('Error: ' + e.message, 'error');
-  }
+  } finally { _plantBusy = false; }
 }
 
 async function unarchivePlant() {
+  if (_plantBusy) return;
   const deviceId = getDeviceId();
   if (!deviceId) return;
-
+  _plantBusy = true;
   try {
-    const resp = await fetch(`${CONFIG.apiUrl}/plants/${deviceId}/unarchive`, {
-      method: 'POST',
-      headers: {
-        ...API.getAuthHeaders(),
-        'Content-Type': 'application/json'
-      }
-    });
-    const data = await resp.json();
-    if (resp.ok) {
-      showToast('Plant restored', 'success');
-      // Update status bar + details
-      document.getElementById('device-status').style.borderLeftColor = '#4caf50';
-      document.getElementById('status-archived-badge').style.display = 'none';
-      document.getElementById('archived-badge').style.display = 'none';
-      document.getElementById('btn-archive').style.display = 'block';
-      document.getElementById('btn-unarchive').style.display = 'none';
-      loadPlantLibrary();
-    } else {
-      showToast(data.error || 'Failed to restore', 'error');
-    }
+    await API.fetch(`/plants/${deviceId}/unarchive`, { method: 'POST' });
+    showToast('Plant restored', 'success');
+    document.getElementById('device-status').style.borderLeftColor = '#4caf50';
+    document.getElementById('status-archived-badge').style.display = 'none';
+    document.getElementById('archived-badge').style.display = 'none';
+    document.getElementById('btn-archive').style.display = 'block';
+    document.getElementById('btn-unarchive').style.display = 'none';
+    loadPlantLibrary();
   } catch (e) {
     showToast('Error: ' + e.message, 'error');
-  }
+  } finally { _plantBusy = false; }
 }
 
 async function deletePlant() {
+  if (_plantBusy) return;
   if (!confirm('Remove this plant from the device? It will be saved in your history.')) return;
-
   const deviceId = getDeviceId();
   if (!deviceId) return;
-
+  _plantBusy = true;
   try {
-    const resp = await fetch(`${CONFIG.apiUrl}/plants/${deviceId}`, {
-      method: 'DELETE',
-      headers: API.getAuthHeaders()
-    });
-    const data = await resp.json();
-    if (resp.ok) {
-      showToast('Plant removed', 'success');
-      document.getElementById('step-current').style.display = 'none';
-      showDeviceEmpty();
-      loadPlantLibrary();
-    } else {
-      showToast(data.error || 'Failed to delete', 'error');
-    }
+    await API.fetch(`/plants/${deviceId}`, { method: 'DELETE' });
+    showToast('Plant removed', 'success');
+    document.getElementById('step-current').style.display = 'none';
+    showDeviceEmpty();
+    loadPlantLibrary();
   } catch (e) {
     showToast('Error: ' + e.message, 'error');
-  }
+  } finally { _plantBusy = false; }
 }
 
 // ============ File Handling ============
@@ -1517,15 +1465,9 @@ async function saveToProfile() {
   };
 
   try {
-    // Direct fetch - /plants/save is a global endpoint, not device-prefixed
-    const url = `${CONFIG.apiUrl}/plants/save`;
-    const headers = {
-      'Content-Type': 'application/json',
-      ...API.getAuthHeaders()
-    };
-    const response = await fetch(url, {
+    const response = await API.fetch('/plants/save', {
       method: 'POST',
-      headers,
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ device_id: deviceId, plant: plantData })
     });
     const data = await response.json();

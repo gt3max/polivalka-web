@@ -21,7 +21,7 @@ const IS_CLOUD = window.location.hostname === 'gt3max.github.io' ||
 // Pages that don't require authentication
 const publicPages = ['login.html', 'index.html', 'fleet.html'];
 // Pages that require device ID
-const deviceRequiredPages = ['home.html', 'sensor.html', 'timer.html', 'settings.html', 'calibration.html', 'update.html', 'trends.html', 'online.html', 'ota.html'];
+const deviceRequiredPages = ['home.html', 'sensor.html', 'timer.html', 'settings.html', 'calibration.html', 'update.html', 'trends.html', 'online.html', 'ota.html', 'identify.html'];
 
 const currentPage = window.location.pathname.split('/').pop() || 'index.html';
 
