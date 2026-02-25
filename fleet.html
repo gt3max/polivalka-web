@@ -232,7 +232,7 @@
     </div>
     <div class="header-info">
       <div id="header-time" class="mono" style="font-size:11px">--:--</div>
-      <div style="font-size:11px"><a href="identify.html" style="color:#fff;text-decoration:none">🌱 Plant</a> | <span id="admin-link"></span><span style="cursor:pointer" onclick="logout()">👤 <span id="username">Admin</span> | Logout</span></div>
+      <div style="font-size:11px"><a id="plant-link" href="identify.html" style="color:#fff;text-decoration:none">🌱 Plant</a> | <span id="admin-link"></span><span style="cursor:pointer" onclick="logout()">👤 <span id="username">Admin</span> | Logout</span></div>
     </div>
   </div>
 
@@ -683,6 +683,11 @@ async function loadDevices() {
 function renderDevices(devices) {
   const container = document.getElementById('device-grid');
   container.innerHTML = '';
+
+  // Update Plant link: first assigned device or no-device mode
+  const plantLink = document.getElementById('plant-link');
+  const firstDevice = devices.find(d => d.owner && d.owner !== 'admin') || devices[0];
+  plantLink.href = firstDevice ? `identify.html?device=${firstDevice.device_id}` : 'identify.html';
 
   // Update container class based on view mode
   container.className = currentView === 'list' ? 'device-list' : 'device-grid';
