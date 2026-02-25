@@ -542,7 +542,7 @@ async function loadSavedProfile() {
   }
 
   try {
-    const response = await API.fetch(`/plants/${deviceId}`);
+    const response = await API.fetchGlobal(`/plants/${deviceId}`);
     const data = await response.json();
 
     if (data.success && data.plant) {
@@ -627,7 +627,7 @@ let _plantBusy = false;
 
 async function loadPlantLibrary() {
   try {
-    const response = await API.fetch('/plants/library');
+    const response = await API.fetchGlobal('/plants/library');
     const data = await response.json();
 
     if (data.success && data.plants) {
@@ -737,7 +737,7 @@ async function deleteLibraryPlant(plantId, deviceId, plantName) {
   if (!confirm(`Remove "${plantName}" from your library? It will be saved in your history.`)) return;
   _plantBusy = true;
   try {
-    await API.fetch(`/plants/${deviceId}?plant_id=${plantId}`, { method: 'DELETE' });
+    await API.fetchGlobal(`/plants/${deviceId}?plant_id=${plantId}`, { method: 'DELETE' });
     showToast('Plant removed from library', 'success');
     loadPlantLibrary();
   } catch (e) {
@@ -752,7 +752,7 @@ async function assignPlantFromLibrary(plantId) {
   if (!deviceId) return;
   _plantBusy = true;
   try {
-    await API.fetch(`/plants/${deviceId}/assign`, {
+    await API.fetchGlobal(`/plants/${deviceId}/assign`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ plant_id: plantId })
@@ -771,7 +771,7 @@ async function archivePlant() {
   if (!deviceId) return;
   _plantBusy = true;
   try {
-    await API.fetch(`/plants/${deviceId}/archive`, { method: 'POST' });
+    await API.fetchGlobal(`/plants/${deviceId}/archive`, { method: 'POST' });
     showToast('Plant archived', 'success');
     document.getElementById('device-status').style.borderLeftColor = '#ff9800';
     document.getElementById('status-archived-badge').style.display = 'inline';
@@ -790,7 +790,7 @@ async function unarchivePlant() {
   if (!deviceId) return;
   _plantBusy = true;
   try {
-    await API.fetch(`/plants/${deviceId}/unarchive`, { method: 'POST' });
+    await API.fetchGlobal(`/plants/${deviceId}/unarchive`, { method: 'POST' });
     showToast('Plant restored', 'success');
     document.getElementById('device-status').style.borderLeftColor = '#4caf50';
     document.getElementById('status-archived-badge').style.display = 'none';
@@ -810,7 +810,7 @@ async function deletePlant() {
   if (!deviceId) return;
   _plantBusy = true;
   try {
-    await API.fetch(`/plants/${deviceId}`, { method: 'DELETE' });
+    await API.fetchGlobal(`/plants/${deviceId}`, { method: 'DELETE' });
     showToast('Plant removed', 'success');
     document.getElementById('step-current').style.display = 'none';
     showDeviceEmpty();
@@ -1465,7 +1465,7 @@ async function saveToProfile() {
   };
 
   try {
-    const response = await API.fetch('/plants/save', {
+    const response = await API.fetchGlobal('/plants/save', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ device_id: deviceId, plant: plantData })

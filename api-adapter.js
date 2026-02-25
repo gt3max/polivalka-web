@@ -189,6 +189,33 @@ const API = {
     return response;
   },
 
+  // Fetch global endpoint (no /device/{id} prefix, e.g. /plants/*)
+  fetchGlobal: async function(path, options = {}) {
+    if (IS_CLOUD && !path.startsWith('/auth') && Auth.isTokenExpired()) {
+      const refreshed = await Auth.refresh();
+      if (!refreshed) {
+        Auth.redirectToLogin();
+        throw new Error('Session expired. Please login again.');
+      }
+    }
+    const url = IS_CLOUD ? `${this.cloudBase}${path}` : `/api${path}`;
+    const headers = {
+      ...this.getAuthHeaders(),
+      ...(options.headers || {})
+    };
+    const response = await fetch(url, { ...options, headers, cache: 'no-store' });
+    if (response.status === 401 && IS_CLOUD) {
+      Auth.clear();
+      Auth.redirectToLogin();
+      throw new Error('Unauthorized. Please login again.');
+    }
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({}));
+      throw new Error(error.error || `API error: ${response.status}`);
+    }
+    return response;
+  },
+
   // GET request with response normalization
   get: async function(path) {
     const data = await this.fetch(path).then(r => r.json());
