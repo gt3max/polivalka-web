@@ -149,7 +149,24 @@
     <strong>Demo Mode:</strong> API not available. Using sample data.
   </div>
 
-  <!-- Current Plant (shown if profile exists) -->
+  <!-- Device Plant Status (always visible) -->
+  <div id="device-status" class="card" style="border-left:4px solid #ccc">
+    <div id="status-empty" style="display:flex;align-items:center;gap:12px">
+      <div style="font-size:28px;opacity:0.4">🪴</div>
+      <div>
+        <div style="font-weight:600;font-size:15px;color:#999">No plant attached</div>
+        <div style="font-size:12px;color:#aaa">Identify a plant below or assign from library</div>
+      </div>
+    </div>
+    <div id="status-attached" style="display:none;align-items:center;gap:8px">
+      <span style="font-size:22px">🌿</span>
+      <span id="status-plant-name" style="font-weight:600;font-size:15px"></span>
+      <span id="status-archived-badge" style="display:none;background:#ff9800;color:#fff;font-size:10px;padding:1px 6px;border-radius:4px">Archived</span>
+      <span id="status-since" style="font-size:12px;color:#666;margin-left:auto"></span>
+    </div>
+  </div>
+
+  <!-- Current Plant details (shown if profile exists) -->
   <div id="step-current" class="card" style="display:none">
     <h2 style="margin-top:0">🌿 Current Plant <span id="archived-badge" style="display:none;font-size:12px;background:#ff9800;color:#fff;padding:2px 8px;border-radius:10px;margin-left:8px">Archived</span></h2>
     <div style="display:flex;gap:16px;align-items:flex-start">
@@ -534,17 +551,40 @@ async function loadSavedProfile() {
       showCurrentPlant(data.plant);
     } else {
       console.log('[Identify] No saved plant profile');
-      // Still load library even without current plant
+      showDeviceEmpty();
       loadPlantLibrary();
     }
   } catch (err) {
     console.error('[Identify] Error loading profile:', err);
-    // Still load library on error
+    showDeviceEmpty();
     loadPlantLibrary();
   }
 }
 
+function showDeviceEmpty() {
+  const statusDiv = document.getElementById('device-status');
+  statusDiv.style.borderLeftColor = '#ccc';
+  document.getElementById('status-empty').style.display = 'flex';
+  document.getElementById('status-attached').style.display = 'none';
+}
+
 function showCurrentPlant(plant) {
+  // Update device status bar
+  const isArchived = plant.archived === true;
+  const statusDiv = document.getElementById('device-status');
+  statusDiv.style.borderLeftColor = isArchived ? '#ff9800' : '#4caf50';
+  document.getElementById('status-empty').style.display = 'none';
+  document.getElementById('status-attached').style.display = 'flex';
+  document.getElementById('status-plant-name').textContent = plant.common_name || plant.scientific;
+  document.getElementById('status-archived-badge').style.display = isArchived ? 'inline' : 'none';
+  const sinceEl = document.getElementById('status-since');
+  if (plant.started_at) {
+    sinceEl.textContent = 'since ' + new Date(plant.started_at * 1000).toLocaleDateString();
+  } else {
+    sinceEl.textContent = '';
+  }
+
+  // Current plant card details
   const currentImg = document.getElementById('current-plant-img');
   currentImg.src = plant.image_url || '';
   // Timeout fallback: if saved image URL hangs (PlantNet DNS down), try Wikipedia
@@ -571,7 +611,6 @@ function showCurrentPlant(plant) {
   document.getElementById('current-plant-preset').textContent = presetText;
 
   // Show/hide archived badge and buttons
-  const isArchived = plant.archived === true;
   document.getElementById('archived-badge').style.display = isArchived ? 'inline' : 'none';
   document.getElementById('btn-archive').style.display = isArchived ? 'none' : 'block';
   document.getElementById('btn-unarchive').style.display = isArchived ? 'block' : 'none';
@@ -762,11 +801,12 @@ async function archivePlant() {
     const data = await resp.json();
     if (resp.ok) {
       showToast('Plant archived', 'success');
-      // Update UI to show archived state
+      // Update status bar + details
+      document.getElementById('device-status').style.borderLeftColor = '#ff9800';
+      document.getElementById('status-archived-badge').style.display = 'inline';
       document.getElementById('archived-badge').style.display = 'inline';
       document.getElementById('btn-archive').style.display = 'none';
       document.getElementById('btn-unarchive').style.display = 'block';
-      // Refresh library to show archived plant
       loadPlantLibrary();
     } else {
       showToast(data.error || 'Failed to archive', 'error');
@@ -791,11 +831,12 @@ async function unarchivePlant() {
     const data = await resp.json();
     if (resp.ok) {
       showToast('Plant restored', 'success');
-      // Update UI to show active state
+      // Update status bar + details
+      document.getElementById('device-status').style.borderLeftColor = '#4caf50';
+      document.getElementById('status-archived-badge').style.display = 'none';
       document.getElementById('archived-badge').style.display = 'none';
       document.getElementById('btn-archive').style.display = 'block';
       document.getElementById('btn-unarchive').style.display = 'none';
-      // Refresh library
       loadPlantLibrary();
     } else {
       showToast(data.error || 'Failed to restore', 'error');
@@ -818,9 +859,9 @@ async function deletePlant() {
     });
     const data = await resp.json();
     if (resp.ok) {
-      showToast('Plant deleted', 'success');
+      showToast('Plant removed', 'success');
       document.getElementById('step-current').style.display = 'none';
-      // Refresh library
+      showDeviceEmpty();
       loadPlantLibrary();
     } else {
       showToast(data.error || 'Failed to delete', 'error');
