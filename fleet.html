@@ -684,10 +684,8 @@ function renderDevices(devices) {
   const container = document.getElementById('device-grid');
   container.innerHTML = '';
 
-  // Update Plant link: first assigned device or no-device mode
-  const plantLink = document.getElementById('plant-link');
-  const firstDevice = devices.find(d => d.owner && d.owner !== 'admin') || devices[0];
-  plantLink.href = firstDevice ? `identify.html?device=${firstDevice.device_id}` : 'identify.html';
+  // Plant link: always device-independent (device chosen at save time)
+  document.getElementById('plant-link').href = 'identify.html';
 
   // Update container class based on view mode
   container.className = currentView === 'list' ? 'device-list' : 'device-grid';

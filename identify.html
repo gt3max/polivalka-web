@@ -192,7 +192,7 @@
       <span id="library-toggle" style="float:right;font-size:14px">▼</span>
     </h2>
     <div id="library-content" style="display:none">
-      <p class="muted" style="margin:0 0 12px">Select a plant to assign to this device:</p>
+      <p class="muted" style="margin:0 0 12px" id="library-hint">Select a plant to assign to this device:</p>
       <div id="library-list" style="display:grid;gap:8px"></div>
       <div id="library-empty" style="display:none;color:#999;font-size:14px;text-align:center;padding:16px">
         No plants in library yet. Identify your first plant above!
@@ -373,12 +373,23 @@
         ✓ Use This Plant
       </button>
     </div>
-    <div id="no-device-promo" style="display:none">
-      <div style="background:#f1f8e9;border:1px solid #c5e1a5;border-radius:12px;padding:16px;text-align:center">
-        <div style="font-size:32px;margin-bottom:8px">🌿</div>
-        <div style="font-weight:600;font-size:15px;margin-bottom:6px">Get a Polivalka device</div>
-        <div style="font-size:13px;color:#555;margin-bottom:12px">Save plant profiles, automate watering, and track soil moisture — all from your phone.</div>
-        <a href="fleet.html" style="text-decoration:none"><button class="primary" style="padding:12px 24px;font-size:14px">Go to My Devices</button></a>
+    <div id="no-device-section" style="display:none">
+      <!-- Device picker (shown when user has devices but no ?device= param) -->
+      <div id="device-picker" style="display:none;margin-bottom:12px">
+        <label style="font-weight:600;font-size:14px;display:block;margin-bottom:6px">Save to device:</label>
+        <select id="device-select" style="width:100%;padding:12px;font-size:15px;border:2px solid #c5e1a5;border-radius:8px;background:#fff"></select>
+        <button class="primary" onclick="confirmPlantWithDevice()" style="width:100%;padding:14px;font-size:16px;margin-top:10px">
+          ✓ Use This Plant
+        </button>
+      </div>
+      <!-- Promo (shown when user has no devices at all) -->
+      <div id="no-device-promo" style="display:none">
+        <div style="background:#f1f8e9;border:1px solid #c5e1a5;border-radius:12px;padding:16px;text-align:center">
+          <div style="font-size:32px;margin-bottom:8px">🌿</div>
+          <div style="font-weight:600;font-size:15px;margin-bottom:6px">Get a Polivalka device</div>
+          <div style="font-size:13px;color:#555;margin-bottom:12px">Save plant profiles, automate watering, and track soil moisture — all from your phone.</div>
+          <a href="fleet.html" style="text-decoration:none"><button class="primary" style="padding:12px 24px;font-size:14px">Go to My Devices</button></a>
+        </div>
       </div>
     </div>
   </div>
@@ -537,14 +548,14 @@ document.addEventListener('DOMContentLoaded', function() {
     document.getElementById('camera-btn').style.display = 'none';
   }
 
-  // Load saved plant profile (only with device)
+  // Load plant data
   if (getDeviceId()) {
-    loadSavedProfile();
+    loadSavedProfile();  // loads current plant + library
   } else {
-    // No device mode: hide device-dependent sections
+    // No device mode: hide device-specific sections, show library
     document.getElementById('device-status').style.display = 'none';
     document.getElementById('step-current').style.display = 'none';
-    document.getElementById('plant-library').style.display = 'none';
+    loadPlantLibrary();  // library is user-level, works without device
   }
 
   console.log('[Identify] Page initialized, mockMode:', CONFIG.mockMode, 'device:', getDeviceId() || 'none');
@@ -661,6 +672,10 @@ function renderPlantLibrary(plants) {
   const emptyDiv = document.getElementById('library-empty');
   const countSpan = document.getElementById('library-count');
   const currentDeviceId = getDeviceId();
+  const hintEl = document.getElementById('library-hint');
+  if (hintEl) hintEl.textContent = currentDeviceId
+    ? 'Select a plant to assign to this device:'
+    : 'Your plant collection:';
 
   // Show ALL plants except the one currently active on THIS device (already shown in "Current Plant")
   const libraryPlants = plants.filter(p => !(p.device_id === currentDeviceId && p.active));
@@ -703,11 +718,12 @@ function renderPlantLibrary(plants) {
     }
 
     const isDeleted = plant.deleted;
+    const canAssign = !isDeleted && !!currentDeviceId;
     return `
-      <div class="library-item" style="display:flex;gap:12px;padding:10px;border:1px solid ${isDeleted ? '#ffcdd2' : '#ddd'};border-radius:8px;align-items:center;${isDeleted ? 'opacity:0.6;' : 'cursor:pointer;'}transition:all 0.2s"
-           ${isDeleted ? '' : `onclick="assignPlantFromLibrary('${plant.plant_id}')"`}
-           ${isDeleted ? '' : 'onmouseover="this.style.borderColor=\'#2c5f2d\';this.style.background=\'#f9fff9\'"'}
-           ${isDeleted ? '' : 'onmouseout="this.style.borderColor=\'#ddd\';this.style.background=\'#fff\'"'}>
+      <div class="library-item" style="display:flex;gap:12px;padding:10px;border:1px solid ${isDeleted ? '#ffcdd2' : '#ddd'};border-radius:8px;align-items:center;${canAssign ? 'cursor:pointer;' : (isDeleted ? 'opacity:0.6;' : '')}transition:all 0.2s"
+           ${canAssign ? `onclick="assignPlantFromLibrary('${plant.plant_id}')"` : ''}
+           ${canAssign ? 'onmouseover="this.style.borderColor=\'#2c5f2d\';this.style.background=\'#f9fff9\'"' : ''}
+           ${canAssign ? 'onmouseout="this.style.borderColor=\'#ddd\';this.style.background=\'#fff\'"' : ''}>
         <img src="${plant.image_url || ''}" style="width:50px;height:50px;border-radius:8px;object-fit:cover;background:#f0f0f0"
              data-wiki-names='${JSON.stringify([plant.scientific, plant.family].filter(Boolean).map(n => encodeURIComponent(n.replace(/ /g, "_"))))}'
              onerror="wikiImgFallback(this)">
@@ -731,7 +747,7 @@ function renderPlantLibrary(plants) {
                   style="background:none;border:none;cursor:pointer;font-size:16px;padding:4px;opacity:0.5;transition:opacity 0.2s"
                   onmouseover="this.style.opacity='1'" onmouseout="this.style.opacity='0.5'"
                   title="Remove from library">🗑️</button>`}
-          ${isDeleted ? '' : '<div style="color:#2c5f2d;font-size:18px">→</div>'}
+          ${canAssign ? '<div style="color:#2c5f2d;font-size:18px">→</div>' : ''}
         </div>
       </div>
     `;
@@ -1533,9 +1549,14 @@ function showStep(step) {
 
   if (step === 'card') {
     document.getElementById('step-card').classList.add('visible');
-    const hasDevice = !!getDeviceId();
-    document.getElementById('plant-actions').style.display = hasDevice ? '' : 'none';
-    document.getElementById('no-device-promo').style.display = hasDevice ? 'none' : 'block';
+    if (getDeviceId()) {
+      document.getElementById('plant-actions').style.display = '';
+      document.getElementById('no-device-section').style.display = 'none';
+    } else {
+      document.getElementById('plant-actions').style.display = 'none';
+      document.getElementById('no-device-section').style.display = 'block';
+      loadDevicePicker();
+    }
   }
 }
 
@@ -1567,6 +1588,87 @@ function getDeviceId() {
   // Get from URL or localStorage
   const params = new URLSearchParams(window.location.search);
   return params.get('device') || localStorage.getItem('selected_device_id');
+}
+
+// ============ Device Picker (no-device mode) ============
+async function loadDevicePicker() {
+  try {
+    const resp = await API.fetchGlobal('/devices');
+    const data = await resp.json();
+    const devices = (data.devices || []).filter(d => d.device_id);
+
+    if (devices.length === 0) {
+      document.getElementById('device-picker').style.display = 'none';
+      document.getElementById('no-device-promo').style.display = 'block';
+      return;
+    }
+
+    document.getElementById('device-picker').style.display = 'block';
+    document.getElementById('no-device-promo').style.display = 'none';
+
+    const select = document.getElementById('device-select');
+    select.innerHTML = devices.map(d => {
+      const name = d.device_name || d.device_id;
+      const label = name !== d.device_id ? `${name} (${d.device_id})` : d.device_id;
+      return `<option value="${d.device_id}">${label}</option>`;
+    }).join('');
+
+  } catch (err) {
+    console.error('[Identify] Load devices error:', err);
+    document.getElementById('device-picker').style.display = 'none';
+    document.getElementById('no-device-promo').style.display = 'block';
+  }
+}
+
+async function confirmPlantWithDevice() {
+  const select = document.getElementById('device-select');
+  const deviceId = select.value;
+  if (!deviceId) return;
+
+  // Save plant to selected device (profile only, no device commands)
+  if (!selectedPlant || !selectedResult) return;
+
+  const btn = document.querySelector('#device-picker button');
+  const originalText = btn.textContent;
+  btn.disabled = true;
+  btn.textContent = 'Saving...';
+
+  const care = selectedResult.care || {};
+  const toxicity = selectedResult.toxicity || {};
+  const plantData = {
+    scientific: selectedPlant.scientific,
+    common_name: selectedPlant.names?.en || selectedPlant.scientific,
+    family: selectedPlant.family,
+    preset: care.preset || 'standard',
+    start_pct: care.start_pct || 35,
+    stop_pct: care.stop_pct || 55,
+    poisonous_to_humans: toxicity.poisonous_to_humans,
+    poisonous_to_pets: toxicity.poisonous_to_pets,
+    toxicity_note: toxicity.toxicity_note,
+    image_url: selectedPlant.wikiImage || selectedPlant.photos?.[0] || ''
+  };
+
+  try {
+    const response = await API.fetchGlobal('/plants/save', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ device_id: deviceId, plant: plantData })
+    });
+    const data = await response.json();
+
+    if (data.success) {
+      showToast('Plant saved!', 'success');
+      btn.textContent = '✓ Saved!';
+      setTimeout(() => loadPlantLibrary(), 1000);
+    } else {
+      throw new Error(data.error || 'Save failed');
+    }
+  } catch (err) {
+    console.error('Save error:', err);
+    showToast(err.message || 'Failed to save', 'error');
+    btn.disabled = false;
+    btn.textContent = originalText;
+  }
 }
 
 console.log('[Identify] Script loaded');
