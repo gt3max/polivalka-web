@@ -336,6 +336,12 @@
 <script>
 let selectedDeviceId = null;
 
+// XSS protection: escape user-controlled strings before innerHTML insertion
+function esc(str) {
+  if (!str) return '';
+  return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+}
+
 // ============ Lambda API для работы с данными (Security Migration 2026-01-20) ============
 // Данные теперь хранятся в DynamoDB, доступ через Lambda API с JWT авторизацией
 
@@ -676,7 +682,7 @@ async function loadDeviceHistoryUI(deviceId) {
     let icon = '📝';
     let text = e.event;
     // Lambda returns user_email, old format used to/from/by
-    const email = e.user_email || e.to || e.from || e.by || 'unknown';
+    const email = esc(e.user_email || e.to || e.from || e.by || 'unknown');
     if (e.event === 'assigned') {
       icon = '✅';
       text = `Assigned to <span style="color:#4caf50">${email}</span>`;
@@ -691,28 +697,22 @@ async function loadDeviceHistoryUI(deviceId) {
       text = 'Provisioned';
     } else if (e.event === 'plant_saved') {
       icon = '🌱';
-      const plantName = e.details || 'Unknown';
-      text = `Plant saved: <span style="color:#81c784">${plantName}</span> by ${email}`;
+      text = `Plant saved: <span style="color:#81c784">${esc(e.details || 'Unknown')}</span> by ${email}`;
     } else if (e.event === 'plant_archived') {
       icon = '📦';
-      const plantName = e.details || 'Unknown';
-      text = `Plant archived: <span style="color:#ffb74d">${plantName}</span> by ${email}`;
+      text = `Plant archived: <span style="color:#ffb74d">${esc(e.details || 'Unknown')}</span> by ${email}`;
     } else if (e.event === 'plant_deleted') {
       icon = '🗑️';
-      const plantName = e.details || 'Unknown';
-      text = `Plant deleted: <span style="color:#ef5350">${plantName}</span> by ${email}`;
+      text = `Plant deleted: <span style="color:#ef5350">${esc(e.details || 'Unknown')}</span> by ${email}`;
     } else if (e.event === 'plant_unarchived') {
       icon = '📤';
-      const plantName = e.details || 'Unknown';
-      text = `Plant restored: <span style="color:#81c784">${plantName}</span> by ${email}`;
+      text = `Plant restored: <span style="color:#81c784">${esc(e.details || 'Unknown')}</span> by ${email}`;
     } else if (e.event === 'plant_assigned') {
       icon = '🔄';
-      const details = e.details || 'Unknown';
-      text = `Plant assigned: <span style="color:#64b5f6">${details}</span> by ${email}`;
+      text = `Plant assigned: <span style="color:#64b5f6">${esc(e.details || 'Unknown')}</span> by ${email}`;
     } else if (e.event === 'plant_detached') {
       icon = '🔌';
-      const plantName = e.details || 'Unknown';
-      text = `Plant detached: <span style="color:#999">${plantName}</span> by ${email}`;
+      text = `Plant detached: <span style="color:#999">${esc(e.details || 'Unknown')}</span> by ${email}`;
     }
     return `<div style="padding:8px 0;border-bottom:1px solid #444;display:flex;justify-content:space-between;align-items:center">
       <span style="color:#fff;font-size:14px">${icon} ${text}</span>
@@ -801,8 +801,8 @@ async function loadPendingClaimsUI() {
       <div style="padding:12px;background:#1a1a2e;border-radius:8px;margin-bottom:8px">
         <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
           <div>
-            <div style="color:#fff;font-size:14px">📱 <span class="mono" style="color:#4caf50">${c.device_id}</span></div>
-            <div style="color:#ccc;font-size:13px;margin-top:4px">User: <strong>${c.email}</strong></div>
+            <div style="color:#fff;font-size:14px">📱 <span class="mono" style="color:#4caf50">${esc(c.device_id)}</span></div>
+            <div style="color:#ccc;font-size:13px;margin-top:4px">User: <strong>${esc(c.email)}</strong></div>
             <div class="muted" style="font-size:11px;margin-top:2px">Requested: ${dateStr}</div>
           </div>
           <div style="display:flex;gap:8px">
@@ -855,8 +855,7 @@ async function approveClaim(index) {
 
   // Reload data
   await loadWhitelist();
-  await loadPendingClaims();
-  loadPendingClaimsUI();
+  await loadPendingClaimsUI();
   renderUsersList();
 }
 
@@ -872,8 +871,7 @@ async function rejectClaim(index) {
     const success = await deleteClaim(claimId);
     if (success) {
       showToast(`Claim rejected`, 'warning');
-      await loadPendingClaims();
-      loadPendingClaimsUI();
+      await loadPendingClaimsUI();
     }
   }
 }
@@ -1209,7 +1207,7 @@ async function loadUsers() {
     renderUsersList();
   } catch(e) {
     console.error('[Admin] Load users error:', e);
-    container.innerHTML = '<div class="danger">Error loading users: ' + e.message + '</div>';
+    container.innerHTML = '<div class="danger">Error loading users: ' + esc(e.message) + '</div>';
   }
 }
 
@@ -1299,7 +1297,7 @@ function renderUsersList() {
           <div class="muted" style="margin-bottom:8px">Admin has full access to all devices</div>
           ${allDevicesData.map(d => {
             const shortId = d.device_id.replace('Polivalka-', '');
-            const name = d.name && d.name !== d.device_id ? ` "${d.name}"` : '';
+            const name = d.name && d.name !== d.device_id ? ` "${esc(d.name)}"` : '';
             const status = d.online ? '🟢' : '⚪';
             return `<div style="padding:4px 0"><span class="mono" style="color:#4caf50">${status} ${shortId}</span>${name}</div>`;
           }).join('')}
@@ -1334,7 +1332,7 @@ function renderUsersList() {
       <div style="padding:10px 0;border-bottom:1px solid #333">
         <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
           <div>
-            <span style="color:#fff">${email}</span>
+            <span style="color:#fff">${esc(email)}</span>
             <span style="margin-left:8px">${statusBadge}</span>
             <div class="muted" style="font-size:11px">Last login: ${lastLogin}</div>
           </div>
@@ -1444,7 +1442,7 @@ async function banUser(email) {
 async function unbanUser(email) {
   if (!confirm(`Unban ${email}?`)) return;
 
-  const success = await removeUserFromWhitelist(email);
+  const success = await updateUserInWhitelist(email, { status: 'active' });
   if (success) {
     showToast(`${email} unbanned`, 'success');
     await loadWhitelist();
@@ -1505,15 +1503,15 @@ function showAssignDeviceDialog(email) {
 
   const options = availableDevices.map(d => {
     const shortId = d.device_id.replace('Polivalka-', '');
-    const name = d.name && d.name !== d.device_id ? ` (${d.name})` : '';
+    const name = d.name && d.name !== d.device_id ? ` (${esc(d.name)})` : '';
     // Value uses full format, display uses short
-    return `<option value="${d.device_id}">${shortId}${name}</option>`;
+    return `<option value="${esc(d.device_id)}">${shortId}${name}</option>`;
   }).join('');
 
   modal.innerHTML = `
     <div style="background:#252540;padding:24px;border-radius:12px;min-width:300px;max-width:400px">
       <h3 style="color:#fff;margin:0 0 16px">Assign Device</h3>
-      <p style="color:#ccc;margin:0 0 16px">Select device for <strong>${email}</strong></p>
+      <p style="color:#ccc;margin:0 0 16px">Select device for <strong>${esc(email)}</strong></p>
       <select id="assign-device-select" style="width:100%;padding:12px;border-radius:8px;border:1px solid #555;background:#1a1a2e;color:#fff;font-size:16px;margin-bottom:16px">
         ${options}
       </select>
@@ -1642,7 +1640,7 @@ async function loadArchivedDevices() {
         <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid #333">
           <div>
             <span class="mono" style="color:#ff9800">${shortId}</span>
-            <span class="muted" style="margin-left:8px">${d.name && d.name !== d.device_id ? d.name : ''}</span>
+            <span class="muted" style="margin-left:8px">${d.name && d.name !== d.device_id ? esc(d.name) : ''}</span>
             <div class="muted" style="font-size:11px">Archived: ${date}</div>
           </div>
           <button onclick="restoreArchived('${d.device_id}')" style="font-size:12px;padding:4px 8px">Restore</button>
@@ -1676,7 +1674,7 @@ async function loadDeletedDevices() {
         <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid #333">
           <div>
             <span class="mono" style="color:#f44">${shortId}</span>
-            <span class="muted" style="margin-left:8px">${d.name && d.name !== d.device_id ? d.name : ''}</span>
+            <span class="muted" style="margin-left:8px">${d.name && d.name !== d.device_id ? esc(d.name) : ''}</span>
             <div class="muted" style="font-size:11px">Deleted: ${date}</div>
           </div>
           <button onclick="restoreDeleted('${d.device_id}')" style="font-size:12px;padding:4px 8px">Restore</button>
