@@ -80,6 +80,10 @@
 <h3>📊 Device Stats</h3>
 <div class="info-list">
 <div class="info-row"><span class="info-label">Firmware</span><span class="info-value" id="stat-firmware">—</span></div>
+<div class="info-row"><span class="info-label">Plant</span><span class="info-value" id="stat-plant" style="color:#81c784">—</span></div>
+<div class="info-row" id="stat-plant-details" style="display:none;padding-left:16px;border-bottom:none">
+  <span class="muted" style="font-size:11px" id="stat-plant-extra"></span>
+</div>
 </div>
 
 <div class="section-header" style="margin-top:16px">Restarts</div>
@@ -613,13 +617,27 @@ async function loadDeviceConfig() {
         document.getElementById('stat-total-water').textContent = device.total_water_ml ? device.total_water_ml.toLocaleString() + ' ml' : '— ml';
         document.getElementById('stat-pump-runtime').textContent = device.pump_runtime_sec ? device.pump_runtime_sec.toLocaleString() + ' sec' : '— sec';
 
-        console.log('[Admin] Loaded device stats:', {
-          firmware: device.firmware_version,
-          clean_restarts: device.clean_restarts,
-          unexpected_restarts: device.unexpected_restarts,
-          total_water_ml: device.total_water_ml,
-          pump_runtime_sec: device.pump_runtime_sec
-        });
+        // Plant info
+        const plant = device.plant;
+        const plantEl = document.getElementById('stat-plant');
+        const plantDetails = document.getElementById('stat-plant-details');
+        const plantExtra = document.getElementById('stat-plant-extra');
+        if (plant) {
+          const name = plant.common_name || plant.scientific || 'Unknown';
+          plantEl.textContent = name;
+          plantEl.style.color = plant.archived ? '#ff9800' : '#81c784';
+          let extra = plant.preset || 'Standard';
+          if (plant.started_at) {
+            extra += ' • since ' + new Date(plant.started_at * 1000).toLocaleDateString();
+          }
+          if (plant.archived) extra += ' • ARCHIVED';
+          plantExtra.textContent = extra;
+          plantDetails.style.display = 'block';
+        } else {
+          plantEl.textContent = 'No plant attached';
+          plantEl.style.color = '#666';
+          plantDetails.style.display = 'none';
+        }
       }
     }
   } catch(e) {
@@ -691,6 +709,10 @@ async function loadDeviceHistoryUI(deviceId) {
       icon = '🔄';
       const details = e.details || 'Unknown';
       text = `Plant assigned: <span style="color:#64b5f6">${details}</span> by ${email}`;
+    } else if (e.event === 'plant_detached') {
+      icon = '🔌';
+      const plantName = e.details || 'Unknown';
+      text = `Plant detached: <span style="color:#999">${plantName}</span> by ${email}`;
     }
     return `<div style="padding:8px 0;border-bottom:1px solid #444;display:flex;justify-content:space-between;align-items:center">
       <span style="color:#fff;font-size:14px">${icon} ${text}</span>
