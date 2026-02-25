@@ -153,10 +153,11 @@
   <div id="device-status" class="card" style="border-left:4px solid #ccc">
     <div id="status-empty" style="display:flex;align-items:center;gap:12px">
       <div style="font-size:28px;opacity:0.4">🪴</div>
-      <div>
+      <div style="flex:1">
         <div style="font-weight:600;font-size:15px;color:#999">No plant attached</div>
-        <div style="font-size:12px;color:#aaa">Identify a plant below or assign from library</div>
+        <div style="font-size:12px;color:#aaa">Take a photo to identify, or pick from library</div>
       </div>
+      <button class="primary" onclick="document.getElementById('step-upload').scrollIntoView({behavior:'smooth'})" style="font-size:13px;padding:6px 14px;white-space:nowrap">📷 Identify</button>
     </div>
     <div id="status-attached" style="display:none;align-items:center;gap:8px">
       <span style="font-size:22px">🌿</span>
