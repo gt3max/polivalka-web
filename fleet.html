@@ -260,8 +260,8 @@
 
     <!-- Action Buttons -->
     <div style="margin-bottom:12px;display:flex;justify-content:flex-end;gap:8px">
-      <a href="identify.html" style="text-decoration:none"><button style="padding:8px 16px;font-size:14px">🌿 Identify Plant</button></a>
       <button class="primary" onclick="showClaimModal()" style="padding:8px 16px;font-size:14px">➕ Add Device</button>
+      <a href="identify.html" style="text-decoration:none"><button class="primary" style="padding:8px 16px;font-size:14px">🌿 Identify Plant</button></a>
     </div>
 
     <!-- Admin Controls (only for admin) - compact single line -->
@@ -685,9 +685,6 @@ function renderDevices(devices) {
   const container = document.getElementById('device-grid');
   container.innerHTML = '';
 
-  // Plant link: always device-independent (device chosen at save time)
-  document.getElementById('plant-link').href = 'identify.html';
-
   // Update container class based on view mode
   container.className = currentView === 'list' ? 'device-list' : 'device-grid';
 
@@ -700,7 +697,7 @@ function renderDevices(devices) {
         <p class="muted" style="margin:0 0 20px">Add your first device or try our Plant Recognition!</p>
         <div style="display:flex;gap:12px;justify-content:center;flex-wrap:wrap">
           <button class="primary" onclick="showClaimModal()" style="padding:12px 24px">➕ Add Device</button>
-          <a href="identify.html" style="text-decoration:none"><button style="padding:12px 24px">🌿 Identify Plant</button></a>
+          <a href="identify.html" style="text-decoration:none"><button class="primary" style="padding:12px 24px">🌿 Identify Plant</button></a>
         </div>
       </div>
     `;
