@@ -669,10 +669,10 @@ function renderPlantLibrary(plants) {
   }
 
   listDiv.innerHTML = libraryPlants.map(plant => {
-    const archivedBadge = plant.archived ? '<span style="background:#ff9800;color:#fff;font-size:10px;padding:1px 4px;border-radius:4px;margin-left:4px">Archived</span>' : '';
+    const deletedBadge = plant.deleted ? '<span style="background:#f44336;color:#fff;font-size:10px;padding:1px 4px;border-radius:4px;margin-left:4px">Deleted</span>' : '';
+    const archivedBadge = !plant.deleted && plant.archived ? '<span style="background:#ff9800;color:#fff;font-size:10px;padding:1px 4px;border-radius:4px;margin-left:4px">Archived</span>' : '';
     const activeBadge = plant.active ? '<span style="background:#4caf50;color:#fff;font-size:10px;padding:1px 4px;border-radius:4px;margin-left:4px">Active</span>' : '';
-    const isAdminOwner = plant.owner === 'Admin';
-    const ownerBadge = plant.owner ? `<span style="background:${isAdminOwner ? '#2c5f2d' : '#2196f3'};color:#fff;font-size:10px;padding:1px 4px;border-radius:4px;margin-left:4px">${plant.owner}</span>` : '';
+    const ownerBadge = plant.owner ? `<span style="background:#2196f3;color:#fff;font-size:10px;padding:1px 4px;border-radius:4px;margin-left:4px">${plant.owner}</span>` : '';
     const deviceLabel = plant.device_id.replace('Polivalka-', '');
 
     // Show device + time period
@@ -685,31 +685,36 @@ function renderPlantLibrary(plants) {
       timeInfo = ` • since ${new Date(plant.started_at * 1000).toLocaleDateString()}`;
     }
 
+    const isDeleted = plant.deleted;
     return `
-      <div class="library-item" style="display:flex;gap:12px;padding:10px;border:1px solid #ddd;border-radius:8px;align-items:center;cursor:pointer;transition:all 0.2s"
-           onclick="assignPlantFromLibrary('${plant.plant_id}')"
-           onmouseover="this.style.borderColor='#2c5f2d';this.style.background='#f9fff9'"
-           onmouseout="this.style.borderColor='#ddd';this.style.background='#fff'">
+      <div class="library-item" style="display:flex;gap:12px;padding:10px;border:1px solid ${isDeleted ? '#ffcdd2' : '#ddd'};border-radius:8px;align-items:center;${isDeleted ? 'opacity:0.6;' : 'cursor:pointer;'}transition:all 0.2s"
+           ${isDeleted ? '' : `onclick="assignPlantFromLibrary('${plant.plant_id}')"`}
+           ${isDeleted ? '' : 'onmouseover="this.style.borderColor=\'#2c5f2d\';this.style.background=\'#f9fff9\'"'}
+           ${isDeleted ? '' : 'onmouseout="this.style.borderColor=\'#ddd\';this.style.background=\'#fff\'"'}>
         <img src="${plant.image_url || ''}" style="width:50px;height:50px;border-radius:8px;object-fit:cover;background:#f0f0f0"
              data-wiki-names='${JSON.stringify([plant.scientific, plant.family].filter(Boolean).map(n => encodeURIComponent(n.replace(/ /g, "_"))))}'
              onerror="wikiImgFallback(this)">
         <div style="flex:1;min-width:0">
           <div style="font-weight:600;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">
-            ${plant.common_name || plant.scientific}${ownerBadge}${archivedBadge}${activeBadge}
+            ${plant.common_name || plant.scientific}${ownerBadge}${deletedBadge}${archivedBadge}${activeBadge}
           </div>
           <div style="font-size:12px;color:#666">${plant.preset || 'Standard'} • 📟 ${deviceLabel}${timeInfo}</div>
         </div>
         <div style="display:flex;align-items:center;gap:8px">
-          ${plant.archived && plant.started_at && plant.ended_at && plant.device_id ? `<a href="trends.html?device=${encodeURIComponent(plant.device_id)}&start=${plant.started_at}&end=${plant.ended_at}&plant_name=${encodeURIComponent(plant.common_name || plant.scientific || '')}"
+          ${!isDeleted && plant.archived && plant.started_at && plant.ended_at && plant.device_id ? `<a href="trends.html?device=${encodeURIComponent(plant.device_id)}&start=${plant.started_at}&end=${plant.ended_at}&plant_name=${encodeURIComponent(plant.common_name || plant.scientific || '')}"
                   onclick="event.stopPropagation()"
                   style="background:none;border:none;cursor:pointer;font-size:16px;padding:4px;opacity:0.5;transition:opacity 0.2s;text-decoration:none"
                   onmouseover="this.style.opacity='1'" onmouseout="this.style.opacity='0.5'"
                   title="View archived trends">📊</a>` : ''}
-          <button onclick="event.stopPropagation();deleteLibraryPlant('${plant.plant_id}','${plant.device_id}','${(plant.common_name || plant.scientific || '').replace(/'/g, "\\'")}')"
+          ${isDeleted ? `<button onclick="event.stopPropagation();unarchivePlant('${plant.plant_id}','${plant.device_id}')"
                   style="background:none;border:none;cursor:pointer;font-size:16px;padding:4px;opacity:0.5;transition:opacity 0.2s"
                   onmouseover="this.style.opacity='1'" onmouseout="this.style.opacity='0.5'"
-                  title="Remove from library">🗑️</button>
-          <div style="color:#2c5f2d;font-size:18px">→</div>
+                  title="Restore plant">♻️</button>` :
+            `<button onclick="event.stopPropagation();deleteLibraryPlant('${plant.plant_id}','${plant.device_id}','${(plant.common_name || plant.scientific || '').replace(/'/g, "\\'")}')"
+                  style="background:none;border:none;cursor:pointer;font-size:16px;padding:4px;opacity:0.5;transition:opacity 0.2s"
+                  onmouseover="this.style.opacity='1'" onmouseout="this.style.opacity='0.5'"
+                  title="Remove from library">🗑️</button>`}
+          ${isDeleted ? '' : '<div style="color:#2c5f2d;font-size:18px">→</div>'}
         </div>
       </div>
     `;
