@@ -1567,9 +1567,9 @@ function hideError() {
 
 // ============ Helpers ============
 function getDeviceId() {
-  // Get from URL or localStorage
+  // Only from URL param — localStorage fallback removed to support standalone mode
   const params = new URLSearchParams(window.location.search);
-  return params.get('device') || localStorage.getItem('selected_device_id');
+  return params.get('device');
 }
 
 console.log('[Identify] Script loaded');
