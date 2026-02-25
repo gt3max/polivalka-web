@@ -373,23 +373,10 @@
         ✓ Use This Plant
       </button>
     </div>
-    <div id="no-device-section" style="display:none">
-      <!-- Device picker (shown when user has devices but no ?device= param) -->
-      <div id="device-picker" style="display:none;margin-bottom:12px">
-        <label style="font-weight:600;font-size:14px;display:block;margin-bottom:6px">Save to device:</label>
-        <select id="device-select" style="width:100%;padding:12px;font-size:15px;border:2px solid #c5e1a5;border-radius:8px;background:#fff"></select>
-        <button class="primary" onclick="confirmPlantWithDevice()" style="width:100%;padding:14px;font-size:16px;margin-top:10px">
-          ✓ Use This Plant
-        </button>
-      </div>
-      <!-- Promo (shown when user has no devices at all) -->
-      <div id="no-device-promo" style="display:none">
-        <div style="background:#f1f8e9;border:1px solid #c5e1a5;border-radius:12px;padding:16px;text-align:center">
-          <div style="font-size:32px;margin-bottom:8px">🌿</div>
-          <div style="font-weight:600;font-size:15px;margin-bottom:6px">Get a Polivalka device</div>
-          <div style="font-size:13px;color:#555;margin-bottom:12px">Save plant profiles, automate watering, and track soil moisture — all from your phone.</div>
-          <a href="fleet.html" style="text-decoration:none"><button class="primary" style="padding:12px 24px;font-size:14px">Go to My Devices</button></a>
-        </div>
+    <div id="no-device-info" style="display:none">
+      <div style="background:#f1f8e9;border:1px solid #c5e1a5;border-radius:12px;padding:16px;text-align:center">
+        <div style="font-size:13px;color:#555">To bind this plant to a device, open the device and identify from there.</div>
+        <a href="fleet.html" style="text-decoration:none"><button style="padding:10px 20px;font-size:14px;margin-top:10px">← Back to My Devices</button></a>
       </div>
     </div>
   </div>
@@ -1549,14 +1536,9 @@ function showStep(step) {
 
   if (step === 'card') {
     document.getElementById('step-card').classList.add('visible');
-    if (getDeviceId()) {
-      document.getElementById('plant-actions').style.display = '';
-      document.getElementById('no-device-section').style.display = 'none';
-    } else {
-      document.getElementById('plant-actions').style.display = 'none';
-      document.getElementById('no-device-section').style.display = 'block';
-      loadDevicePicker();
-    }
+    const hasDevice = !!getDeviceId();
+    document.getElementById('plant-actions').style.display = hasDevice ? '' : 'none';
+    document.getElementById('no-device-info').style.display = hasDevice ? 'none' : 'block';
   }
 }
 
@@ -1588,87 +1570,6 @@ function getDeviceId() {
   // Get from URL or localStorage
   const params = new URLSearchParams(window.location.search);
   return params.get('device') || localStorage.getItem('selected_device_id');
-}
-
-// ============ Device Picker (no-device mode) ============
-async function loadDevicePicker() {
-  try {
-    const resp = await API.fetchGlobal('/devices');
-    const data = await resp.json();
-    const devices = (data.devices || []).filter(d => d.device_id);
-
-    if (devices.length === 0) {
-      document.getElementById('device-picker').style.display = 'none';
-      document.getElementById('no-device-promo').style.display = 'block';
-      return;
-    }
-
-    document.getElementById('device-picker').style.display = 'block';
-    document.getElementById('no-device-promo').style.display = 'none';
-
-    const select = document.getElementById('device-select');
-    select.innerHTML = devices.map(d => {
-      const name = d.device_name || d.device_id;
-      const label = name !== d.device_id ? `${name} (${d.device_id})` : d.device_id;
-      return `<option value="${d.device_id}">${label}</option>`;
-    }).join('');
-
-  } catch (err) {
-    console.error('[Identify] Load devices error:', err);
-    document.getElementById('device-picker').style.display = 'none';
-    document.getElementById('no-device-promo').style.display = 'block';
-  }
-}
-
-async function confirmPlantWithDevice() {
-  const select = document.getElementById('device-select');
-  const deviceId = select.value;
-  if (!deviceId) return;
-
-  // Save plant to selected device (profile only, no device commands)
-  if (!selectedPlant || !selectedResult) return;
-
-  const btn = document.querySelector('#device-picker button');
-  const originalText = btn.textContent;
-  btn.disabled = true;
-  btn.textContent = 'Saving...';
-
-  const care = selectedResult.care || {};
-  const toxicity = selectedResult.toxicity || {};
-  const plantData = {
-    scientific: selectedPlant.scientific,
-    common_name: selectedPlant.names?.en || selectedPlant.scientific,
-    family: selectedPlant.family,
-    preset: care.preset || 'standard',
-    start_pct: care.start_pct || 35,
-    stop_pct: care.stop_pct || 55,
-    poisonous_to_humans: toxicity.poisonous_to_humans,
-    poisonous_to_pets: toxicity.poisonous_to_pets,
-    toxicity_note: toxicity.toxicity_note,
-    image_url: selectedPlant.wikiImage || selectedPlant.photos?.[0] || ''
-  };
-
-  try {
-    const response = await API.fetchGlobal('/plants/save', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ device_id: deviceId, plant: plantData })
-    });
-    const data = await response.json();
-
-    if (data.success) {
-      showToast('Plant saved!', 'success');
-      btn.textContent = '✓ Saved!';
-      setTimeout(() => loadPlantLibrary(), 1000);
-    } else {
-      throw new Error(data.error || 'Save failed');
-    }
-  } catch (err) {
-    console.error('Save error:', err);
-    showToast(err.message || 'Failed to save', 'error');
-    btn.disabled = false;
-    btn.textContent = originalText;
-  }
 }
 
 console.log('[Identify] Script loaded');
