@@ -2379,9 +2379,14 @@ def send_device_command(device_id, user_id, body):
             return {'statusCode': 400, 'headers': cors_headers(),
                     'body': json.dumps({'error': 'Missing group parameter'})}
 
+        # Restart counters reset = admin-only (diagnostic data)
+        if group == 'restarts' and user_id not in ADMIN_EMAILS:
+            return {'statusCode': 403, 'headers': cors_headers(),
+                    'body': json.dumps({'error': 'Admin access required'})}
+
         try:
             if group == 'pump':
-                # Reset pump stats in DynamoDB
+                # Reset pump stats in DynamoDB (available to device owner)
                 devices_table.update_item(
                     Key={'user_id': user_id, 'device_id': device_id},
                     UpdateExpression='SET total_water_ml = :zero, pump_runtime_sec = :zero',
