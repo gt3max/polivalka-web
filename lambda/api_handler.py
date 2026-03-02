@@ -5046,7 +5046,7 @@ def get_device_logs(device_id, user_id):
             'device_id': device_id,
             'command_id': command_id,
             'command': 'get_logs',
-            'params': {'limit': 50},  # Request last 50 logs
+            'params': {'limit': 15},  # Request last 15 logs (MQTT out_size=2048)
             'status': 'pending',
             'created_at': int(time.time()),
             'ttl': int(time.time()) + 604800  # 7 days TTL
@@ -5057,7 +5057,7 @@ def get_device_logs(device_id, user_id):
     mqtt_payload = {
         'command_id': command_id,
         'command': 'get_logs',
-        'params': {'limit': 50}
+        'params': {'limit': 15}
     }
 
     mac_address = device_id.replace('Polivalka-', '')
