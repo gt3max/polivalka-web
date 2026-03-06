@@ -95,12 +95,16 @@ document.getElementById('s2-live-moisture').textContent=s2pct+'%';}
 if(s.sensor2_calib){
 document.getElementById('s2-calib').textContent='adc_dry='+s.sensor2_calib.dry+'  adc_wet='+s.sensor2_calib.wet;
 const s2badge=document.getElementById('sensor2-cal-badge');
-if(s.sensor2_calibrated){s2badge.textContent='✓ Calibrated';s2badge.style.background='#e8f5e9';s2badge.style.color='#2e7d32';}
+const s2Count=Object.values(s2Done).filter(Boolean).length;
+if(s2Count>0&&s2Count<2){s2badge.textContent='⚠️ '+s2Count+'/2';s2badge.style.background='#fff3e0';s2badge.style.color='#f57c00';}
+else if(s.sensor2_calibrated){s2badge.textContent='✓ Calibrated';s2badge.style.background='#e8f5e9';s2badge.style.color='#2e7d32';}
 else{s2badge.textContent='⚠️ Presets';s2badge.style.background='#fff3e0';s2badge.style.color='#f57c00';}}
 const air=s.calib.adc_air;const water=s.calib.adc_water;const soil=s.calib.adc_dry_soil;
 document.getElementById('calib').textContent=`adc_air=${air}  adc_water=${water}  adc_dry_soil=${soil||'—'}`;
 const sensorBadge=document.getElementById('sensor-cal-badge');
-if(s.sensor_calibrated){sensorBadge.textContent='✓ Calibrated';sensorBadge.style.background='#e8f5e9';sensorBadge.style.color='#2e7d32';}
+const capCount=Object.values(capDone).filter(Boolean).length;
+if(capCount>0&&capCount<3){sensorBadge.textContent='⚠️ '+capCount+'/3';sensorBadge.style.background='#fff3e0';sensorBadge.style.color='#f57c00';}
+else if(s.sensor_calibrated){sensorBadge.textContent='✓ Calibrated';sensorBadge.style.background='#e8f5e9';sensorBadge.style.color='#2e7d32';}
 else{sensorBadge.textContent='⚠️ Presets';sensorBadge.style.background='#fff3e0';sensorBadge.style.color='#f57c00';}
 // Warning only for user-calibrated values (not presets)
 if(s.sensor_calibrated&&air!==null&&soil!==null&&air!=='—'&&soil!=='—'){
@@ -122,25 +126,25 @@ try{const t=await API.get('/time/status');
 const timeEl=document.getElementById('header-time');
 if(t.time_set&&t.current_time){timeEl.textContent=t.current_time.substring(11,16);timeEl.className='mono ok';}
 else{timeEl.textContent='--:--';timeEl.className='mono danger';}}catch(e){}}
+// Session tracking: which calibration points were done
+var capDone={air:false,water:false,soil:false};
+var s2Done={dry:false,wet:false};
 async function calib(kind){
 document.getElementById('btn-air').disabled=true;document.getElementById('btn-water').disabled=true;
 document.getElementById('btn-soil').disabled=true;const CAL_SEC=2;
 for(let t=CAL_SEC;t>0;t--){await new Promise(r=>setTimeout(r,1000));}
 try {
   if (IS_CLOUD) {
-    // Cloud: use MQTT command
     await API.post('/command', {command: 'calibrate_sensor', params: {type: kind}});
-    // Wait longer for MQTT propagation + ESP32 response + DynamoDB update
     await new Promise(r=>setTimeout(r,4000));
   } else {
-    // Local: direct ESP32 API
     const params={'air':'dry=1','water':'wet=1','soil':'soil=1'};
     await fetch('/api/calibrate?'+params[kind]+'&hold='+(CAL_SEC*1000),{cache:'no-store'});
   }
 } catch(e) { console.error('Calibration error:', e); }
+capDone[kind]=true;
 document.getElementById('btn-air').disabled=false;document.getElementById('btn-water').disabled=false;
 document.getElementById('btn-soil').disabled=false;
-// Force fresh data fetch after calibration
 await loadAllData();}
 async function resetCalib(){
   try {
@@ -151,6 +155,7 @@ async function resetCalib(){
       await fetch('/api/reset',{cache:'no-store'});
     }
   } catch(e) { console.error('Reset error:', e); }
+  capDone={air:false,water:false,soil:false};
   await loadAllData();
 }
 // Sensor 2 (Resistive) functions - Cloud mode: data comes from main status, no separate endpoints
@@ -166,7 +171,9 @@ try{
     const settings=await API.get('/sensor2/settings');
     document.getElementById('s2-calib').textContent='adc_dry='+settings.dry+'  adc_wet='+settings.wet;
     const badge=document.getElementById('sensor2-cal-badge');
-    if(settings.calibrated){badge.textContent='✓ Calibrated';badge.style.background='#e8f5e9';badge.style.color='#2e7d32';}
+    const s2c=Object.values(s2Done).filter(Boolean).length;
+    if(s2c>0&&s2c<2){badge.textContent='⚠️ '+s2c+'/2';badge.style.background='#fff3e0';badge.style.color='#f57c00';}
+    else if(settings.calibrated){badge.textContent='✓ Calibrated';badge.style.background='#e8f5e9';badge.style.color='#2e7d32';}
     else{badge.textContent='⚠️ Presets';badge.style.background='#fff3e0';badge.style.color='#f57c00';}
   }
 }catch(e){console.log('Sensor2 data from main status in cloud mode');}}
@@ -189,6 +196,7 @@ try{
 if(IS_CLOUD){await API.post('/command',{command:'sensor2_calibrate_'+kind,params:{}});await new Promise(r=>setTimeout(r,4000));}
 else{await fetch('/api/sensor2/calibrate?'+kind+'=1',{cache:'no-store'});}
 }catch(e){console.error('Calib2 error:',e);}
+s2Done[kind]=true;
 document.getElementById('btn-s2-dry').disabled=false;document.getElementById('btn-s2-wet').disabled=false;
 loadSensor2Data();}
 async function resetCalib2(){
@@ -196,6 +204,7 @@ try{
 if(IS_CLOUD){await API.post('/command',{command:'reset_sensor2_calibration',params:{}});await new Promise(r=>setTimeout(r,4000));}
 else{await fetch('/api/sensor2/reset',{cache:'no-store'});}
 }catch(e){console.error('Reset2 error:',e);}
+s2Done={dry:false,wet:false};
 loadSensor2Data();}
 async function loadPumpCalibration(){
 try{const s=await API.get('/pump/status');
