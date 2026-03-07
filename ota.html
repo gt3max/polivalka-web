@@ -33,9 +33,6 @@
     .file-info{margin:12px 0;padding:12px;background:#e8f5e9;border-radius:8px;font-size:14px}
     .progress-bar{width:100%;height:24px;background:#f0f0f0;border-radius:8px;overflow:hidden;margin:12px 0}
     .progress-fill{height:100%;background:#2c5f2d;transition:width 0.3s;display:flex;align-items:center;justify-content:center;color:#fff;font-size:13px;font-weight:600}
-    .status-msg{margin:12px 0;padding:12px;border-radius:8px;font-size:14px}
-    .status-msg.success{background:#e8f5e9;color:#2e7d32;border:1px solid #2e7d32}
-    .status-msg.error{background:#ffebee;color:#c62828;border:1px solid #c62828}
     .warning-box{background:#fff3cd;padding:12px;border-radius:8px;font-size:13px;color:#856404;border:1px solid #ffc107}
 </style>
 </head><body><div class="header"><div><h1 id="device-id-header" style="margin:0;font-size:15px">🌱 Polivalka</h1><div style="font-size:13px">📍 <span id="location-text">—</span> / <span id="room-text">—</span><span id="custom-name-suffix"></span></div><div style="font-size:11px;margin-top:4px"><span id="battery-status">🔋 —</span> · <span id="header-state">💤 Standby</span></div></div><div class="header-info"><div id="header-time" class="mono" style="font-size:11px">--:--</div><div style="font-size:11px" id="header-mode"><span id="mode-badge" class="status-badge">—</span></div><div style="font-size:11px" id="header-conn">📡 <span id="conn-text" style="transition:color 0.3s">...</span></div></div></div></div><div class="nav"><a href="fleet.html">Fleet</a><a href="home.html">Home</a><a href="identify.html" style="background:#e8f5e9">🌱 Plant</a><a href="timer.html">Timer</a><a href="sensor.html">Sensor</a><a href="settings.html">Settings</a><a href="calibration.html">Calibration</a><a href="online.html">Online</a><a href="trends.html">Trends</a><a href="ota.html" class="active">Update</a><a href="admin.html" id="admin-nav-link" style="display:none">Admin</a></div><div class="container">
@@ -75,7 +72,6 @@
 <div class="muted" style="text-align:center" id="progressText">Uploading firmware...</div>
 </div>
 
-<div class="status-msg" id="statusMsg" style="display:none"></div>
 </div>
 
 </div>
@@ -140,7 +136,7 @@ document.getElementById('fileInput').addEventListener('change', function(e) {
     selectedFile = file;
     showFileInfo(file);
   } else {
-    showStatus('Please select a .bin file', 'error');
+    showToast('Please select a .bin file', 'error');
   }
 });
 
@@ -161,7 +157,7 @@ uploadArea.addEventListener('drop', (e) => {
     selectedFile = file;
     showFileInfo(file);
   } else {
-    showStatus('Please select a .bin file', 'error');
+    showToast('Please select a .bin file', 'error');
   }
 });
 
@@ -185,11 +181,8 @@ async function startOTA() {
 
   const uploadBtn = document.getElementById('uploadBtn');
   const progressSection = document.getElementById('progressSection');
-  const statusMsg = document.getElementById('statusMsg');
-
   uploadBtn.disabled = true;
   progressSection.style.display = 'block';
-  statusMsg.style.display = 'none';
 
   try {
     updateProgress(10, 'Uploading to S3...');
@@ -214,7 +207,7 @@ async function startOTA() {
       let deviceResponse = null;
       for (let i = 0; i < 15; i++) {
         await new Promise(r => setTimeout(r, 2000));
-        updateProgress(60 + i * 2, `Waiting for device response... (${i*2}s)`);
+        updateProgress(60 + Math.floor(i * 10 / 15), `Waiting for device response... (${i*2}s)`);
         try {
           const cmdResult = await API.get(`/command/${cmdId}`);
           if (cmdResult.status === 'success') {
@@ -228,27 +221,28 @@ async function startOTA() {
       }
 
       if (deviceResponse && !deviceResponse.ok) {
-        showStatus(`❌ Device rejected OTA: ${deviceResponse.msg}`, 'error');
-        progressSection.style.display = 'none';
-        uploadBtn.disabled = false;
+        showToast(`Device rejected OTA: ${deviceResponse.msg}`, 'error');
+        resetOTAForm();
         return;
       } else if (deviceResponse && deviceResponse.ok) {
-        updateProgress(70, 'OTA accepted, waiting for reboot...');
-        // Verify actual firmware version after reboot
+        // Animate progress during reboot wait (70→93% over 30 seconds)
         const oldVersion = document.getElementById('current-version').textContent || 'unknown';
-        showStatus('⏳ Device is updating and rebooting... verifying firmware version.', 'success');
-        await new Promise(r => setTimeout(r, 30000)); // Wait 30s for reboot
+        for (let sec = 0; sec < 30; sec++) {
+          updateProgress(70 + Math.floor(sec * 23 / 30), `Device rebooting... (${30 - sec}s)`);
+          await new Promise(r => setTimeout(r, 1000));
+        }
+        // Verify actual firmware version after reboot (93→100%)
         let verified = false;
         for (let attempt = 0; attempt < 4; attempt++) {
-          updateProgress(75 + attempt * 5, `Verifying firmware... (attempt ${attempt + 1}/4)`);
+          updateProgress(93 + attempt * 2, `Verifying firmware... (attempt ${attempt + 1}/4)`);
           try {
             const timeoutP = new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 12000));
             const status = await Promise.race([API.get('/sensor'), timeoutP]);
             const newVer = status.firmware_version || 'unknown';
             if (newVer !== oldVersion && newVer !== 'unknown') {
               updateProgress(100, 'Update verified!');
-              showStatus(`✅ Firmware updated: ${oldVersion} → ${newVer}`, 'success');
               document.getElementById('current-version').textContent = newVer;
+              showToast(`Firmware updated: ${oldVersion} → ${newVer}`, 'success');
               verified = true;
               break;
             }
@@ -257,24 +251,23 @@ async function startOTA() {
         }
         if (!verified) {
           updateProgress(100, 'Update sent');
-          showStatus(`⏳ OTA accepted but could not verify new version yet. Device may still be rebooting. Current: ${oldVersion}`, 'success');
+          showToast(`OTA accepted but could not verify new version yet. Device may still be rebooting.`, 'warning');
         }
-        progressSection.style.display = 'none';
+        await new Promise(r => setTimeout(r, 2000));
+        resetOTAForm();
         return;
       }
     }
 
     // Timeout — no response from device
     updateProgress(100, 'Command sent');
-    showStatus('⚠️ OTA command sent but no response from device. It may be offline or updating.', 'error');
-    progressSection.style.display = 'none';
-    uploadBtn.disabled = false;
+    showToast('OTA command sent but no response from device. It may be offline or updating.', 'warning');
+    resetOTAForm();
 
   } catch(e) {
     console.error('[OTA] OTA failed:', e);
-    showStatus(`❌ Failed: ${e.message}`, 'error');
-    progressSection.style.display = 'none';
-    uploadBtn.disabled = false;
+    showToast(`OTA failed: ${e.message}`, 'error');
+    resetOTAForm();
   }
 }
 
@@ -308,11 +301,13 @@ function updateProgress(percent, text) {
   document.getElementById('progressText').textContent = text;
 }
 
-function showStatus(message, type) {
-  const el = document.getElementById('statusMsg');
-  el.innerHTML = message;
-  el.className = `status-msg ${type}`;
-  el.style.display = 'block';
+function resetOTAForm() {
+  document.getElementById('progressSection').style.display = 'none';
+  document.getElementById('progressFill').style.width = '0%';
+  document.getElementById('progressFill').textContent = '0%';
+  document.getElementById('uploadBtn').disabled = false;
+  document.getElementById('fileInfo').style.display = 'none';
+  selectedFile = null;
 }
 
 loadHeaderData();

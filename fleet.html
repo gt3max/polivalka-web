@@ -112,6 +112,13 @@
   .admin-controls{background:#e8eaf6;border:1px solid #3f51b5;border-radius:8px;padding:8px 12px;margin-bottom:12px}
   .admin-controls h3{margin:0;color:#3f51b5;font-size:14px;display:inline-block;margin-right:12px}
 
+  /* OTA status badge */
+  .ota-badge{display:none;font-size:11px;padding:2px 6px;border-radius:6px;font-weight:600;animation:pulse 1.5s infinite}
+  .ota-badge.sending{display:inline-block;background:#e3f2fd;color:#1976d2}
+  .ota-badge.rebooting{display:inline-block;background:#fff3e0;color:#f57c00}
+  .ota-badge.updated{display:inline-block;background:#e8f5e9;color:#2e7d32;animation:none}
+  .ota-badge.failed{display:inline-block;background:#ffebee;color:#c62828;animation:none}
+
   /* Animations */
   @keyframes pulse{
     0%,100%{opacity:1}
@@ -844,6 +851,7 @@ function createExpandableRow(device, isOnline, hasWarnings, isCritical) {
         ${automationControl}
         <span class="device-status" style="background:${stateBg};color:${stateColor}">${stateText}</span>
         <span class="device-status ${isOnline ? 'online' : 'offline'}">${isOnline ? '● Online' : '○ Offline'}</span>
+        <span class="ota-badge" id="ota-badge-${device.device_id}"></span>
       </div>
     </div>
 
@@ -1028,7 +1036,10 @@ function createDeviceCard(device) {
         <div class="device-name">🌱 ${device.device_id}</div>
         <div class="device-location">📍 ${device.location || 'Home'} / ${device.room || 'Room'}${cardPlantName ? ' / ' + cardPlantName : ''}</div>
       </div>
-      <div class="device-status ${isOnline ? 'online' : 'offline'}">${isOnline ? '● Online' : '○ Offline'}</div>
+      <div style="display:flex;gap:6px;align-items:center">
+        <span class="ota-badge" id="ota-card-${device.device_id}"></span>
+        <div class="device-status ${isOnline ? 'online' : 'offline'}">${isOnline ? '● Online' : '○ Offline'}</div>
+      </div>
     </div>
 
     <div style="margin:8px 0;display:flex;gap:8px;flex-wrap:wrap;align-items:center">
@@ -1574,6 +1585,24 @@ async function bulkAction(action) {
   }
 }
 
+function setDeviceOTABadge(deviceId, status, text) {
+  // Update both list and grid badges
+  ['ota-badge-', 'ota-card-'].forEach(prefix => {
+    const el = document.getElementById(prefix + deviceId);
+    if (el) {
+      el.className = 'ota-badge' + (status ? ' ' + status : '');
+      el.textContent = text || '';
+    }
+  });
+}
+
+function clearAllOTABadges() {
+  document.querySelectorAll('.ota-badge').forEach(el => {
+    el.className = 'ota-badge';
+    el.textContent = '';
+  });
+}
+
 // Mass OTA Update
 async function massOTAUpdate() {
   console.log('[OTA] massOTAUpdate started');
@@ -1653,6 +1682,7 @@ async function massOTAUpdate() {
       const commandIds = [];
       for (const device of onlineDevices) {
         try {
+          setDeviceOTABadge(device.device_id, 'sending', 'Sending...');
           console.log('[OTA] Triggering OTA for device:', device.device_id);
           showToast(`Sending to ${device.device_id}... (${completed+1}/${onlineDevices.length})`, 'info');
 
@@ -1664,6 +1694,7 @@ async function massOTAUpdate() {
         } catch(e) {
           console.error('[OTA] OTA trigger failed for', device.device_id, ':', e.message);
           results.push({device_id: device.device_id, success: false, error: e.message});
+          setDeviceOTABadge(device.device_id, 'failed', 'Failed');
         }
         completed++;
       }
@@ -1679,9 +1710,11 @@ async function massOTAUpdate() {
             if (cmdResult.status === 'success') {
               results.push({device_id: cmd.device_id, success: true});
               cmd.done = true;
+              setDeviceOTABadge(cmd.device_id, 'rebooting', 'Rebooting...');
             } else if (cmdResult.status === 'error') {
               results.push({device_id: cmd.device_id, success: false, error: cmdResult.message || 'Device rejected'});
               cmd.done = true;
+              setDeviceOTABadge(cmd.device_id, 'failed', 'Rejected');
             }
           } catch(e) { /* pending */ }
         }
@@ -1689,7 +1722,10 @@ async function massOTAUpdate() {
       }
       // Mark remaining as timeout
       for (const cmd of commandIds) {
-        if (!cmd.done) results.push({device_id: cmd.device_id, success: false, error: 'No response (timeout)'});
+        if (!cmd.done) {
+          results.push({device_id: cmd.device_id, success: false, error: 'No response (timeout)'});
+          setDeviceOTABadge(cmd.device_id, 'failed', 'Timeout');
+        }
       }
 
       // Step 4: Verify actual firmware versions
@@ -1717,6 +1753,7 @@ async function massOTAUpdate() {
               r.newVersion = newVersion;
               if (newVersion !== r.oldVersion) {
                 r.verified = true;
+                setDeviceOTABadge(r.device_id, 'updated', newVersion);
               }
             } catch(e) { /* device still rebooting or timeout */ }
           }));
@@ -1725,14 +1762,16 @@ async function massOTAUpdate() {
             await new Promise(r => setTimeout(r, pollInterval * 1000));
           }
         }
-        // Mark remaining unverified
+        // Mark remaining unverified and update badges
         for (const r of started) {
           if (!r.verified) {
             r.verified = false;
             if (!r.newVersion) {
               r.verifyError = 'Device not responding';
+              setDeviceOTABadge(r.device_id, 'failed', 'No response');
             } else {
               r.alreadyUpToDate = true;
+              setDeviceOTABadge(r.device_id, 'updated', r.newVersion);
             }
           }
         }
@@ -1744,30 +1783,13 @@ async function massOTAUpdate() {
       const unverified = results.filter(r => r.success && r.verified === false && !r.alreadyUpToDate).length;
       const rejected = results.filter(r => !r.success).length;
 
-      let resultMsg = '📦 OTA Update Results\n\n';
-      if (verified > 0) resultMsg += `✅ Updated: ${verified}\n`;
-      if (alreadyOk > 0) resultMsg += `✅ Already up to date: ${alreadyOk}\n`;
-      if (unverified > 0) resultMsg += `⏳ Pending verification: ${unverified}\n`;
-      if (rejected > 0) resultMsg += `❌ Rejected: ${rejected}\n`;
-      resultMsg += '\n';
-
-      results.filter(r => r.verified === true).forEach(r => {
-        resultMsg += `✅ ${r.device_id}: ${r.oldVersion} → ${r.newVersion}\n`;
+      console.log('[OTA] Results:', {verified, alreadyOk, unverified, rejected});
+      results.forEach(r => {
+        if (r.verified) console.log(`[OTA] ${r.device_id}: ${r.oldVersion} → ${r.newVersion}`);
+        else if (r.success && r.alreadyUpToDate) console.log(`[OTA] ${r.device_id}: Already on ${r.oldVersion}`);
+        else if (r.success) console.log(`[OTA] ${r.device_id}: Still ${r.oldVersion}`);
+        else console.log(`[OTA] ${r.device_id}: ${r.error}`);
       });
-      results.filter(r => r.success && r.verified === false).forEach(r => {
-        if (r.verifyError) {
-          resultMsg += `⏳ ${r.device_id}: Rebooting (${r.verifyError})\n`;
-        } else if (r.alreadyUpToDate) {
-          resultMsg += `✅ ${r.device_id}: Already on ${r.oldVersion}\n`;
-        } else {
-          resultMsg += `⚠️ ${r.device_id}: Still ${r.oldVersion} — OTA may have failed\n`;
-        }
-      });
-      results.filter(r => !r.success).forEach(r => {
-        resultMsg += `❌ ${r.device_id}: ${r.error}\n`;
-      });
-
-      alert(resultMsg);
 
       showToast(rejected > 0
         ? `⚠️ OTA: ${verified} updated, ${rejected} rejected`
@@ -1779,7 +1801,8 @@ async function massOTAUpdate() {
 
     } catch(e) {
       console.error('Mass OTA failed:', e);
-      showToast(`❌ Mass OTA failed: ${e.message}`, 'error');
+      showToast(`Mass OTA failed: ${e.message}`, 'error');
+      clearAllOTABadges();
     }
   };
 

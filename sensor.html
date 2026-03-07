@@ -92,9 +92,7 @@ function updateDeepWateringWarning(interval, lastTs, cyclesSince){
   const btn = document.getElementById('deep-mark-done-btn');
 
   if (interval === 0) {
-    warning.style.display = 'block';
-    text.textContent = 'Deep watering disabled (salt may accumulate)';
-    btn.style.display = 'inline-block';
+    warning.style.display = 'none';
     return;
   }
 
