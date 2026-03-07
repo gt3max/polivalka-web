@@ -954,7 +954,7 @@ function createDeviceCard(device) {
   // Use device.online from API (Lambda calculates with 45 min threshold)
   // Fallback to local calculation if device.online is missing (shouldn't happen)
   const isOnline = device.online !== undefined ? device.online :
-                   ((Date.now() - (device.last_update < 10000000000 ? device.last_update * 1000 : device.last_update)) < 45 * 60 * 1000);
+                   ((Date.now() - (device.last_update < 10000000000 ? device.last_update * 1000 : device.last_update)) < 90 * 60 * 1000);
   const hasWarnings = device.warnings.length > 0;
   const isCritical = (device.battery_pct !== null && device.battery_pct < 10) || (device.moisture_pct !== null && device.moisture_pct < 15);
 
