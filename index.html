@@ -2044,11 +2044,12 @@
             .showcase-text > p { margin-left: auto; margin-right: auto; }
             .sc-feats { align-items: center; }
             .sc-card-wrap { max-width: 480px; margin: 0 auto; }
-            .hero-columns { grid-template-columns: 1fr; max-width: 400px; margin: 0 auto; }
-            .hero-device-card { transform: none; }
+            .hero-columns { grid-template-columns: 1fr; max-width: 100%; margin: 0 auto; }
+            .hero-device-card { transform: none; max-height: 400px; }
             .hero-device-card:hover { transform: none; }
-            .hero-mockup { transform: none; max-width: 400px; margin: 0 auto; }
+            .hero-mockup { transform: none; }
             .hero-mockup:hover { transform: none; }
+            .hero-mockup-wrap { max-width: 100%; }
         }
 
         @media (max-width: 640px) {
@@ -2058,7 +2059,9 @@
             .hero h1 { letter-spacing: -1.5px; }
             .hero-ctas { flex-direction: column; align-items: center; }
             .hero-ctas .btn { width: 100%; max-width: 320px; }
-            .hero-mockup-wrap { margin-left: -8px; margin-right: -8px; }
+            .hero-columns { gap: 20px; }
+            .hero-mockup-wrap { margin-left: 0; margin-right: 0; }
+            .hero-mockup { padding: 12px; }
             .features, .how, .showcase { padding: 80px 16px; }
             .feat-visual { height: 140px; }
             .cta-section { padding: 100px 16px; }
