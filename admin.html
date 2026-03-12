@@ -1597,23 +1597,45 @@ async function unassignDevice(email, deviceId) {
   const fullId = deviceId.startsWith('Polivalka-') ? deviceId : `Polivalka-${deviceId}`;
   const shortId = fullId.replace('Polivalka-', '');
 
-  if (!confirm(`Unassign ${shortId} from ${email}?`)) return;
+  if (!confirm(`Unassign ${shortId} from ${email}?\n\nThis will revoke device access and return it to admin.`)) return;
 
-  const devices = whitelistData.users?.[email]?.devices || [];
-  // Filter using full format for comparison
-  const newDevices = devices.filter(d => d !== fullId);
-
-  const success = await updateUserInWhitelist(email, { devices: newDevices });
-  if (success) {
-    // Add to device history (full format)
-    await addDeviceHistoryEntry(fullId, {
-      event: 'unassigned',
-      from: email
+  // Try full revoke first (transfers device record back to admin, archives plant, updates whitelist)
+  try {
+    const res = await fetch(`${API.cloudBase}/admin/revoke-device`, {
+      method: 'POST',
+      headers: { ...API.getAuthHeaders(), 'Content-Type': 'application/json' },
+      body: JSON.stringify({ device_id: fullId, user_email: email })
     });
+    const data = await res.json();
 
-    showToast(`${shortId} unassigned`, 'success');
-    await loadWhitelist();
-    renderUsersList();
+    if (res.ok && data.success) {
+      // Full revoke succeeded — device record transferred to admin, whitelist updated, history logged
+      showToast(`${shortId} revoked from ${email}`, 'success');
+      await loadWhitelist();
+      renderUsersList();
+      return;
+    }
+
+    if (res.status === 404) {
+      // User never claimed — no device record exists. Just remove from whitelist.
+      console.log(`[Admin] No device record for ${email}/${fullId} — whitelist-only unassign`);
+      const devices = whitelistData.users?.[email]?.devices || [];
+      const newDevices = devices.filter(d => d !== fullId);
+      const success = await updateUserInWhitelist(email, { devices: newDevices });
+      if (success) {
+        await addDeviceHistoryEntry(fullId, { event: 'unassigned', from: email });
+        showToast(`${shortId} unassigned (not yet claimed)`, 'success');
+        await loadWhitelist();
+        renderUsersList();
+      }
+      return;
+    }
+
+    // Other error
+    throw new Error(data.error || data.message || `HTTP ${res.status}`);
+  } catch (e) {
+    console.error('[Admin] Unassign error:', e);
+    alert(`Failed to unassign ${shortId}: ${e.message}`);
   }
 }
 
