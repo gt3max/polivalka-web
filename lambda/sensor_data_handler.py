@@ -2,7 +2,7 @@
 AWS Lambda Function: Sensor Data Handler
 Retrieves sensor data history from DynamoDB
 
-Query: /sensor-data?device_id=BC67E9&days=7
+Query: /sensor-data?device_id=D4E5F6&days=7
 """
 
 import json
@@ -36,7 +36,7 @@ def lambda_handler(event, context):
 
     Response:
     {
-        "device_id": "BC67E9",
+        "device_id": "D4E5F6",
         "latest": {...},
         "history": [...],
         "count": 123

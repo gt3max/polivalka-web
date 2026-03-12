@@ -1198,7 +1198,7 @@ async function loadLongTermData() {
   error.style.display = 'none';
 
   try {
-    // Extract short device ID (BB00C1) from DEVICE_ID (Polivalka-BB00C1 or BB00C1)
+    // Extract short device ID (A1B2C3) from DEVICE_ID (Polivalka-A1B2C3 or A1B2C3)
     const shortId = DEVICE_ID.replace('Polivalka-', '');
     const url = `data/weekly/${shortId}.json`;
 

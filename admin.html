@@ -430,7 +430,7 @@ async function loadDeviceHistory() {
 
 async function loadDeviceHistoryFor(deviceId) {
   try {
-    // Use full device_id format (Polivalka-BC67E9) - standardized everywhere
+    // Use full device_id format (Polivalka-D4E5F6) - standardized everywhere
     const res = await fetch(`${API.cloudBase}/admin/history/${deviceId}`, {
       headers: API.getAuthHeaders(),
       cache: 'no-store'
@@ -446,7 +446,7 @@ async function loadDeviceHistoryFor(deviceId) {
 
 async function addDeviceHistoryEntry(deviceId, event) {
   try {
-    // Use full device_id format (Polivalka-BC67E9) - standardized everywhere
+    // Use full device_id format (Polivalka-D4E5F6) - standardized everywhere
     const res = await fetch(`${API.cloudBase}/admin/history`, {
       method: 'POST',
       headers: { ...API.getAuthHeaders(), 'Content-Type': 'application/json' },
@@ -1572,7 +1572,7 @@ function showAssignDeviceDialog(email) {
   });
 
   const availableDevices = allDevicesData.filter(d => {
-    // Compare using full device_id format (Polivalka-BC67E9)
+    // Compare using full device_id format (Polivalka-D4E5F6)
     return !assignedDevices.has(d.device_id);
   });
 
@@ -1629,7 +1629,7 @@ async function confirmAssignDevice() {
 }
 
 async function assignDevice(email, deviceId) {
-  // Use full device_id format: Polivalka-BC67E9 (standardized everywhere)
+  // Use full device_id format: Polivalka-D4E5F6 (standardized everywhere)
   const fullId = deviceId.startsWith('Polivalka-') ? deviceId : `Polivalka-${deviceId}`;
   const shortId = fullId.replace('Polivalka-', ''); // For display only
 
@@ -1680,7 +1680,7 @@ async function assignDevice(email, deviceId) {
 }
 
 async function unassignDevice(email, deviceId) {
-  // Normalize device_id format: Polivalka-BC67E9 (standardized everywhere)
+  // Normalize device_id format: Polivalka-D4E5F6 (standardized everywhere)
   const fullId = deviceId.startsWith('Polivalka-') ? deviceId : `Polivalka-${deviceId}`;
   const shortId = fullId.replace('Polivalka-', '');
 

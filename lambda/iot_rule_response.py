@@ -131,7 +131,7 @@ def lambda_handler(event, context):
 
     print(f"Received event: {json.dumps(event)}")
 
-    # ESP32 sends: {"device_id": "BB00C1", "response": {"command_id": ..., "status": ..., "moisture": 67, ...}, "timestamp": ...}
+    # ESP32 sends: {"device_id": "A1B2C3", "response": {"command_id": ..., "status": ..., "moisture": 67, ...}, "timestamp": ...}
     # Handle both nested (SELECT *) and flat (IoT Rule extracts fields) formats
     if 'response' in event and isinstance(event['response'], dict):
         # Nested format: IoT Rule passes raw MQTT message

@@ -24,16 +24,16 @@ def lambda_handler(event, context):
 
     Event structure (from IoT Rule):
     {
-        "topic": "Polivalka/BB00C1/system",
-        "device_id": "BB00C1",  # extracted by IoT Rule SQL
+        "topic": "Polivalka/A1B2C3/system",
+        "device_id": "A1B2C3",  # extracted by IoT Rule SQL
         "data": {...}  # system message payload
     }
     """
 
     try:
         # Extract device_id from event
-        # СТАНДАРТ: device_id ВСЕГДА должен быть "Polivalka-BC67E9"
-        # IoT Rule может передать "BB00C1" (из topic(2)) или "Polivalka-BB00C1" (из payload)
+        # СТАНДАРТ: device_id ВСЕГДА должен быть "Polivalka-D4E5F6"
+        # IoT Rule может передать "A1B2C3" (из topic(2)) или "Polivalka-A1B2C3" (из payload)
         raw_device_id = event.get('device_id', '')
 
         # Нормализация: добавляем префикс если его нет
@@ -62,7 +62,7 @@ def lambda_handler(event, context):
             return {'statusCode': 200, 'body': 'Device already registered'}
 
         # Get Thing attributes (location, room) from IoT Core
-        # ВАЖНО: Thing name = device_id (с дефисом!): "Polivalka-BC67E9"
+        # ВАЖНО: Thing name = device_id (с дефисом!): "Polivalka-D4E5F6"
         thing_name = device_id
         thing_attrs = {}
 
@@ -73,12 +73,12 @@ def lambda_handler(event, context):
             print(f"[WARN] Could not get Thing attributes: {e}")
 
         # Auto-register device
-        # device_id уже содержит префикс "Polivalka-BC67E9"
+        # device_id уже содержит префикс "Polivalka-D4E5F6"
         # Use sensible defaults for new devices
         devices_table.put_item(
             Item={
                 'user_id': 'admin',  # TODO: extract from invite code or Cognito
-                'device_id': device_id,  # "Polivalka-BC67E9"
+                'device_id': device_id,  # "Polivalka-D4E5F6"
                 'device_name': device_id,  # Same as device_id (display name)
                 'location': thing_attrs.get('location', 'Home'),  # Default: Home
                 'room': thing_attrs.get('room', 'Living Room'),  # Default: Living Room

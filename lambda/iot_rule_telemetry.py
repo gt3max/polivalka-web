@@ -10,7 +10,7 @@ Triggered by IoT Rules:
 
 Input (from MQTT):
   {
-    "device_id": "Polivalka-BB00C1",
+    "device_id": "Polivalka-A1B2C3",
     "timestamp": 1731586800,
     "sensor": {
       "moisture_percent": 45,
@@ -19,7 +19,7 @@ Input (from MQTT):
   }
 
 Output (to DynamoDB polivalka_telemetry):
-  PK: device_id = "Polivalka-BB00C1"
+  PK: device_id = "Polivalka-A1B2C3"
   SK: timestamp = 1731586800 (numeric)
   sensor: {moisture_percent: 45, adc_raw: 2340}  (data in ROOT, not nested)
   ttl: timestamp + 7 days
@@ -59,8 +59,8 @@ def lambda_handler(event, context):
     """Save MQTT telemetry to DynamoDB"""
 
     # Extract device_id from MQTT message
-    # СТАНДАРТ: device_id ВСЕГДА в формате "Polivalka-BC67E9" (с префиксом!)
-    device_id = event.get('device_id', '')  # "Polivalka-BB00C1"
+    # СТАНДАРТ: device_id ВСЕГДА в формате "Polivalka-D4E5F6" (с префиксом!)
+    device_id = event.get('device_id', '')  # "Polivalka-A1B2C3"
     timestamp = event.get('timestamp', 0)
 
     # FIX: If timestamp=0 (NTP not synced on ESP32), use Lambda's own time
@@ -399,7 +399,7 @@ def handle_config(event, device_id, timestamp):
 
     Expected format:
     {
-        "device_id": "Polivalka-BB00C1",
+        "device_id": "Polivalka-A1B2C3",
         "timestamp": 1731586800,
         "config_type": "timer",
         "schedules": [...]

@@ -39,11 +39,11 @@
       result.textContent = 'Starting pump...';
 
       try {
-        const url = API.getEndpoint('/device/Polivalka-BB00C1/pump?sec=3');
+        const url = API.getEndpoint('/device/Polivalka-A1B2C3/pump?sec=3');
         console.log('Fetching:', url);
         result.textContent += '\nURL: ' + url;
 
-        const response = await API.post('/device/Polivalka-BB00C1/pump?sec=3');
+        const response = await API.post('/device/Polivalka-A1B2C3/pump?sec=3');
         console.log('Success!', response);
         result.textContent = 'PUMP STARTED!\n\n' + JSON.stringify(response, null, 2);
       } catch (e) {

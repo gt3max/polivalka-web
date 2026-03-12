@@ -1,10 +1,10 @@
 {
-  "_comment": "JSON Schema for weekly device summaries. Each device has its own file: BB00C1.json",
+  "_comment": "JSON Schema for weekly device summaries. Each device has its own file: A1B2C3.json",
   "_updated": "2026-01-19",
   "_version": "1.0",
 
   "schema": {
-    "device_id": "BB00C1",
+    "device_id": "A1B2C3",
     "summaries": [
       {
         "week": "2026-W03",

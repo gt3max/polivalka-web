@@ -522,7 +522,7 @@ def put_github_file(path, content, sha=None, message=None):
 def update_device_weekly_data(device_id, week_summary):
     """Update weekly data file for a device"""
 
-    # Extract short ID (BB00C1 from Polivalka-BB00C1)
+    # Extract short ID (A1B2C3 from Polivalka-A1B2C3)
     short_id = device_id.replace('Polivalka-', '')
     file_path = f'data/weekly/{short_id}.json'
 

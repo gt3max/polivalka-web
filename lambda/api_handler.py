@@ -122,8 +122,8 @@ def validate_device_id(device_id):
     """
     Validate device_id format.
     Accepts:
-      - Short format: 6 uppercase hex characters (e.g., BC67E9, BB00C1)
-      - Full format: Polivalka-XXXXXX (e.g., Polivalka-BC67E9)
+      - Short format: 6 uppercase hex characters (e.g., D4E5F6, A1B2C3)
+      - Full format: Polivalka-XXXXXX (e.g., Polivalka-D4E5F6)
     Returns: (is_valid, error_message)
     """
     if not device_id:
@@ -726,7 +726,7 @@ def save_plant_profile(user_id, event, origin):
     POST /plants/save
     Save plant profile to device record.
     If device already has a plant — auto-detach it to plant_library (seamless).
-    Body: { device_id: "Polivalka-BB00C1", plant: {...} }
+    Body: { device_id: "Polivalka-A1B2C3", plant: {...} }
     """
     try:
         body = json.loads(event.get('body', '{}'))
@@ -1354,7 +1354,7 @@ def get_plant_profile(user_id, device_id, origin):
 
 
 def get_telemetry_device_id(device_id):
-    """Convert API device_id (BB00C1) to telemetry format (Polivalka-BB00C1)
+    """Convert API device_id (A1B2C3) to telemetry format (Polivalka-A1B2C3)
     ESP32 publishes telemetry with 'Polivalka-' prefix, but API uses short ID
     """
     if device_id.startswith('Polivalka-'):
@@ -2477,9 +2477,9 @@ def send_device_command(device_id, user_id, body):
     }
 
     # Topic format: {device_id}/command (device_id already contains "Polivalka-" prefix)
-    # ESP32 subscribes to: Polivalka/BB00C1/command
+    # ESP32 subscribes to: Polivalka/A1B2C3/command
     # So we need to extract MAC address from device_id and use it
-    # device_id format: "Polivalka-BB00C1" → use "Polivalka/BB00C1/command"
+    # device_id format: "Polivalka-A1B2C3" → use "Polivalka/A1B2C3/command"
     mac_address = device_id.replace('Polivalka-', '')
     topic = f'Polivalka/{mac_address}/command'
 
@@ -4302,7 +4302,7 @@ def admin_delete_claim(claim_id):
 def admin_get_history(device_id):
     """GET /admin/history/{device_id} - Get device history"""
     try:
-        # device_id format: "Polivalka-BC67E9" (standardized everywhere)
+        # device_id format: "Polivalka-D4E5F6" (standardized everywhere)
         history_table = dynamodb.Table('polivalka_admin_history')
 
         # Query all events for this device
@@ -4339,7 +4339,7 @@ def admin_add_history(event):
     """POST /admin/history - Add history entry"""
     try:
         body = json.loads(event.get('body', '{}'))
-        # device_id format: "Polivalka-BC67E9" (standardized everywhere)
+        # device_id format: "Polivalka-D4E5F6" (standardized everywhere)
         device_id = body.get('device_id', '')
         event_type = body.get('event')
         user_email = body.get('user_email')

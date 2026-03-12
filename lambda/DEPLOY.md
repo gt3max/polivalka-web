@@ -178,7 +178,7 @@ Test command endpoint:
 curl -X POST https://YOUR_API_ID.execute-api.us-east-1.amazonaws.com/command \
   -H "Content-Type: application/json" \
   -d '{
-    "device_id": "BC67E9",
+    "device_id": "D4E5F6",
     "command": {
       "action": "read_sensor"
     }
@@ -187,7 +187,7 @@ curl -X POST https://YOUR_API_ID.execute-api.us-east-1.amazonaws.com/command \
 
 Test sensor data endpoint:
 ```bash
-curl "https://YOUR_API_ID.execute-api.us-east-1.amazonaws.com/sensor-data?device_id=BC67E9&days=7"
+curl "https://YOUR_API_ID.execute-api.us-east-1.amazonaws.com/sensor-data?device_id=D4E5F6&days=7"
 ```
 
 ## Update Lambda Functions (after changes)

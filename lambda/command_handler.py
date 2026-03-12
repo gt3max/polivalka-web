@@ -20,7 +20,7 @@ def lambda_handler(event, context):
 
     Request body:
     {
-        "device_id": "BC67E9",
+        "device_id": "D4E5F6",
         "command": {
             "action": "water",
             "duration_sec": 10
@@ -31,7 +31,7 @@ def lambda_handler(event, context):
     {
         "status": "success",
         "command_id": "uuid",
-        "message": "Command sent to BC67E9"
+        "message": "Command sent to D4E5F6"
     }
     """
 
