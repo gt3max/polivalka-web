@@ -804,13 +804,19 @@ function renderInstructions(container) {
     <p>To change WiFi later: connect to the device's own network (Polivalka-XXXXXX) → 192.168.4.1 → Settings.</p>
 
     <h4>Watering Modes</h4>
-    <p><strong>Sensor Mode</strong> (recommended) — the device measures soil moisture and waters automatically when it drops below the threshold. Best for most plants.</p>
-    <p><strong>Timer Mode</strong> — watering on a fixed schedule. Use when sensor mode is not suitable or for simple setups.</p>
+    <p><strong>Sensor Mode</strong> (recommended) — the device measures soil moisture and waters automatically when it drops below the threshold. Requires the sensor to be inserted into the soil. Best for most plants.</p>
+    <p><strong>Timer Mode</strong> — watering on a fixed schedule. You set the times and duration, the device does the rest. Works with or without the sensor — simple watering by the clock.</p>
+    <p><strong>Manual Mode</strong> — no automatic watering. If the sensor is inserted, the device will still measure and display moisture — useful for monitoring without automation.</p>
     <p>Only one mode can be active at a time.</p>
+
+    <h4>Good to Know</h4>
+    <p><strong>Water container:</strong> Keep the water level at or below the pot. If the container is higher, water may flow by gravity even when the pump is off.</p>
+    <p><strong>Power:</strong> The device has a built-in battery but works best when always plugged in. The battery is a backup for short outages, not for standalone use.</p>
+    <p><strong>Offline:</strong> If WiFi goes down, the device continues to water on its own. You just won't see updates on this page until it reconnects.</p>
 
     <h4>Troubleshooting</h4>
     <p><strong>Sensor reads 0%?</strong> — Check that the sensor is inserted into soil. If needed, run calibration from device settings.</p>
-    <p><strong>Device offline?</strong> — Make sure it's powered via USB-C and connected to a 2.4 GHz WiFi network.</p>
+    <p><strong>Device offline?</strong> — Make sure it's powered and connected to a 2.4 GHz WiFi network (5 GHz is not supported).</p>
     <p><strong>Factory Reset:</strong> Connect to device WiFi (Polivalka-XXXXXX) → open 192.168.4.1 → Settings → Factory Reset.</p>
   `;
 
