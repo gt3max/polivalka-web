@@ -1444,11 +1444,37 @@ async function removeFromWhitelist(email) {
 }
 
 async function suspendUser(email) {
-  if (!confirm(`Suspend ${email}? They will not be able to use their devices.`)) return;
+  const userData = whitelistData.users?.[email];
+  const devices = userData?.devices || [];
+  let msg = `Suspend ${email}?`;
+  if (devices.length > 0) {
+    msg += `\n\nThis will revoke ${devices.length} device(s) and return them to admin.`;
+  }
+  if (!confirm(msg)) return;
 
-  const success = await updateUserInWhitelist(email, { status: 'suspended' });
+  // Revoke all devices first
+  const failed = [];
+  for (const deviceId of devices) {
+    try {
+      const res = await fetch(`${API.cloudBase}/admin/revoke-device`, {
+        method: 'POST',
+        headers: { ...API.getAuthHeaders(), 'Content-Type': 'application/json' },
+        body: JSON.stringify({ device_id: deviceId, user_email: email })
+      });
+      if (res.ok) { console.log(`[Admin] Revoked ${deviceId} from ${email} (suspend)`); }
+      else if (res.status === 404) { console.log(`[Admin] ${deviceId} not claimed — skip`); }
+      else { failed.push(deviceId); }
+    } catch (e) { failed.push(deviceId); }
+  }
+
+  if (failed.length > 0) {
+    alert(`Failed to revoke ${failed.length} device(s): ${failed.join(', ')}\n\nUser NOT suspended. Fix manually.`);
+    await loadWhitelist(); renderUsersList(); return;
+  }
+
+  const success = await updateUserInWhitelist(email, { status: 'suspended', devices: [] });
   if (success) {
-    showToast(`${email} suspended`, 'warning');
+    showToast(`${email} suspended` + (devices.length ? ` — ${devices.length} device(s) revoked` : ''), 'warning');
     await loadWhitelist();
     renderUsersList();
   }
@@ -1464,11 +1490,37 @@ async function unsuspendUser(email) {
 }
 
 async function banUser(email) {
-  if (!confirm(`BAN ${email}?\n\nThis will mark them as banned.`)) return;
+  const userData = whitelistData.users?.[email];
+  const devices = userData?.devices || [];
+  let msg = `BAN ${email}?`;
+  if (devices.length > 0) {
+    msg += `\n\nThis will revoke ${devices.length} device(s) and return them to admin.`;
+  }
+  if (!confirm(msg)) return;
+
+  // Revoke all devices first (same pattern as removeFromWhitelist)
+  const failed = [];
+  for (const deviceId of devices) {
+    try {
+      const res = await fetch(`${API.cloudBase}/admin/revoke-device`, {
+        method: 'POST',
+        headers: { ...API.getAuthHeaders(), 'Content-Type': 'application/json' },
+        body: JSON.stringify({ device_id: deviceId, user_email: email })
+      });
+      if (res.ok) { console.log(`[Admin] Revoked ${deviceId} from ${email} (ban)`); }
+      else if (res.status === 404) { console.log(`[Admin] ${deviceId} not claimed — skip`); }
+      else { failed.push(deviceId); }
+    } catch (e) { failed.push(deviceId); }
+  }
+
+  if (failed.length > 0) {
+    alert(`Failed to revoke ${failed.length} device(s): ${failed.join(', ')}\n\nUser NOT banned. Fix manually.`);
+    await loadWhitelist(); renderUsersList(); return;
+  }
 
   const success = await updateUserInWhitelist(email, { status: 'banned', devices: [] });
   if (success) {
-    showToast(`${email} banned`, 'error');
+    showToast(`${email} banned` + (devices.length ? ` — ${devices.length} device(s) revoked` : ''), 'error');
     await loadWhitelist();
     renderUsersList();
   }
