@@ -721,6 +721,10 @@ function renderDevices(devices) {
         </div>
       </div>
     `;
+    // Check whitelist — show instructions if user has a device assigned but not yet claimed
+    if (!isAdmin()) {
+      checkWhitelistForInstructions(container);
+    }
     return;
   }
 
@@ -757,6 +761,22 @@ function renderDevices(devices) {
 }
 
 // ========== INSTRUCTIONS SECTION ==========
+async function checkWhitelistForInstructions(container) {
+  try {
+    const res = await fetch(`${API.cloudBase}/whitelist/check`, {
+      headers: API.getAuthHeaders(),
+      cache: 'no-store'
+    });
+    if (!res.ok) return;
+    const data = await res.json();
+    if (data.whitelisted && data.devices && data.devices.length > 0) {
+      renderInstructions(container);
+    }
+  } catch (e) {
+    console.log('[Fleet] Whitelist check skipped:', e.message);
+  }
+}
+
 function renderInstructions(container) {
   const toggle = document.createElement('div');
   toggle.className = 'instructions-toggle';
