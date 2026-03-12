@@ -156,10 +156,17 @@
   .automation-control span{user-select:none}
 
   /* Instructions section */
-  .instructions-section{margin-top:24px;padding:20px;background:#fff;border:1px solid #ddd;border-radius:12px}
-  .instructions-section h3{margin:0 0 16px;color:#2c5f2d;font-size:16px}
-  .instructions-section h4{margin:20px 0 8px;color:#333;font-size:14px;font-weight:600}
-  .instructions-section p{margin:4px 0;font-size:14px;line-height:1.6;color:#444}
+  .instructions-toggle{margin-top:24px;padding:14px 20px;background:#fff;border:1px solid #ddd;border-radius:12px;cursor:pointer;display:flex;justify-content:space-between;align-items:center;user-select:none}
+  .instructions-toggle:hover{background:#f9f9f9}
+  .instructions-toggle h3{margin:0;color:#2c5f2d;font-size:16px}
+  .instructions-toggle .arrow{color:#999;font-size:18px;transition:transform 0.2s}
+  .instructions-toggle.open .arrow{transform:rotate(180deg)}
+  .instructions-toggle.open{border-radius:12px 12px 0 0;border-bottom:none}
+  .instructions-body{display:none;padding:0 20px 20px;background:#fff;border:1px solid #ddd;border-top:none;border-radius:0 0 12px 12px}
+  .instructions-body.open{display:block}
+  .instructions-body h4{margin:16px 0 8px;color:#333;font-size:14px;font-weight:600}
+  .instructions-body h4:first-child{margin-top:0}
+  .instructions-body p{margin:4px 0;font-size:14px;line-height:1.6;color:#444}
 </style>
 </head>
 <body>
@@ -751,11 +758,17 @@ function renderDevices(devices) {
 
 // ========== INSTRUCTIONS SECTION ==========
 function renderInstructions(container) {
-  const section = document.createElement('div');
-  section.className = 'instructions-section';
-  section.innerHTML = `
-    <h3>Instructions</h3>
+  const toggle = document.createElement('div');
+  toggle.className = 'instructions-toggle';
+  toggle.innerHTML = `<h3>Instructions</h3><span class="arrow">▼</span>`;
+  toggle.onclick = function() {
+    this.classList.toggle('open');
+    body.classList.toggle('open');
+  };
 
+  const body = document.createElement('div');
+  body.className = 'instructions-body';
+  body.innerHTML = `
     <h4>First Start</h4>
     <p><strong>1.</strong> Insert the moisture sensor into the soil — about 2/3 of its length, near the edge of the pot (not next to the stem).</p>
     <p><strong>2.</strong> Connect the silicone tube: one end into a water container, the other into the pot. The water container should be at the same level or below the pot.</p>
@@ -772,7 +785,9 @@ function renderInstructions(container) {
     <p><strong>Device offline?</strong> — Make sure it's powered via USB-C and connected to a 2.4 GHz WiFi network.</p>
     <p><strong>Factory Reset:</strong> Connect to device WiFi (Polivalka-XXXXXX) → open 192.168.4.1 → Settings → Factory Reset.</p>
   `;
-  container.appendChild(section);
+
+  container.appendChild(toggle);
+  container.appendChild(body);
 }
 
 function createExpandableRow(device, isOnline, hasWarnings, isCritical) {
