@@ -866,8 +866,6 @@ async function rejectClaim(index) {
   const claim = pendingData.claims[index];
   if (!claim) return;
 
-  if (!confirm(`Reject claim and send waitlist invitation?\n\nDevice: ${claim.device_id}\nUser: ${claim.email}`)) return;
-
   const claimId = claim.claim_id;
   if (!claimId) return;
 
