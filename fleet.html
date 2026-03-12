@@ -154,6 +154,12 @@
   .automation-control{cursor:pointer;padding:4px 8px;border-radius:4px;transition:all 0.2s;display:inline-block;margin-left:8px;font-size:12px;font-weight:600}
   .automation-control:hover{background:rgba(0,170,0,0.1)}
   .automation-control span{user-select:none}
+
+  /* Instructions section */
+  .instructions-section{margin-top:24px;padding:20px;background:#fff;border:1px solid #ddd;border-radius:12px}
+  .instructions-section h3{margin:0 0 16px;color:#2c5f2d;font-size:16px}
+  .instructions-section h4{margin:20px 0 8px;color:#333;font-size:14px;font-weight:600}
+  .instructions-section p{margin:4px 0;font-size:14px;line-height:1.6;color:#444}
 </style>
 </head>
 <body>
@@ -738,6 +744,35 @@ function renderDevices(devices) {
       }
     }
   });
+
+  // Instructions section (below device list)
+  renderInstructions(container);
+}
+
+// ========== INSTRUCTIONS SECTION ==========
+function renderInstructions(container) {
+  const section = document.createElement('div');
+  section.className = 'instructions-section';
+  section.innerHTML = `
+    <h3>Instructions</h3>
+
+    <h4>First Start</h4>
+    <p><strong>1.</strong> Insert the moisture sensor into the soil — about 2/3 of its length, near the edge of the pot (not next to the stem).</p>
+    <p><strong>2.</strong> Connect the silicone tube: one end into a water container, the other into the pot. The water container should be at the same level or below the pot.</p>
+    <p><strong>3.</strong> Choose a watering mode — open your device and select <strong>Sensor</strong> (recommended) or <strong>Timer</strong>.</p>
+    <p style="margin-top:12px;color:#2c5f2d"><strong>Plant Recognition:</strong> Open your device → Identify → take a photo of your plant. We'll recognize the species and set optimal watering parameters automatically!</p>
+
+    <h4>Watering Modes</h4>
+    <p><strong>Sensor Mode</strong> (recommended) — the device measures soil moisture and waters automatically when it drops below the threshold. Best for most plants.</p>
+    <p><strong>Timer Mode</strong> — watering on a fixed schedule. Use when sensor mode is not suitable or for simple setups.</p>
+    <p>Only one mode can be active at a time.</p>
+
+    <h4>Troubleshooting</h4>
+    <p><strong>Sensor reads 0%?</strong> — Check that the sensor is inserted into soil. If needed, run calibration from device settings.</p>
+    <p><strong>Device offline?</strong> — Make sure it's powered via USB-C and connected to a 2.4 GHz WiFi network.</p>
+    <p><strong>Factory Reset:</strong> Connect to device WiFi (Polivalka-XXXXXX) → open 192.168.4.1 → Settings → Factory Reset.</p>
+  `;
+  container.appendChild(section);
 }
 
 function createExpandableRow(device, isOnline, hasWarnings, isCritical) {
