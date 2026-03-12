@@ -1394,18 +1394,50 @@ async function addToWhitelist(email) {
 
 async function removeFromWhitelist(email) {
   const userData = whitelistData.users?.[email];
-  const deviceCount = userData?.devices?.length || 0;
+  const devices = userData?.devices || [];
 
   let msg = `Remove ${email} from whitelist?`;
-  if (deviceCount > 0) {
-    msg += `\n\nThis will also unassign ${deviceCount} device(s).`;
+  if (devices.length > 0) {
+    msg += `\n\nThis will revoke ${devices.length} device(s) and return them to admin.`;
   }
 
   if (!confirm(msg)) return;
 
+  // Revoke each device back to admin before removing from whitelist
+  const failed = [];
+  for (const deviceId of devices) {
+    try {
+      const res = await fetch(`${API.cloudBase}/admin/revoke-device`, {
+        method: 'POST',
+        headers: { ...API.getAuthHeaders(), 'Content-Type': 'application/json' },
+        body: JSON.stringify({ device_id: deviceId, user_email: email })
+      });
+      if (res.ok) {
+        console.log(`[Admin] Revoked ${deviceId} from ${email}`);
+      } else if (res.status === 404) {
+        console.log(`[Admin] ${deviceId} not claimed by ${email} — skip`);
+      } else {
+        failed.push(deviceId);
+        console.error(`[Admin] Failed to revoke ${deviceId}:`, res.status);
+      }
+    } catch (e) {
+      failed.push(deviceId);
+      console.error(`[Admin] Revoke error for ${deviceId}:`, e);
+    }
+  }
+
+  // Abort if any revoke failed — don't delete whitelist with active devices
+  if (failed.length > 0) {
+    alert(`Failed to revoke ${failed.length} device(s): ${failed.join(', ')}\n\nWhitelist NOT deleted. Fix manually.`);
+    await loadWhitelist();
+    renderUsersList();
+    return;
+  }
+
+  // All devices revoked (or never claimed) — safe to delete whitelist entry
   const success = await removeUserFromWhitelist(email);
   if (success) {
-    showToast(`${email} removed from whitelist`, 'success');
+    showToast(`${email} removed` + (devices.length ? ` — ${devices.length} device(s) revoked` : ''), 'success');
     await loadWhitelist();
     renderUsersList();
   }
