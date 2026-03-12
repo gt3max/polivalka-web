@@ -866,16 +866,32 @@ async function rejectClaim(index) {
   const claim = pendingData.claims[index];
   if (!claim) return;
 
-  if (!confirm(`Reject claim?\n\nDevice: ${claim.device_id}\nUser: ${claim.email}`)) return;
+  if (!confirm(`Reject claim and send waitlist invitation?\n\nDevice: ${claim.device_id}\nUser: ${claim.email}`)) return;
 
-  // Delete the claim
   const claimId = claim.claim_id;
-  if (claimId) {
-    const success = await deleteClaim(claimId);
-    if (success) {
-      showToast(`Claim rejected`, 'warning');
+  if (!claimId) return;
+
+  try {
+    // Set status to rejected (triggers email)
+    const res = await fetch(`${API.cloudBase}/admin/claims/${claimId}`, {
+      method: 'PUT',
+      headers: { ...API.getAuthHeaders(), 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status: 'rejected' })
+    });
+    const data = await res.json();
+
+    if (data.success) {
+      // Delete the claim record
+      await deleteClaim(claimId);
+      const emailMsg = data.email_sent ? ' (waitlist email sent)' : '';
+      showToast(`Claim rejected${emailMsg}`, 'warning');
       await loadPendingClaimsUI();
+    } else {
+      showToast('Failed to reject claim', 'error');
     }
+  } catch (e) {
+    console.error('[Admin] Reject claim error:', e);
+    showToast('Error rejecting claim', 'error');
   }
 }
 
