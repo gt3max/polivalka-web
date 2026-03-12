@@ -285,6 +285,20 @@
 </div>
 </div>
 
+<!-- Waitlist -->
+<div class="card" id="waitlist-card">
+<div style="display:flex;justify-content:space-between;align-items:center;cursor:pointer" onclick="toggleWaitlistSection()">
+  <h3 style="margin:0">📋 Waitlist <span id="waitlist-count" style="background:#2196f3;color:#fff;padding:2px 8px;border-radius:12px;font-size:12px;margin-left:8px;display:none">0</span></h3>
+  <span id="waitlist-toggle-icon" style="color:#fff;font-size:18px">▶</span>
+</div>
+<div id="waitlist-content" style="display:none;margin-top:12px">
+  <p class="muted">People who clicked "Join Waitlist" from the rejection email</p>
+  <div id="waitlist-list">
+    <div class="muted">No one on the waitlist yet</div>
+  </div>
+</div>
+</div>
+
 <!-- Registered Users -->
 <div class="card">
 <h3>👥 Registered Users</h3>
@@ -776,6 +790,18 @@ function togglePendingSection() {
   }
 }
 
+function toggleWaitlistSection() {
+  const content = document.getElementById('waitlist-content');
+  const icon = document.getElementById('waitlist-toggle-icon');
+  if (content.style.display === 'none') {
+    content.style.display = 'block';
+    icon.textContent = '▼';
+  } else {
+    content.style.display = 'none';
+    icon.textContent = '▶';
+  }
+}
+
 // ============ Pending Claims UI ============
 
 async function loadPendingClaimsUI() {
@@ -784,7 +810,9 @@ async function loadPendingClaimsUI() {
 
   await loadPendingClaims();
 
-  const claims = pendingData?.claims || [];
+  const allClaims = pendingData?.claims || [];
+  // Filter: only pending claims for this section
+  const claims = allClaims.filter(c => !c.status || c.status === 'pending');
   countBadge.textContent = claims.length;
 
   // Hide badge if no pending claims
@@ -792,30 +820,71 @@ async function loadPendingClaimsUI() {
 
   if (claims.length === 0) {
     container.innerHTML = '<div class="muted">No pending claims</div>';
+  } else {
+    container.innerHTML = claims.map((c, idx) => {
+      // Find original index in allClaims for approve/reject functions
+      const origIdx = allClaims.indexOf(c);
+      const date = new Date(c.created_at || c.timestamp);
+      const dateStr = date.toLocaleDateString() + ' ' + date.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+
+      return `
+        <div style="padding:12px;background:#1a1a2e;border-radius:8px;margin-bottom:8px">
+          <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
+            <div>
+              <div style="color:#fff;font-size:14px">📱 <span class="mono" style="color:#4caf50">${esc(c.device_id)}</span></div>
+              <div style="color:#ccc;font-size:13px;margin-top:4px">User: <strong>${esc(c.email)}</strong></div>
+              <div class="muted" style="font-size:11px;margin-top:2px">Requested: ${dateStr}</div>
+            </div>
+            <div style="display:flex;gap:8px">
+              <button onclick="approveClaim(${origIdx})" style="background:#4caf50;color:#fff;border-color:#4caf50;font-size:12px;padding:6px 12px">✓ Approve</button>
+              <button onclick="rejectClaim(${origIdx})" style="background:#f44;color:#fff;border-color:#f44;font-size:12px;padding:6px 12px">✗ Reject</button>
+            </div>
+          </div>
+        </div>
+      `;
+    }).join('');
+  }
+
+  // Render waitlist section
+  renderWaitlist(allClaims);
+}
+
+function renderWaitlist(allClaims) {
+  const waitlistClaims = allClaims.filter(c => c.status === 'waitlist');
+  const container = document.getElementById('waitlist-list');
+  const countBadge = document.getElementById('waitlist-count');
+
+  if (!container || !countBadge) return;
+
+  countBadge.textContent = waitlistClaims.length;
+  countBadge.style.display = waitlistClaims.length > 0 ? 'inline' : 'none';
+
+  if (waitlistClaims.length === 0) {
+    container.innerHTML = '<div class="muted">No one on the waitlist yet</div>';
     return;
   }
 
-  container.innerHTML = claims.map((c, idx) => {
-    // Lambda returns created_at, old format used timestamp
-    const date = new Date(c.created_at || c.timestamp);
+  // Sort by waitlisted_at descending (newest first)
+  waitlistClaims.sort((a, b) => (b.waitlisted_at || 0) - (a.waitlisted_at || 0));
+
+  const totalLine = `<div style="color:#90caf9;font-size:13px;margin-bottom:12px;font-weight:bold">Total: ${waitlistClaims.length} people waiting</div>`;
+
+  const rows = waitlistClaims.map(c => {
+    const date = c.waitlisted_at ? new Date(c.waitlisted_at * 1000) : new Date(c.created_at || c.timestamp);
     const dateStr = date.toLocaleDateString() + ' ' + date.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
 
     return `
-      <div style="padding:12px;background:#1a1a2e;border-radius:8px;margin-bottom:8px">
-        <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
-          <div>
-            <div style="color:#fff;font-size:14px">📱 <span class="mono" style="color:#4caf50">${esc(c.device_id)}</span></div>
-            <div style="color:#ccc;font-size:13px;margin-top:4px">User: <strong>${esc(c.email)}</strong></div>
-            <div class="muted" style="font-size:11px;margin-top:2px">Requested: ${dateStr}</div>
-          </div>
-          <div style="display:flex;gap:8px">
-            <button onclick="approveClaim(${idx})" style="background:#4caf50;color:#fff;border-color:#4caf50;font-size:12px;padding:6px 12px">✓ Approve</button>
-            <button onclick="rejectClaim(${idx})" style="background:#f44;color:#fff;border-color:#f44;font-size:12px;padding:6px 12px">✗ Reject</button>
-          </div>
+      <div style="padding:10px 12px;background:#1a1a2e;border-radius:8px;margin-bottom:6px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:4px">
+        <div>
+          <div style="color:#fff;font-size:13px">${esc(c.email)}</div>
+          <div class="muted" style="font-size:11px;margin-top:2px">Device: <span class="mono" style="color:#90caf9">${esc(c.device_id)}</span></div>
         </div>
+        <div class="muted" style="font-size:11px">${dateStr}</div>
       </div>
     `;
   }).join('');
+
+  container.innerHTML = totalLine + '<div style="max-height:400px;overflow-y:auto">' + rows + '</div>';
 }
 
 async function approveClaim(index) {
@@ -879,8 +948,7 @@ async function rejectClaim(index) {
     const data = await res.json();
 
     if (data.success) {
-      // Delete the claim record
-      await deleteClaim(claimId);
+      // Claim stays in table with status=rejected (waitlist flow)
       const emailMsg = data.email_sent ? ' (waitlist email sent)' : '';
       showToast(`Claim rejected${emailMsg}`, 'warning');
       await loadPendingClaimsUI();
