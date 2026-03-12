@@ -692,6 +692,9 @@ async function loadDeviceHistoryUI(deviceId) {
     } else if (e.event === 'claimed') {
       icon = '🔗';
       text = `Claimed by <span style="color:#4caf50">${email}</span>`;
+    } else if (e.event === 'approved') {
+      icon = '👍';
+      text = `Claim approved for <span style="color:#4caf50">${email}</span>`;
     } else if (e.event === 'provisioned') {
       icon = '🏭';
       text = 'Provisioned';
@@ -845,9 +848,9 @@ async function approveClaim(index) {
     await deleteClaim(claimId);
   }
 
-  // 3. Add to device history
+  // 3. Add to device history (approved, not claimed — user must still Claim on Fleet)
   await addDeviceHistoryEntry(claim.device_id, {
-    event: 'claimed',
+    event: 'approved',
     by: claim.email
   });
 
