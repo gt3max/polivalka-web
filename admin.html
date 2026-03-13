@@ -877,7 +877,7 @@ function renderWaitlist(allClaims) {
       <div style="padding:10px 12px;background:#1a1a2e;border-radius:8px;margin-bottom:6px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:4px">
         <div>
           <div style="color:#fff;font-size:13px">${esc(c.email)}</div>
-          <div class="muted" style="font-size:11px;margin-top:2px">Device: <span class="mono" style="color:#90caf9">${esc(c.device_id)}</span></div>
+          <div class="muted" style="font-size:11px;margin-top:2px">${c.source === 'landing_page' ? '<span style="color:#ffd54f">Landing page</span>' : 'Device: <span class="mono" style="color:#90caf9">' + esc(c.device_id) + '</span>'}</div>
         </div>
         <div class="muted" style="font-size:11px">${dateStr}</div>
       </div>
