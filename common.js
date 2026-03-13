@@ -6,7 +6,7 @@
  */
 
 // ============ Admin ============
-const ADMIN_EMAILS = ['mrmaximshurigin@gmail.com', 'admin@plantapp.pro'];
+const ADMIN_EMAILS = ['mrmaximshurigin@gmail.com'];
 
 function isAdmin() {
   const email = localStorage.getItem('user_email') || '';
