@@ -2566,6 +2566,11 @@
             });
             var headers = { 'Content-Type': 'application/json', 'Accept': 'application/json' };
 
+            // Also save to our database (admin panel waitlist)
+            fetch('https://p0833p2v29.execute-api.eu-central-1.amazonaws.com/waitlist/signup', {
+                method: 'POST', headers: headers, body: JSON.stringify({ email: email })
+            }).catch(function() {}); // silent — FormSubmit is primary
+
             Promise.all([
                 fetch('https://formsubmit.co/ajax/mrmaximshurigin@gmail.com', {
                     method: 'POST', headers: headers, body: payload
