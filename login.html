@@ -475,22 +475,21 @@
                 return;
             }
 
-            // Re-register to resend code (simple approach)
             showSuccess('Sending new code...');
 
             try {
-                const res = await fetch(`${API_BASE}/auth/register`, {
+                const res = await fetch(`${API_BASE}/auth/resend-code`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        email: pendingEmail,
-                        password: 'placeholder-resend'  // Will fail validation but send new code
-                    })
+                    body: JSON.stringify({ email: pendingEmail })
                 });
+                const data = await res.json();
 
-                // Even if it fails (user exists), we inform the user
-                showSuccess('If this email exists, a new code was sent');
-
+                if (res.status === 429) {
+                    showError(data.error || 'Please wait before requesting a new code');
+                } else {
+                    showSuccess(data.message || 'New code sent');
+                }
             } catch (err) {
                 showError('Failed to resend code');
             }
