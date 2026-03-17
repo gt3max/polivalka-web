@@ -678,6 +678,8 @@ async function loadDevices() {
   try {
     console.log('[Fleet] Calling API.get(/devices)...');
     allDevices = await API.get('/devices');
+    // Filter out virtual records (user-collection is NOT a device)
+    allDevices = allDevices.filter(d => d.device_id !== 'user-collection');
     console.log('[Fleet] ✅ API returned', allDevices.length, 'devices');
     console.log('[Fleet] Devices:', allDevices.map(d => d.device_id).join(', '));
 
