@@ -3108,16 +3108,19 @@ def generate_warnings(telemetry):
 
     battery = telemetry.get('battery', {})
     sensor = telemetry.get('sensor', {})
+    system = telemetry.get('system', {})
 
     # Battery warnings
     battery_pct = battery.get('percent')
     if battery_pct is not None and battery_pct <= 10:
         warnings.append('Low battery (10%)')
 
-    # Moisture warnings
+    # Moisture warnings — use start_pct from device config as threshold
+    # Skip warning if moisture is 0 (sensor not calibrated or not ready)
     moisture = sensor.get('moisture_percent')
-    if moisture is not None and moisture < 20:
-        warnings.append(f'Moisture too low ({moisture}%)')
+    start_pct = system.get('start_pct', 20)
+    if moisture is not None and moisture > 0 and moisture < start_pct:
+        warnings.append(f'Moisture low ({moisture}%) — watering threshold is {start_pct}%')
 
     return warnings
 
