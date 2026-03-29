@@ -1293,7 +1293,7 @@ function showPlantCard(result) {
     soil: enrichment.soil || (result.details || {}).soil,
     propagation: enrichment.propagation || (result.details || {}).propagation,
     pruning_month: enrichment.pruning_month || (result.details || {}).pruning_month,
-    pest_susceptibility: enrichment.pest_susceptibility ? enrichment.pest_susceptibility.join(', ') : (result.details || {}).pest_susceptibility,
+    pest_susceptibility: enrichment.pest_susceptibility ? (Array.isArray(enrichment.pest_susceptibility) ? enrichment.pest_susceptibility.join(', ') : enrichment.pest_susceptibility) : (result.details || {}).pest_susceptibility,
     indoor: enrichment.indoor !== undefined ? enrichment.indoor : (result.details || {}).indoor,
     description: enrichment.description || (result.details || {}).description,
   };
