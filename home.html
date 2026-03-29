@@ -342,9 +342,6 @@ async function updateStatus(){
         const totalSec = s.pump_remaining_ms > 0 ? Math.floor((s.pump_elapsed_ms + s.pump_remaining_ms) / 1000) : elapsedSec;
         const remainingSec = s.pump_remaining_ms > 0 ? Math.floor(s.pump_remaining_ms / 1000) : 0;
 
-        // Show elapsed timer as button text
-        manualBtn.textContent = `Watering ${elapsedSec}s`;
-
         document.getElementById('pump-elapsed').textContent = elapsedSec + 's';
         document.getElementById('pump-total').textContent = totalSec + 's';
         document.getElementById('pump-remaining').textContent = s.pump_remaining_ms > 0 ? `(${remainingSec}s left)` : '(manual mode)';
@@ -528,7 +525,7 @@ async function manualWater(){
       // Show pump running indicator immediately
       pumpIndicator.style.display = 'block';
       stopBtn.disabled = false;
-      btn.textContent = `Watering ${sec}s`;
+      // Button stays as "Water Now" but disabled — Stop button handles stopping
 
       // Set up local countdown display
       document.getElementById('pump-elapsed').textContent = '0s';
@@ -542,7 +539,6 @@ async function manualWater(){
         const remaining = Math.max(0, sec - elapsed);
         document.getElementById('pump-elapsed').textContent = elapsed + 's';
         document.getElementById('pump-remaining').textContent = `(${remaining}s left)`;
-        btn.textContent = `Watering ${elapsed}s`;
 
         if (elapsed >= sec) {
           clearInterval(countdownInterval);

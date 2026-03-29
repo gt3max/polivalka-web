@@ -665,7 +665,7 @@ function renderPlantLibrary(plants) {
     : 'Your plant collection:';
 
   // Show ALL plants except the one currently active on THIS device (already shown in "Current Plant")
-  const libraryPlants = plants.filter(p => !(p.device_id === currentDeviceId && p.active));
+  const libraryPlants = plants.filter(p => !(p.device_id === currentDeviceId && p.active) && !p.archived && !p.deleted);
 
   countSpan.textContent = `(${libraryPlants.length})`;
 
@@ -1063,6 +1063,20 @@ function compressWithCanvas(blob, fileName) {
   });
 }
 
+// Check HEIC by reading magic bytes (reliable, not just file extension)
+async function isHEICByBytes(file) {
+  try {
+    const buffer = await file.slice(0, 12).arrayBuffer();
+    const view = new Uint8Array(buffer);
+    // ISOBMFF container: bytes 4-7 = 'ftyp', then brand check
+    if (view[4] === 0x66 && view[5] === 0x74 && view[6] === 0x79 && view[7] === 0x70) {
+      const brand = String.fromCharCode(view[8], view[9], view[10], view[11]);
+      return ['heic', 'heix', 'hevc', 'mif1'].includes(brand);
+    }
+    return false;
+  } catch { return false; }
+}
+
 // Main function: convert file to base64 with compression
 async function fileToBase64(file) {
   // Check file size (max 20MB raw)
@@ -1085,8 +1099,9 @@ async function fileToBase64(file) {
   try {
     return await compressWithCanvas(file, file.name);
   } catch (e) {
-    // If native failed and it's HEIC, try heic2any converter (Windows/Linux)
-    if (isHEIC) {
+    // Verify HEIC by magic bytes before attempting conversion (prevents false "Convert HEIC" on JPEG)
+    const confirmedHEIC = isHEIC && await isHEICByBytes(file);
+    if (confirmedHEIC) {
       try {
         const jpegBlob = await convertHEIC(file);
         return await compressWithCanvas(jpegBlob, file.name);
