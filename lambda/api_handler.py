@@ -242,6 +242,125 @@ def check_identify_rate_limit(identifier, daily_limit):
         return True, daily_limit  # Fail open — don't block on errors
 
 
+def identify_with_serpapi_lens(image_bytes):
+    """
+    Fallback identification via SerpAPI Google Lens.
+    Uploads image to S3 temporarily, gets pre-signed URL, sends to Google Lens.
+    Returns list of results in same format as PlantNet handler, or empty list.
+    """
+    if not SERPAPI_API_KEY:
+        print("[SerpAPI Lens] No API key configured")
+        return []
+    try:
+        import hashlib
+        # Step 1: Upload image to S3 with 1-hour TTL
+        s3_client = boto3.client('s3', region_name='eu-central-1')
+        bucket = 'polivalka-firmware'
+        img_hash = hashlib.md5(image_bytes[:1000]).hexdigest()[:12]
+        s3_key = f'identify-temp/{img_hash}.jpg'
+
+        s3_client.put_object(
+            Bucket=bucket,
+            Key=s3_key,
+            Body=image_bytes,
+            ContentType='image/jpeg',
+        )
+
+        # Generate pre-signed URL (1 hour expiry)
+        presigned_url = s3_client.generate_presigned_url(
+            'get_object',
+            Params={'Bucket': bucket, 'Key': s3_key},
+            ExpiresIn=3600,
+        )
+        print(f"[SerpAPI Lens] Uploaded to S3, URL generated")
+
+        # Step 2: Call SerpAPI Google Lens with the URL
+        params = urllib.parse.urlencode({
+            'engine': 'google_lens',
+            'url': presigned_url,
+            'api_key': SERPAPI_API_KEY,
+        })
+        lens_url = f'{SERPAPI_URL}?{params}'
+        req = urllib.request.Request(lens_url, method='GET')
+        with urllib.request.urlopen(req, timeout=20) as response:
+            data = json.loads(response.read().decode('utf-8'))
+
+        # Step 3: Parse Google Lens results into our format
+        visual_matches = data.get('visual_matches', [])
+        knowledge_graph = data.get('knowledge_graph', [])
+
+        results = []
+        seen_names = set()
+
+        # Knowledge graph results (most reliable)
+        for kg in (knowledge_graph if isinstance(knowledge_graph, list) else [knowledge_graph] if knowledge_graph else []):
+            title = kg.get('title', '')
+            if title and title.lower() not in seen_names:
+                seen_names.add(title.lower())
+                # Try to determine family from knowledge graph
+                subtitle = kg.get('subtitle', '')
+                results.append({
+                    'id': title.lower().replace(' ', '_'),
+                    'scientific': title,
+                    'commonNames': [title],
+                    'family': '',
+                    'genus': '',
+                    'score': 85,  # High confidence from knowledge graph
+                    'images': [kg.get('thumbnail', '')],
+                    'care': {
+                        'preset': 'Standard',
+                        'start_pct': 35,
+                        'stop_pct': 55,
+                        'watering': 'Every 7-10 days',
+                        'light': 'Bright indirect light',
+                        'temperature': '18-24°C',
+                        'humidity': 'Average (40-60%)',
+                        'tips': subtitle or 'Adjust care based on your plant\'s specific needs.'
+                    },
+                    'toxicity': None
+                })
+
+        # Visual matches (fallback if no knowledge graph)
+        for match in visual_matches[:5]:
+            title = match.get('title', '')
+            # Filter: only keep results that look like plant names
+            if title and title.lower() not in seen_names and len(title) < 60:
+                seen_names.add(title.lower())
+                results.append({
+                    'id': title.lower().replace(' ', '_'),
+                    'scientific': title,
+                    'commonNames': [title],
+                    'family': '',
+                    'genus': '',
+                    'score': 60,  # Lower confidence from visual match
+                    'images': [match.get('thumbnail', '')],
+                    'care': {
+                        'preset': 'Standard',
+                        'start_pct': 35,
+                        'stop_pct': 55,
+                        'watering': 'Every 7-10 days',
+                        'light': 'Bright indirect light',
+                        'temperature': '18-24°C',
+                        'humidity': 'Average (40-60%)',
+                        'tips': 'Adjust care based on your plant\'s specific needs.'
+                    },
+                    'toxicity': None
+                })
+
+        # Cleanup S3 (non-blocking)
+        try:
+            s3_client.delete_object(Bucket=bucket, Key=s3_key)
+        except Exception:
+            pass  # TTL or manual cleanup later
+
+        print(f"[SerpAPI Lens] Found {len(results)} results")
+        return results[:5]
+
+    except Exception as e:
+        print(f"[SerpAPI Lens] Error: {e}")
+        return []
+
+
 def verify_with_serpapi(scientific_name):
     """
     Cross-verify PlantNet result using SerpAPI Google Search Knowledge Graph.
@@ -541,20 +660,46 @@ def identify_plant_handler(event, origin):
         }
 
     except (urllib.error.HTTPError, urllib.error.URLError, Exception) as e:
-        # PlantNet failed — return empty results with error info, not a 500
-        # User can still use manual name entry on the client
+        # PlantNet failed — try SerpAPI Google Lens as fallback
         error_msg = str(e)
         if hasattr(e, 'code'):
             error_msg = f'PlantNet API error: {e.code}'
-        print(f"Plant identification error (returning empty results): {error_msg}")
+        print(f"PlantNet failed ({error_msg}), trying SerpAPI Lens fallback...")
+
+        try:
+            serpapi_results = identify_with_serpapi_lens(image_bytes)
+            if serpapi_results:
+                # Enrich top result with Perenual if available
+                if PERENUAL_API_KEY and serpapi_results:
+                    top_name = serpapi_results[0].get('scientific', '')
+                    if top_name:
+                        perenual_data = enrich_with_perenual(top_name)
+                        if perenual_data:
+                            serpapi_results[0]['enrichment'] = perenual_data
+
+                print(f"[Fallback] SerpAPI Lens returned {len(serpapi_results)} results")
+                return {
+                    'statusCode': 200,
+                    'headers': cors_headers(origin),
+                    'body': json.dumps({
+                        'success': True,
+                        'results': serpapi_results,
+                        'source': 'serpapi_lens'
+                    })
+                }
+        except Exception as fallback_err:
+            print(f"[Fallback] SerpAPI Lens also failed: {fallback_err}")
+
+        # Both services failed — return empty with manual entry suggestion
+        print(f"All identification services failed")
         return {
             'statusCode': 200,
             'headers': cors_headers(origin),
             'body': json.dumps({
                 'success': True,
                 'results': [],
-                'source': 'plantnet_error',
-                'error': f'Identification service temporarily unavailable. You can enter the plant name manually.'
+                'source': 'all_failed',
+                'error': 'Identification services temporarily unavailable. You can enter the plant name manually.'
             })
         }
 
