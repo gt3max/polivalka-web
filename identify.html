@@ -253,6 +253,14 @@
 
     <div id="results-list"></div>
 
+    <div style="margin-top:16px;padding:12px;border:1px dashed #ccc;border-radius:8px;text-align:center">
+      <p style="margin:0 0 8px;font-size:13px;color:#666">Plant not listed?</p>
+      <div style="display:flex;gap:8px">
+        <input type="text" id="manual-plant-name" placeholder="Enter plant name" style="flex:1;padding:8px 12px;border:1px solid #ddd;border-radius:6px;font-size:14px">
+        <button onclick="useManualName()" style="padding:8px 16px;background:#2c5f2d;color:#fff;border:none;border-radius:6px;font-size:13px;cursor:pointer">Use</button>
+      </div>
+    </div>
+
   </div>
 
   <!-- Step 3: Plant Card -->
@@ -1162,6 +1170,28 @@ function renderResults(results) {
     }, 2000);
     img.addEventListener('load', () => clearTimeout(tid));
   });
+}
+
+function useManualName() {
+  const nameInput = document.getElementById('manual-plant-name');
+  const name = (nameInput.value || '').trim();
+  if (!name) { nameInput.focus(); return; }
+
+  // Create a manual result with the entered name
+  const manualResult = {
+    id: name.toLowerCase().replace(/\s+/g, '_'),
+    scientific: name,
+    commonNames: [name],
+    family: '',
+    genus: '',
+    score: 100,
+    images: [],
+    care: { preset: 'Standard', start_pct: 35, stop_pct: 55, watering: 'Every 7-10 days', light: 'Bright indirect light', temperature: '18-24°C', humidity: 'Average (40-60%)', tips: 'Adjust care based on your plant\'s specific needs.' },
+    toxicity: null
+  };
+
+  identificationResults.push(manualResult);
+  selectResult(identificationResults.length - 1);
 }
 
 function selectResult(index) {
