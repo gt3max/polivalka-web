@@ -8,6 +8,12 @@ API Endpoints:
   POST /device/{id}/command        - Send MQTT command
   GET  /device/{id}/sensor/history - Sensor data history (7 days)
   GET  /device/{id}/battery/history- Battery data history (7 days)
+  GET  /device/{id}/system/history - System diagnostics history (7 days)
+
+  Plant DB (Turso):
+  GET  /plants/db/search?q=...     - Search plants by name
+  GET  /plants/db/stats            - Database stats
+  GET  /plants/db/{plant_id}       - Get full plant card
 
 DynamoDB Tables:
   - polivalka_devices    (PK: user_id, SK: device_id)
@@ -19,6 +25,8 @@ Environment Variables:
   - TELEMETRY_TABLE=polivalka_telemetry
   - COMMANDS_TABLE=polivalka_commands
   - IOT_ENDPOINT=xxx.iot.eu-central-1.amazonaws.com
+  - TURSO_DB_URL=libsql://plantapp-db-gt3max.aws-eu-west-1.turso.io
+  - TURSO_AUTH_TOKEN=...
 """
 
 import json
@@ -193,14 +201,147 @@ def validate_int_param(value, param_name, min_val=None, max_val=None, required=F
 
 PLANTNET_API_KEY = os.environ.get('PLANTNET_API_KEY', '')
 PERENUAL_API_KEY = os.environ.get('PERENUAL_API_KEY', '')
+SERPAPI_API_KEY = os.environ.get('SERPAPI_API_KEY', '')
 PLANTNET_URL = 'https://my-api.plantnet.org/v2/identify/all'
 PERENUAL_URL = 'https://perenual.com/api/species-list'
+SERPAPI_URL = 'https://serpapi.com/search.json'
+
+# Rate limits for plant identification (per day)
+IDENTIFY_LIMIT_PREMIUM = 20    # Subscribed user (TODO: check subscription tier)
+IDENTIFY_LIMIT_FREE = 5        # Authenticated, no subscription
+IDENTIFY_LIMIT_ANONYMOUS = 3   # No auth (by IP)
+# Admin (ADMIN_EMAILS) — no limit
+
+
+def check_identify_rate_limit(identifier, daily_limit):
+    """
+    Check and increment daily rate limit for plant identification.
+    Uses dedicated polivalka_rate_limits table (NOT devices table).
+    Returns: (allowed: bool, remaining: int)
+    """
+    from datetime import datetime, timezone
+    today = datetime.now(timezone.utc).strftime('%Y-%m-%d')
+    pk = f'{identifier}#{today}'
+    try:
+        response = rate_limits_table.get_item(Key={'pk': pk})
+        item = response.get('Item', {})
+        current_count = int(item.get('request_count', 0))
+
+        if current_count >= daily_limit:
+            return False, 0
+
+        # Increment counter (TTL = 2 days for auto-cleanup)
+        rate_limits_table.put_item(Item={
+            'pk': pk,
+            'request_count': current_count + 1,
+            'ttl': int(time.time()) + 172800
+        })
+        return True, daily_limit - current_count - 1
+    except Exception as e:
+        print(f"[RateLimit] Error checking limit for {identifier}: {e}")
+        return True, daily_limit  # Fail open — don't block on errors
+
+
+def verify_with_serpapi(scientific_name):
+    """
+    Cross-verify PlantNet result using SerpAPI Google Search Knowledge Graph.
+    Returns dict with verification data, or None on failure.
+    """
+    if not SERPAPI_API_KEY:
+        return None
+    try:
+        params = urllib.parse.urlencode({
+            'engine': 'google',
+            'q': f'{scientific_name} plant',
+            'api_key': SERPAPI_API_KEY,
+            'num': 3,
+        })
+        url = f'{SERPAPI_URL}?{params}'
+        req = urllib.request.Request(url, method='GET')
+        with urllib.request.urlopen(req, timeout=10) as response:
+            data = json.loads(response.read().decode('utf-8'))
+
+        kg = data.get('knowledge_graph', {})
+        return {
+            'verified': bool(kg),
+            'kg_title': kg.get('title', ''),
+            'kg_description': kg.get('description', ''),
+            'kg_image': (kg.get('header_images', [{}]) or [{}])[0].get('image', ''),
+        }
+    except Exception as e:
+        print(f"[SerpAPI] Verify error for {scientific_name}: {e}")
+        return None
+
+
+def enrich_with_perenual(scientific_name):
+    """
+    Enrich plant data using Perenual API (search + detail).
+    Returns dict with growth_rate, soil, problems, etc., or None on failure.
+    """
+    if not PERENUAL_API_KEY:
+        return None
+    try:
+        # Step 1: search by scientific name
+        params = urllib.parse.urlencode({
+            'key': PERENUAL_API_KEY,
+            'q': scientific_name,
+        })
+        url = f'{PERENUAL_URL}?{params}'
+        req = urllib.request.Request(url, method='GET')
+        with urllib.request.urlopen(req, timeout=10) as response:
+            data = json.loads(response.read().decode('utf-8'))
+
+        species_list = data.get('data', [])
+        if not species_list:
+            return None
+
+        # Find best match (exact scientific name preferred)
+        best = None
+        for sp in species_list:
+            names = sp.get('scientific_name', [])
+            if isinstance(names, list):
+                for n in names:
+                    if n.lower() == scientific_name.lower():
+                        best = sp
+                        break
+            elif isinstance(names, str) and names.lower() == scientific_name.lower():
+                best = sp
+            if best:
+                break
+        if not best:
+            best = species_list[0]
+
+        species_id = best.get('id')
+        if not species_id:
+            return None
+
+        # Step 2: fetch detailed info
+        detail_url = f'https://perenual.com/api/species/details/{species_id}?key={PERENUAL_API_KEY}'
+        req2 = urllib.request.Request(detail_url, method='GET')
+        with urllib.request.urlopen(req2, timeout=10) as response2:
+            detail = json.loads(response2.read().decode('utf-8'))
+
+        return {
+            'growth_rate': detail.get('growth_rate', ''),
+            'care_level': detail.get('care_level', ''),
+            'soil': detail.get('soil', []),
+            'pruning_month': detail.get('pruning_month', []),
+            'propagation': detail.get('propagation', []),
+            'pest_susceptibility': detail.get('pest_susceptibility', []),
+            'indoor': detail.get('indoor', False),
+            'description': detail.get('description', ''),
+        }
+    except Exception as e:
+        print(f"[Perenual] Enrich error for {scientific_name}: {e}")
+        return None
 
 
 def identify_plant_handler(event, origin):
     """
     POST /plants/identify
     Receives base64 image, sends to PlantNet, returns identification results.
+    Enriches top result with Perenual data. Cross-verifies low-confidence via SerpAPI.
+    Rate limited: admin=unlimited, premium=20/day, free=5/day, anonymous=3/day.
     """
     if not PLANTNET_API_KEY:
         return {
@@ -208,6 +349,34 @@ def identify_plant_handler(event, origin):
             'headers': cors_headers(origin),
             'body': json.dumps({'error': 'PlantNet API key not configured'})
         }
+
+    # --- Rate limiting ---
+    user_id = get_user_from_event(event)
+    is_admin = user_id in ADMIN_EMAILS if user_id else False
+
+    if not is_admin:
+        if user_id:
+            identifier = f'user:{user_id}'
+            # TODO: check subscription tier when billing is implemented
+            # Premium users get IDENTIFY_LIMIT_PREMIUM (20/day)
+            limit = IDENTIFY_LIMIT_FREE
+        else:
+            source_ip = (event.get('requestContext', {})
+                         .get('http', {}).get('sourceIp', 'unknown'))
+            identifier = f'ip:{source_ip}'
+            limit = IDENTIFY_LIMIT_ANONYMOUS
+
+        allowed, remaining = check_identify_rate_limit(identifier, limit)
+        if not allowed:
+            print(f"[RateLimit] BLOCKED: {identifier}, limit={limit}")
+            return {
+                'statusCode': 429,
+                'headers': cors_headers(origin),
+                'body': json.dumps({
+                    'error': 'Daily identification limit reached. The counter resets in 24 hours.'
+                })
+            }
+        print(f"[RateLimit] OK: {identifier}, remaining={remaining}")
 
     try:
         body = json.loads(event.get('body', '{}'))
@@ -328,13 +497,46 @@ def identify_plant_handler(event, origin):
                 'toxicity': toxicity
             })
 
+        # --- Enrich top result with SerpAPI + Perenual (parallel) ---
+        source = 'plantnet'
+        if results:
+            top_scientific = results[0].get('scientific', '')
+            top_score = results[0].get('score', 0)
+
+            serpapi_data = None
+            perenual_data = None
+
+            # Run SerpAPI + Perenual in parallel to avoid adding latency
+            from concurrent.futures import ThreadPoolExecutor
+            futures = {}
+            with ThreadPoolExecutor(max_workers=2) as executor:
+                if top_score < 70 and SERPAPI_API_KEY:
+                    futures['serpapi'] = executor.submit(verify_with_serpapi, top_scientific)
+                if PERENUAL_API_KEY:
+                    futures['perenual'] = executor.submit(enrich_with_perenual, top_scientific)
+
+            if 'serpapi' in futures:
+                serpapi_data = futures['serpapi'].result()
+            if 'perenual' in futures:
+                perenual_data = futures['perenual'].result()
+
+            # Update source tracking
+            parts = ['plantnet']
+            if serpapi_data:
+                parts.append('serpapi')
+                results[0]['serpapi_verification'] = serpapi_data
+            if perenual_data:
+                parts.append('perenual')
+                results[0]['enrichment'] = perenual_data
+            source = '+'.join(parts)
+
         return {
             'statusCode': 200,
             'headers': cors_headers(origin),
             'body': json.dumps({
                 'success': True,
                 'results': results,
-                'source': 'plantnet'
+                'source': source
             })
         }
 
@@ -520,6 +722,227 @@ TOXIC_FAMILIES = {
 }
 
 
+# ============ Turso Plant DB ============
+# HTTP API for plant encyclopedia (Turso = SQLite edge, Frankfurt)
+
+TURSO_DB_URL = os.environ.get('TURSO_DB_URL', '')
+TURSO_AUTH_TOKEN = os.environ.get('TURSO_AUTH_TOKEN', '')
+
+
+def _turso_http_url():
+    """Convert libsql:// URL to https:// for HTTP API."""
+    url = TURSO_DB_URL
+    if url.startswith('libsql://'):
+        url = url.replace('libsql://', 'https://')
+    return url
+
+
+def turso_query(sql, params=None):
+    """Execute SQL query on Turso and return rows as list of dicts."""
+    url = f"{_turso_http_url()}/v2/pipeline"
+    if not TURSO_DB_URL or not TURSO_AUTH_TOKEN:
+        raise RuntimeError("Turso not configured (missing TURSO_DB_URL or TURSO_AUTH_TOKEN)")
+
+    stmt = {"type": "execute", "stmt": {"sql": sql}}
+    if params:
+        args = []
+        for p in params:
+            if p is None:
+                args.append({"type": "null", "value": None})
+            elif isinstance(p, int):
+                args.append({"type": "integer", "value": str(p)})
+            elif isinstance(p, float):
+                args.append({"type": "float", "value": p})
+            else:
+                args.append({"type": "text", "value": str(p)})
+        stmt["stmt"]["args"] = args
+
+    body = {"requests": [stmt, {"type": "close"}]}
+    req = urllib.request.Request(
+        url,
+        data=json.dumps(body).encode(),
+        headers={
+            'Authorization': f'Bearer {TURSO_AUTH_TOKEN}',
+            'Content-Type': 'application/json',
+        },
+        method='POST',
+    )
+
+    with urllib.request.urlopen(req, timeout=10) as resp:
+        data = json.loads(resp.read().decode())
+        result = data.get('results', [{}])[0]
+        if 'error' in result:
+            raise RuntimeError(f"Turso: {result['error']}")
+        res = result.get('response', {}).get('result', {})
+        cols = [c['name'] for c in res.get('cols', [])]
+        rows = []
+        for row in res.get('rows', []):
+            d = {}
+            for i, col in enumerate(cols):
+                cell = row[i]
+                if cell is None or cell.get('type') == 'null':
+                    d[col] = None
+                elif cell.get('type') == 'integer':
+                    d[col] = int(cell['value'])
+                elif cell.get('type') == 'float':
+                    d[col] = float(cell['value'])
+                else:
+                    d[col] = cell.get('value')
+            rows.append(d)
+        return rows
+
+
+def get_plant_db_detail(plant_id, origin):
+    """GET /plants/db/{plant_id} — full plant card from Turso."""
+    try:
+        # Main plant record
+        plants = turso_query("SELECT * FROM plants WHERE plant_id = ?", [plant_id])
+        if not plants:
+            return {
+                'statusCode': 404,
+                'headers': cors_headers(origin),
+                'body': json.dumps({'error': 'Plant not found'})
+            }
+        plant = plants[0]
+
+        # Care data
+        care_rows = turso_query("SELECT * FROM care WHERE plant_id = ?", [plant_id])
+        care = care_rows[0] if care_rows else {}
+        # Parse JSON arrays
+        for field in ('common_problems', 'common_pests'):
+            if field in care and isinstance(care[field], str):
+                try:
+                    care[field] = json.loads(care[field])
+                except (json.JSONDecodeError, TypeError):
+                    care[field] = []
+
+        # Common names
+        names = turso_query(
+            "SELECT lang, name, is_primary FROM common_names WHERE plant_id = ?",
+            [plant_id]
+        )
+        common_names = {}
+        for n in names:
+            lang = n['lang']
+            if lang not in common_names:
+                common_names[lang] = []
+            common_names[lang].append(n['name'])
+
+        # Tags
+        tags_rows = turso_query("SELECT tag FROM plant_tags WHERE plant_id = ?", [plant_id])
+        tags = [t['tag'] for t in tags_rows]
+
+        # Parse sources JSON
+        sources = plant.get('sources')
+        if isinstance(sources, str):
+            try:
+                sources = json.loads(sources)
+            except (json.JSONDecodeError, TypeError):
+                sources = []
+
+        result = {
+            **plant,
+            'sources': sources,
+            'care': care,
+            'common_names': common_names,
+            'tags': tags,
+        }
+
+        return {
+            'statusCode': 200,
+            'headers': cors_headers(origin),
+            'body': json.dumps(result)
+        }
+
+    except Exception as e:
+        print(f"[ERROR] get_plant_db_detail: {e}")
+        return {
+            'statusCode': 500,
+            'headers': cors_headers(origin),
+            'body': json.dumps({'error': str(e)})
+        }
+
+
+def search_plant_db(event, origin):
+    """GET /plants/db/search?q=monstera&limit=20 — search by name."""
+    try:
+        query_params = event.get('queryStringParameters', {}) or {}
+        q = query_params.get('q', '').strip()
+        limit = min(int(query_params.get('limit', 20)), 50)
+
+        if not q or len(q) < 2:
+            return {
+                'statusCode': 400,
+                'headers': cors_headers(origin),
+                'body': json.dumps({'error': 'Query must be at least 2 characters'})
+            }
+
+        search_term = f'%{q}%'
+
+        # Search in scientific name, common names, and family
+        rows = turso_query("""
+            SELECT DISTINCT p.plant_id, p.scientific, p.family, p.preset,
+                   p.image_url, p.category,
+                   c.water_frequency, c.light_preferred,
+                   c.toxic_to_pets, c.toxic_to_humans, c.toxicity_note
+            FROM plants p
+            LEFT JOIN care c ON p.plant_id = c.plant_id
+            LEFT JOIN common_names cn ON p.plant_id = cn.plant_id
+            WHERE p.scientific LIKE ? OR cn.name LIKE ? OR p.family LIKE ?
+            ORDER BY
+                CASE WHEN p.scientific LIKE ? THEN 0 ELSE 1 END,
+                p.scientific
+            LIMIT ?
+        """, [search_term, search_term, search_term, f'{q}%', limit])
+
+        # Add primary common name for each result
+        for row in rows:
+            names = turso_query(
+                "SELECT name FROM common_names WHERE plant_id = ? AND lang = 'en' AND is_primary = 1 LIMIT 1",
+                [row['plant_id']]
+            )
+            row['common_name'] = names[0]['name'] if names else ''
+
+        return {
+            'statusCode': 200,
+            'headers': cors_headers(origin),
+            'body': json.dumps({'results': rows, 'count': len(rows), 'query': q})
+        }
+
+    except Exception as e:
+        print(f"[ERROR] search_plant_db: {e}")
+        return {
+            'statusCode': 500,
+            'headers': cors_headers(origin),
+            'body': json.dumps({'error': str(e)})
+        }
+
+
+def get_plant_db_stats(origin):
+    """GET /plants/db/stats — database statistics."""
+    try:
+        total = turso_query("SELECT COUNT(*) as cnt FROM plants")
+        families = turso_query("SELECT COUNT(DISTINCT family) as cnt FROM plants")
+        latest = turso_query("SELECT MAX(updated_at) as last_updated FROM plants")
+
+        return {
+            'statusCode': 200,
+            'headers': cors_headers(origin),
+            'body': json.dumps({
+                'total_plants': total[0]['cnt'],
+                'total_families': families[0]['cnt'],
+                'last_updated': latest[0]['last_updated'],
+            })
+        }
+    except Exception as e:
+        print(f"[ERROR] get_plant_db_stats: {e}")
+        return {
+            'statusCode': 500,
+            'headers': cors_headers(origin),
+            'body': json.dumps({'error': str(e)})
+        }
+
+
 def get_plant_care_handler(event, origin):
     """
     GET /plants/care?name=scientific_name&family=family_name
@@ -610,6 +1033,7 @@ iot_client = boto3.client('iot-data',
 s3_client = boto3.client('s3',
                         region_name='eu-central-1',
                         config=boto3.session.Config(signature_version='s3v4'))
+ses_client = boto3.client('ses', region_name='eu-central-1')
 
 # Table names (from environment)
 DEVICES_TABLE = os.environ.get('DEVICES_TABLE', 'polivalka_devices')
@@ -623,6 +1047,7 @@ devices_table = dynamodb.Table(DEVICES_TABLE)
 telemetry_table = dynamodb.Table(TELEMETRY_TABLE)
 commands_table = dynamodb.Table(COMMANDS_TABLE)
 history_table = dynamodb.Table('polivalka_admin_history')
+rate_limits_table = dynamodb.Table('polivalka_rate_limits')
 
 
 def add_device_history(device_id, event_type, user_email, details=None):
@@ -671,6 +1096,19 @@ def _to_dynamo_map(obj):
 PLANT_LIBRARY_LIMIT = 50  # Max entries per device (including soft-deleted)
 
 
+def _plant_summary(plant):
+    """Extract minimal plant info for device list (avoids sending full plant object)."""
+    if not plant or not plant.get('plant_id'):
+        return None
+    return {
+        'common_name': plant.get('common_name'),
+        'scientific': plant.get('scientific'),
+        'preset': plant.get('preset'),
+        'started_at': plant.get('started_at'),
+        'archived': plant.get('archived'),
+    }
+
+
 def _enforce_library_limit(plant_library):
     """
     Enforce plant_library size limit per device.
@@ -712,6 +1150,10 @@ def _auto_detach_plant(device, current_time):
     if existing_plant and existing_plant.get('plant_id') and not existing_plant.get('archived'):
         existing_plant['ended_at'] = current_time
         existing_plant['detached_at'] = current_time
+        # Record ended_at in device_history
+        dh = existing_plant.get('device_history', [])
+        if dh:
+            dh[-1]['ended_at'] = current_time
         plant_library.append(existing_plant)
         plant_library = _enforce_library_limit(plant_library)
         plant_name = existing_plant.get('common_name') or existing_plant.get('scientific', 'Unknown')
@@ -724,68 +1166,91 @@ def _auto_detach_plant(device, current_time):
 def save_plant_profile(user_id, event, origin):
     """
     POST /plants/save
-    Save plant profile to device record.
-    If device already has a plant — auto-detach it to plant_library (seamless).
-    Body: { device_id: "Polivalka-A1B2C3", plant: {...} }
+    Save plant profile. Two modes:
+    1) With device_id → save as active plant on device (auto-detach existing)
+    2) Without device_id → save to user's collection (virtual 'user-collection' record)
+    Body: { device_id?: "Polivalka-A1B2C3", plant: {...} }
     """
     try:
         body = json.loads(event.get('body', '{}'))
         device_id = body.get('device_id', '')
         plant_data = body.get('plant', {})
 
-        if not device_id or not plant_data:
+        if not plant_data:
             return {
                 'statusCode': 400,
                 'headers': cors_headers(origin),
-                'body': json.dumps({'error': 'Missing device_id or plant data'})
+                'body': json.dumps({'error': 'Missing plant data'})
             }
 
-        # Normalize device_id
-        if not device_id.startswith('Polivalka-'):
-            device_id = f'Polivalka-{device_id}'
-
-        # Verify user owns this device
-        response = devices_table.get_item(
-            Key={'user_id': user_id, 'device_id': device_id}
-        )
-        if 'Item' not in response:
-            return {
-                'statusCode': 404,
-                'headers': cors_headers(origin),
-                'body': json.dumps({'error': f'Device {device_id} not found for your account'})
-            }
-
-        device = response['Item']
         current_time = int(time.time())
 
-        # Auto-detach current plant (seamless — no user action needed)
-        plant_library, detached_name = _auto_detach_plant(device, current_time)
-        plant_library = _enforce_library_limit(plant_library)
-
-        # Generate plant_id if not provided (for data isolation)
+        # Generate plant_id if not provided
         if not plant_data.get('plant_id'):
             plant_data['plant_id'] = f"plant_{int(current_time * 1000)}"
-            plant_data['started_at'] = current_time
             plant_data['created_at'] = current_time
-            plant_data['device_history'] = [{'device_id': device_id, 'started_at': current_time}]
 
-        # Add/update saved_at timestamp
         plant_data['saved_at'] = current_time
 
-        # Update device: new plant + updated library
-        devices_table.update_item(
-            Key={'user_id': user_id, 'device_id': device_id},
-            UpdateExpression='SET plant = :plant, plant_library = :library',
-            ExpressionAttributeValues={':plant': plant_data, ':library': plant_library}
-        )
+        # --- Mode 1: Save to device ---
+        if device_id:
+            if not device_id.startswith('Polivalka-'):
+                device_id = f'Polivalka-{device_id}'
 
-        # Add to device history
-        plant_name = plant_data.get('common_name') or plant_data.get('scientific', 'Unknown')
-        if detached_name:
-            add_device_history(device_id, 'plant_detached', user_id, detached_name)
-        add_device_history(device_id, 'plant_saved', user_id, plant_name)
+            device = get_device_info(device_id, user_id)
+            if not device:
+                return {
+                    'statusCode': 404,
+                    'headers': cors_headers(origin),
+                    'body': json.dumps({'error': f'Device {device_id} not found for your account'})
+                }
 
-        print(f"[PLANTS] Saved plant profile for {device_id}: {plant_data.get('scientific', 'unknown')}")
+            actual_user_id = device['user_id']
+
+            plant_library, detached_name = _auto_detach_plant(device, current_time)
+            plant_library = _enforce_library_limit(plant_library)
+
+            if not plant_data.get('started_at'):
+                plant_data['started_at'] = current_time
+            if not plant_data.get('device_history'):
+                plant_data['device_history'] = [{'device_id': device_id, 'started_at': current_time}]
+
+            devices_table.update_item(
+                Key={'user_id': actual_user_id, 'device_id': device_id},
+                UpdateExpression='SET plant = :plant, plant_library = :library',
+                ExpressionAttributeValues={':plant': plant_data, ':library': plant_library}
+            )
+
+            plant_name = plant_data.get('common_name') or plant_data.get('scientific', 'Unknown')
+            if detached_name:
+                add_device_history(device_id, 'plant_detached', user_id, detached_name)
+            add_device_history(device_id, 'plant_saved', user_id, plant_name)
+
+            print(f"[PLANTS] Saved plant to device {device_id}: {plant_data.get('scientific', 'unknown')}")
+
+        # --- Mode 2: Save to user collection (no device) ---
+        else:
+            collection_id = 'user-collection'
+
+            # Get or create virtual collection record
+            try:
+                resp = devices_table.get_item(Key={'user_id': user_id, 'device_id': collection_id})
+                collection = resp.get('Item', {})
+            except Exception:
+                collection = {}
+
+            plant_library = list(collection.get('plant_library', []))
+            plant_library.append(plant_data)
+            plant_library = _enforce_library_limit(plant_library)
+
+            devices_table.update_item(
+                Key={'user_id': user_id, 'device_id': collection_id},
+                UpdateExpression='SET plant_library = :library',
+                ExpressionAttributeValues={':library': plant_library}
+            )
+
+            print(f"[PLANTS] Saved plant to collection for {user_id}: {plant_data.get('scientific', 'unknown')}")
+
         return {
             'statusCode': 200,
             'headers': cors_headers(origin),
@@ -812,17 +1277,16 @@ def archive_plant_profile(user_id, device_id, origin):
         if not device_id.startswith('Polivalka-'):
             device_id = f'Polivalka-{device_id}'
 
-        response = devices_table.get_item(
-            Key={'user_id': user_id, 'device_id': device_id}
-        )
-        if 'Item' not in response:
+        # Admin-aware device lookup
+        device = get_device_info(device_id, user_id)
+        if not device:
             return {
                 'statusCode': 404,
                 'headers': cors_headers(origin),
                 'body': json.dumps({'error': f'Device {device_id} not found for your account'})
             }
 
-        device = response['Item']
+        actual_user_id = device['user_id']
         plant = device.get('plant')
         if not plant:
             return {
@@ -837,12 +1301,17 @@ def archive_plant_profile(user_id, device_id, origin):
         plant['archived_at'] = current_time
         plant['ended_at'] = current_time
 
+        # Update device_history: record ended_at on the last entry
+        device_history = plant.get('device_history', [])
+        if device_history:
+            device_history[-1]['ended_at'] = current_time
+
         plant_library = list(device.get('plant_library', []))
         plant_library.append(plant)
         plant_library = _enforce_library_limit(plant_library)
 
         devices_table.update_item(
-            Key={'user_id': user_id, 'device_id': device_id},
+            Key={'user_id': actual_user_id, 'device_id': device_id},
             UpdateExpression='SET plant_library = :library REMOVE plant',
             ExpressionAttributeValues={':library': plant_library}
         )
@@ -879,17 +1348,16 @@ def unarchive_plant_profile(user_id, device_id, origin, event=None):
         if not device_id.startswith('Polivalka-'):
             device_id = f'Polivalka-{device_id}'
 
-        response = devices_table.get_item(
-            Key={'user_id': user_id, 'device_id': device_id}
-        )
-        if 'Item' not in response:
+        # Admin-aware device lookup
+        device = get_device_info(device_id, user_id)
+        if not device:
             return {
                 'statusCode': 404,
                 'headers': cors_headers(origin),
                 'body': json.dumps({'error': f'Device {device_id} not found for your account'})
             }
 
-        device = response['Item']
+        actual_user_id = device['user_id']
         plant_library = list(device.get('plant_library', []))
         query_params = (event.get('queryStringParameters', {}) or {}) if event else {}
         target_plant_id = query_params.get('plant_id')
@@ -925,6 +1393,10 @@ def unarchive_plant_profile(user_id, device_id, origin, event=None):
         if existing_plant and existing_plant.get('plant_id'):
             existing_plant['ended_at'] = current_time
             existing_plant['detached_at'] = current_time
+            # Record ended_at in device_history
+            dh = existing_plant.get('device_history', [])
+            if dh:
+                dh[-1]['ended_at'] = current_time
             plant_library.append(existing_plant)
             plant_library = _enforce_library_limit(plant_library)
             detached_name = existing_plant.get('common_name') or existing_plant.get('scientific', 'Unknown')
@@ -937,9 +1409,13 @@ def unarchive_plant_profile(user_id, device_id, origin, event=None):
         plant.pop('detached_at', None)
         plant['started_at'] = current_time
         plant['saved_at'] = current_time
+        # Track re-attachment in device_history
+        history = plant.get('device_history', [])
+        history.append({'device_id': device_id, 'started_at': current_time})
+        plant['device_history'] = history
 
         devices_table.update_item(
-            Key={'user_id': user_id, 'device_id': device_id},
+            Key={'user_id': actual_user_id, 'device_id': device_id},
             UpdateExpression='SET plant = :plant, plant_library = :library',
             ExpressionAttributeValues={':plant': plant, ':library': plant_library}
         )
@@ -975,17 +1451,16 @@ def delete_plant_profile(user_id, device_id, origin, event=None):
         if not device_id.startswith('Polivalka-'):
             device_id = f'Polivalka-{device_id}'
 
-        response = devices_table.get_item(
-            Key={'user_id': user_id, 'device_id': device_id}
-        )
-        if 'Item' not in response:
+        # Admin-aware device lookup
+        device = get_device_info(device_id, user_id)
+        if not device:
             return {
                 'statusCode': 404,
                 'headers': cors_headers(origin),
                 'body': json.dumps({'error': f'Device {device_id} not found for your account'})
             }
 
-        device = response['Item']
+        actual_user_id = device['user_id']
         current_time = int(time.time())
         query_params = (event.get('queryStringParameters', {}) or {}) if event else {}
         target_plant_id = query_params.get('plant_id')
@@ -993,29 +1468,47 @@ def delete_plant_profile(user_id, device_id, origin, event=None):
         plant_library = list(device.get('plant_library', []))
 
         if target_plant_id:
-            # Soft-delete specific plant from plant_library
-            target = next((p for p in plant_library if p.get('plant_id') == target_plant_id), None)
-            if not target:
-                return {
-                    'statusCode': 404,
-                    'headers': cors_headers(origin),
-                    'body': json.dumps({'error': f'Plant {target_plant_id} not found in library'})
-                }
-            if target.get('deleted'):
-                return {
-                    'statusCode': 400,
-                    'headers': cors_headers(origin),
-                    'body': json.dumps({'error': f'Plant {target_plant_id} is already deleted'})
-                }
-            plant_name = target.get('common_name') or target.get('scientific', 'Unknown')
-            # Mark as deleted (don't remove from library)
-            target['deleted'] = True
-            target['deleted_at'] = current_time
-            devices_table.update_item(
-                Key={'user_id': user_id, 'device_id': device_id},
-                UpdateExpression='SET plant_library = :library',
-                ExpressionAttributeValues={':library': plant_library}
-            )
+            # Check if target is the active plant first
+            active_plant = device.get('plant', {})
+            if active_plant.get('plant_id') == target_plant_id:
+                # Delete active plant (same as no-plant_id path)
+                plant_name = active_plant.get('common_name') or active_plant.get('scientific', 'Unknown')
+                active_plant['deleted'] = True
+                active_plant['deleted_at'] = current_time
+                active_plant['ended_at'] = current_time
+                dh = active_plant.get('device_history', [])
+                if dh:
+                    dh[-1]['ended_at'] = current_time
+                plant_library.append(active_plant)
+                plant_library = _enforce_library_limit(plant_library)
+                devices_table.update_item(
+                    Key={'user_id': actual_user_id, 'device_id': device_id},
+                    UpdateExpression='SET plant_library = :library REMOVE plant',
+                    ExpressionAttributeValues={':library': plant_library}
+                )
+            else:
+                # Soft-delete specific plant from plant_library
+                target = next((p for p in plant_library if p.get('plant_id') == target_plant_id), None)
+                if not target:
+                    return {
+                        'statusCode': 404,
+                        'headers': cors_headers(origin),
+                        'body': json.dumps({'error': f'Plant {target_plant_id} not found in library'})
+                    }
+                if target.get('deleted'):
+                    return {
+                        'statusCode': 400,
+                        'headers': cors_headers(origin),
+                        'body': json.dumps({'error': f'Plant {target_plant_id} is already deleted'})
+                    }
+                plant_name = target.get('common_name') or target.get('scientific', 'Unknown')
+                target['deleted'] = True
+                target['deleted_at'] = current_time
+                devices_table.update_item(
+                    Key={'user_id': actual_user_id, 'device_id': device_id},
+                    UpdateExpression='SET plant_library = :library',
+                    ExpressionAttributeValues={':library': plant_library}
+                )
         else:
             # Soft-delete active plant: move to library with deleted flag
             plant = device.get('plant', {})
@@ -1029,10 +1522,14 @@ def delete_plant_profile(user_id, device_id, origin, event=None):
             plant['deleted'] = True
             plant['deleted_at'] = current_time
             plant['ended_at'] = current_time
+            # Record ended_at in device_history
+            dh = plant.get('device_history', [])
+            if dh:
+                dh[-1]['ended_at'] = current_time
             plant_library.append(plant)
             plant_library = _enforce_library_limit(plant_library)
             devices_table.update_item(
-                Key={'user_id': user_id, 'device_id': device_id},
+                Key={'user_id': actual_user_id, 'device_id': device_id},
                 UpdateExpression='SET plant_library = :library REMOVE plant',
                 ExpressionAttributeValues={':library': plant_library}
             )
@@ -1055,9 +1552,78 @@ def delete_plant_profile(user_id, device_id, origin, event=None):
         }
 
 
-def _plant_to_entry(plant, device_id, device, active=True):
+def delete_collection_plant(user_id, origin, event=None):
+    """
+    DELETE /plants/user-collection?plant_id=xxx
+    Soft-delete a plant saved to user-collection (no device).
+    Marks the plant as deleted in the user-collection record.
+    """
+    try:
+        query_params = (event.get('queryStringParameters', {}) or {}) if event else {}
+        target_plant_id = query_params.get('plant_id')
+        if not target_plant_id:
+            return {
+                'statusCode': 400,
+                'headers': cors_headers(origin),
+                'body': json.dumps({'error': 'plant_id query parameter is required'})
+            }
+
+        device_id = 'user-collection'
+        # Get user-collection record
+        response = devices_table.get_item(Key={'user_id': user_id, 'device_id': device_id})
+        device = response.get('Item')
+        if not device:
+            return {
+                'statusCode': 404,
+                'headers': cors_headers(origin),
+                'body': json.dumps({'error': 'No user-collection found'})
+            }
+
+        plant_library = list(device.get('plant_library', []))
+        target = next((p for p in plant_library if p.get('plant_id') == target_plant_id), None)
+        if not target:
+            return {
+                'statusCode': 404,
+                'headers': cors_headers(origin),
+                'body': json.dumps({'error': f'Plant {target_plant_id} not found in collection'})
+            }
+        if target.get('deleted'):
+            return {
+                'statusCode': 400,
+                'headers': cors_headers(origin),
+                'body': json.dumps({'error': f'Plant {target_plant_id} is already deleted'})
+            }
+
+        plant_name = target.get('common_name') or target.get('scientific', 'Unknown')
+        current_time = int(time.time())
+        target['deleted'] = True
+        target['deleted_at'] = current_time
+
+        devices_table.update_item(
+            Key={'user_id': user_id, 'device_id': device_id},
+            UpdateExpression='SET plant_library = :library',
+            ExpressionAttributeValues={':library': plant_library}
+        )
+
+        print(f"[PLANTS] Soft-deleted collection plant for {user_id}: {plant_name}")
+        return {
+            'statusCode': 200,
+            'headers': cors_headers(origin),
+            'body': json.dumps({'success': True, 'message': 'Plant deleted from collection'})
+        }
+
+    except Exception as e:
+        print(f"[PLANTS] Error deleting collection plant: {e}")
+        return {
+            'statusCode': 500,
+            'headers': cors_headers(origin),
+            'body': json.dumps({'error': str(e)})
+        }
+
+
+def _plant_to_entry(plant, device_id, device, active=True, owner=None):
     """Helper: convert plant data to library entry format."""
-    return {
+    entry = {
         'plant_id': plant.get('plant_id'),
         'scientific': plant.get('scientific'),
         'common_name': plant.get('common_name'),
@@ -1080,37 +1646,54 @@ def _plant_to_entry(plant, device_id, device, active=True):
         'device_location': device.get('location', ''),
         'device_room': device.get('room', ''),
     }
+    if owner:
+        entry['owner'] = owner
+    return entry
 
 
 def get_plant_library(user_id, origin):
     """
     GET /plants/library
     Get all plant profiles for this user (active + library from all devices).
+    Admin sees ALL users' plants. Regular users see only their own.
     Returns list with 'active' flag to distinguish current vs detached/archived.
     """
     try:
-        response = devices_table.query(
-            KeyConditionExpression=Key('user_id').eq(user_id)
-        )
+        is_admin = user_id in ADMIN_EMAILS
+
+        if is_admin:
+            # Admin: scan ALL devices to see all users' plants
+            response = devices_table.scan()
+        else:
+            response = devices_table.query(
+                KeyConditionExpression=Key('user_id').eq(user_id)
+            )
 
         plants = []
         for device in response.get('Items', []):
             device_id = device.get('device_id')
+            device_owner = device.get('user_id', '')
+            # For admin: show device owner only when multiple users exist
+            # Admin is the system owner — don't label own devices with email
+            owner = device_owner if is_admin else None
 
             # Active plant on device
             plant = device.get('plant')
             if plant and plant.get('plant_id'):
-                plants.append(_plant_to_entry(plant, device_id, device, active=True))
+                plants.append(_plant_to_entry(plant, device_id, device, active=True, owner=owner))
 
-            # Detached/archived plants in library (exclude soft-deleted for regular users)
+            # Library plants: admin sees all (incl. deleted), users see only non-deleted
             for lib_plant in device.get('plant_library', []):
-                if lib_plant.get('plant_id') and not lib_plant.get('deleted'):
-                    plants.append(_plant_to_entry(lib_plant, device_id, device, active=False))
+                if not lib_plant.get('plant_id'):
+                    continue
+                if lib_plant.get('deleted') and not is_admin:
+                    continue
+                plants.append(_plant_to_entry(lib_plant, device_id, device, active=False, owner=owner))
 
         # Sort: active first, then by saved_at descending
         plants.sort(key=lambda x: (not x.get('active', False), -(x.get('saved_at', 0) or 0)))
 
-        print(f"[PLANTS] Library for {user_id}: {len(plants)} plants")
+        print(f"[PLANTS] Library for {user_id} (admin={is_admin}): {len(plants)} plants")
         return {
             'statusCode': 200,
             'headers': cors_headers(origin),
@@ -1150,21 +1733,24 @@ def assign_plant_to_device(user_id, device_id, event, origin):
         if not device_id.startswith('Polivalka-'):
             device_id = f'Polivalka-{device_id}'
 
-        # Verify user owns target device
-        target_response = devices_table.get_item(
-            Key={'user_id': user_id, 'device_id': device_id}
-        )
-        if 'Item' not in target_response:
+        # Verify user owns target device (admin-aware)
+        target_device_info = get_device_info(device_id, user_id)
+        if not target_device_info:
             return {
                 'statusCode': 404,
                 'headers': cors_headers(origin),
                 'body': json.dumps({'error': f'Device {device_id} not found for your account'})
             }
+        actual_user_id = target_device_info['user_id']
 
         # Find source plant in user's devices (active plants + plant_library)
-        all_devices = devices_table.query(
-            KeyConditionExpression=Key('user_id').eq(user_id)
-        )
+        is_admin = user_id in ADMIN_EMAILS
+        if is_admin:
+            all_devices = devices_table.scan()
+        else:
+            all_devices = devices_table.query(
+                KeyConditionExpression=Key('user_id').eq(user_id)
+            )
 
         source_plant = None
         source_device_id = None
@@ -1206,7 +1792,7 @@ def assign_plant_to_device(user_id, device_id, event, origin):
             }
 
         current_time = int(time.time())
-        target_device = target_response['Item']
+        target_device = target_device_info
 
         # Auto-detach current plant on target device (seamless)
         target_library, detached_name = _auto_detach_plant(target_device, current_time)
@@ -1233,7 +1819,7 @@ def assign_plant_to_device(user_id, device_id, event, origin):
             # Remove source from library since it becomes the new active plant
             target_library = [p for p in target_library if p.get('plant_id') != source_plant_id]
             devices_table.update_item(
-                Key={'user_id': user_id, 'device_id': device_id},
+                Key={'user_id': actual_user_id, 'device_id': device_id},
                 UpdateExpression='SET plant = :plant, plant_library = :library',
                 ExpressionAttributeValues={':plant': source_plant, ':library': target_library}
             )
@@ -1250,11 +1836,13 @@ def assign_plant_to_device(user_id, device_id, event, origin):
 
             transact_items = []
 
+            # Source device: use its actual user_id from DB
+            source_actual_user_id = source_device.get('user_id', user_id)
             source_item = {
                 'Update': {
                     'TableName': DEVICES_TABLE,
                     'Key': {
-                        'user_id': {'S': user_id},
+                        'user_id': {'S': source_actual_user_id},
                         'device_id': {'S': source_device_id}
                     },
                     'UpdateExpression': source_update_expr,
@@ -1268,7 +1856,7 @@ def assign_plant_to_device(user_id, device_id, event, origin):
                 'Update': {
                     'TableName': DEVICES_TABLE,
                     'Key': {
-                        'user_id': {'S': user_id},
+                        'user_id': {'S': actual_user_id},
                         'device_id': {'S': device_id}
                     },
                     'UpdateExpression': 'SET plant = :plant, plant_library = :library',
@@ -1323,20 +1911,16 @@ def get_plant_profile(user_id, device_id, origin):
         if not device_id.startswith('Polivalka-'):
             device_id = f'Polivalka-{device_id}'
 
-        # Get THIS user's device record directly (not via GSI which returns all users)
-        response = devices_table.get_item(
-            Key={'user_id': user_id, 'device_id': device_id}
-        )
+        # Admin-aware lookup (admin sees all devices, user sees own)
+        device = get_device_info(device_id, user_id)
 
-        if 'Item' not in response:
-            # User doesn't have this device
+        if not device:
             return {
                 'statusCode': 404,
                 'headers': cors_headers(origin),
                 'body': json.dumps({'error': f'Device {device_id} not found for your account'})
             }
 
-        device = response['Item']
         plant = device.get('plant')
         return {
             'statusCode': 200,
@@ -1406,12 +1990,15 @@ def lambda_handler(event, context):
     user_id = get_user_from_event(event)
 
     # Public endpoints that don't require authentication
-    PUBLIC_PATHS = ['/plants/identify', '/plants/care']
+    PUBLIC_PATHS = ['/plants/identify', '/plants/care', '/plants/db/stats', '/plants/db/search',
+                    '/waitlist/join', '/waitlist/signup']
 
     # SECURITY: Require valid authentication for all API endpoints
     # MVP fallback removed 2025-12-06 (security hardening)
     # Exception: /plants/* endpoints are public (plant recognition for everyone)
-    if not user_id and path not in PUBLIC_PATHS:
+    # Plant DB detail /plants/db/{id} is also public (prefix check below)
+    is_public = path in PUBLIC_PATHS or path.startswith('/plants/db/')
+    if not user_id and not is_public:
         return {
             'statusCode': 401,
             'headers': cors_headers(origin),
@@ -1420,6 +2007,14 @@ def lambda_handler(event, context):
 
     # Route to appropriate handler
     print(f"[DEBUG] path={path}, user_id={user_id}")
+
+    # ============ Public: Waitlist (no auth) ============
+    if path == '/waitlist/join' and http_method == 'GET':
+        return waitlist_join(event)
+
+    if path == '/waitlist/signup' and http_method == 'POST':
+        return waitlist_signup(event, origin)
+
     if path == '/devices' and http_method == 'GET':
         return get_devices(user_id)
 
@@ -1457,7 +2052,7 @@ def lambda_handler(event, context):
                 return get_sensor_realtime(device_id, user_id)
 
             if len(parts) == 5 and parts[3] == 'sensor' and parts[4] == 'history':
-                return get_sensor_history(device_id, user_id)
+                return get_sensor_history(device_id, user_id, event=event)
 
             # Sensor presets endpoint - GET returns config from devices_table
             if len(parts) == 5 and parts[3] == 'sensor' and parts[4] == 'preset' and http_method == 'GET':
@@ -1557,18 +2152,24 @@ def lambda_handler(event, context):
                 # FLEET ARCHITECTURE: Read from devices.latest (single source of truth)
                 device_info = get_device_info(device_id, user_id)
                 latest = device_info.get('latest') or {}
-                # devices.latest is populated by dual-write (iot_rule_telemetry + iot_rule_response)
-                mode = latest.get('system', {}).get('mode', 'manual')
-                state = latest.get('system', {}).get('state', 'DISABLED')
+                system = latest.get('system', {})
+                # Sensor uses shared 'state' field (no separate sensor_state in ESP32 telemetry)
+                mode = system.get('mode', 'manual')
+                state = system.get('state', 'DISABLED')
+                if mode != 'sensor':
+                    state = 'DISABLED'
+                # Validate: state field is shared with timer mode, reject invalid sensor states
+                valid_sensor_states = {'DISABLED', 'LAUNCH', 'STANDBY', 'PULSE', 'SETTLE', 'CHECK', 'COOLDOWN', 'EMERGENCY'}
+                if state not in valid_sensor_states:
+                    state = 'DISABLED'
+                # Use real sensor_arming_countdown from telemetry (not hardcoded)
+                arming_countdown = int(system.get('sensor_arming_countdown', 0))
+
                 # Sensor data with ADC < 100 check (defense against pre-fix data)
                 sensor_data = latest.get('sensor', {})
                 adc_raw = sensor_data.get('adc_raw')
                 sensor_disconnected = adc_raw is not None and int(adc_raw) < 100
                 moisture_pct = None if sensor_disconnected else sensor_data.get('moisture_percent')
-
-                # arming_countdown: 60 when LAUNCH, 0 otherwise
-                # Frontend will show countdown locally
-                arming_countdown = 60 if state == 'LAUNCH' else 0
 
                 return {
                     'statusCode': 200,
@@ -1577,22 +2178,22 @@ def lambda_handler(event, context):
                         'state': state,
                         'arming_countdown': arming_countdown,
                         'moisture_pct': moisture_pct,
-                        'daily_water_ml': 0,
-                        'daily_hard_limit_reached': False,
-                        'pulses_delivered': 0,
-                        'total_water_ml': 0,
-                        'cooldown_remaining': 0,
-                        'warning_active': False,
-                        'warning_msg': '',
+                        'daily_water_ml': int(system.get('daily_water_ml', 0)),
+                        'daily_hard_limit_reached': system.get('daily_hard_limit_reached', False),
+                        'pulses_delivered': int(system.get('pulses_in_cycle', 0)),
+                        'total_water_ml': int(system.get('total_water_ml', 0)),
+                        'cooldown_remaining': int(system.get('cooldown_remaining_sec', 0)),
+                        'warning_active': system.get('warning_active', False),
+                        'warning_msg': system.get('warning_msg', ''),
                         'watering': state in ['PULSE', 'SETTLE', 'CHECK'],
-                        'start_threshold': 35,
-                        'stop_threshold': 55,
-                        'pulse_duration': 32,
-                        'retry_interval': 600,
+                        'start_threshold': int(system.get('start_pct', 35)),
+                        'stop_threshold': int(system.get('stop_pct', 55)),
+                        'pulse_duration': int(system.get('pulse_sec', 32)),
+                        'retry_interval': int(system.get('wait_sec', 600)),
                         'last_check': None,
                         'last_watering': None,
                         'timestamp': int(time.time())
-                    })
+                    }, cls=DecimalEncoder)
                 }
 
             # Timer controller endpoints - send MQTT command to ESP32
@@ -1643,12 +2244,17 @@ def lambda_handler(event, context):
                 # FLEET ARCHITECTURE: Read from devices.latest (single source of truth)
                 device_info = get_device_info(device_id, user_id)
                 latest = device_info.get('latest') or {}
-                # devices.latest is populated by dual-write (iot_rule_telemetry + iot_rule_response)
-                mode = latest.get('system', {}).get('mode', 'manual')
-                state = latest.get('system', {}).get('state', 'DISABLED')
-
-                # arming_countdown_sec: 15 when LAUNCH, 0 otherwise (timer uses 15 sec)
-                arming_countdown_sec = 15 if state == 'LAUNCH' else 0
+                system = latest.get('system', {})
+                # Use timer-specific fields (immune to mode-transition timing issues)
+                # ESP32 publishes timer_state separately from shared state field
+                state = system.get('timer_state', 'DISABLED')
+                arming_countdown_sec = int(system.get('timer_arming_countdown', 0))
+                schedule_exists = system.get('timer_schedule_exists', False)
+                next_watering_sec = int(system.get('timer_next_watering_sec', 0))
+                next_watering_str = system.get('timer_next_watering_str', 'Not scheduled')
+                daily_water_ml = int(system.get('timer_daily_water_ml', 0))
+                warning_active = system.get('timer_warning_active', False)
+                warning_msg = system.get('timer_warning_msg', '')
 
                 return {
                     'statusCode': 200,
@@ -1656,19 +2262,15 @@ def lambda_handler(event, context):
                     'body': json.dumps({
                         'state': state,
                         'arming_countdown_sec': arming_countdown_sec,
-                        'schedule_exists': True,
-                        'next_watering_str': 'Not scheduled',
+                        'schedule_exists': schedule_exists,
+                        'next_watering_sec': next_watering_sec,
+                        'next_watering_str': next_watering_str,
                         'current_duration_sec': 0,
-                        'daily_water_ml': 0,
-                        'warning_active': False,
-                        'warning_msg': '',
-                        'morning_enabled': True,
-                        'morning_time': '06:00',
-                        'evening_enabled': False,
-                        'evening_time': '20:00',
-                        'duration': 30,
+                        'daily_water_ml': daily_water_ml,
+                        'warning_active': warning_active,
+                        'warning_msg': warning_msg,
                         'timestamp': int(time.time())
-                    })
+                    }, cls=DecimalEncoder)
                 }
 
             # Time status endpoint - for timer.html and settings.html
@@ -1704,6 +2306,9 @@ def lambda_handler(event, context):
 
             # Timezone GET endpoint - for settings.html
             if len(parts) == 5 and parts[3] == 'time' and parts[4] == 'timezone' and http_method == 'GET':
+                if not verify_device_access(device_id, user_id):
+                    return {'statusCode': 403, 'headers': cors_headers(origin),
+                            'body': json.dumps({'error': 'Access denied'})}
                 device_info = get_device_info(device_id, user_id)
                 tz_string = device_info.get('timezone', 'Europe/Warsaw')
                 return {
@@ -1717,6 +2322,9 @@ def lambda_handler(event, context):
 
             # Timezone POST endpoint - save to DynamoDB + send MQTT to ESP32
             if len(parts) == 5 and parts[3] == 'time' and parts[4] == 'timezone' and http_method == 'POST':
+                if not verify_device_access(device_id, user_id):
+                    return {'statusCode': 403, 'headers': cors_headers(origin),
+                            'body': json.dumps({'error': 'Access denied'})}
                 body = json.loads(event.get('body', '{}'))
                 new_tz = body.get('timezone', '')
                 if not new_tz:
@@ -1768,7 +2376,11 @@ def lambda_handler(event, context):
             # Schedules are stored on ESP32, not in DynamoDB
 
             if len(parts) == 5 and parts[3] == 'battery' and parts[4] == 'history':
-                return get_battery_history(device_id, user_id)
+                return get_battery_history(device_id, user_id, event=event)
+
+            # System telemetry history (WiFi RSSI, disconnect counts, restarts)
+            if len(parts) == 5 and parts[3] == 'system' and parts[4] == 'history':
+                return get_system_history(device_id, user_id, event=event)
 
             # Battery status (for home.html Cloud mode)
             if len(parts) == 5 and parts[3] == 'battery' and parts[4] == 'status' and http_method == 'GET':
@@ -1855,14 +2467,10 @@ def lambda_handler(event, context):
                     return {'statusCode': 403, 'headers': cors_headers(origin),
                             'body': json.dumps({'error': 'Access denied'})}
 
-                # Read config_timer from devices table
+                # Read config_timer from devices table (direct fetch, no GSI)
                 try:
-                    query_response = devices_table.query(
-                        IndexName='device_id-index',
-                        KeyConditionExpression=Key('device_id').eq(device_id)
-                    )
-                    if query_response['Items'] and len(query_response['Items']) > 0:
-                        device = query_response['Items'][0]
+                    device = get_device_info(device_id, user_id)
+                    if device:
                         schedules = device.get('config_timer', [])
                         updated = device.get('config_timer_updated', 0)
                         return {
@@ -1903,7 +2511,7 @@ def lambda_handler(event, context):
 
             # Activity log (commands + telemetry combined)
             if len(parts) == 4 and parts[3] == 'activity' and http_method == 'GET':
-                return get_device_activity(device_id, user_id)
+                return get_device_activity(device_id, user_id, event=event)
 
             # ESP32 real-time logs from RAM buffer
             if len(parts) == 4 and parts[3] == 'logs' and http_method == 'GET':
@@ -1917,6 +2525,18 @@ def lambda_handler(event, context):
             # GET /device/{id}/telemetry/config - Get telemetry config (admin only)
             if len(parts) == 5 and parts[3] == 'telemetry' and parts[4] == 'config' and http_method == 'GET':
                 return get_telemetry_config(device_id, user_id)
+
+    # ============ Plant DB Routes (Turso encyclopedia) ============
+    if path == '/plants/db/search' and http_method == 'GET':
+        return search_plant_db(event, origin)
+
+    if path == '/plants/db/stats' and http_method == 'GET':
+        return get_plant_db_stats(origin)
+
+    # GET /plants/db/{plant_id} — must be after /search and /stats
+    if path.startswith('/plants/db/') and http_method == 'GET' and path.count('/') == 3:
+        plant_id = path.split('/')[-1]
+        return get_plant_db_detail(plant_id, origin)
 
     # ============ Plant Recognition Routes (added 2025-12-06) ============
     # POST /plants/identify - Identify plant from image
@@ -1954,6 +2574,10 @@ def lambda_handler(event, context):
     if path.startswith('/plants/Polivalka-') and path.endswith('/assign') and http_method == 'POST':
         device_id = path.split('/')[2]  # /plants/Polivalka-XXX/assign -> Polivalka-XXX
         return assign_plant_to_device(user_id, device_id, event, origin)
+
+    # DELETE /plants/user-collection?plant_id=xxx - Delete saved plant (no device)
+    if path == '/plants/user-collection' and http_method == 'DELETE':
+        return delete_collection_plant(user_id, origin, event)
 
     # DELETE /plants/{device_id} - Delete plant profile
     if path.startswith('/plants/Polivalka-') and http_method == 'DELETE' and path.count('/') == 2:
@@ -2040,7 +2664,7 @@ def lambda_handler(event, context):
 
         # POST /admin/revoke-device - Revoke device from user, transfer back to admin
         if path == '/admin/revoke-device' and http_method == 'POST':
-            return admin_revoke_device(event)
+            return admin_revoke_device(event, user_id)
 
         # ============ Claims Management ============
         # GET /admin/claims - List all pending claims
@@ -2096,9 +2720,9 @@ def get_devices(user_id):
     items = response.get('Items', [])
     print(f"[DEBUG] get_devices: Found {len(items)} devices before filter: {[i['device_id'] for i in items]}")
 
-    # Filter out archived and deleted devices
+    # Filter out archived, deleted, and internal records (rate_limit)
     is_admin = user_id in ADMIN_EMAILS
-    items = [i for i in items if not i.get('archived') and not i.get('deleted')]
+    items = [i for i in items if not i.get('archived') and not i.get('deleted') and i.get('user_id') != 'rate_limit' and i.get('device_id') != 'user-collection']
     print(f"[DEBUG] get_devices: {len(items)} devices after filter (is_admin={is_admin})")
 
     devices = []
@@ -2110,19 +2734,23 @@ def get_devices(user_id):
             latest = item.get('latest') or {}
 
             # Merge device metadata + telemetry
+            system_data = latest.get('system', {})
             # Migration: "off" → "manual" (backward compatibility with old firmware)
-            mode = latest.get('system', {}).get('mode', 'manual')
+            mode = system_data.get('mode', 'manual')
             if mode == 'off':
                 mode = 'manual'
 
-            # Controller is enabled based on state from device telemetry
-            # state = DISABLED means controller is OFF
-            # state = LAUNCH/STANDBY/ACTIVE/etc means controller is ON
-            device_state = latest.get('system', {}).get('state', 'DISABLED')
+            # Controller enabled: use mode-specific state field
+            # Timer has dedicated timer_state; sensor uses shared state field
+            if mode == 'timer':
+                device_state = system_data.get('timer_state', 'DISABLED')
+            elif mode == 'sensor':
+                device_state = system_data.get('state', 'DISABLED')
+            else:
+                device_state = 'DISABLED'
             controller_enabled = device_state != 'DISABLED'
 
             # Device info: prefer telemetry (ESP32 source of truth), fallback to DynamoDB
-            system_data = latest.get('system', {})
             device_name = system_data.get('device_name') or item.get('device_name') or device_id
             device_location = system_data.get('location') or item.get('location') or '—'
             device_room = system_data.get('room') or item.get('room') or '—'
@@ -2150,6 +2778,7 @@ def get_devices(user_id):
                 'dry_soil': int(sensor_calib.get('dry_soil', 2400)) if sensor_calib else 2400,
                 'air': int(sensor_calib.get('air', 2800)) if sensor_calib else 2800
             }
+            sensor2_calib = item.get('sensor2_calibration', {})
 
             device_data = {
                 'device_id': device_id,
@@ -2167,8 +2796,8 @@ def get_devices(user_id):
                 'battery_charging': battery_charging,
                 'battery_no_data': battery_no_data,  # True = no telemetry yet
                 'mode': mode,
-                'controller_enabled': controller_enabled,  # True if state != DISABLED (from telemetry)
-                'state': latest.get('system', {}).get('state', 'UNKNOWN'),
+                'controller_enabled': controller_enabled,  # True if state != DISABLED
+                'state': device_state,  # Mode-specific: timer_state for timer, shared state for sensor
                 # firmware_version: prefer telemetry, fallback to devices table (skip "unknown" from both)
                 'firmware_version': (lambda fw_tel, fw_dev: fw_tel if fw_tel and fw_tel != 'unknown' else (fw_dev if fw_dev and fw_dev != 'unknown' else 'v1.0.0'))(latest.get('system', {}).get('firmware_version'), item.get('firmware_version')),
                 'reboot_count': item.get('reboot_count'),  # From devices table (persistent), not telemetry
@@ -2184,12 +2813,16 @@ def get_devices(user_id):
                 'pump_calibration': pump_calib_float,
                 'pump_speed': pump_speed_int,
                 'sensor_calibration': sensor_calib_dict,
+                'sensor2_calibration': sensor2_calib if sensor2_calib else {'dry': 100, 'wet': 3000},
                 'total_water_ml': int(item.get('total_water_ml', 0)) if item.get('total_water_ml') else None,
                 'pump_runtime_sec': int(item.get('pump_runtime_sec', 0)) if item.get('pump_runtime_sec') else None,
                 'pump_running': latest.get('pump', {}).get('running', False),  # For state display
                 # Owner info (for admin fleet view)
                 'owner': item.get('user_id'),
-                'claimed_at': item.get('claimed_at')
+                'claimed_at': item.get('claimed_at'),
+                'sta_rssi': latest.get('system', {}).get('sta_rssi'),
+                # Plant info (for admin/device overview)
+                'plant': _plant_summary(item.get('plant')),
             }
 
             devices.append(device_data)
@@ -2234,7 +2867,10 @@ def get_devices(user_id):
                 'total_water_ml': None,
                 'pump_runtime_sec': None,
                 'pump_running': False,
-                'owner': item.get('user_id')
+                'owner': item.get('user_id'),
+                'claimed_at': item.get('claimed_at'),
+                'sta_rssi': None,
+                'plant': _plant_summary(item.get('plant')),
             })
 
     print(f"[DEBUG] get_devices: Returning {len(devices)} devices")
@@ -2338,7 +2974,7 @@ def get_device_status(device_id, user_id):
             'location': device_location,
             'room': device_room,
             'mode': mode,
-            'state': latest.get('system', {}).get('state', 'STANDBY')
+            'state': system_data.get('timer_state', 'DISABLED') if mode == 'timer' else system_data.get('state', 'DISABLED')
         },
         'battery': latest.get('battery', {}),
         'last_watering': latest.get('last_watering'),
@@ -2346,7 +2982,8 @@ def get_device_status(device_id, user_id):
         'pump_elapsed_ms': pump_elapsed_ms,
         'pump_remaining_ms': pump_remaining_ms,
         'timestamp': latest.get('last_update'),
-        'online': is_device_online(latest.get('last_update'))  # Add online status
+        'online': is_device_online(latest.get('last_update')),  # Add online status
+        'sta_rssi': latest.get('system', {}).get('sta_rssi')
     }
 
     return {
@@ -2777,36 +3414,54 @@ def set_device_mode(device_id, user_id, body):
         }
 
 
-def get_sensor_history(device_id, user_id, days=7):
-    """GET /device/{id}/sensor/history - Get sensor data history"""
+def get_sensor_history(device_id, user_id, days=7, event=None):
+    """GET /device/{id}/sensor/history - Get sensor data history
+    Optional query params: ?start=<unix>&end=<unix> for archive mode"""
 
     if not verify_device_access(device_id, user_id):
         return {'statusCode': 403, 'headers': cors_headers(),
                 'body': json.dumps({'error': 'Access denied'})}
 
-    # Query telemetry table for sensor data (last 7 days)
-    cutoff = int(time.time()) - (days * 86400)
+    # Archive mode: explicit start/end from query params
+    qsp = (event or {}).get('queryStringParameters') or {}
+    archive_start = qsp.get('start')
+    archive_end = qsp.get('end')
+
     telem_device_id = get_telemetry_device_id(device_id)
 
-    # Data isolation: filter by plant.started_at or claimed_at (unless admin)
-    # Priority: plant.started_at > claimed_at > 0
-    is_admin = user_id in ADMIN_EMAILS
-    if not is_admin:
-        device_info = get_device_info(device_id, user_id)
-        plant = device_info.get('plant', {})
-        plant_started_at = plant.get('started_at')
-        # Fallback to claimed_at if no plant profile yet (device just claimed)
-        if plant_started_at is None:
-            plant_started_at = device_info.get('claimed_at', 0)
-        if plant_started_at and plant_started_at > cutoff:
-            cutoff = plant_started_at  # Only show data since device was claimed/plant assigned
+    if archive_start and archive_end:
+        # Archive mode — query between start and end, skip data isolation
+        cutoff = int(archive_start)
+        end_cutoff = int(archive_end)
+        response = telemetry_table.query(
+            KeyConditionExpression=Key('device_id').eq(telem_device_id) &
+                                   Key('timestamp').between(cutoff, end_cutoff),
+            ScanIndexForward=False,
+            Limit=1000
+        )
+    else:
+        # Normal mode: last N days with data isolation
+        cutoff = int(time.time()) - (days * 86400)
 
-    response = telemetry_table.query(
-        KeyConditionExpression=Key('device_id').eq(telem_device_id) &
-                               Key('timestamp').gt(cutoff),
-        ScanIndexForward=False,  # Descending (newest first)
-        Limit=1000  # Max 1000 points
-    )
+        # Data isolation: filter by plant.started_at or claimed_at (unless admin)
+        # Priority: plant.started_at > claimed_at > 0
+        is_admin = user_id in ADMIN_EMAILS
+        if not is_admin:
+            device_info = get_device_info(device_id, user_id)
+            plant = device_info.get('plant', {})
+            plant_started_at = plant.get('started_at')
+            # Fallback to claimed_at if no plant profile yet (device just claimed)
+            if plant_started_at is None:
+                plant_started_at = device_info.get('claimed_at', 0)
+            if plant_started_at and plant_started_at > cutoff:
+                cutoff = plant_started_at  # Only show data since device was claimed/plant assigned
+
+        response = telemetry_table.query(
+            KeyConditionExpression=Key('device_id').eq(telem_device_id) &
+                                   Key('timestamp').gt(cutoff),
+            ScanIndexForward=False,  # Descending (newest first)
+            Limit=1000  # Max 1000 points
+        )
 
     # Extract sensor data points
     history = []
@@ -2880,35 +3535,54 @@ def get_battery_status(device_id, user_id):
     }
 
 
-def get_battery_history(device_id, user_id, days=7):
-    """GET /device/{id}/battery/history - Get battery data history"""
+def get_battery_history(device_id, user_id, days=7, event=None):
+    """GET /device/{id}/battery/history - Get battery data history
+    Optional query params: ?start=<unix>&end=<unix> for archive mode"""
 
     if not verify_device_access(device_id, user_id):
         return {'statusCode': 403, 'headers': cors_headers(),
                 'body': json.dumps({'error': 'Access denied'})}
 
-    cutoff = int(time.time()) - (days * 86400)
+    # Archive mode: explicit start/end from query params
+    qsp = (event or {}).get('queryStringParameters') or {}
+    archive_start = qsp.get('start')
+    archive_end = qsp.get('end')
+
     telem_device_id = get_telemetry_device_id(device_id)
 
-    # Data isolation: filter by plant.started_at or claimed_at (unless admin)
-    # Priority: plant.started_at > claimed_at > 0
-    is_admin = user_id in ADMIN_EMAILS
-    if not is_admin:
-        device_info = get_device_info(device_id, user_id)
-        plant = device_info.get('plant', {})
-        plant_started_at = plant.get('started_at')
-        # Fallback to claimed_at if no plant profile yet (device just claimed)
-        if plant_started_at is None:
-            plant_started_at = device_info.get('claimed_at', 0)
-        if plant_started_at and plant_started_at > cutoff:
-            cutoff = plant_started_at  # Only show data since device was claimed/plant assigned
+    if archive_start and archive_end:
+        # Archive mode — query between start and end, skip data isolation
+        cutoff = int(archive_start)
+        end_cutoff = int(archive_end)
+        response = telemetry_table.query(
+            KeyConditionExpression=Key('device_id').eq(telem_device_id) &
+                                   Key('timestamp').between(cutoff, end_cutoff),
+            ScanIndexForward=False,
+            Limit=1000
+        )
+    else:
+        # Normal mode: last N days with data isolation
+        cutoff = int(time.time()) - (days * 86400)
 
-    response = telemetry_table.query(
-        KeyConditionExpression=Key('device_id').eq(telem_device_id) &
-                               Key('timestamp').gt(cutoff),
-        ScanIndexForward=False,
-        Limit=1000
-    )
+        # Data isolation: filter by plant.started_at or claimed_at (unless admin)
+        # Priority: plant.started_at > claimed_at > 0
+        is_admin = user_id in ADMIN_EMAILS
+        if not is_admin:
+            device_info = get_device_info(device_id, user_id)
+            plant = device_info.get('plant', {})
+            plant_started_at = plant.get('started_at')
+            # Fallback to claimed_at if no plant profile yet (device just claimed)
+            if plant_started_at is None:
+                plant_started_at = device_info.get('claimed_at', 0)
+            if plant_started_at and plant_started_at > cutoff:
+                cutoff = plant_started_at  # Only show data since device was claimed/plant assigned
+
+        response = telemetry_table.query(
+            KeyConditionExpression=Key('device_id').eq(telem_device_id) &
+                                   Key('timestamp').gt(cutoff),
+            ScanIndexForward=False,
+            Limit=1000
+        )
 
     history = []
     for item in response.get('Items', []):
@@ -2921,6 +3595,77 @@ def get_battery_history(device_id, user_id, days=7):
                 'percent': battery_data.get('percent'),
                 'charging': battery_data.get('charging')
             })
+
+    return {
+        'statusCode': 200,
+        'headers': cors_headers(),
+        'body': json.dumps(history, cls=DecimalEncoder)
+    }
+
+
+def get_system_history(device_id, user_id, days=7, event=None):
+    """GET /device/{id}/system/history - Get system telemetry history (diagnostics)
+    Returns WiFi RSSI, disconnect counts, restart counts for Device Health charts.
+    Optional query params: ?start=<unix>&end=<unix> for archive mode"""
+
+    if not verify_device_access(device_id, user_id):
+        return {'statusCode': 403, 'headers': cors_headers(),
+                'body': json.dumps({'error': 'Access denied'})}
+
+    qsp = (event or {}).get('queryStringParameters') or {}
+    archive_start = qsp.get('start')
+    archive_end = qsp.get('end')
+
+    telem_device_id = get_telemetry_device_id(device_id)
+
+    if archive_start and archive_end:
+        cutoff = int(archive_start)
+        end_cutoff = int(archive_end)
+        response = telemetry_table.query(
+            KeyConditionExpression=Key('device_id').eq(telem_device_id) &
+                                   Key('timestamp').between(cutoff, end_cutoff),
+            ScanIndexForward=False,
+            Limit=1000
+        )
+    else:
+        cutoff = int(time.time()) - (days * 86400)
+
+        is_admin = user_id in ADMIN_EMAILS
+        if not is_admin:
+            device_info = get_device_info(device_id, user_id)
+            plant = device_info.get('plant', {})
+            plant_started_at = plant.get('started_at')
+            if plant_started_at is None:
+                plant_started_at = device_info.get('claimed_at', 0)
+            if plant_started_at and plant_started_at > cutoff:
+                cutoff = plant_started_at
+
+        response = telemetry_table.query(
+            KeyConditionExpression=Key('device_id').eq(telem_device_id) &
+                                   Key('timestamp').gt(cutoff),
+            ScanIndexForward=False,
+            Limit=1000
+        )
+
+    history = []
+    for item in response.get('Items', []):
+        if 'system' in item:
+            timestamp = int(item.get('timestamp', 0))
+            sys_data = item['system']
+            point = {
+                'timestamp': timestamp,
+                'sta_rssi': sys_data.get('sta_rssi'),
+                'wifi_disconnect_count': sys_data.get('wifi_disconnect_count'),
+                'wifi_disconnect_reason_str': sys_data.get('wifi_disconnect_reason_str'),
+                'reboot_count': sys_data.get('reboot_count'),
+                'unexpected_restarts': sys_data.get('unexpected_restarts'),
+                'heap_free': sys_data.get('heap_free'),
+                'warning_active': sys_data.get('warning_active'),
+                'warning_msg': sys_data.get('warning_msg'),
+                'boot_type': sys_data.get('boot_type'),
+                'reset_reason': sys_data.get('reset_reason'),
+            }
+            history.append(point)
 
     return {
         'statusCode': 200,
@@ -3085,20 +3830,20 @@ def format_uptime(uptime_ms):
 
 
 def is_device_online(last_update_timestamp):
-    """Check if device is online (updated within last 45 minutes)
+    """Check if device is online (updated within last 90 minutes)
 
     PRODUCTION telemetry intervals (app_main.c):
     - Sensor: 60 min (3600000ms)
     - Battery: 60 min (3600000ms)
-    - System: 30 min (1800000ms) - heartbeat
+    - System: 60 min (3600000ms)
 
-    Online threshold = 45 min (1.5x system heartbeat) to account for delays
+    Online threshold = 90 min (1.5x telemetry interval) to account for delays
     """
 
     if not last_update_timestamp:
         return False
 
-    return (int(time.time()) - last_update_timestamp) < 2700  # 45 min (1.5x 30 min heartbeat)
+    return (int(time.time()) - last_update_timestamp) < 5400  # 90 min (1.5x 60 min telemetry)
 
 
 def generate_warnings(telemetry):
@@ -3440,17 +4185,34 @@ def admin_get_users():
 # These are NOT admin-only - any authenticated user can use them
 
 def check_whitelist_status(user_id, event, origin):
-    """GET /whitelist/check?device_id=XXX - Check if user can claim a device"""
+    """GET /whitelist/check?device_id=XXX - Check if user can claim a device
+       GET /whitelist/check (no device_id) - Check if user is in whitelist"""
     try:
         # Get device_id from query params
         query_params = event.get('queryStringParameters') or {}
         device_id = query_params.get('device_id', '')
 
+        # No device_id: just check if user is in whitelist
         if not device_id:
+            whitelist_table = dynamodb.Table('polivalka_admin_users')
+            response = whitelist_table.get_item(Key={'email': user_id})
+            if 'Item' not in response:
+                return {
+                    'statusCode': 200,
+                    'headers': cors_headers(origin),
+                    'body': json.dumps({'whitelisted': False})
+                }
+            user_data = response['Item']
+            status = user_data.get('status', 'active')
+            devices = user_data.get('devices', [])
             return {
-                'statusCode': 400,
+                'statusCode': 200,
                 'headers': cors_headers(origin),
-                'body': json.dumps({'error': 'device_id required'})
+                'body': json.dumps({
+                    'whitelisted': status == 'active',
+                    'status': status,
+                    'devices': devices
+                })
             }
 
         # Ensure full device_id format: Polivalka-XXXXXX
@@ -3534,7 +4296,7 @@ def check_whitelist_status(user_id, event, origin):
 
 
 def create_user_claim(user_id, event, origin):
-    """POST /claims - Create new claim request"""
+    """POST /claims - Create new claim request (non-whitelisted users)"""
     try:
         body = json.loads(event.get('body', '{}'))
         # Ensure full device_id format: Polivalka-XXXXXX
@@ -3546,27 +4308,55 @@ def create_user_claim(user_id, event, origin):
         else:
             device_id = f'Polivalka-{raw_device_id}'
 
-        if not device_id:
+        # Validate device_id format (6 uppercase hex characters)
+        is_valid, error_msg = validate_device_id(device_id)
+        if not is_valid:
             return {
                 'statusCode': 400,
                 'headers': cors_headers(origin),
-                'body': json.dumps({'error': 'device_id required'})
+                'body': json.dumps({'error': error_msg})
+            }
+
+        # Verify device actually exists (registered via AWS IoT)
+        devices_table = dynamodb.Table('polivalka_devices')
+        existing = devices_table.query(
+            IndexName='device_id-index',
+            KeyConditionExpression='device_id = :did',
+            ExpressionAttributeValues={':did': device_id},
+            Limit=1
+        )
+        if not existing.get('Items'):
+            # Don't reveal whether device exists — generic error
+            return {
+                'statusCode': 400,
+                'headers': cors_headers(origin),
+                'body': json.dumps({'error': 'Invalid device ID. Check the serial number on your device label.'})
             }
 
         claims_table = dynamodb.Table('polivalka_admin_claims')
 
-        # Check if claim already exists
-        response = claims_table.scan(
-            FilterExpression='email = :email AND device_id = :device_id AND #s = :status',
+        # Rate limit: max 3 pending claims per user
+        all_user_claims = claims_table.scan(
+            FilterExpression='email = :email AND #s = :status',
             ExpressionAttributeNames={'#s': 'status'},
             ExpressionAttributeValues={
                 ':email': user_id,
-                ':device_id': device_id,
                 ':status': 'pending'
             }
         )
+        if len(all_user_claims.get('Items', [])) >= 3:
+            return {
+                'statusCode': 429,
+                'headers': cors_headers(origin),
+                'body': json.dumps({
+                    'success': False,
+                    'message': 'Too many pending requests. Please wait for admin to review.'
+                })
+            }
 
-        if response.get('Items'):
+        # Check if claim already exists for this device
+        duplicate = [c for c in all_user_claims.get('Items', []) if c.get('device_id') == device_id]
+        if duplicate:
             return {
                 'statusCode': 409,
                 'headers': cors_headers(origin),
@@ -3673,7 +4463,7 @@ def claim_device(user_id, event, origin):
         if 'Item' in existing:
             user_record_exists = True
             print(f"[Transfer] User {user_id} already has record for {device_id}, but CONTINUING to process transfers")
-                # DON'T RETURN EARLY! Must still process transfers for OTHER owners
+            # DON'T RETURN EARLY! Must still process transfers for OTHER owners
 
         current_time = int(time.time())
 
@@ -3685,10 +4475,7 @@ def claim_device(user_id, event, origin):
             KeyConditionExpression=Key('device_id').eq(device_id)
         )
 
-        # Collect data from previous owner's record to carry over
-        carried_latest = {}
-        carried_plant_library = []
-        carried_data = {}  # reboot_count, ota_count, calibration, etc.
+        # Process previous owner's records: archive plants, delete records
         transfer_count = 0
 
         for record in all_records.get('Items', []):
@@ -3705,22 +4492,16 @@ def claim_device(user_id, event, origin):
                 plant['archived'] = True
                 plant['archived_at'] = current_time
                 plant['previous_owner'] = prev_owner
+                # Record ended_at in device_history
+                dh = plant.get('device_history', [])
+                if dh:
+                    dh[-1]['ended_at'] = current_time
                 plant_library.append(plant)
                 plant_library = _enforce_library_limit(plant_library)
 
-            # Carry over data from previous owner's record
-            carried_latest = record.get('latest', {})
-            carried_plant_library = plant_library
-            carried_data = {
-                'reboot_count': record.get('reboot_count'),
-                'clean_restarts': record.get('clean_restarts'),
-                'unexpected_restarts': record.get('unexpected_restarts'),
-                'ota_count': record.get('ota_count'),
-                'ota_last_timestamp': record.get('ota_last_timestamp'),
-                'total_water_ml': record.get('total_water_ml'),
-                'pump_runtime_sec': record.get('pump_runtime_sec'),
-                'last_watering_timestamp': record.get('last_watering_timestamp'),
-            }
+            # Fresh start for new owner: do NOT carry over latest, library, or counters
+            # Plant library with archived plants stays with admin's record (already deleted above)
+            # Counters reset — admin can reset ESP32 counters via admin_reset_counters command
 
             # DELETE previous owner's record (not mark as transferred!)
             try:
@@ -3745,64 +4526,68 @@ def claim_device(user_id, event, origin):
             'room': 'Room',
         }
 
-        # Copy carried-over data (latest, counters, library)
-        if carried_latest:
-            new_record['latest'] = carried_latest
-        if carried_plant_library:
-            new_record['plant_library'] = carried_plant_library
-        for key, value in carried_data.items():
-            if value is not None:
-                new_record[key] = value
+        # Fresh start: no carried data (latest, counters, library)
+        # Next ESP32 telemetry will populate latest with fresh data
 
         # Remove None values (DynamoDB doesn't accept None for top-level attrs)
         new_record = {k: v for k, v in new_record.items() if v is not None}
 
         if not user_record_exists:
             devices_table.put_item(Item=new_record)
-            print(f"[Claim] Created single record for {user_id} -> {device_id} (carried latest={bool(carried_latest)}, library={len(carried_plant_library)} items)")
+            print(f"[Claim] Created fresh record for {user_id} -> {device_id}")
         else:
-            # User record exists (reclaim) — update it with carried data
-            update_parts = ['claimed_at = :ca', 'device_name = :dn']
-            expr_values = {':ca': current_time, ':dn': 'Polivalka'}
+            # User record exists (reclaim) — full reset: fresh device, same as new claim
+            update_parts = ['claimed_at = :ca', 'device_name = :dn', '#loc = :loc', 'room = :rm']
+            expr_values = {':ca': current_time, ':dn': 'Polivalka', ':loc': 'Home', ':rm': 'Room'}
+            expr_names = {'#loc': 'location'}
 
-            if carried_latest:
-                update_parts.append('latest = :lat')
-                expr_values[':lat'] = carried_latest
-            if carried_plant_library:
-                update_parts.append('plant_library = :lib')
-                expr_values[':lib'] = carried_plant_library
-            for key, value in carried_data.items():
-                if value is not None:
-                    safe_key = key.replace('-', '_')
-                    update_parts.append(f'{safe_key} = :{safe_key}')
-                    expr_values[f':{safe_key}'] = value
-
-            # Clean up legacy transferred fields (migration safety)
-            remove_parts = ['transferred', 'transferred_to', 'transferred_at']
+            # Clean up: legacy fields + active plant + stale data (fresh start)
+            remove_parts = ['transferred', 'transferred_to', 'transferred_at', 'plant',
+                            'plant_library', 'latest', 'reboot_count', 'clean_restarts',
+                            'unexpected_restarts', 'ota_count', 'ota_last_timestamp',
+                            'total_water_ml', 'pump_runtime_sec', 'last_watering_timestamp',
+                            'config_timer', 'config_sensor', 'sensor_calibration',
+                            'sensor2_calibration', 'pump_calibration', 'pump_speed']
             update_expr = 'SET ' + ', '.join(update_parts) + ' REMOVE ' + ', '.join(remove_parts)
 
             devices_table.update_item(
                 Key={'user_id': user_id, 'device_id': device_id},
                 UpdateExpression=update_expr,
-                ExpressionAttributeValues=expr_values
+                ExpressionAttributeValues=expr_values,
+                ExpressionAttributeNames=expr_names
             )
-            print(f"[Claim] Updated existing record for {user_id} -> {device_id}")
+            print(f"[Claim] Reset existing record for {user_id} -> {device_id} (fresh start)")
 
-        # Send MQTT command to ESP32 to reset device_name
-        # Command is update_device_info (not set_device_name!)
+        # Race condition guard: verify single-owner invariant after write
+        verify = devices_table.query(
+            IndexName='device_id-index',
+            KeyConditionExpression=Key('device_id').eq(device_id),
+            Select='COUNT'
+        )
+        if verify['Count'] > 1:
+            print(f"[Claim] ⚠️ RACE CONDITION: {verify['Count']} records for {device_id} — rolling back")
+            # Delete our record and return conflict error
+            devices_table.delete_item(Key={'user_id': user_id, 'device_id': device_id})
+            return {
+                'statusCode': 409,
+                'headers': cors_headers(origin),
+                'body': json.dumps({'error': 'Device was claimed by another user. Please try again.'})
+            }
+
+        # Send MQTT command to ESP32 to reset device_name (every claim = fresh start)
         try:
             topic = f'Polivalka/{device_id.replace("Polivalka-", "")}/command'
             mqtt_payload = {
                 'command_id': str(uuid.uuid4()),
                 'command': 'update_device_info',
-                'params': {'name': 'Polivalka'}
+                'params': {'name': 'Polivalka', 'location': 'Home', 'room': 'Room'}
             }
             iot_client.publish(
                 topic=topic,
                 qos=1,
                 payload=json.dumps(mqtt_payload)
             )
-            print(f"[Transfer] Sent update_device_info name=Polivalka to {topic}")
+            print(f"[Transfer] Sent update_device_info (name/location/room reset) to {topic}")
         except Exception as mqtt_err:
             print(f"[Transfer] MQTT publish failed: {mqtt_err}")
             # Non-fatal - user can change name manually
@@ -4000,7 +4785,7 @@ def admin_delete_whitelist(email):
         }
 
 
-def admin_revoke_device(event):
+def admin_revoke_device(event, admin_user_id):
     """POST /admin/revoke-device - Revoke device from user, transfer back to admin
 
     SINGLE RECORD: Moves device ownership from user back to admin.
@@ -4014,14 +4799,15 @@ def admin_revoke_device(event):
         body = json.loads(event.get('body', '{}'))
         device_id = body.get('device_id', '').upper()
         user_email = body.get('user_email', '')
-        admin_email = body.get('admin_email', 'admin')  # Default admin
+        admin_email = admin_user_id  # From JWT, not request body
 
-        # Normalize device_id
-        if not device_id:
+        # Validate and normalize device_id
+        is_valid, error_msg = validate_device_id(device_id)
+        if not is_valid:
             return {
                 'statusCode': 400,
                 'headers': cors_headers(),
-                'body': json.dumps({'error': 'device_id required'})
+                'body': json.dumps({'error': error_msg})
             }
 
         if device_id.startswith('POLIVALKA-'):
@@ -4064,6 +4850,10 @@ def admin_revoke_device(event):
             plant['archived'] = True
             plant['archived_at'] = current_time
             plant['previous_owner'] = user_email
+            # Record ended_at in device_history
+            dh = plant.get('device_history', [])
+            if dh:
+                dh[-1]['ended_at'] = current_time
             plant_library.append(plant)
             plant_library = _enforce_library_limit(plant_library)
 
@@ -4159,13 +4949,16 @@ def admin_get_claims():
 
         claims = []
         for item in response.get('Items', []):
-            claims.append({
+            claim = {
                 'claim_id': item.get('claim_id'),
                 'email': item.get('email'),
                 'device_id': item.get('device_id'),
                 'status': item.get('status', 'pending'),
                 'created_at': item.get('created_at', '')
-            })
+            }
+            if item.get('waitlisted_at'):
+                claim['waitlisted_at'] = item['waitlisted_at']
+            claims.append(claim)
 
         # Sort by created_at descending (newest first)
         claims.sort(key=lambda x: x.get('created_at', ''), reverse=True)
@@ -4225,17 +5018,219 @@ def admin_create_claim(event):
         }
 
 
+def send_reject_email(user_email, claim_id=None):
+    """Send friendly waitlist invitation email when claim is rejected"""
+    try:
+        # Waitlist join link: public Lambda endpoint (no auth needed)
+        api_base = 'https://p0833p2v29.execute-api.eu-central-1.amazonaws.com'
+        if claim_id:
+            waitlist_url = f'{api_base}/waitlist/join?token={claim_id}'
+        else:
+            waitlist_url = 'https://plantapp.pro/#waitlist'
+
+        ses_client.send_email(
+            Source='PlantApp <noreply@plantapp.pro>',
+            Destination={'ToAddresses': [user_email]},
+            Message={
+                'Subject': {'Data': 'Thank you for your interest in PlantApp!', 'Charset': 'UTF-8'},
+                'Body': {
+                    'Html': {
+                        'Data': (
+                            '<div style="font-family: Arial, sans-serif; max-width: 500px; margin: 0 auto; color: #333;">'
+                            '<h2 style="color: #4CAF50;">Hi there!</h2>'
+                            '<p>Thank you for your interest in PlantApp! We\'re glad you found us.</p>'
+                            '<p>Join our waitlist and we\'ll let you know when you can order your device. '
+                            'You\'ll be among the first to get your hands on automatic plant care &mdash; '
+                            'no guesswork, no overwatering, just happy plants.</p>'
+                            '<p style="text-align: center; margin: 30px 0;">'
+                            f'<a href="{waitlist_url}" '
+                            'style="background: #4CAF50; color: white; padding: 12px 30px; '
+                            'text-decoration: none; border-radius: 6px; font-weight: bold;">'
+                            'Join the Waitlist</a></p>'
+                            '<p>We\'re a small team that\'s passionate about keeping plants alive. '
+                            'We\'d love to have you on board.</p>'
+                            '<p>Take care (of your plants too),<br>'
+                            '<strong>The PlantApp Team</strong></p>'
+                            '</div>'
+                        ),
+                        'Charset': 'UTF-8'
+                    },
+                    'Text': {
+                        'Data': (
+                            'Hi there!\n\n'
+                            'Thank you for your interest in PlantApp! We\'re glad you found us.\n\n'
+                            'Join our waitlist and we\'ll let you know when you can order your device. '
+                            'You\'ll be among the first to get your hands on automatic plant care - '
+                            'no guesswork, no overwatering, just happy plants.\n\n'
+                            f'Join the Waitlist: {waitlist_url}\n\n'
+                            'We\'re a small team that\'s passionate about keeping plants alive. '
+                            'We\'d love to have you on board.\n\n'
+                            'Take care (of your plants too),\n'
+                            'The PlantApp Team'
+                        ),
+                        'Charset': 'UTF-8'
+                    }
+                }
+            }
+        )
+        print(f"[SES] Reject email sent to {user_email}")
+        return True
+    except Exception as e:
+        print(f"[SES] Failed to send reject email to {user_email}: {e}")
+        return False
+
+
+def waitlist_signup(event, origin):
+    """POST /waitlist/signup - Public endpoint for landing page waitlist signups"""
+    import re
+    try:
+        body = json.loads(event.get('body', '{}') or '{}')
+        email = body.get('email', '').strip().lower()
+
+        if not email or not re.match(r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$', email):
+            return {
+                'statusCode': 400,
+                'headers': cors_headers(origin),
+                'body': json.dumps({'error': 'Valid email required'})
+            }
+
+        claims_table = dynamodb.Table('polivalka_admin_claims')
+
+        # Check if this email already signed up from landing page
+        import datetime
+        response = claims_table.scan()
+        for item in response.get('Items', []):
+            if item.get('email') == email and item.get('source') == 'landing_page':
+                return {
+                    'statusCode': 200,
+                    'headers': cors_headers(origin),
+                    'body': json.dumps({'message': 'Already on waitlist'})
+                }
+
+        claim_id = str(uuid.uuid4())
+        claims_table.put_item(Item={
+            'claim_id': claim_id,
+            'email': email,
+            'device_id': 'none',
+            'status': 'waitlist',
+            'source': 'landing_page',
+            'created_at': datetime.datetime.now().isoformat(),
+            'waitlisted_at': int(time.time())
+        })
+
+        print(f"[WAITLIST] Landing page signup: {email}")
+        return {
+            'statusCode': 200,
+            'headers': cors_headers(origin),
+            'body': json.dumps({'message': 'Added to waitlist'})
+        }
+
+    except Exception as e:
+        print(f"[ERROR] waitlist_signup: {e}")
+        return {
+            'statusCode': 500,
+            'headers': cors_headers(origin),
+            'body': json.dumps({'error': 'Server error'})
+        }
+
+
+def waitlist_join(event):
+    """GET /waitlist/join?token=<claim_id> - Public endpoint for waitlist signup from email"""
+    try:
+        # Get token (claim_id) from query params
+        params = event.get('queryStringParameters') or {}
+        claim_id = params.get('token', '')
+
+        if not claim_id:
+            return {
+                'statusCode': 400,
+                'headers': {'Content-Type': 'text/html'},
+                'body': '<html><body><h2>Invalid link</h2><p>This waitlist link is not valid.</p></body></html>'
+            }
+
+        claims_table = dynamodb.Table('polivalka_admin_claims')
+        existing = claims_table.get_item(Key={'claim_id': claim_id})
+
+        if 'Item' not in existing:
+            return {
+                'statusCode': 404,
+                'headers': {'Content-Type': 'text/html'},
+                'body': '<html><body><h2>Link expired</h2><p>This waitlist link is no longer valid.</p></body></html>'
+            }
+
+        item = existing['Item']
+        current_status = item.get('status', '')
+
+        # Only transition from rejected to waitlist
+        if current_status == 'waitlist':
+            # Already on waitlist — show success anyway
+            pass
+        elif current_status == 'rejected':
+            claims_table.update_item(
+                Key={'claim_id': claim_id},
+                UpdateExpression='SET #s = :status, waitlisted_at = :ts',
+                ExpressionAttributeNames={'#s': 'status'},
+                ExpressionAttributeValues={
+                    ':status': 'waitlist',
+                    ':ts': int(time.time())
+                }
+            )
+            print(f"[Waitlist] {item.get('email')} joined waitlist (claim {claim_id})")
+        else:
+            # Not in rejected/waitlist state — invalid
+            return {
+                'statusCode': 400,
+                'headers': {'Content-Type': 'text/html'},
+                'body': '<html><body><h2>Link not applicable</h2><p>This claim has already been processed.</p></body></html>'
+            }
+
+        # Return thank-you page with redirect to plantapp.pro
+        html = (
+            '<!DOCTYPE html>'
+            '<html><head><meta charset="utf-8">'
+            '<meta http-equiv="refresh" content="4;url=https://plantapp.pro">'
+            '<title>PlantApp Waitlist</title>'
+            '<style>body{font-family:Arial,sans-serif;display:flex;justify-content:center;'
+            'align-items:center;min-height:100vh;margin:0;background:#f5f5f5;}'
+            '.card{background:#fff;border-radius:12px;padding:40px;text-align:center;'
+            'box-shadow:0 2px 12px rgba(0,0,0,0.1);max-width:400px;}'
+            'h2{color:#4CAF50;margin-bottom:16px;}'
+            'p{color:#666;line-height:1.6;}'
+            '.redirect{font-size:12px;color:#999;margin-top:20px;}</style></head>'
+            '<body><div class="card">'
+            '<h2>You\'re on the list!</h2>'
+            '<p>Thank you for joining the PlantApp waitlist. '
+            'We\'ll notify you when your device is ready.</p>'
+            '<p class="redirect">Redirecting to plantapp.pro...</p>'
+            '</div></body></html>'
+        )
+
+        return {
+            'statusCode': 200,
+            'headers': {'Content-Type': 'text/html'},
+            'body': html
+        }
+
+    except Exception as e:
+        print(f"[Waitlist] Error: {e}")
+        return {
+            'statusCode': 500,
+            'headers': {'Content-Type': 'text/html'},
+            'body': '<html><body><h2>Something went wrong</h2><p>Please try again later.</p></body></html>'
+        }
+
+
 def admin_update_claim(claim_id, event):
     """PUT /admin/claims/{id} - Update claim (approve/reject)"""
     try:
         body = json.loads(event.get('body', '{}'))
         new_status = body.get('status')
 
-        if new_status not in ['approved', 'rejected', 'pending']:
+        if new_status not in ['approved', 'rejected', 'pending', 'waitlist']:
             return {
                 'statusCode': 400,
                 'headers': cors_headers(),
-                'body': json.dumps({'error': 'Invalid status. Use: approved, rejected, pending'})
+                'body': json.dumps({'error': 'Invalid status. Use: approved, rejected, pending, waitlist'})
             }
 
         claims_table = dynamodb.Table('polivalka_admin_claims')
@@ -4256,10 +5251,22 @@ def admin_update_claim(claim_id, event):
             ExpressionAttributeValues={':status': new_status}
         )
 
+        # Send waitlist invitation email on reject
+        email_sent = False
+        if new_status == 'rejected':
+            user_email = existing['Item'].get('email')
+            if user_email:
+                email_sent = send_reject_email(user_email, claim_id)
+
         return {
             'statusCode': 200,
             'headers': cors_headers(),
-            'body': json.dumps({'success': True, 'claim_id': claim_id, 'status': new_status})
+            'body': json.dumps({
+                'success': True,
+                'claim_id': claim_id,
+                'status': new_status,
+                'email_sent': email_sent
+            })
         }
     except Exception as e:
         print(f"[Admin] Error updating claim: {e}")
@@ -4318,7 +5325,8 @@ def admin_get_history(device_id):
             events.append({
                 'timestamp': item.get('timestamp'),
                 'event': item.get('event'),
-                'user_email': item.get('user_email')
+                'user_email': item.get('user_email'),
+                'details': item.get('details')
             })
 
         # Sort by timestamp ascending (oldest first)
@@ -4327,14 +5335,14 @@ def admin_get_history(device_id):
         return {
             'statusCode': 200,
             'headers': cors_headers(),
-            'body': json.dumps({'device_id': device_id, 'events': events})
+            'body': json.dumps({'device_id': device_id, 'events': events}, cls=DecimalEncoder)
         }
     except Exception as e:
         print(f"[Admin] Error getting history: {e}")
         return {
             'statusCode': 500,
             'headers': cors_headers(),
-            'body': json.dumps({'error': str(e)})
+            'body': json.dumps({'error': str(e)}, cls=DecimalEncoder)
         }
 
 
@@ -4684,8 +5692,9 @@ def trigger_ota_update(device_id, user_id, body):
         }
 
 
-def get_device_activity(device_id, user_id):
-    """GET /device/{id}/activity - Get command history + telemetry for activity log"""
+def get_device_activity(device_id, user_id, event=None):
+    """GET /device/{id}/activity - Get command history + telemetry for activity log
+    Optional query params: ?start=<unix>&end=<unix> for archive mode"""
 
     # Verify access
     if not verify_device_access(device_id, user_id):
@@ -4694,6 +5703,11 @@ def get_device_activity(device_id, user_id):
             'headers': cors_headers(),
             'body': json.dumps({'error': 'Access denied'})
         }
+
+    # Archive mode: explicit start/end from query params
+    qsp = (event or {}).get('queryStringParameters') or {}
+    archive_start = qsp.get('start')
+    archive_end = qsp.get('end')
 
     try:
         activity_items = []
@@ -4718,26 +5732,38 @@ def get_device_activity(device_id, user_id):
                 'result': cmd.get('result', {})
             })
 
-        # 2. Get telemetry (last 7 days — matches trends.html Activity tab)
-        cutoff = int(time.time()) - 604800  # Last 7 days
+        # 2. Get telemetry
         telem_device_id = get_telemetry_device_id(device_id)
 
-        # Data isolation: filter by plant.started_at or claimed_at (unless admin)
-        # Priority: plant.started_at > claimed_at > 0
-        is_admin = user_id in ADMIN_EMAILS
-        if not is_admin:
-            device_info = get_device_info(device_id, user_id)
-            plant = device_info.get('plant', {})
-            plant_started_at = plant.get('started_at')
-            # Fallback to claimed_at if no plant profile yet (device just claimed)
-            if plant_started_at is None:
-                plant_started_at = device_info.get('claimed_at', 0)
-            if plant_started_at and plant_started_at > cutoff:
-                cutoff = plant_started_at  # Only show data since device was claimed/plant assigned
-        telem_response = telemetry_table.query(
-            KeyConditionExpression=Key('device_id').eq(telem_device_id) & Key('timestamp').gt(cutoff),
-            ScanIndexForward=False  # Sort DESC
-        )
+        if archive_start and archive_end:
+            # Archive mode — query between start and end, skip data isolation
+            cutoff = int(archive_start)
+            end_cutoff = int(archive_end)
+            telem_response = telemetry_table.query(
+                KeyConditionExpression=Key('device_id').eq(telem_device_id) &
+                                       Key('timestamp').between(cutoff, end_cutoff),
+                ScanIndexForward=False
+            )
+        else:
+            # Normal mode: last 7 days with data isolation
+            cutoff = int(time.time()) - 604800  # Last 7 days
+
+            # Data isolation: filter by plant.started_at or claimed_at (unless admin)
+            # Priority: plant.started_at > claimed_at > 0
+            is_admin = user_id in ADMIN_EMAILS
+            if not is_admin:
+                device_info = get_device_info(device_id, user_id)
+                plant = device_info.get('plant', {})
+                plant_started_at = plant.get('started_at')
+                # Fallback to claimed_at if no plant profile yet (device just claimed)
+                if plant_started_at is None:
+                    plant_started_at = device_info.get('claimed_at', 0)
+                if plant_started_at and plant_started_at > cutoff:
+                    cutoff = plant_started_at  # Only show data since device was claimed/plant assigned
+            telem_response = telemetry_table.query(
+                KeyConditionExpression=Key('device_id').eq(telem_device_id) & Key('timestamp').gt(cutoff),
+                ScanIndexForward=False  # Sort DESC
+            )
 
         # Process all telemetry events (system, pump, sensor, battery)
         prev_firmware_version = None
