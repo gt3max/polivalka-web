@@ -1143,13 +1143,14 @@ function renderResults(results) {
     // Show care preset badge
     const care = result.care || {};
     const presetBadge = care.preset ? `<span style="background:#e8f5e9;color:#2c5f2d;padding:2px 8px;border-radius:10px;font-size:11px;margin-left:8px">${care.preset}</span>` : '';
+    const verifiedBadge = result.serpapi_verification?.verified ? '<span style="background:#dcfce7;color:#166534;padding:2px 6px;border-radius:10px;font-size:10px;margin-left:4px">✓ Verified</span>' : '';
     const familyInfo = result.family ? `<div style="font-size:11px;color:#888;margin-top:2px">Family: ${result.family}</div>` : '';
 
     div.innerHTML = `
       <div class="result-header">
         <input type="radio" name="result" class="result-radio" ${index === 0 ? 'checked' : ''}>
         <div class="result-info">
-          <div class="result-name">${result.scientific}${presetBadge}</div>
+          <div class="result-name">${result.scientific}${presetBadge}${verifiedBadge}</div>
           <div class="result-common">${result.commonNames.slice(0, 2).join(', ') || 'No common name'}</div>
           ${familyInfo}
           <div class="result-score">${result.score}% match${care.watering ? ' • ' + care.watering : ''}</div>
@@ -1267,7 +1268,8 @@ function showPlantCard(result) {
 
   // Show family info
   const familyText = plantData.family ? `Family: ${plantData.family}` : '';
-  document.getElementById('card-names').textContent = familyText;
+  const sourceInfo = result.serpapi_verification?.verified ? ' • Verified by Google' : '';
+  document.getElementById('card-names').textContent = familyText + sourceInfo;
 
   // Care info from API
   const care = plantData.care;
@@ -1282,8 +1284,19 @@ function showPlantCard(result) {
   tipsList.innerHTML = '<li></li>';
   tipsList.querySelector('li').textContent = care.tips || 'Water when top inch of soil is dry.';
 
-  // Detailed info from API
-  const details = result.details || {};
+  // Detailed info from API — merge old 'details' with new 'enrichment' (Perenual data)
+  const enrichment = result.enrichment || {};
+  const details = {
+    ...(result.details || {}),
+    growth_rate: enrichment.growth_rate || (result.details || {}).growth_rate,
+    care_level: enrichment.care_level || (result.details || {}).care_level,
+    soil: enrichment.soil || (result.details || {}).soil,
+    propagation: enrichment.propagation || (result.details || {}).propagation,
+    pruning_month: enrichment.pruning_month || (result.details || {}).pruning_month,
+    pest_susceptibility: enrichment.pest_susceptibility ? enrichment.pest_susceptibility.join(', ') : (result.details || {}).pest_susceptibility,
+    indoor: enrichment.indoor !== undefined ? enrichment.indoor : (result.details || {}).indoor,
+    description: enrichment.description || (result.details || {}).description,
+  };
 
   // Safety section - toxicity from API (TOXIC_FAMILIES on backend)
   const safetySection = document.getElementById('safety-section');
