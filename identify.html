@@ -270,7 +270,10 @@
     <div class="plant-card-header">
       <img class="plant-card-photo" id="card-photo" src="" alt="">
       <div class="plant-card-info">
-        <div class="plant-card-name" id="card-name">-</div>
+        <div style="display:flex;align-items:center;gap:6px">
+          <div class="plant-card-name" id="card-name">-</div>
+          <button onclick="editPlantName()" style="background:none;border:1px solid #ccc;border-radius:4px;padding:2px 6px;font-size:11px;cursor:pointer;color:#666" title="Edit name">✏️</button>
+        </div>
         <div class="plant-card-scientific" id="card-scientific">-</div>
         <div class="plant-card-names" id="card-names">-</div>
       </div>
@@ -983,8 +986,11 @@ async function identifyPlant() {
     results = results.filter(r => r.score >= 1);
 
     if (results.length === 0) {
-      showError('No confident matches found. Try a clearer photo of the leaves.');
-      showStep('upload');
+      // Show results step with manual entry available
+      identificationResults = [];
+      renderResults([]);
+      showError('No confident matches found. Enter the plant name manually below.');
+      showStep('results');
       return;
     }
 
@@ -994,8 +1000,11 @@ async function identifyPlant() {
 
   } catch (err) {
     console.error('Identification error:', err);
-    showError('Error identifying plant: ' + err.message);
-    showStep('upload');
+    // Show results step with manual entry instead of dead-end error
+    identificationResults = [];
+    renderResults([]);
+    showError('Identification service error. Enter the plant name manually below.');
+    showStep('results');
   }
 }
 
@@ -1171,6 +1180,23 @@ function renderResults(results) {
     }, 2000);
     img.addEventListener('load', () => clearTimeout(tid));
   });
+}
+
+function editPlantName() {
+  const currentName = document.getElementById('card-name').textContent;
+  const newName = prompt('Edit plant name:', currentName);
+  if (newName && newName.trim()) {
+    const name = newName.trim();
+    document.getElementById('card-name').textContent = name;
+    if (selectedPlant) {
+      selectedPlant.scientific = name;
+      selectedPlant.id = name.toLowerCase().replace(/\s+/g, '_');
+    }
+    if (selectedResult) {
+      selectedResult.scientific = name;
+      selectedResult.id = name.toLowerCase().replace(/\s+/g, '_');
+    }
+  }
 }
 
 function useManualName() {
