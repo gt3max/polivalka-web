@@ -1518,14 +1518,12 @@ function updatePumpButton(deviceId, isRunning, elapsed = 0, total = maxWateringT
   buttons.forEach(btn => {
     if (isRunning) {
       btn.classList.add('active');
-      btn.textContent = `💧 Water Now`;
+      btn.textContent = `💧 Watering ${elapsed}s / ${total}s`;
       btn.disabled = true;
-      btn.style.opacity = '0.5';
     } else {
       btn.classList.remove('active');
       btn.textContent = `💧 Water Now`;
       btn.disabled = false;
-      btn.style.opacity = '1';
       btn.onclick = (e) => startPump(deviceId, e);
     }
   });
