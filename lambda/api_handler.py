@@ -540,20 +540,22 @@ def identify_plant_handler(event, origin):
             })
         }
 
-    except urllib.error.HTTPError as e:
-        error_body = e.read().decode('utf-8') if e.fp else str(e)
-        print(f"PlantNet API error: {e.code} - {error_body}")
+    except (urllib.error.HTTPError, urllib.error.URLError, Exception) as e:
+        # PlantNet failed — return empty results with error info, not a 500
+        # User can still use manual name entry on the client
+        error_msg = str(e)
+        if hasattr(e, 'code'):
+            error_msg = f'PlantNet API error: {e.code}'
+        print(f"Plant identification error (returning empty results): {error_msg}")
         return {
-            'statusCode': 502,
+            'statusCode': 200,
             'headers': cors_headers(origin),
-            'body': json.dumps({'error': f'PlantNet API error: {e.code}'})
-        }
-    except Exception as e:
-        print(f"Plant identification error: {e}")
-        return {
-            'statusCode': 500,
-            'headers': cors_headers(origin),
-            'body': json.dumps({'error': str(e)})
+            'body': json.dumps({
+                'success': True,
+                'results': [],
+                'source': 'plantnet_error',
+                'error': f'Identification service temporarily unavailable. You can enter the plant name manually.'
+            })
         }
 
 
