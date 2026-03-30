@@ -1340,7 +1340,7 @@ def save_plant_profile(user_id, event, origin):
         plant_data['saved_at'] = current_time
 
         # --- Mode 1: Save to device ---
-        if device_id:
+        if device_id and device_id != 'user-collection':
             if not device_id.startswith('Polivalka-'):
                 device_id = f'Polivalka-{device_id}'
 
