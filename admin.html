@@ -594,18 +594,18 @@ async function loadDeviceConfig() {
         document.getElementById('calib-pump-mlsec').value = pumpCalib;
         console.log('[Admin] Loaded pump_calibration:', pumpCalib);
 
-        // Populate Capacitive sensor calibration (from DynamoDB)
-        const sensorCalib = device.sensor_calibration || {};
-        document.getElementById('calib-adc-water').value = sensorCalib.water || 1200;
-        document.getElementById('calib-adc-dry').value = sensorCalib.dry_soil || 2400;
-        document.getElementById('calib-adc-air').value = sensorCalib.air || 2800;
-        console.log('[Admin] Loaded sensor_calibration:', sensorCalib);
+        // Factory Presets: show DEFAULTS, not user calibration
+        // These are admin-set factory values, not what user calibrated
+        // Presets live in device NVS, not DynamoDB — show hardcoded defaults
+        document.getElementById('calib-adc-water').value = 1200;   // ADC_WATER_DEFAULT
+        document.getElementById('calib-adc-dry').value = 2400;     // ADC_DRY_SOIL_DEFAULT
+        document.getElementById('calib-adc-air').value = 2800;     // ADC_AIR_DEFAULT
+        console.log('[Admin] Factory preset defaults loaded (not user calibration)');
 
-        // Populate Resistive sensor calibration (from DynamoDB)
-        const sensor2Calib = device.sensor2_calibration || {};
-        document.getElementById('calib-s2-dry').value = sensor2Calib.dry || 100;
-        document.getElementById('calib-s2-wet').value = sensor2Calib.wet || 3000;
-        console.log('[Admin] Loaded sensor2_calibration:', sensor2Calib);
+        // Resistive sensor: show defaults
+        document.getElementById('calib-s2-dry').value = 100;       // ADC2_DRY_DEFAULT
+        document.getElementById('calib-s2-wet').value = 3000;      // ADC2_WET_DEFAULT
+        console.log('[Admin] Resistive preset defaults loaded');
 
         // Show last seen info
         if (device.last_update) {
