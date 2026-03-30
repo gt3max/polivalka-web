@@ -147,6 +147,8 @@ document.getElementById('btn-air').disabled=false;document.getElementById('btn-w
 document.getElementById('btn-soil').disabled=false;
 await loadAllData();}
 async function resetCalib(){
+  if (!confirm('Reset capacitive sensor calibration to factory defaults?')) return;
+  const btn = event?.target; if (btn) { btn.disabled = true; btn.textContent = 'Resetting...'; }
   try {
     if (IS_CLOUD) {
       await API.post('/command', {command: 'reset_sensor_calibration', params: {}});
@@ -154,7 +156,9 @@ async function resetCalib(){
     } else {
       await fetch('/api/reset',{cache:'no-store'});
     }
-  } catch(e) { console.error('Reset error:', e); }
+    alert('✓ Calibration reset to factory defaults');
+  } catch(e) { console.error('Reset error:', e); alert('Failed to reset: ' + e.message); }
+  if (btn) { btn.disabled = false; btn.textContent = 'Reset'; }
   capDone={air:false,water:false,soil:false};
   await loadAllData();
 }
@@ -200,10 +204,12 @@ s2Done[kind]=true;
 document.getElementById('btn-s2-dry').disabled=false;document.getElementById('btn-s2-wet').disabled=false;
 loadSensor2Data();}
 async function resetCalib2(){
+if (!confirm('Reset resistive sensor calibration to defaults?')) return;
 try{
 if(IS_CLOUD){await API.post('/command',{command:'reset_sensor2_calibration',params:{}});await new Promise(r=>setTimeout(r,4000));}
 else{await fetch('/api/sensor2/reset',{cache:'no-store'});}
-}catch(e){console.error('Reset2 error:',e);}
+alert('✓ Resistive calibration reset to defaults');
+}catch(e){console.error('Reset2 error:',e);alert('Failed to reset: '+e.message);}
 s2Done={dry:false,wet:false};
 loadSensor2Data();}
 async function loadPumpCalibration(){
