@@ -2104,7 +2104,7 @@
                 <span class="nav-brand-text"><span class="nb-plant">Plant</span><span class="nb-app">App</span></span>
             </a>
             <div class="nav-links">
-                <a href="login.html" class="btn btn-hollow btn-nav" id="nav-login">Log In</a>
+                <a href="/login" class="btn btn-hollow btn-nav" id="nav-login">Log In</a>
                 <a href="#waitlist" class="btn btn-solid btn-nav" id="nav-signup">Join Waitlist</a>
             </div>
         </div>
@@ -2435,7 +2435,7 @@
                 PlantApp
             </div>
             <div class="footer-links">
-                <a href="login.html">Log In</a>
+                <a href="/login">Log In</a>
                 <a href="#waitlist">Join Waitlist</a>
                 <a href="https://github.com/gt3max/Polivalka" target="_blank" rel="noopener">GitHub</a>
             </div>
@@ -2450,15 +2450,15 @@
             if (t && e > Date.now()) {
                 var navLogin = document.getElementById('nav-login');
                 var navSignup = document.getElementById('nav-signup');
-                if (navLogin) { navLogin.textContent = 'My Plants'; navLogin.href = 'fleet.html'; }
-                if (navSignup) { navSignup.textContent = 'Dashboard'; navSignup.href = 'fleet.html'; navSignup.onclick = null; }
+                if (navLogin) { navLogin.textContent = 'My Plants'; navLogin.href = '/fleet'; }
+                if (navSignup) { navSignup.textContent = 'Dashboard'; navSignup.href = '/fleet'; navSignup.onclick = null; }
                 // Swap all waitlist buttons to dashboard
                 document.querySelectorAll('[onclick="openWaitlist()"]').forEach(function(btn) {
                     btn.onclick = null;
                     btn.textContent = 'Go to Dashboard';
                     if (btn.tagName === 'BUTTON') {
                         var a = document.createElement('a');
-                        a.href = 'fleet.html';
+                        a.href = '/fleet';
                         a.className = btn.className;
                         a.textContent = 'Go to Dashboard';
                         btn.replaceWith(a);

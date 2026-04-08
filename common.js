@@ -5,6 +5,13 @@
  * Usage: <script src="common.js"></script> (after api-adapter.js)
  */
 
+// ============ Clean URLs ============
+// Remove .html from browser address bar (keep file loading via GitHub Pages)
+if (window.location.pathname.endsWith('.html') && window.location.pathname !== '/index.html') {
+  const clean = window.location.pathname.replace('.html', '') + window.location.search + window.location.hash;
+  history.replaceState(null, '', clean);
+}
+
 // ============ Admin ============
 const ADMIN_EMAILS = ['mrmaximshurigin@gmail.com'];
 
@@ -364,10 +371,10 @@ function initDevicePersistence() {
 function updateNavLinksWithDevice(deviceId) {
   if (!deviceId) return;
 
-  document.querySelectorAll('.nav a, a[href*=".html"]').forEach(link => {
+  document.querySelectorAll('.nav a, a[href]').forEach(link => {
     const href = link.getAttribute('href');
-    if (href && href.endsWith('.html') && !href.includes('fleet.html') && href !== '/') {
-      // Don't add device to fleet.html or root (Fleet page shows all devices)
+    if (href && !href.startsWith('http') && !href.includes('fleet') && !href.includes('login') && href !== '/') {
+      // Don't add device to fleet or root (Fleet page shows all devices)
       try {
         const url = new URL(href, window.location.origin);
         url.searchParams.set('device', deviceId);  // Always set (not just if missing)

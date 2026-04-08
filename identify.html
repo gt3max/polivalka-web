@@ -130,17 +130,17 @@
   </div>
 </div>
 <div class="nav">
-  <a href="fleet.html">Fleet</a>
-  <a href="home.html">Home</a>
-  <a href="identify.html" class="active" style="background:#e8f5e9">🌱 Plant</a>
-  <a href="timer.html">Timer</a>
-  <a href="sensor.html">Sensor</a>
-  <a href="settings.html">Settings</a>
-  <a href="calibration.html">Calibration</a>
-  <a href="online.html">Online</a>
-  <a href="trends.html">Trends</a>
-  <a href="ota.html">Update</a>
-  <a href="admin.html" id="admin-nav-link" style="display:none">Admin</a>
+  <a href="/fleet">Fleet</a>
+  <a href="/home">Home</a>
+  <a href="/identify" class="active" style="background:#e8f5e9">🌱 Plant</a>
+  <a href="/timer">Timer</a>
+  <a href="/sensor">Sensor</a>
+  <a href="/settings">Settings</a>
+  <a href="/calibration">Calibration</a>
+  <a href="/online">Online</a>
+  <a href="/trends">Trends</a>
+  <a href="/ota">Update</a>
+  <a href="/admin" id="admin-nav-link" style="display:none">Admin</a>
 </div>
 
 <div class="container">
@@ -395,7 +395,7 @@
     <div id="no-device-info" style="display:none">
       <div style="background:#f1f8e9;border:1px solid #c5e1a5;border-radius:12px;padding:16px;text-align:center">
         <div style="font-size:13px;color:#555">To bind this plant to a device, open the device and identify from there.</div>
-        <a href="fleet.html" style="text-decoration:none"><button style="padding:10px 20px;font-size:14px;margin-top:10px">← Back to My Devices</button></a>
+        <a href="/fleet" style="text-decoration:none"><button style="padding:10px 20px;font-size:14px;margin-top:10px">← Back to My Devices</button></a>
       </div>
     </div>
   </div>
@@ -740,7 +740,7 @@ function renderPlantLibrary(plants) {
           <div style="font-size:12px;color:#666">📟 ${deviceLabel} ${ownerBadge}${timeInfo}</div>
         </div>
         <div style="display:flex;align-items:center;gap:8px">
-          ${!isDeleted && plant.archived && plant.started_at && plant.ended_at && plant.device_id ? `<a href="trends.html?device=${encodeURIComponent(plant.device_id)}&start=${plant.started_at}&end=${plant.ended_at}&plant_name=${encodeURIComponent(plant.common_name || plant.scientific || '')}"
+          ${!isDeleted && plant.archived && plant.started_at && plant.ended_at && plant.device_id ? `<a href="/trends?device=${encodeURIComponent(plant.device_id)}&start=${plant.started_at}&end=${plant.ended_at}&plant_name=${encodeURIComponent(plant.common_name || plant.scientific || '')}"
                   onclick="event.stopPropagation()"
                   style="background:none;border:none;cursor:pointer;font-size:16px;padding:4px;opacity:0.5;transition:opacity 0.2s;text-decoration:none"
                   onmouseover="this.style.opacity='1'" onmouseout="this.style.opacity='0.5'"

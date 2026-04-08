@@ -55,7 +55,7 @@
 <div class="warning-banner">ADMIN PANEL — NOT FOR USERS</div>
 <div class="header">
 <div style="display:flex;align-items:center;gap:12px">
-  <a id="back-link" href="fleet.html" style="color:#fff;text-decoration:none;font-size:14px">← Fleet</a>
+  <a id="back-link" href="/fleet" style="color:#fff;text-decoration:none;font-size:14px">← Fleet</a>
   <div><h1 style="margin:0">🔧 Admin Panel</h1><div style="font-size:11px;opacity:0.8">AWS IoT Configuration</div></div>
 </div>
 <div class="header-info"><div class="mono" style="font-size:11px"><span class="status-dot" id="aws-status-dot"></span><span id="aws-status">Checking...</span></div></div>
@@ -2019,7 +2019,7 @@ function checkAdminAccess() {
   const userEmail = localStorage.getItem('user_email');
   if (!userEmail) {
     // Not logged in
-    window.location.href = 'login.html';
+    window.location.href = '/login';
     return false;
   }
   if (!isAdmin()) {
@@ -2029,7 +2029,7 @@ function checkAdminAccess() {
         <div style="text-align:center;color:#fff">
           <h1 style="color:#f44">⛔ Access Denied</h1>
           <p>This page is for administrators only.</p>
-          <a href="fleet.html" style="color:#4caf50">← Back to Fleet</a>
+          <a href="/fleet" style="color:#4caf50">← Back to Fleet</a>
         </div>
       </div>
     `;
@@ -2044,7 +2044,7 @@ const urlDeviceId = new URLSearchParams(window.location.search).get('device');
 // Update back link - if came from device page, go back there
 if (urlDeviceId) {
   const backLink = document.getElementById('back-link');
-  backLink.href = `home.html?device=${urlDeviceId}`;
+  backLink.href = `/home?device=${urlDeviceId}`;
   backLink.textContent = '← Device';
 }
 

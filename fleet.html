@@ -281,7 +281,7 @@
     <!-- Action Buttons -->
     <div style="margin-bottom:12px;display:flex;justify-content:flex-end;gap:8px">
       <button class="primary" onclick="showClaimModal()" style="padding:8px 16px;font-size:14px">➕ Add Device</button>
-      <a href="identify.html" style="text-decoration:none"><button class="primary" style="padding:8px 16px;font-size:14px">🌿 Identify Plant</button></a>
+      <a href="/identify" style="text-decoration:none"><button class="primary" style="padding:8px 16px;font-size:14px">🌿 Identify Plant</button></a>
     </div>
 
     <!-- Admin Controls (only for admin) - compact single line -->
@@ -591,7 +591,7 @@ function loginSuccess(email) {
   // Show Admin link only for admins (UX only - real security is on backend)
   // Uses isAdmin() from common.js
   if (isAdmin()) {
-    document.getElementById('admin-link').innerHTML = '<a href="admin.html" style="color:#fff;text-decoration:none">⚙️ Admin</a> | ';
+    document.getElementById('admin-link').innerHTML = '<a href="/admin" style="color:#fff;text-decoration:none">⚙️ Admin</a> | ';
     document.getElementById('admin-controls').style.display = 'flex';
     document.getElementById('user-info').textContent = 'Admin Dashboard';
     // Show debug console toggle for admins
@@ -613,7 +613,7 @@ function logout() {
     localStorage.removeItem('access_token');
     localStorage.removeItem('refresh_token');
     localStorage.removeItem('user_email');
-    window.location.href = 'login.html';
+    window.location.href = '/login';
   }
 }
 
@@ -632,7 +632,7 @@ function initUserDisplay() {
     // Show admin features for admins
     try {
       if (typeof isAdmin === 'function' && isAdmin()) {
-        document.getElementById('admin-link').innerHTML = '<a href="admin.html" style="color:#fff;text-decoration:none">⚙️ Admin</a> | ';
+        document.getElementById('admin-link').innerHTML = '<a href="/admin" style="color:#fff;text-decoration:none">⚙️ Admin</a> | ';
         document.getElementById('admin-controls').style.display = 'flex';
         document.getElementById('user-info').textContent = 'Admin Dashboard';
         const consoleToggle = document.getElementById('consoleToggle');
@@ -719,7 +719,7 @@ function renderDevices(devices) {
         <p class="muted" style="margin:0 0 20px">Add your first device or try our Plant Recognition!</p>
         <div style="display:flex;gap:12px;justify-content:center;flex-wrap:wrap">
           <button class="primary" onclick="showClaimModal()" style="padding:12px 24px">➕ Add Device</button>
-          <a href="identify.html" style="text-decoration:none"><button class="primary" style="padding:12px 24px">🌿 Identify Plant</button></a>
+          <a href="/identify" style="text-decoration:none"><button class="primary" style="padding:12px 24px">🌿 Identify Plant</button></a>
         </div>
       </div>
     `;
@@ -1558,16 +1558,16 @@ function stopPumpTimer(deviceId) {
 
 function viewDevice(deviceId) {
   // Navigate to home.html with device_id parameter
-  window.location.href = `home.html?device=${deviceId}`;
+  window.location.href = `/home?device=${deviceId}`;
 }
 
 function viewTrends(deviceId) {
   // Navigate to trends.html with device_id parameter
-  window.location.href = `trends.html?device=${deviceId}`;
+  window.location.href = `/trends?device=${deviceId}`;
 }
 
 function deviceUpdate(deviceId) {
-  window.location.href = `ota.html?device=${deviceId}`;
+  window.location.href = `/ota?device=${deviceId}`;
 }
 
 // Admin actions

@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>PlantApp</title>
+  <script>
+    // GitHub Pages clean URL router
+    // /fleet?device=XXX → loads fleet.html?device=XXX
+    (function() {
+      var path = window.location.pathname;
+      var search = window.location.search;
+      var hash = window.location.hash;
+
+      // Don't redirect if already .html or root
+      if (path.endsWith('.html') || path === '/') return;
+
+      // Remove trailing slash
+      if (path.endsWith('/')) path = path.slice(0, -1);
+
+      // Redirect to .html version
+      var newUrl = path + '.html' + search + hash;
+      window.location.replace(newUrl);
+    })();
+  </script>
+</head>
+<body>
+  <p>Redirecting...</p>
+</body>
+</html>

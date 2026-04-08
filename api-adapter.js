@@ -18,12 +18,12 @@ const IS_CLOUD = window.location.hostname === 'gt3max.github.io' ||
                  window.location.hostname === 'www.plantapp.pro' ||
                  window.location.hostname === 'localhost';
 
-// Pages that don't require authentication
-const publicPages = ['login.html', 'index.html'];
+// Pages that don't require authentication (match with or without .html)
+const publicPages = ['login', 'index', 'login.html', 'index.html', ''];
 // Pages that require device ID
-const deviceRequiredPages = ['home.html', 'sensor.html', 'timer.html', 'settings.html', 'calibration.html', 'update.html', 'trends.html', 'online.html', 'ota.html'];
+const deviceRequiredPages = ['home', 'sensor', 'timer', 'settings', 'calibration', 'update', 'trends', 'online', 'ota'];
 
-const currentPage = window.location.pathname.split('/').pop() || 'index.html';
+const currentPage = window.location.pathname.split('/').pop().replace('.html', '') || 'index';
 
 // ============ Auth Functions ============
 
@@ -65,7 +65,7 @@ const Auth = {
   // Redirect to login page
   redirectToLogin: function() {
     const returnUrl = window.location.href;
-    window.location.href = `login.html?return=${encodeURIComponent(returnUrl)}`;
+    window.location.href = `/login?return=${encodeURIComponent(returnUrl)}`;
   },
 
   // Refresh access token using refresh token
@@ -112,7 +112,7 @@ const Auth = {
       }
     }
     this.clear();
-    window.location.href = 'login.html';
+    window.location.href = '/login';
   }
 };
 
@@ -266,10 +266,10 @@ if (IS_CLOUD && !publicPages.includes(currentPage)) {
   }
 }
 
-// Redirect to home if Cloud mode without device ID (on device pages)
+// Redirect to fleet if Cloud mode without device ID (on device pages)
 if (IS_CLOUD && !DEVICE_ID && deviceRequiredPages.includes(currentPage)) {
-  console.warn('[API Adapter] No device ID in Cloud mode, redirecting to home');
-  window.location.href = 'fleet.html';
+  console.warn('[API Adapter] No device ID in Cloud mode, redirecting to fleet');
+  window.location.href = '/fleet';
 }
 
 // В Cloud mode: добавить ?device=XX ко всем внутренним ссылкам (кроме fleet, login)
@@ -277,14 +277,13 @@ if (IS_CLOUD && DEVICE_ID) {
   document.addEventListener('DOMContentLoaded', function() {
     document.querySelectorAll('a[href]').forEach(link => {
       const href = link.getAttribute('href');
-      // Только локальные ссылки на .html страницы (не fleet, login, внешние)
-      if (href && href.endsWith('.html') && !href.includes('?') &&
-          !href.includes('fleet.html') && !href.includes('login.html') &&
-          !href.startsWith('http')) {
-        link.setAttribute('href', `${href.split('?')[0]}?device=${DEVICE_ID}`);
+      // Только локальные ссылки (не fleet, login, внешние)
+      if (href && !href.includes('?') && !href.includes('fleet') &&
+          !href.includes('login') && !href.startsWith('http') && href.startsWith('/')) {
+        link.setAttribute('href', `${href}?device=${DEVICE_ID}`);
       }
-      // Ссылки с якорем (calibration.html#pump)
-      if (href && href.includes('.html#') && !href.includes('?') && !href.startsWith('http')) {
+      // Ссылки с якорем (/calibration#pump)
+      if (href && href.includes('#') && !href.includes('?') && !href.startsWith('http') && href.startsWith('/')) {
         const [page, anchor] = href.split('#');
         link.setAttribute('href', `${page}?device=${DEVICE_ID}#${anchor}`);
       }
