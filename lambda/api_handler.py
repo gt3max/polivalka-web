@@ -52,7 +52,9 @@ ADMIN_EMAILS = ['mrmaximshurigin@gmail.com', 'admin']
 # ============ JWT Verification ============
 
 # JWT secret (same as auth_handler.py)
-JWT_SECRET = os.environ.get('JWT_SECRET', 'polivalka-jwt-secret-v1-change-later')
+JWT_SECRET = os.environ.get('JWT_SECRET')
+if not JWT_SECRET:
+    raise RuntimeError("JWT_SECRET not set in Lambda environment variables")
 
 
 def base64url_decode(data):
