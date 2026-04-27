@@ -1,0 +1,136 @@
+#!/usr/bin/env bash
+# pre-commit secrets scanner
+#
+# Blocks commits that contain hardcoded API keys, secrets, tokens,
+# passwords, or PII. Triggered after FIVE leak incidents (2026-04-07,
+# 04-18, 04-20, 04-22, 04-27 dev-password discovery).
+#
+# Bypass with `git commit --no-verify` ONLY if you have a strong reason
+# AND have visually verified no secret leaks. Avoid bypassing.
+
+set -u
+
+# Get list of staged file paths (added/modified, exclude deleted)
+staged=$(git diff --cached --name-only --diff-filter=AM)
+[ -z "$staged" ] && exit 0
+
+# Skip files that are NOT plain text or are large binaries / data dumps
+filter() {
+    local f="$1"
+    # exclude obvious binary / dataset / lock files
+    case "$f" in
+        *.png|*.jpg|*.jpeg|*.webp|*.pdf|*.sqlite|*.db|*.zip|*.tar|*.gz|*.bin|*.lock) return 1 ;;
+        *.csv|*.tsv|*.json|*.jsonl)
+            # JSON/CSV often huge data dumps; only scan if <1 MB
+            local sz
+            sz=$(wc -c <"$f" 2>/dev/null || echo 0)
+            [ "$sz" -gt 1048576 ] && return 1
+            return 0 ;;
+        scripts/plant-parser/.env|.env|.env.*|*.env)
+            # .env files MUST NOT be tracked at all — separate check below
+            return 0 ;;
+        *) return 0 ;;
+    esac
+}
+
+violations=()
+
+add_violation() {
+    violations+=("$1")
+}
+
+# === 1. .env file accidentally staged? ===
+for f in $staged; do
+    case "$f" in
+        .env|.env.*|*/.env|*/.env.*)
+            add_violation "  STAGED .env file (must never be tracked): $f"
+            ;;
+    esac
+done
+
+# === 2. content-pattern scans ===
+for f in $staged; do
+    filter "$f" || continue
+    [ -f "$f" ] || continue
+
+    # diff vs HEAD — only scan ADDED lines (lines starting with +, not ++)
+    diff_added=$(git diff --cached --no-color -- "$f" | grep -E '^\+[^+]' || true)
+    [ -z "$diff_added" ] && continue
+
+    # Google API key
+    if echo "$diff_added" | grep -qE 'AIza[A-Za-z0-9_-]{30,}'; then
+        add_violation "  Google API key (AIza...) in $f"
+    fi
+    # AWS Access Key
+    if echo "$diff_added" | grep -qE '(AKIA|ASIA)[A-Z0-9]{16}'; then
+        add_violation "  AWS Access Key (AKIA/ASIA...) in $f"
+    fi
+    # Anthropic
+    if echo "$diff_added" | grep -qE 'sk-ant-[a-zA-Z0-9_-]{20,}'; then
+        add_violation "  Anthropic API key (sk-ant-...) in $f"
+    fi
+    # OpenAI
+    if echo "$diff_added" | grep -qE 'sk-[A-Za-z0-9]{40,}'; then
+        add_violation "  OpenAI API key (sk-...) in $f"
+    fi
+    # Stripe
+    if echo "$diff_added" | grep -qE '(sk|pk|rk)_(live|test)_[A-Za-z0-9]{20,}'; then
+        add_violation "  Stripe key (sk_live/pk_live/...) in $f"
+    fi
+    # Slack/Discord webhook URL
+    if echo "$diff_added" | grep -qE 'https://hooks\.(slack|discord)\.com/'; then
+        add_violation "  Slack/Discord webhook URL in $f"
+    fi
+    # Postgres/MySQL/MongoDB conn string with creds
+    if echo "$diff_added" | grep -qE '(postgres|mysql|mongodb|libsql)://[^/[:space:]]*:[^@[:space:]]*@'; then
+        add_violation "  DB connection string with credentials in $f"
+    fi
+    # Generic 'secret': '<27+chars>' (Cloudinary-like)
+    if echo "$diff_added" | grep -qiE "['\"]?(secret|api_secret|client_secret)['\"]?\s*[:=]\s*['\"][A-Za-z0-9_/+=-]{20,}['\"]"; then
+        # exclude obvious env-driven patterns
+        if ! echo "$diff_added" | grep -qE "os\.environ|process\.env|os\.getenv|getenv\(|\$\{|\\\$[A-Z_]+"; then
+            add_violation "  literal 'secret': '<value>' assignment in $f"
+        fi
+    fi
+    # Generic 'api_key': '<long>' OR 15+ digit numeric near 'key'
+    if echo "$diff_added" | grep -qiE "['\"]?api_key['\"]?\s*[:=]\s*['\"][A-Za-z0-9_-]{20,}['\"]"; then
+        if ! echo "$diff_added" | grep -qE "os\.environ|process\.env|os\.getenv|getenv\(|\$\{"; then
+            add_violation "  literal 'api_key': '<value>' assignment in $f"
+        fi
+    fi
+    if echo "$diff_added" | grep -qiE "['\"]?key['\"]?\s*:\s*['\"][0-9]{15,}['\"]"; then
+        add_violation "  Cloudinary-style numeric key (15+ digits) in $f"
+    fi
+    # Hardcoded password assignment
+    if echo "$diff_added" | grep -qiE "(password|passwd|_pwd)\s*[:=]\s*['\"][^'\"]{4,}['\"]"; then
+        if ! echo "$diff_added" | grep -qE "os\.environ|process\.env|os\.getenv|getenv\(|\$\{|placeholder|example|hint"; then
+            add_violation "  literal password assignment in $f"
+        fi
+    fi
+    # JWT signing secret
+    if echo "$diff_added" | grep -qiE "JWT_SECRET\s*=\s*['\"][^'\"]{8,}['\"]"; then
+        if ! echo "$diff_added" | grep -qE "os\.environ|process\.env|getenv"; then
+            add_violation "  hardcoded JWT_SECRET in $f"
+        fi
+    fi
+done
+
+# === 3. Result ===
+if [ ${#violations[@]} -gt 0 ]; then
+    echo
+    echo "✗ COMMIT BLOCKED — pre-commit hook detected potential secrets/PII:"
+    echo
+    printf '%s\n' "${violations[@]}"
+    echo
+    echo "Move the value to .env (gitignored) and reference it via"
+    echo "  os.environ.get('NAME', '')   (Python)"
+    echo "  process.env.NAME             (Node)"
+    echo "  String.fromEnvironment('X')  (Dart)"
+    echo
+    echo "If this is a deliberate, sanitized example — confirm it is NOT"
+    echo "a live credential, then re-commit with --no-verify."
+    echo
+    exit 1
+fi
+
+exit 0

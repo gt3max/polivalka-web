@@ -34,6 +34,17 @@ git push origin main  # GitHub Pages автоматически обновит p
 
 **ВАЖНО:** push в `main`, не в `develop`! GitHub Pages берёт файлы из main.
 
+### Pre-commit hook (mandatory after `git clone`)
+
+```bash
+cp scripts/git-hooks/pre-commit .git/hooks/pre-commit
+chmod +x .git/hooks/pre-commit
+```
+
+Hook сканирует staged-content на API keys, passwords, private keys,
+`.env` файлы. После 5 leak-инцидентов — обязательная механическая
+защита. **Не использовать `git commit --no-verify` без явной причины.**
+
 ---
 
 ## Для полной документации
