@@ -42,7 +42,8 @@
 <span class="muted" style="font-size:12px">Time for water absorption before next moisture check</span></div><div class="advanced-toggle" onclick="toggleAdvanced()"><b>▶ Advanced Parameters</b></div><div id="advanced-section" class="advanced-section"><div style="margin-top:12px"><label>Max water/cycle (ml)</label><br><input id="max-water-cycle-ml" type="number" min="50" max="1000" value="300" style="width:80px" onchange="autoSave()"> ml<br>
 <span class="muted" style="font-size:12px">Maximum water per watering cycle (safety limit)</span></div><div style="margin-top:12px"><label>Cooldown (min)</label><br><input id="cooldown-min" type="number" min="10" max="1440" value="120" style="width:80px" onchange="autoSave()"> min<br>
 <span class="muted" style="font-size:12px">Minimum pause after completed cycle</span></div><div style="margin-top:12px"><label>Max water/day (ml)</label><br><input id="max-water-day-ml" type="number" min="50" max="2000" value="400" style="width:80px" onchange="autoSave()"> ml<br>
-<span class="muted" style="font-size:12px">Daily soft limit (24h rolling window)</span></div><div style="margin-top:12px"><label>No-rise check volume (ml)</label><br><input id="no-rise-check-ml" type="number" min="10" max="500" value="300" style="width:80px" onchange="autoSave()"> ml<br>
+<span class="muted" style="font-size:12px">Daily soft limit (24h rolling window)</span></div><div style="margin-top:12px"><label>Max water/session (ml)</label><br><input id="max-ml-per-session-strict" type="number" min="50" max="2000" value="500" style="width:80px" onchange="autoSave()"> ml<br>
+<span class="muted" style="font-size:12px">Hard cap per single watering session (channeling protection, v1.0.173+)</span></div><div style="margin-top:12px"><label>No-rise check volume (ml)</label><br><input id="no-rise-check-ml" type="number" min="10" max="500" value="300" style="width:80px" onchange="autoSave()"> ml<br>
 <span class="muted" style="font-size:12px">Alert if moisture doesn't rise after this amount (leak/hose misalignment detection)</span></div><div style="margin-top:12px"><label>Idle check interval (min)</label><br><input id="idle-check-interval-min" type="number" min="5" max="180" value="60" style="width:80px" onchange="autoSave()"> min<br>
 <span class="muted" style="font-size:12px">How often to check moisture in standby mode</span></div><div style="margin-top:12px"><label>Micro-prime interval (h)</label><br><input id="microprime-interval-hours" type="number" min="12" max="168" value="48" style="width:80px" onchange="autoSave()"> hours<br>
 <span class="muted" style="font-size:12px">Periodic tiny pulses for baseline learning (0 to disable)</span></div><div style="margin-top:12px"><label>Micro-prime pulse (sec)</label><br><input id="microprime-pulse-sec" type="number" min="1" max="20" value="4" style="width:80px" onchange="autoSave()"> sec<br>
@@ -265,6 +266,7 @@ async function saveSettings(){
   const maxWaterCycleMl = parseInt(document.getElementById('max-water-cycle-ml').value);
   const cooldownMin = parseInt(document.getElementById('cooldown-min').value);
   const maxWaterDayMl = parseInt(document.getElementById('max-water-day-ml').value);
+  const maxMlPerSessionStrict = parseInt(document.getElementById('max-ml-per-session-strict').value);
   const noRiseCheckMl = parseInt(document.getElementById('no-rise-check-ml').value);
   const idleCheckMin = parseInt(document.getElementById('idle-check-interval-min').value);
   const microprimeHours = parseInt(document.getElementById('microprime-interval-hours').value);
@@ -294,6 +296,7 @@ async function saveSettings(){
       '&max_water_cycle_ml=' + maxWaterCycleMl +
       '&cooldown_min=' + cooldownMin +
       '&max_water_day_ml=' + maxWaterDayMl +
+      '&max_ml_per_session_strict=' + maxMlPerSessionStrict +
       '&no_rise_check_ml=' + noRiseCheckMl +
       '&idle_check_interval_min=' + idleCheckMin +
       '&microprime_interval_hours=' + microprimeHours +
@@ -362,6 +365,7 @@ async function loadSensorSettings(){
     document.getElementById('max-water-cycle-ml').value = config.max_water_cycle_ml || 300;
     document.getElementById('cooldown-min').value = config.cooldown_min || 120;
     document.getElementById('max-water-day-ml').value = config.max_water_day_ml || 400;
+    document.getElementById('max-ml-per-session-strict').value = config.max_ml_per_session_strict || 500;
     document.getElementById('no-rise-check-ml').value = config.no_rise_check_ml || 60;
     document.getElementById('idle-check-interval-min').value = config.idle_check_interval_min || 60;
     document.getElementById('microprime-interval-hours').value = config.microprime_interval_hours || 48;
