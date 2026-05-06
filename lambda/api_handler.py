@@ -2263,7 +2263,8 @@ def lambda_handler(event, context):
                     'max_water_cycle_ml', 'cooldown_min', 'max_water_day_ml', 'no_rise_check_ml',
                     'idle_check_interval_min', 'microprime_interval_hours',
                     'microprime_pulse_sec', 'microprime_settle_sec',
-                    'deep_watering_interval'
+                    'deep_watering_interval',
+                    'max_ml_per_session_strict',  # v1.0.173 safety field
                 ]
                 for param in param_names:
                     if param in query_params:

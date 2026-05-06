@@ -444,6 +444,7 @@ def handle_config(event, device_id, timestamp):
                 'max_water_cycle_ml': event.get('max_water_cycle_ml', 300),
                 'cooldown_min': event.get('cooldown_min', 120),
                 'max_water_day_ml': event.get('max_water_day_ml', 400),
+                'max_ml_per_session_strict': event.get('max_ml_per_session_strict', 500),
                 'no_rise_check_ml': event.get('no_rise_check_ml', 60),
                 'idle_check_interval_min': event.get('idle_check_interval_min', 60),
                 'microprime_interval_hours': event.get('microprime_interval_hours', 48),
