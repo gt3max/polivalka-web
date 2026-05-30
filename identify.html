@@ -1,6 +1,15 @@
 <!doctype html>
 <html>
 <head>
+<script>
+  // Auth gate — identify is for signed-in users only. Same pattern as
+  // admin.html / fleet.html. Closes the "anonymous-by-URL" backdoor
+  // that previously let unauthenticated visitors hit the API (tier
+  // 'anonymous' fallback) by typing the URL directly.
+  if (!localStorage.getItem('user_email')) {
+    window.location.href = '/login';
+  }
+</script>
 <script src="api-adapter.js"></script>
 <script src="common.js"></script>
 <meta charset="utf-8"/>
