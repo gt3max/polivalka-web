@@ -1296,6 +1296,50 @@ async function loadUsers() {
   }
 }
 
+// ====== Per-user finance (debit/credit ledger) — 2026-06-07 ======
+async function toggleUserFinance(email) {
+  const id = 'finance-' + email.replace(/[@.]/g, '_');
+  const el = document.getElementById(id);
+  if (!el) return;
+  if (el.style.display === 'none') {
+    el.style.display = 'block';
+    if (!el.dataset.loaded) await loadUserLedger(email);
+  } else { el.style.display = 'none'; }
+}
+
+async function loadUserLedger(email) {
+  const id = 'finance-' + email.replace(/[@.]/g, '_');
+  const el = document.getElementById(id);
+  el.innerHTML = '<div class="muted">Loading…</div>';
+  try {
+    const res = await fetch(`${API.cloudBase}/admin/users/${encodeURIComponent(email)}/ledger?limit=50`, { headers: API.getAuthHeaders() });
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const d = await res.json();
+    const b = d.balance || {};
+    const rows = (d.items || []).map(it => `
+      <tr>
+        <td class="mono" style="font-size:10px">${(it.ts || '').replace('T', ' ').slice(0, 16)}</td>
+        <td>${it.type === 'credit' ? '➕' : '➖'} ${esc(it.service || '')}</td>
+        <td style="text-align:right">${it.units || 0}</td>
+        <td class="mono" style="text-align:right;color:${it.type === 'credit' ? '#4caf50' : '#f88'}">$${Number(it.cost_usd || 0).toFixed(4)}</td>
+      </tr>`).join('');
+    el.innerHTML = `
+      <div style="display:flex;gap:14px;flex-wrap:wrap;margin-bottom:6px;font-size:12px">
+        <div>Debit: <span class="mono" style="color:#f88">$${Number(b.debit_usd || 0).toFixed(4)}</span></div>
+        <div>Credit: <span class="mono" style="color:#4caf50">$${Number(b.credit_usd || 0).toFixed(2)}</span></div>
+        <div>Balance: <span class="mono">$${Number(b.balance_usd || 0).toFixed(2)}</span></div>
+        <div class="muted">free units: ${b.free_units || 0}</div>
+      </div>
+      <table style="width:100%;font-size:11px;border-collapse:collapse">
+        <thead><tr><th style="text-align:left">When</th><th style="text-align:left">Service</th><th>u</th><th>$</th></tr></thead>
+        <tbody>${rows || '<tr><td colspan=4 class="muted">No events yet</td></tr>'}</tbody>
+      </table>`;
+    el.dataset.loaded = '1';
+  } catch (e) {
+    el.innerHTML = '<div class="danger">Error: ' + esc(e.message) + '</div>';
+  }
+}
+
 // Render users list with current whitelist data
 function renderUsersList() {
   const container = document.getElementById('users-list');
@@ -1424,6 +1468,10 @@ function renderUsersList() {
           <div style="display:flex;gap:4px;flex-wrap:wrap">
             ${actions}
           </div>
+        </div>
+        <div style="margin-top:6px">
+          <button onclick="toggleUserFinance('${email}')" style="font-size:11px;padding:3px 8px">💰 Finance</button>
+          <div id="finance-${email.replace(/[@.]/g, '_')}" style="display:none;margin-top:6px;padding:8px;background:#14141f;border-radius:8px"></div>
         </div>
         ${devicesSection}
       </div>
