@@ -11,11 +11,15 @@ REGION="eu-central-1"
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 
 # Mapping: local_file -> lambda_function_name
+#
+# ⚠️ DEFUSED 2026-06-13: api_handler / iot_rule_* are OWNED BY the Polivalka repo
+# (Polivalka/lambda/, deployed via deploy_lambdas.py) — that is the CANONICAL source.
+# Deploying them from HERE would overwrite production (Doctor/Identify/users) with a
+# STALE copy and break the app. This script may ONLY deploy web-owned functions.
+# The stale duplicates have been moved to _legacy/. The canonical backend will move
+# to its own repo (plantapp-cloud) — see Polivalka PLANTAPP_CLOUD_MIGRATION.
 declare -A LAMBDA_MAP
 LAMBDA_MAP=(
-    ["api_handler.py"]="polivalka-api-handler"
-    ["iot_rule_response.py"]="ProcessCommandResponseEU"
-    ["iot_rule_telemetry.py"]="SaveTelemetryToDynamoDB"
     ["weekly_aggregator.py"]="polivalka-weekly-aggregator"
 )
 
