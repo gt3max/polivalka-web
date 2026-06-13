@@ -6,19 +6,22 @@
 
 ---
 
-## ⚠️ ТРИ РЕПОЗИТОРИЯ - КРИТИЧЕСКИ ВАЖНО!
+## ⚠️ ЧЕТЫРЕ РЕПОЗИТОРИЯ - КРИТИЧЕСКИ ВАЖНО!
 
-**Проект состоит из ТРЁХ git репозиториев:**
+**Проект состоит из ЧЕТЫРЁХ git репозиториев (3 клиента + общий бэкенд):**
 
 | Папка | GitHub | Назначение |
 |-------|--------|------------|
-| `/Users/maximshurygin/Polivalka` | gt3max/Polivalka | ESP32 firmware + Lambda + документация |
-| `/Users/maximshurygin/polivalka-web` | gt3max/polivalka-web | Cloud сайт (plantapp.pro) |
+| `/Users/maximshurygin/Polivalka` | gt3max/Polivalka | ESP32 firmware + документация |
+| `/Users/maximshurygin/polivalka-web` | gt3max/polivalka-web | Cloud сайт (plantapp.pro) — ЭТОТ репо |
 | `/Users/maximshurygin/plantapp` | gt3max/plantapp | Мобильное приложение PlantApp (React Native + Expo) |
+| `/Users/maximshurygin/plantapp-cloud` | gt3max/plantapp-cloud | **Общий бэкенд** (AWS Lambda) для всех 3 клиентов |
 
-**ПРАВИЛО СИНХРОНИЗАЦИИ:** Все 3 клиента → один бэкенд.
+**Серверного кода в этом репо больше НЕТ** — он весь в `plantapp-cloud` (вынесен 2026-06-13, `lambda/` здесь удалён). Деплой бэкенда: `cd /Users/maximshurygin/plantapp-cloud && python3 deploy_lambdas.py`.
+
+**ПРАВИЛО СИНХРОНИЗАЦИИ:** Все 3 клиента → один общий бэкенд `plantapp-cloud`.
 - Изменил UI логику → проверяй AP (`components/website/`) и Cloud (этот репо)
-- Изменил API endpoint → проверить ВСЕ клиенты (сайт + приложение + ESP32)
+- Изменил API endpoint (в `plantapp-cloud`) → проверить ВСЕ клиенты (сайт + приложение + ESP32)
 - Добавил фичу → нужен ли аналог в других клиентах?
 - Несинхронизированные клиенты = баг
 
