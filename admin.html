@@ -278,7 +278,7 @@
   <span id="pending-toggle-icon" style="color:#fff;font-size:18px">▶</span>
 </div>
 <div id="pending-claims-content" style="display:none;margin-top:12px">
-  <p class="muted">Users requesting to claim devices (not in whitelist)</p>
+  <p class="muted">Users requesting to claim devices (not yet device owners)</p>
   <div id="pending-claims-list">
     <div class="muted">No pending claims</div>
   </div>
@@ -891,7 +891,7 @@ async function approveClaim(index) {
   const claim = pendingData.claims[index];
   if (!claim) return;
 
-  if (!confirm(`Approve claim?\n\nDevice: ${claim.device_id}\nUser: ${claim.email}\n\nThis will add user to whitelist and assign the device.`)) return;
+  if (!confirm(`Approve claim?\n\nDevice: ${claim.device_id}\nUser: ${claim.email}\n\nThis will grant device access and assign the device.`)) return;
 
   // 1. Add/update user in whitelist with the device
   const existingUser = whitelistData.users?.[claim.email];
@@ -907,7 +907,7 @@ async function approveClaim(index) {
   }
 
   if (!whitelistOk) {
-    alert('Failed to update whitelist. Claim NOT processed.');
+    alert('Failed to update device access. Claim NOT processed.');
     return;
   }
 
@@ -1375,11 +1375,11 @@ function renderUsersList() {
     } else if (isSuspended) {
       statusBadge = '<span style="color:#ff9800">⏸️ Suspended</span>';
     } else if (isWhitelisted) {
-      statusBadge = '<span style="color:#4caf50">✅ Whitelisted</span>';
+      statusBadge = '<span style="color:#4caf50">🔌 Device owner</span>';
     } else if (!verified) {
       statusBadge = '<span style="color:#999">❌ Not verified</span>';
     } else {
-      statusBadge = '<span style="color:#999">⏳ Not whitelisted</span>';
+      statusBadge = '<span style="color:#999">⏳ No device</span>';
     }
 
     // Action buttons based on status
@@ -1403,13 +1403,13 @@ function renderUsersList() {
       `;
     } else if (verified) {
       actions = `
-        <button onclick="addToWhitelist('${email}')" style="font-size:11px;padding:4px 8px;background:#4caf50;color:#fff;border-color:#4caf50">+ Whitelist</button>
+        <button onclick="addToWhitelist('${email}')" style="font-size:11px;padding:4px 8px;background:#4caf50;color:#fff;border-color:#4caf50">+ Grant device</button>
         <button onclick="banUser('${email}')" style="font-size:11px;padding:4px 8px">Ban</button>
       `;
     } else {
       // Unverified users: can add to whitelist or ban
       actions = `
-        <button onclick="addToWhitelist('${email}')" style="font-size:11px;padding:4px 8px;background:#4caf50;color:#fff;border-color:#4caf50">+ Whitelist</button>
+        <button onclick="addToWhitelist('${email}')" style="font-size:11px;padding:4px 8px;background:#4caf50;color:#fff;border-color:#4caf50">+ Grant device</button>
         <button onclick="banUser('${email}')" style="font-size:11px;padding:4px 8px">Ban</button>
       `;
     }
@@ -1512,11 +1512,11 @@ function restoreExpandedUsers() {
 // ============ Whitelist Actions ============
 
 async function addToWhitelist(email) {
-  if (!confirm(`Add ${email} to whitelist?`)) return;
+  if (!confirm(`Grant device access to ${email}?`)) return;
 
   const success = await addUserToWhitelist(email, { status: 'active', devices: [] });
   if (success) {
-    showToast(`${email} added to whitelist`, 'success');
+    showToast(`${email} granted device access`, 'success');
     await loadWhitelist();
     renderUsersList();
   }
@@ -1526,7 +1526,7 @@ async function removeFromWhitelist(email) {
   const userData = whitelistData.users?.[email];
   const devices = userData?.devices || [];
 
-  let msg = `Remove ${email} from whitelist?`;
+  let msg = `Revoke device access for ${email}?`;
   if (devices.length > 0) {
     msg += `\n\nThis will revoke ${devices.length} device(s) and return them to admin.`;
   }
@@ -1558,7 +1558,7 @@ async function removeFromWhitelist(email) {
 
   // Abort if any revoke failed — don't delete whitelist with active devices
   if (failed.length > 0) {
-    alert(`Failed to revoke ${failed.length} device(s): ${failed.join(', ')}\n\nWhitelist NOT deleted. Fix manually.`);
+    alert(`Failed to revoke ${failed.length} device(s): ${failed.join(', ')}\n\nDevice access NOT removed. Fix manually.`);
     await loadWhitelist();
     renderUsersList();
     return;
