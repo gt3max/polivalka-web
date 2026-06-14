@@ -1258,6 +1258,15 @@ function updateCostEstimate() {
 let allUsersData = [];
 // All devices data (from AWS)
 let allDevicesData = [];
+// App-axis: tier + monthly usage per user, keyed by email (from /admin/users/stats)
+let statsMap = {};
+// Free-tier limits — SYNC with TIER_POLICY (plantapp-cloud/shared/user_storage.py). -1 = ∞ (premium/admin).
+const TIER_LIMITS = {
+  free:    { doctor: 3,  identify: 15, plants: 5 },
+  premium: { doctor: -1, identify: -1, plants: -1 },
+  admin:   { doctor: -1, identify: -1, plants: -1 },
+};
+function fmtUsage(n, lim) { return (lim < 0 ? `${n}/∞` : `${n}/${lim}`); }
 
 // Load users with whitelist status
 async function loadUsers() {
@@ -1274,6 +1283,17 @@ async function loadUsers() {
     });
     if (!res.ok) throw new Error('Failed to load users');
     allUsersData = await res.json();
+
+    // App-axis: tier + monthly usage per user (one bulk call). Non-fatal if it fails.
+    try {
+      const ym = new Date().toISOString().slice(0, 7);  // YYYY-MM
+      const sres = await fetch(`${API.cloudBase}/admin/users/stats?yyyy_mm=${ym}`, { headers: API.getAuthHeaders() });
+      if (sres.ok) {
+        const sdata = await sres.json();
+        statsMap = {};
+        (sdata.users || []).forEach(r => { if (r && r.email) statsMap[r.email] = r; });
+      }
+    } catch (e) { console.warn('[Admin] usage stats load failed (non-fatal):', e); }
 
     // Load devices from AWS
     const devRes = await fetch(`${API.cloudBase}/devices`, {
@@ -1325,10 +1345,9 @@ async function loadUserLedger(email) {
       </tr>`).join('');
     el.innerHTML = `
       <div style="display:flex;gap:14px;flex-wrap:wrap;margin-bottom:6px;font-size:12px">
-        <div>Debit: <span class="mono" style="color:#f88">$${Number(b.debit_usd || 0).toFixed(4)}</span></div>
+        <div>Spent: <span class="mono" style="color:#f88">$${Number(b.debit_usd || 0).toFixed(4)}</span></div>
         <div>Credit: <span class="mono" style="color:#4caf50">$${Number(b.credit_usd || 0).toFixed(2)}</span></div>
         <div>Balance: <span class="mono">$${Number(b.balance_usd || 0).toFixed(2)}</span></div>
-        <div class="muted">free units: ${b.free_units || 0}</div>
       </div>
       <table style="width:100%;font-size:11px;border-collapse:collapse">
         <thead><tr><th style="text-align:left">When</th><th style="text-align:left">Service</th><th>u</th><th>$</th></tr></thead>
@@ -1457,6 +1476,12 @@ function renderUsersList() {
 
     const lastLogin = u.last_login ? new Date(u.last_login).toLocaleDateString() : 'Never';
 
+    // App-axis: subscription tier + monthly usage vs limit (from statsMap / hardcoded TIER_LIMITS)
+    const st = statsMap[email] || {};
+    const tier = st.tier || (isAdmin ? 'admin' : 'free');
+    const lim = TIER_LIMITS[tier] || TIER_LIMITS.free;
+    const appAxis = `💳 ${tier} &nbsp;·&nbsp; 🩺 Doctor ${fmtUsage(st.doctor_count || 0, lim.doctor)} &nbsp;·&nbsp; 🔍 Identify ${fmtUsage(st.identify_count || 0, lim.identify)}`;
+
     return `
       <div style="padding:10px 0;border-bottom:1px solid #333">
         <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
@@ -1464,6 +1489,7 @@ function renderUsersList() {
             <span style="color:#fff">${esc(email)}</span>
             <span style="margin-left:8px">${statusBadge}</span>
             <div class="muted" style="font-size:11px">Last login: ${lastLogin}</div>
+            <div style="font-size:11px;margin-top:3px;color:#bbb">${appAxis}</div>
           </div>
           <div style="display:flex;gap:4px;flex-wrap:wrap">
             ${actions}
