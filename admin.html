@@ -1403,13 +1403,13 @@ function renderUsersList() {
       `;
     } else if (verified) {
       actions = `
-        <button onclick="addToWhitelist('${email}')" style="font-size:11px;padding:4px 8px;background:#4caf50;color:#fff;border-color:#4caf50">+ Grant device</button>
+        <button onclick="addToWhitelist('${email}')" style="font-size:11px;padding:4px 8px;background:#4caf50;color:#fff;border-color:#4caf50">+ Device access</button>
         <button onclick="banUser('${email}')" style="font-size:11px;padding:4px 8px">Ban</button>
       `;
     } else {
       // Unverified users: can add to whitelist or ban
       actions = `
-        <button onclick="addToWhitelist('${email}')" style="font-size:11px;padding:4px 8px;background:#4caf50;color:#fff;border-color:#4caf50">+ Grant device</button>
+        <button onclick="addToWhitelist('${email}')" style="font-size:11px;padding:4px 8px;background:#4caf50;color:#fff;border-color:#4caf50">+ Device access</button>
         <button onclick="banUser('${email}')" style="font-size:11px;padding:4px 8px">Ban</button>
       `;
     }
