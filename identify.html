@@ -436,12 +436,10 @@ async function updateStatus() {
 
     // Time is handled by universal clock in common.js
 
-    // Battery
+    // Battery (РАЗДЕЛ 3 — единое правило)
     const batteryStatus = document.getElementById('battery-status');
-    if (s.battery && s.battery.percent !== null && s.battery.percent !== undefined) {
-      const percent = Math.round(s.battery.percent);
-      const charging = s.battery.charging ? ' ⚡' : '';
-      batteryStatus.textContent = `🔋 ${percent}%${charging}`;
+    if (s.battery) {
+      batteryStatus.textContent = formatBattery(s.battery.percent, s.battery.voltage, batteryOnPower(s.battery));
     } else {
       batteryStatus.textContent = '⚡ AC';
     }

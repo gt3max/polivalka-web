@@ -34,11 +34,7 @@ async function updateBattery(){
   try {
     const b = await API.get('/battery/status');
     const el = document.getElementById('battery-status');
-    if (b.percent !== null && b.percent !== undefined && b.percent >= 0) {
-      el.textContent = `🔋 ${Math.round(b.percent)}%${b.charging ? ' ⚡' : ''}`;
-    } else {
-      el.textContent = '⚡ AC';
-    }
+    el.textContent = formatBattery(b.percent, b.voltage, batteryOnPower(b)); // РАЗДЕЛ 3
   } catch(e) { document.getElementById('battery-status').textContent = '⚡ AC'; }
 }
 
@@ -47,7 +43,7 @@ try {
 const s=await API.get('/status');
 // Battery
 const batteryStatus=document.getElementById('battery-status');
-if(s.battery&&s.battery.percent!==null&&s.battery.percent!==undefined&&s.battery.percent>=0){batteryStatus.textContent=`🔋 ${Math.round(s.battery.percent)}%${s.battery.charging?' ⚡':''}`;}else{batteryStatus.textContent='⚡ AC';}
+if(s.battery){batteryStatus.textContent=formatBattery(s.battery.percent,s.battery.voltage,batteryOnPower(s.battery));}else{batteryStatus.textContent='⚡ AC';}/*РАЗДЕЛ 3*/
 // Location, Room, Custom Name
 if(s.system_state?.location)document.getElementById('location-text').textContent=s.system_state.location;
 if(s.system_state?.room)document.getElementById('room-text').textContent=s.system_state.room;

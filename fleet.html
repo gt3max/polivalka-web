@@ -844,23 +844,18 @@ function createExpandableRow(device, isOnline, hasWarnings, isCritical) {
   let moistureColor = moisturePct === null ? '#666' : (moisturePct < 20 ? '#b00' : moisturePct < 40 ? '#f57c00' : '#0a0');
   let batteryColor = device.battery_pct === null ? '#0a0' : device.battery_pct < 10 ? '#b00' : device.battery_pct < 30 ? '#f57c00' : '#0a0';
 
-  // Charging icon (⚡ если на розетке, как на home.html)
-  const chargingIcon = device.battery_charging ? ' ⚡' : '';
+  // РАЗДЕЛ 3 — единое правило (common.js formatBattery): AC vs %, пол по напряжению.
+  const onPower = batteryOnPower({on_power: device.battery_on_power, charging: device.battery_charging});
 
   // Battery display text
   // battery_no_data = true: no telemetry received yet (device new/offline)
-  // battery_pct = null: telemetry received but no battery (AC power)
-  // battery_pct = number: battery data available
   let batteryDisplay, batteryDisplayLong;
   if (device.battery_no_data === true) {
     batteryDisplay = '— (no data)';
     batteryDisplayLong = '🔋 Battery: no data';
-  } else if (device.battery_pct !== null) {
-    batteryDisplay = `🔋${Math.round(device.battery_pct)}%${chargingIcon}`;
-    batteryDisplayLong = `🔋 Battery: ${Math.round(device.battery_pct)}%${chargingIcon}`;
   } else {
-    batteryDisplay = '⚡ AC';
-    batteryDisplayLong = '⚡ AC Power';
+    batteryDisplay = formatBattery(device.battery_pct, device.battery_voltage, onPower);
+    batteryDisplayLong = batteryDisplay.indexOf('⚡ AC') === 0 ? '⚡ AC Power' : ('🔋 Battery: ' + batteryDisplay.replace(/^🔋\s*/, ''));
   }
 
   // Time ago (handles both seconds and milliseconds)
@@ -1088,9 +1083,9 @@ function createDeviceCard(device) {
   const isWatering = device.state === 'PULSE' || device.state === 'WATERING';
   const wateringBadge = isWatering ? '<span style="color:#1976d2;font-weight:600">💧 Watering...</span>' : '';
 
-  // Battery display (null = AC power, no battery)
-  const chargingIcon = device.battery_charging ? ' ⚡' : '';
-  const batteryMetric = device.battery_pct !== null ? `${Math.round(device.battery_pct)}%${chargingIcon}` : '⚡ AC Power';
+  // Battery display (РАЗДЕЛ 3 — единое правило)
+  const batteryMetric = formatBattery(device.battery_pct, device.battery_voltage,
+    batteryOnPower({on_power: device.battery_on_power, charging: device.battery_charging}));
 
   // Time ago
   const lastWateringAgo = timeAgo(device.last_watering);
@@ -1615,13 +1610,19 @@ async function bulkAction(action) {
         // Recalculate controller_enabled based on new state
         device.controller_enabled = device.state !== 'DISABLED';
         if (result.pump_running !== undefined) device.pump_running = result.pump_running;
-        // Battery: update percent + charging from command response
+        // Battery: update percent + charging + on_power + voltage from command response
         if (result.battery) {
           if (result.battery.percent !== undefined && result.battery.percent !== null) {
             device.battery_pct = result.battery.percent;
           }
           if (result.battery.charging !== undefined) {
             device.battery_charging = result.battery.charging;
+          }
+          if (result.battery.on_power !== undefined) {
+            device.battery_on_power = result.battery.on_power;  // РАЗДЕЛ 3 — чтобы ⚡ обновлялась по Refresh All
+          }
+          if (result.battery.voltage !== undefined) {
+            device.battery_voltage = result.battery.voltage;
           }
         }
         // Pump calibration and speed

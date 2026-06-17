@@ -41,11 +41,7 @@ async function updateBattery(){
   try {
     const b = await API.get('/battery/status');
     const el = document.getElementById('battery-status');
-    if (b.percent !== null && b.percent !== undefined && b.percent >= 0) {
-      el.textContent = `🔋 ${Math.round(b.percent)}%${b.charging ? ' ⚡' : ''}`;
-    } else {
-      el.textContent = '⚡ AC';
-    }
+    el.textContent = formatBattery(b.percent, b.voltage, batteryOnPower(b)); // РАЗДЕЛ 3
   } catch(e) { document.getElementById('battery-status').textContent = '⚡ AC'; }
 }
 
@@ -70,8 +66,8 @@ async function updateHeader(){
     // Battery (Cloud mode)
     if (IS_CLOUD) {
       const batteryStatus = document.getElementById('battery-status');
-      if (s.battery && s.battery.percent !== null && s.battery.percent !== undefined && s.battery.percent >= 0) {
-        batteryStatus.textContent = `🔋 ${Math.round(s.battery.percent)}%${s.battery.charging ? ' ⚡' : ''}`;
+      if (s.battery) {
+        batteryStatus.textContent = formatBattery(s.battery.percent, s.battery.voltage, batteryOnPower(s.battery)); // РАЗДЕЛ 3
       } else { batteryStatus.textContent = '⚡ AC'; }
     }
 
@@ -813,10 +809,10 @@ if (IS_CLOUD) {
       // Load system telemetry from DynamoDB
       const status = await API.get('/status');
 
-      // Battery (Cloud mode)
+      // Battery (Cloud mode) — РАЗДЕЛ 3
       const batteryStatus = document.getElementById('battery-status');
-      if (status.battery && status.battery.percent !== null && status.battery.percent !== undefined && status.battery.percent >= 0) {
-        batteryStatus.textContent = `🔋 ${Math.round(status.battery.percent)}%${status.battery.charging ? ' ⚡' : ''}`;
+      if (status.battery) {
+        batteryStatus.textContent = formatBattery(status.battery.percent, status.battery.voltage, batteryOnPower(status.battery));
       } else {
         batteryStatus.textContent = '⚡ AC';
       }

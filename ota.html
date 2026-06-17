@@ -83,10 +83,10 @@ async function loadHeaderData() {
   try {
     const s = await API.get('/status');
 
-    // Battery
+    // Battery (РАЗДЕЛ 3)
     const batteryEl = document.getElementById('battery-status');
-    if (s.battery && s.battery.percent !== null && s.battery.percent !== undefined) {
-      batteryEl.textContent = `🔋 ${Math.round(s.battery.percent)}%${s.battery.charging ? ' ⚡' : ''}`;
+    if (s.battery) {
+      batteryEl.textContent = formatBattery(s.battery.percent, s.battery.voltage, batteryOnPower(s.battery));
     } else {
       batteryEl.textContent = '⚡ AC';
     }

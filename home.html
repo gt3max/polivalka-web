@@ -179,8 +179,8 @@ async function updateHeader(){
     // Battery (Cloud mode: from /status, AP mode: separate updateBattery())
     if (IS_CLOUD) {
       const batteryStatus = document.getElementById('battery-status');
-      if (s.battery && s.battery.percent !== null && s.battery.percent !== undefined && s.battery.percent >= 0) {
-        batteryStatus.textContent = `🔋 ${Math.round(s.battery.percent)}%${s.battery.charging ? ' ⚡' : ''}`;
+      if (s.battery) {
+        batteryStatus.textContent = formatBattery(s.battery.percent, s.battery.voltage, batteryOnPower(s.battery)); // РАЗДЕЛ 3
       } else {
         batteryStatus.textContent = '⚡ AC';
       }
@@ -415,20 +415,7 @@ async function updateTime(){
 async function updateBattery(){
   try {
     const b = await API.get('/battery/status');
-    const batteryStatus = document.getElementById('battery-status');
-
-    // 3 states only:
-    // 1. 🔋 XX% - battery, not charging
-    // 2. 🔋 XX% ⚡ - battery, charging
-    // 3. ⚡ AC - no battery, AC power
-    // percent < 0 means "no battery detected" (ESP32 returns -1.0)
-    if (b.percent !== null && b.percent !== undefined && b.percent >= 0) {
-      const percent = Math.round(b.percent);
-      const charging = b.charging ? ' ⚡' : '';
-      batteryStatus.textContent = `🔋 ${percent}%${charging}`;
-    } else {
-      batteryStatus.textContent = '⚡ AC';
-    }
+    document.getElementById('battery-status').textContent = formatBattery(b.percent, b.voltage, batteryOnPower(b)); // РАЗДЕЛ 3
   } catch(e) {
     document.getElementById('battery-status').textContent = '⚡ AC';
   }

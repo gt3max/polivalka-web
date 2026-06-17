@@ -121,15 +121,31 @@ function formatTime(dateOrTimestamp) {
 // ============ Battery Display ============
 /**
  * Format battery status for display
- * 3 states: 🔋 XX%, 🔋 XX% ⚡, ⚡ AC
+ * РАЗДЕЛ 3 — ЕДИНОЕ правило отображения заряда (единственное место на этот репо).
+ * Заряд показываем в ПРОЦЕНТАХ; напряжение — только страховочный пол.
+ *   percent==null            → onPower ? "⚡ AC" : "🔋 —"
+ *   !onPower                 → "🔋 XX%"          (на батарее: всегда %)
+ *   onPower && V < 3.75      → "🔋 XX% ⚡"        (на питании, реально низко → число)
+ *   onPower (заряжен)        → "⚡ AC"
+ * Пол по напряжению (а не SOC%): "полный" SOC на питании дрейфует и разный по
+ * странам (данные за 6 мес). Унифицирует платы с аккумулятором и без → "⚡ AC".
+ * @param {number|null} percent  SOC %
+ * @param {number|null} voltage  battery voltage (V)
+ * @param {boolean} onPower      on external power (N_PG/IO12)
  */
-function formatBattery(percent, charging) {
-  if (percent === null || percent === undefined) {
-    return '⚡ AC';
+function formatBattery(percent, voltage, onPower) {
+  if (percent === null || percent === undefined || percent < 0) {
+    return onPower ? '⚡ AC' : '🔋 —';
   }
   const pct = Math.round(percent);
-  const icon = charging ? ' ⚡' : '';
-  return `🔋 ${pct}%${icon}`;
+  if (!onPower) return `🔋 ${pct}%`;
+  if (voltage !== null && voltage !== undefined && voltage < 3.75) return `🔋 ${pct}% ⚡`;
+  return '⚡ AC';
+}
+// Helper: extract on_power from a battery object (fallback to charging for old fw).
+function batteryOnPower(b) {
+  if (!b) return false;
+  return (b.on_power !== undefined && b.on_power !== null) ? b.on_power : !!b.charging;
 }
 
 // ============ Toast Notifications ============
@@ -220,7 +236,7 @@ function updateHeaderFromStatus(status) {
   const batteryEl = document.getElementById('battery-status');
   if (batteryEl) {
     if (status.battery) {
-      batteryEl.textContent = formatBattery(status.battery.percent, status.battery.charging);
+      batteryEl.textContent = formatBattery(status.battery.percent, status.battery.voltage, batteryOnPower(status.battery));
     } else {
       batteryEl.textContent = '⚡ AC';
     }
