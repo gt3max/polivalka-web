@@ -1411,8 +1411,10 @@ function renderUsersList() {
       statusBadge = '<span style="color:#f44">🚫 Banned</span>';
     } else if (isSuspended) {
       statusBadge = '<span style="color:#ff9800">⏸️ Suspended</span>';
-    } else if (isWhitelisted) {
+    } else if (isWhitelisted && userDevices.length > 0) {
       statusBadge = '<span style="color:#4caf50">🔌 Device owner</span>';
+    } else if (isWhitelisted) {
+      statusBadge = '<span style="color:#80cbc4">🔑 Device access · no device</span>';
     } else if (!verified) {
       statusBadge = '<span style="color:#999">❌ Not verified</span>';
     } else {
@@ -1442,12 +1444,14 @@ function renderUsersList() {
       actions = `
         <button onclick="addToWhitelist('${email}')" style="font-size:11px;padding:4px 8px;background:#4caf50;color:#fff;border-color:#4caf50">+ Device access</button>
         <button onclick="banUser('${email}')" style="font-size:11px;padding:4px 8px">Ban</button>
+        <button onclick="deleteUser('${email}')" style="font-size:11px;padding:4px 8px;background:#f44;color:#fff;border-color:#f44">🗑 Delete</button>
       `;
     } else {
       // Unverified users: can add to whitelist or ban
       actions = `
         <button onclick="addToWhitelist('${email}')" style="font-size:11px;padding:4px 8px;background:#4caf50;color:#fff;border-color:#4caf50">+ Device access</button>
         <button onclick="banUser('${email}')" style="font-size:11px;padding:4px 8px">Ban</button>
+        <button onclick="deleteUser('${email}')" style="font-size:11px;padding:4px 8px;background:#f44;color:#fff;border-color:#f44">🗑 Delete</button>
       `;
     }
 
@@ -1712,25 +1716,29 @@ async function unbanUser(email) {
 }
 
 async function deleteUser(email) {
-  if (!confirm(`Delete unverified user ${email}?\n\nThis cannot be undone.`)) return;
+  // Guards: never delete an admin or yourself
+  const self = (localStorage.getItem('user_email') || '').toLowerCase();
+  if (ADMIN_EMAILS.includes(email.toLowerCase())) { showToast('Cannot delete an admin', 'error'); return; }
+  if (email.toLowerCase() === self) { showToast('Cannot delete yourself', 'error'); return; }
+  if (!confirm(`Delete user ${email}?\n\nRemoves identity + device access. This cannot be undone.`)) return;
 
   try {
-    const res = await fetch(`${API.cloudBase}/admin/user/${encodeURIComponent(email)}/delete`, {
-      method: 'POST',
+    const res = await fetch(`${API.cloudBase}/admin/users/${encodeURIComponent(email)}`, {
+      method: 'DELETE',
       headers: API.getAuthHeaders()
     });
 
     if (res.ok) {
       showToast(`${email} deleted`, 'success');
-      // Remove from local array and re-render
       allUsersData = allUsersData.filter(u => u.email !== email);
+      await loadWhitelist();
       renderUsersList();
     } else {
       const data = await res.json().catch(() => ({}));
-      alert('Error: ' + (data.error || 'Failed to delete user'));
+      showToast('Failed to delete: ' + (data.error || res.status), 'error');
     }
   } catch(e) {
-    alert('Error: ' + e.message);
+    showToast('Error deleting user: ' + e.message, 'error');
   }
 }
 

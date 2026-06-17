@@ -13,7 +13,7 @@ if (window.location.pathname.endsWith('.html') && window.location.pathname !== '
 }
 
 // ============ Admin ============
-const ADMIN_EMAILS = ['mrmaximshurigin@gmail.com'];
+const ADMIN_EMAILS = ['mrmaximshurigin@gmail.com', 'mahin84@gmail.com'];
 
 function isAdmin() {
   const email = localStorage.getItem('user_email') || '';
