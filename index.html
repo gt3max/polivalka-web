@@ -2420,6 +2420,9 @@
                         <span class="wl-input-icon">&#9993;</span>
                         <input type="email" id="wl-email" name="email" placeholder="you@email.com" required autocomplete="email">
                     </div>
+                    <!-- honeypot: hidden from humans, bots fill it in -->
+                    <input type="text" id="wl-company" name="company" tabindex="-1" autocomplete="off" aria-hidden="true" style="position:absolute;left:-9999px;top:auto;width:1px;height:1px;opacity:0;pointer-events:none">
+                    <input type="hidden" id="wl-ts" value="">
                     <button type="submit" class="wl-submit" id="wl-submit-btn">Join Waitlist</button>
                     <div class="wl-note">We respect your privacy. Unsubscribe anytime.</div>
                 </form>
@@ -2534,6 +2537,8 @@
         function openWaitlist() {
             document.getElementById('wl-overlay').classList.add('open');
             document.body.style.overflow = 'hidden';
+            var ts = document.getElementById('wl-ts');
+            if (ts) ts.value = Date.now();   // timing-check: when the form was opened
             setTimeout(function() {
                 var inp = document.getElementById('wl-email');
                 if (inp) inp.focus();
@@ -2554,32 +2559,23 @@
             var email = document.getElementById('wl-email').value.trim();
             if (!email) return false;
 
+            var company = document.getElementById('wl-company').value;  // honeypot (must stay empty)
+            var ts = document.getElementById('wl-ts').value || '';
+
             var btn = document.getElementById('wl-submit-btn');
             btn.disabled = true;
             btn.innerHTML = '<span class="wl-spinner"></span>';
 
-            // Send to both admins in parallel
-            var payload = JSON.stringify({
-                email: email,
-                _subject: 'PlantApp Waitlist: ' + email,
-                message: 'New waitlist signup from ' + email
-            });
-            var headers = { 'Content-Type': 'application/json', 'Accept': 'application/json' };
-
-            // Also save to our database (admin panel waitlist)
+            // Single source of truth: our Lambda (double opt-in confirmation email is sent server-side)
             fetch('https://p0833p2v29.execute-api.eu-central-1.amazonaws.com/waitlist/signup', {
-                method: 'POST', headers: headers, body: JSON.stringify({ email: email })
-            }).catch(function() {}); // silent — FormSubmit is primary
-
-            Promise.all([
-                fetch('https://formsubmit.co/ajax/mrmaximshurigin@gmail.com', {
-                    method: 'POST', headers: headers, body: payload
-                }),
-                fetch('https://formsubmit.co/ajax/mahin84@gmail.com', {
-                    method: 'POST', headers: headers, body: payload
-                })
-            ])
-            .then(function() { showWaitlistSuccess(); })
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+                body: JSON.stringify({ email: email, company: company, ts: ts })
+            })
+            .then(function(r) {
+                if (r.status >= 500) throw new Error('server');
+                showWaitlistSuccess();   // 200/4xx → tell user to check inbox (don't reveal bot blocks)
+            })
             .catch(function() {
                 btn.disabled = false;
                 btn.textContent = 'Retry';
@@ -2594,8 +2590,8 @@
             var formBody = document.getElementById('wl-form-body');
             formBody.innerHTML = '<div class="wl-success-state">' +
                 '<div class="wl-success-circle"><svg viewBox="0 0 32 32" fill="none"><path d="M8 17L13 22L24 10" stroke="#fff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg></div>' +
-                '<div class="wl-success-title">You\'re on the list!</div>' +
-                '<div class="wl-success-sub">We\'ll email you when PlantApp launches.<br>Welcome aboard.</div>' +
+                '<div class="wl-success-title">Almost there!</div>' +
+                '<div class="wl-success-sub">Check your inbox and click the confirmation link<br>to lock in your spot on the waitlist.</div>' +
                 '</div>';
         }
     </script>
