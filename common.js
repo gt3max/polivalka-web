@@ -122,15 +122,18 @@ function formatTime(dateOrTimestamp) {
 /**
  * Format battery status for display
  * РАЗДЕЛ 3 — ЕДИНОЕ правило отображения заряда (единственное место на этот репо).
- * Заряд показываем в ПРОЦЕНТАХ; напряжение — только страховочный пол.
- *   percent==null            → onPower ? "⚡ AC" : "🔋 —"
- *   !onPower                 → "🔋 XX%"          (на батарее: всегда %)
- *   onPower && V < 3.75      → "🔋 XX% ⚡"        (на питании, реально низко → число)
- *   onPower (заряжен)        → "⚡ AC"
- * Пол по напряжению (а не SOC%): "полный" SOC на питании дрейфует и разный по
- * странам (данные за 6 мес). Унифицирует платы с аккумулятором и без → "⚡ AC".
+ * Заряд показываем в ПРОЦЕНТАХ; порог AC — по SOC%.
+ *   percent==null   → onPower ? "⚡ AC" : "🔋 —"
+ *   !onPower        → "🔋 XX%"          (на батарее: всегда %)
+ *   onPower & <85%  → "🔋 XX% ⚡"        (на питании, ещё заряжается → число + молния)
+ *   onPower & ≥85%  → "⚡ AC"           (на питании, заряжен)
+ * Порог 85% по SOC, а НЕ по напряжению: под зарядкой напряжение упирается в плато
+ * ~4.18В уже к ~78% (логи EBB339), поэтому воль-порог не даёт AC при высоком заряде.
+ * 85% выбран по 6-мес логам: "полный на питании" проседает до 88.5% (BC67E9) —
+ * 85% даёт запас 3.5%, чтобы полный аккум всегда был AC, без мигания. Унифицирует
+ * платы с аккумулятором (≥85%→AC) и без (фантом ~99%→AC).
  * @param {number|null} percent  SOC %
- * @param {number|null} voltage  battery voltage (V)
+ * @param {number|null} voltage  battery voltage (V) — больше не в решении, оставлен для совместимости
  * @param {boolean} onPower      on external power (N_PG/IO12)
  */
 function formatBattery(percent, voltage, onPower) {
@@ -138,9 +141,9 @@ function formatBattery(percent, voltage, onPower) {
     return onPower ? '⚡ AC' : '🔋 —';
   }
   const pct = Math.round(percent);
-  if (!onPower) return `🔋 ${pct}%`;
-  if (voltage !== null && voltage !== undefined && voltage < 3.75) return `🔋 ${pct}% ⚡`;
-  return '⚡ AC';
+  if (!onPower) return `🔋 ${pct}%`;       // на батарее: всегда %
+  if (pct < 85) return `🔋 ${pct}% ⚡`;     // на питании, ещё не заряжен → % + молния
+  return '⚡ AC';                           // на питании, заряжен (≥85%) → AC
 }
 // Helper: extract on_power from a battery object (fallback to charging for old fw).
 function batteryOnPower(b) {
