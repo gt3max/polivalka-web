@@ -1964,19 +1964,18 @@ async function switchLogsTab(tab) {
   // Update tab button styles
   const activityBtn = document.getElementById('logsTabActivity');
   const deviceBtn = document.getElementById('logsTabDevice');
+  const criticalBtn = document.getElementById('logsTabCritical');
+  [activityBtn, deviceBtn, criticalBtn].forEach(b => { if (b) { b.style.background = ''; b.style.color = ''; } });
 
   if (tab === 'activity') {
-    activityBtn.style.background = '#4CAF50';
-    activityBtn.style.color = 'white';
-    deviceBtn.style.background = '';
-    deviceBtn.style.color = '';
+    activityBtn.style.background = '#4CAF50'; activityBtn.style.color = 'white';
     await viewActivityLogs(currentLogsDeviceId);
   } else if (tab === 'device') {
-    deviceBtn.style.background = '#2196F3';
-    deviceBtn.style.color = 'white';
-    activityBtn.style.background = '';
-    activityBtn.style.color = '';
+    deviceBtn.style.background = '#2196F3'; deviceBtn.style.color = 'white';
     await viewDeviceLogs(currentLogsDeviceId);
+  } else if (tab === 'critical') {
+    criticalBtn.style.background = '#b00'; criticalBtn.style.color = 'white';
+    await viewCriticalLogs(currentLogsDeviceId);
   }
 }
 
@@ -2042,6 +2041,32 @@ async function viewDeviceLogs(deviceId) {
       document.getElementById('logsContent').textContent = '⚠️ Device is offline or sleeping.\n\nDevice RAM logs are only available when device is online and awake.';
     } else {
       document.getElementById('logsContent').textContent = `Error loading Device logs: ${e.message}`;
+    }
+  }
+}
+
+// View persistent CRITICAL logs (NVS - survives reboot: faults, power, cooldown, toggles, boot)
+async function viewCriticalLogs(deviceId) {
+  try {
+    document.getElementById('logsContent').textContent = 'Loading Critical (persistent NVS) logs...';
+    const data = await API.get(`/device/${deviceId}/critical-logs`);
+    const header = `Critical NVS log (persistent, survives reboot): ${data.count} events\n${'='.repeat(80)}\n`;
+    const logLines = (data.logs || []).map(log => {
+      const ts = log.timestamp;
+      let when;
+      if (ts && ts > 0) {
+        when = new Date(ts * 1000).toISOString().replace('T', ' ').substring(0, 19);
+      } else {
+        when = 'time-unset';
+      }
+      return `(${when}) ${log.event}`;
+    }).join('\n');
+    document.getElementById('logsContent').textContent = header + (logLines || 'No critical logs');
+  } catch(e) {
+    if (e.message.includes('408')) {
+      document.getElementById('logsContent').textContent = '⚠️ Device offline or sleeping.\n\nCritical logs are pulled live — device must be online.';
+    } else {
+      document.getElementById('logsContent').textContent = `Error loading Critical logs: ${e.message}`;
     }
   }
 }
@@ -2419,6 +2444,7 @@ window.addEventListener('beforeunload',()=>{Object.values(pumpTimers).forEach(cl
         <div style="display:flex;gap:8px">
           <button id="logsTabActivity" onclick="switchLogsTab('activity')" class="btn-secondary" style="padding:6px 12px;font-size:14px">Activity (7d)</button>
           <button id="logsTabDevice" onclick="switchLogsTab('device')" class="btn-secondary" style="padding:6px 12px;font-size:14px">Device RAM</button>
+          <button id="logsTabCritical" onclick="switchLogsTab('critical')" class="btn-secondary" style="padding:6px 12px;font-size:14px">Critical</button>
         </div>
       </div>
       <button onclick="closeLogsModal()" style="background:none;border:none;font-size:24px;cursor:pointer;padding:0">×</button>
