@@ -1504,6 +1504,14 @@ function renderUsersList() {
     const lim = TIER_LIMITS[tier] || TIER_LIMITS.free;
     const appAxis = `💳 ${tier} &nbsp;·&nbsp; 🩺 Doctor ${fmtUsage(st.doctor_count || 0, lim.doctor)} &nbsp;·&nbsp; 🔍 Identify ${fmtUsage(st.identify_count || 0, lim.identify)}`;
 
+    // Device-axis: owner = Maxim only; everyone else with an assigned device = "Assigned"; none = "—".
+    // (App-role ≠ device-role: an app-admin like Maria is a device USER here.)
+    const DEVICE_OWNER = 'mrmaximshurigin@gmail.com';
+    const devIds = userDevices.map(d => d.replace('Polivalka-', ''));
+    const deviceAxis = (email.toLowerCase() === DEVICE_OWNER)
+      ? '🔌 Device: <b>Owner</b>'
+      : (devIds.length ? `🔌 Device: Assigned · ${devIds.join(', ')}` : '🔌 Device: —');
+
     return `
       <div style="padding:10px 0;border-bottom:1px solid #333">
         <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
@@ -1511,7 +1519,7 @@ function renderUsersList() {
             <span style="color:#fff">${esc(email)}</span>
             <span style="margin-left:8px">${statusBadge}</span>
             <div class="muted" style="font-size:11px">Last login: ${lastLogin}</div>
-            <div style="font-size:11px;margin-top:3px;color:#bbb">${appAxis}</div>
+            <div style="font-size:11px;margin-top:3px;color:#bbb">📱 App: ${appAxis} &nbsp;&nbsp;|&nbsp;&nbsp; ${deviceAxis}</div>
           </div>
           <div style="display:flex;gap:4px;flex-wrap:wrap">
             ${actions}
