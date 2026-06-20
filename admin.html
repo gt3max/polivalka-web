@@ -1512,9 +1512,13 @@ function renderUsersList() {
     if (isAdmin)               rolePill = pill('#3a3000', '#ffd700', '👑 Admin');
     else if (tier === 'premium') rolePill = pill('#173a2a', '#5cd98a', '💎 Premium');
     else                        rolePill = pill('#2a2a2a', '#bbb', '🆓 Free');
-    const usageTxt = (usedDoc > 0 || usedId > 0)
+    const hasAppActivity = usedDoc > 0 || usedId > 0;
+    const usageTxt = hasAppActivity
       ? ` <span style="color:#888">🩺 ${fmtUsage(usedDoc, lim.doctor)} · 🔍 ${fmtUsage(usedId, lim.identify)}</span>` : '';
-    const appBadge = `<span style="color:#9aa">📱 App</span> ${rolePill}${usageTxt}`;
+    // Honest origin until a backend `source` field exists: real app activity → App, otherwise
+    // it's a web signup (the mobile app isn't released yet, so most accounts arrived via the site).
+    const originLabel = hasAppActivity ? '📱 App' : '🌐 Web';
+    const appBadge = `<span style="color:#9aa">${originLabel}</span> ${rolePill}${usageTxt}`;
 
     // Device-axis: owner = Maxim only; everyone else with an assigned device = "Assigned"; none = "—".
     // (App-role ≠ device-role: an app-admin like Maria is a device USER here.)
