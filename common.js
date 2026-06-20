@@ -13,9 +13,7 @@ if (window.location.pathname.endsWith('.html') && window.location.pathname !== '
 }
 
 // ============ Admin ============
-// 'admin' = legacy backend user_id for mrmaximshurigin (see get_user_from_event in api_handler.py).
-// MUST stay in sync with backend ADMIN_EMAILS, else the admin alias renders as a deletable user.
-const ADMIN_EMAILS = ['admin', 'mrmaximshurigin@gmail.com', 'mahin84@gmail.com'];
+const ADMIN_EMAILS = ['mrmaximshurigin@gmail.com', 'mahin84@gmail.com'];
 
 function isAdmin() {
   const email = localStorage.getItem('user_email') || '';

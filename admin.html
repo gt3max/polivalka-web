@@ -1302,11 +1302,6 @@ async function loadUsers() {
     if (!res.ok) throw new Error('Failed to load users');
     allUsersData = await res.json();
 
-    // Hide the internal legacy 'admin' user_id (backend alias of mrmaximshurigin@gmail.com,
-    // see get_user_from_event). It is not a separate registered user — showing it rendered a
-    // bogus 🗑 Delete that the backend correctly refuses ("Cannot delete an admin").
-    allUsersData = allUsersData.filter(u => (u.email || '').toLowerCase() !== 'admin');
-
     // App-axis: tier + monthly usage per user (one bulk call). Non-fatal if it fails.
     try {
       const ym = new Date().toISOString().slice(0, 7);  // YYYY-MM
