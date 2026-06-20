@@ -1534,22 +1534,36 @@ function renderUsersList() {
     const tier = st.tier || (isAdmin ? 'admin' : 'free');
     const lim = TIER_LIMITS[tier] || TIER_LIMITS.free;
 
+    // ===== Registration-source axis: WHERE the user signed up — web-site vs the app. =====
+    // Structural field stored on the user record (registration_source). App-usage counters
+    // (Doctor/Identify/Plants) are APP activity → shown ONLY for app-registered users.
+    // Web-registered users don't use the app yet → counters are "—" (NOT 0/3, which would
+    // falsely imply they're idle app users).
+    const regSource = (u.registration_source || 'web').toLowerCase();
+    const isAppUser = regSource === 'app';
+    const SRC_W = 'display:inline-block;min-width:74px;text-align:center';
+    // Admin is neither a web nor an app end-user → no source pill.
+    const sourcePill = isAdmin ? ''
+      : (isAppUser ? pill('#16263a', '#6fb0e8', '📱 App', SRC_W)
+                   : pill('#2a2520', '#d9ad6b', '🌐 Web', SRC_W));
+
     // App-axis: role pill (Admin / Premium / Free). Detailed usage goes in the expanded panel.
     const usedDoc = st.doctor_count || 0, usedId = st.identify_count || 0, usedPlants = st.plants_count || 0;
     let rolePill;
     if (isAdmin)               rolePill = pill('#3a3000', '#ffd700', '👑 Admin', ROLE_W);
     else if (tier === 'premium') rolePill = pill('#173a2a', '#5cd98a', '💎 Premium', ROLE_W);
     else                        rolePill = pill('#2a2a2a', '#bbb', '🆓 Free', ROLE_W);
-    // Usage counters: SAME for every non-admin account (free + premium), always shown — even at
-    // zero (new accounts read 0/3 · 0/15 · 0/5). Uniform across all rows. Admins have no app quotas.
-    const showUsage = !isAdmin;
+    // Usage counters: ONLY for app-registered users (free + premium), always shown for them —
+    // even at zero (new app accounts read 0/3 · 0/15 · 0/5). Web users & admins get "—".
     const uslot = (ic, txt) => `<span style="display:inline-block;min-width:58px">${ic} ${txt}</span>`;
-    const usageTxt = showUsage
-      ? ` <span style="color:#999;font-size:10px;white-space:nowrap">${uslot(mi('local_hospital'), fmtUsage(usedDoc, lim.doctor))}${uslot(mi('camera_alt'), fmtUsage(usedId, lim.identify))}${uslot(mi('eco'), fmtUsage(usedPlants, lim.plants))}</span>` : '';
-    const appBadge = `${rolePill}${usageTxt}`;
-    // Clear monthly quota line for the expanded panel (shown for every tier; -1 limit = ∞).
-    // Quota line only for real app users / premium — admins are not app users (no quotas).
-    const quotaLine = isAdmin ? '' : (`<div style="font-size:11px;color:#9aa;margin-bottom:7px;line-height:1.5">`
+    const usageTxt = isAppUser
+      ? ` <span style="color:#999;font-size:10px;white-space:nowrap">${uslot(mi('local_hospital'), fmtUsage(usedDoc, lim.doctor))}${uslot(mi('camera_alt'), fmtUsage(usedId, lim.identify))}${uslot(mi('eco'), fmtUsage(usedPlants, lim.plants))}</span>`
+      : (isAdmin ? '' : ` <span style="color:#666;font-size:11px">—</span>`);
+    const appBadge = `${sourcePill}${rolePill}${usageTxt}`;
+    // Expanded-panel quota line: only for app users (web users have no app usage yet; admins none).
+    const quotaLine = !isAppUser
+      ? (isAdmin ? '' : `<div style="font-size:11px;color:#9aa;margin-bottom:7px">🌐 Registered via web-site — no app usage yet. Plan: <b style="color:#ddd">${tier}</b>.</div>`)
+      : (`<div style="font-size:11px;color:#9aa;margin-bottom:7px;line-height:1.5">`
       + `Plan: <b style="color:#ddd">${tier}</b> · monthly usage / limit:<br>`
       + `&nbsp;&nbsp;${mi('local_hospital')} Doctor (diagnoses): <b>${fmtUsage(usedDoc, lim.doctor)}</b>`
       + ` &nbsp; ${mi('camera_alt')} Identify (scans): <b>${fmtUsage(usedId, lim.identify)}</b>`
@@ -1598,7 +1612,7 @@ function renderUsersList() {
     <table style="width:100%;border-collapse:collapse;font-size:12px">
       <thead><tr style="color:#9aa;text-align:left;border-bottom:2px solid #444">
         <th style="padding:6px 8px;font-weight:600">Email</th>
-        <th style="padding:6px 8px;font-weight:600">App</th>
+        <th style="padding:6px 8px;font-weight:600">Account · source / plan / app-usage</th>
         <th style="padding:6px 8px;font-weight:600">Device</th>
         <th style="padding:6px 8px"></th>
       </tr></thead>
