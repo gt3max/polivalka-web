@@ -1424,42 +1424,35 @@ function renderUsersList() {
       statusBadge = '<span style="color:#999">❌ Not verified</span>';
     }
 
-    // Action buttons based on status
-    let actions = '';
-    if (isDeviceOwner) {
-      // Device owner (Maxim): manages ALL devices.
-      actions = `<button onclick="toggleUserDevices('${email}')" style="font-size:11px;padding:4px 8px">📱 All devices (${allDevicesData.length})</button>`;
-    } else if (isAdmin) {
-      // Other admin (app-admin, device-user): show only their OWN assigned devices, no account actions.
-      actions = userDevices.length
-        ? `<button onclick="toggleUserDevices('${email}')" style="font-size:11px;padding:4px 8px">📱 Devices (${userDevices.length})</button>`
-        : '';
-    } else if (isBanned) {
-      actions = `<button onclick="unbanUser('${email}')" style="font-size:11px;padding:4px 8px">Unban</button>`;
-    } else if (isSuspended) {
-      actions = `
-        <button onclick="unsuspendUser('${email}')" style="font-size:11px;padding:4px 8px">Unsuspend</button>
-        <button onclick="banUser('${email}')" style="font-size:11px;padding:4px 8px;background:#f44;color:#fff;border-color:#f44">Ban</button>
-      `;
-    } else if (isWhitelisted) {
-      actions = `
-        <button onclick="toggleUserDevices('${email}')" style="font-size:11px;padding:4px 8px">📱 Devices (${userDevices.length})</button>
-        <button onclick="suspendUser('${email}')" style="font-size:11px;padding:4px 8px">Suspend</button>
-        <button onclick="removeFromWhitelist('${email}')" style="font-size:11px;padding:4px 8px">Remove</button>
-      `;
-    } else if (verified) {
-      actions = `
-        <button onclick="addToWhitelist('${email}')" style="font-size:11px;padding:4px 8px;background:#4caf50;color:#fff;border-color:#4caf50">+ Device access</button>
-        <button onclick="banUser('${email}')" style="font-size:11px;padding:4px 8px">Ban</button>
-        <button onclick="deleteUser('${email}')" style="font-size:11px;padding:4px 8px;background:#f44;color:#fff;border-color:#f44">🗑 Delete</button>
-      `;
+    // ===== Controls split by axis (two labeled groups) =====
+    const btn = (oc, txt, extra) => `<button onclick="${oc}" style="font-size:11px;padding:4px 8px;${extra || ''}">${txt}</button>`;
+    const soon = (txt) => `<button disabled title="скоро — нужен backend" style="font-size:11px;padding:4px 8px;opacity:.45;cursor:not-allowed">${txt}</button>`;
+
+    // App-axis controls (account/tier). Premium/Block need a backend endpoint → disabled placeholders.
+    let appActions;
+    if (isAdmin) {
+      appActions = '<span class="muted">— полный доступ</span>';
     } else {
-      // Unverified users: can add to whitelist or ban
-      actions = `
-        <button onclick="addToWhitelist('${email}')" style="font-size:11px;padding:4px 8px;background:#4caf50;color:#fff;border-color:#4caf50">+ Device access</button>
-        <button onclick="banUser('${email}')" style="font-size:11px;padding:4px 8px">Ban</button>
-        <button onclick="deleteUser('${email}')" style="font-size:11px;padding:4px 8px;background:#f44;color:#fff;border-color:#f44">🗑 Delete</button>
-      `;
+      appActions = `${soon('💎 Premium')} ${soon('🚫 Block app')} ` +
+        btn(`deleteUser('${email}')`, '🗑 Delete account', 'background:#f44;color:#fff;border-color:#f44');
+    }
+
+    // Device-axis controls (device / whitelist access).
+    let deviceActions;
+    if (isDeviceOwner) {
+      deviceActions = btn(`toggleUserDevices('${email}')`, `📱 All devices (${allDevicesData.length})`);
+    } else if (isBanned) {
+      deviceActions = btn(`unbanUser('${email}')`, 'Разблокировать устройства');
+    } else if (isSuspended) {
+      deviceActions = btn(`unsuspendUser('${email}')`, 'Снять заморозку') + ' ' +
+        btn(`banUser('${email}')`, 'Заблокировать', 'background:#f44;color:#fff;border-color:#f44');
+    } else if (isWhitelisted) {
+      deviceActions = btn(`toggleUserDevices('${email}')`, `📱 Devices (${userDevices.length})`) + ' ' +
+        btn(`suspendUser('${email}')`, 'Заморозить') + ' ' +
+        btn(`removeFromWhitelist('${email}')`, 'Отозвать доступ');
+    } else {
+      // No device access yet → can grant one (assign a device).
+      deviceActions = btn(`addToWhitelist('${email}')`, '+ Присвоить устройство', 'background:#4caf50;color:#fff;border-color:#4caf50');
     }
 
     // Devices section (expandable). Owner (Maxim) sees ALL devices; everyone else (incl. other
@@ -1536,16 +1529,17 @@ function renderUsersList() {
 
     return `
       <div style="padding:10px 0;border-bottom:1px solid #333${isFake ? ';background:#201a30;border-left:3px solid #9575cd;padding-left:8px' : ''}">
-        <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
-          <div>
-            <span style="color:#fff">${esc(email)}</span>
-            ${isFake ? '<span style="margin-left:6px;background:#4a3a6b;color:#d1c4e9;padding:1px 7px;border-radius:9px;font-size:10px;font-weight:600">🧪 service</span>' : ''}
-            <span style="margin-left:8px">${statusBadge}</span>
-            <div class="muted" style="font-size:11px">Last login: ${lastLogin}</div>
-            <div style="font-size:11px;margin-top:5px;display:flex;gap:16px;align-items:center;flex-wrap:wrap">${appBadge}${deviceBadge}</div>
+        <div>
+          <span style="color:#fff">${esc(email)}</span>
+          ${isFake ? '<span style="margin-left:6px;background:#4a3a6b;color:#d1c4e9;padding:1px 7px;border-radius:9px;font-size:10px;font-weight:600">🧪 service</span>' : ''}
+          <span style="margin-left:8px">${statusBadge}</span>
+          <div class="muted" style="font-size:11px">Last login: ${lastLogin}</div>
+          <div style="font-size:11px;margin-top:5px;display:flex;gap:16px;align-items:center;flex-wrap:wrap">${appBadge}${deviceBadge}</div>
+          <div style="margin-top:7px;font-size:11px;display:flex;gap:6px;align-items:center;flex-wrap:wrap">
+            <span style="color:#9aa;min-width:54px">📱 App</span> ${appActions}
           </div>
-          <div style="display:flex;gap:4px;flex-wrap:wrap">
-            ${actions}
+          <div style="margin-top:5px;font-size:11px;display:flex;gap:6px;align-items:center;flex-wrap:wrap">
+            <span style="color:#9aa;min-width:54px">🔌 Device</span> ${deviceActions}
           </div>
         </div>
         <div style="margin-top:6px">
