@@ -1407,6 +1407,7 @@ function renderUsersList() {
     // Use ADMIN_EMAILS from common.js (not u.is_admin from DynamoDB which may not be set)
     const isAdmin = ADMIN_EMAILS.includes(email.toLowerCase());
     const isFake = FAKE_ACCOUNTS.includes(email.toLowerCase());
+    const isDeviceOwner = email.toLowerCase() === ME;   // only Maxim owns/manages all devices
     const verified = u.verified;
 
     // Get devices assigned to this user
@@ -1425,10 +1426,14 @@ function renderUsersList() {
 
     // Action buttons based on status
     let actions = '';
-    if (isAdmin) {
-      // Admin sees ALL devices (total count), not whitelist-assigned
-      const totalDevices = allDevicesData.length;
-      actions = `<button onclick="toggleUserDevices('${email}')" style="font-size:11px;padding:4px 8px">📱 Devices (all ${totalDevices})</button>`;
+    if (isDeviceOwner) {
+      // Device owner (Maxim): manages ALL devices.
+      actions = `<button onclick="toggleUserDevices('${email}')" style="font-size:11px;padding:4px 8px">📱 All devices (${allDevicesData.length})</button>`;
+    } else if (isAdmin) {
+      // Other admin (app-admin, device-user): show only their OWN assigned devices, no account actions.
+      actions = userDevices.length
+        ? `<button onclick="toggleUserDevices('${email}')" style="font-size:11px;padding:4px 8px">📱 Devices (${userDevices.length})</button>`
+        : '';
     } else if (isBanned) {
       actions = `<button onclick="unbanUser('${email}')" style="font-size:11px;padding:4px 8px">Unban</button>`;
     } else if (isSuspended) {
@@ -1457,16 +1462,16 @@ function renderUsersList() {
       `;
     }
 
-    // Devices section (expandable) - show for Admin and Whitelisted users
-    const canHaveDevices = isAdmin || isWhitelisted;
+    // Devices section (expandable). Owner (Maxim) sees ALL devices; everyone else (incl. other
+    // admins like Maria) sees only their own assigned devices.
+    const canHaveDevices = isDeviceOwner || isWhitelisted;
 
-    // Admin sees ALL devices (read-only list), others see assigned devices
     let devicesSection = '';
-    if (isAdmin) {
-      // Admin: show all devices (no assign/unassign - Admin has access to all by default)
+    if (isDeviceOwner) {
+      // Owner: full list of all devices (he assembles and assigns them).
       devicesSection = `
         <div id="devices-${email.replace(/[@.]/g, '_')}" style="display:none;margin-top:8px;padding:8px;background:#1a1a2e;border-radius:8px">
-          <div class="muted" style="margin-bottom:8px">Admin has full access to all devices</div>
+          <div class="muted" style="margin-bottom:8px">Owner — manages all devices</div>
           ${allDevicesData.map(d => {
             const shortId = d.device_id.replace('Polivalka-', '');
             const name = d.name && d.name !== d.device_id ? ` "${esc(d.name)}"` : '';
@@ -1522,10 +1527,9 @@ function renderUsersList() {
 
     // Device-axis: owner = Maxim only; everyone else with an assigned device = "Assigned"; none = "—".
     // (App-role ≠ device-role: an app-admin like Maria is a device USER here.)
-    const DEVICE_OWNER = 'mrmaximshurigin@gmail.com';
     const devIds = userDevices.map(d => d.replace('Polivalka-', ''));
     let devPill;
-    if (email.toLowerCase() === DEVICE_OWNER) devPill = pill('#16263a', '#6fb0e8', 'Owner');
+    if (isDeviceOwner) devPill = pill('#16263a', '#6fb0e8', 'Owner');
     else if (devIds.length)                   devPill = pill('#14322e', '#5fd0c2', `Assigned · ${devIds.length}`);
     else                                      devPill = '<span style="color:#666">—</span>';
     const deviceBadge = `<span style="color:#9aa">🔌 Device</span> ${devPill}`;
