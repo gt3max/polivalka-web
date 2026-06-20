@@ -1506,9 +1506,11 @@ function renderUsersList() {
     // Honest origin until a backend `source` field exists: real app activity → App, otherwise
     // it's a web signup (the mobile app isn't released yet, so most accounts arrived via the site).
     const originIcon = hasAppActivity ? '📱' : '🌐';
-    // Restore the at-a-glance numbers in the collapsed row, with the app's own icons.
-    const usageTxt = hasAppActivity
-      ? ` <span style="color:#999;font-size:10px;white-space:nowrap">${mi('local_hospital', 12)}${fmtUsage(usedDoc, lim.doctor)} ${mi('camera_alt', 12)}${fmtUsage(usedId, lim.identify)}</span>` : '';
+    // At-a-glance numbers in the collapsed row (app icons). Shown for app users AND for every
+    // paid/admin account (premium/admin) so their quotas are visible even at zero usage.
+    const showUsage = hasAppActivity || tier === 'premium' || isAdmin;
+    const usageTxt = showUsage
+      ? ` <span style="color:#999;font-size:10px;white-space:nowrap">${mi('local_hospital', 12)}${fmtUsage(usedDoc, lim.doctor)} ${mi('camera_alt', 12)}${fmtUsage(usedId, lim.identify)} ${mi('eco', 12)}${fmtUsage(usedPlants, lim.plants)}</span>` : '';
     const appBadge = `<span title="${hasAppActivity ? 'used the app' : 'web signup — no app activity'}">${originIcon}</span> ${rolePill}${usageTxt}`;
     // Clear monthly quota line for the expanded panel (shown for every tier; -1 limit = ∞).
     const quotaLine = `<div style="font-size:11px;color:#9aa;margin-bottom:7px;line-height:1.5">`
