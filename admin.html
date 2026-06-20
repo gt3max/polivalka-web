@@ -1403,22 +1403,15 @@ function renderUsersList() {
     // Get devices assigned to this user
     const userDevices = whitelistUsers[email]?.devices || [];
 
-    // Status badge
+    // Status badge — ONLY real state flags now. Role (Admin) and device relation
+    // (owner / assigned / none) moved to the App/Device axis pills below.
     let statusBadge = '';
-    if (isAdmin) {
-      statusBadge = '<span style="color:#ffd700">👑 Admin</span>';
-    } else if (isBanned) {
+    if (isBanned) {
       statusBadge = '<span style="color:#f44">🚫 Banned</span>';
     } else if (isSuspended) {
       statusBadge = '<span style="color:#ff9800">⏸️ Suspended</span>';
-    } else if (isWhitelisted && userDevices.length > 0) {
-      statusBadge = '<span style="color:#4caf50">🔌 Device owner</span>';
-    } else if (isWhitelisted) {
-      statusBadge = '<span style="color:#80cbc4">🔑 Device access</span>';
     } else if (!verified) {
       statusBadge = '<span style="color:#999">❌ Not verified</span>';
-    } else {
-      statusBadge = '<span style="color:#999">⏳ No device</span>';
     }
 
     // Action buttons based on status
@@ -1498,19 +1491,31 @@ function renderUsersList() {
 
     const lastLogin = u.last_login ? new Date(u.last_login).toLocaleDateString() : 'Never';
 
-    // App-axis: subscription tier + monthly usage vs limit (from statsMap / hardcoded TIER_LIMITS)
+    // ===== Two axes as colored pills =====
+    const pill = (bg, fg, txt) => `<span style="background:${bg};color:${fg};padding:2px 9px;border-radius:11px;font-weight:600;white-space:nowrap">${txt}</span>`;
     const st = statsMap[email] || {};
     const tier = st.tier || (isAdmin ? 'admin' : 'free');
     const lim = TIER_LIMITS[tier] || TIER_LIMITS.free;
-    const appAxis = `💳 ${tier} &nbsp;·&nbsp; 🩺 Doctor ${fmtUsage(st.doctor_count || 0, lim.doctor)} &nbsp;·&nbsp; 🔍 Identify ${fmtUsage(st.identify_count || 0, lim.identify)}`;
+
+    // App-axis: role pill (Admin / Premium / Free) + usage shown ONLY if there is any.
+    const usedDoc = st.doctor_count || 0, usedId = st.identify_count || 0;
+    let rolePill;
+    if (isAdmin)               rolePill = pill('#3a3000', '#ffd700', '👑 Admin');
+    else if (tier === 'premium') rolePill = pill('#173a2a', '#5cd98a', '💎 Premium');
+    else                        rolePill = pill('#2a2a2a', '#bbb', '🆓 Free');
+    const usageTxt = (usedDoc > 0 || usedId > 0)
+      ? ` <span style="color:#888">🩺 ${fmtUsage(usedDoc, lim.doctor)} · 🔍 ${fmtUsage(usedId, lim.identify)}</span>` : '';
+    const appBadge = `<span style="color:#9aa">📱 App</span> ${rolePill}${usageTxt}`;
 
     // Device-axis: owner = Maxim only; everyone else with an assigned device = "Assigned"; none = "—".
     // (App-role ≠ device-role: an app-admin like Maria is a device USER here.)
     const DEVICE_OWNER = 'mrmaximshurigin@gmail.com';
     const devIds = userDevices.map(d => d.replace('Polivalka-', ''));
-    const deviceAxis = (email.toLowerCase() === DEVICE_OWNER)
-      ? '🔌 Device: <b>Owner</b>'
-      : (devIds.length ? `🔌 Device: Assigned · ${devIds.join(', ')}` : '🔌 Device: —');
+    let devPill;
+    if (email.toLowerCase() === DEVICE_OWNER) devPill = pill('#16263a', '#6fb0e8', 'Owner');
+    else if (devIds.length)                   devPill = pill('#14322e', '#5fd0c2', 'Assigned · ' + devIds.join(', '));
+    else                                      devPill = '<span style="color:#666">—</span>';
+    const deviceBadge = `<span style="color:#9aa">🔌 Device</span> ${devPill}`;
 
     return `
       <div style="padding:10px 0;border-bottom:1px solid #333">
@@ -1519,7 +1524,7 @@ function renderUsersList() {
             <span style="color:#fff">${esc(email)}</span>
             <span style="margin-left:8px">${statusBadge}</span>
             <div class="muted" style="font-size:11px">Last login: ${lastLogin}</div>
-            <div style="font-size:11px;margin-top:3px;color:#bbb">📱 App: ${appAxis} &nbsp;&nbsp;|&nbsp;&nbsp; ${deviceAxis}</div>
+            <div style="font-size:11px;margin-top:5px;display:flex;gap:16px;align-items:center;flex-wrap:wrap">${appBadge}${deviceBadge}</div>
           </div>
           <div style="display:flex;gap:4px;flex-wrap:wrap">
             ${actions}
