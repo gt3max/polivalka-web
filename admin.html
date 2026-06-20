@@ -1527,7 +1527,9 @@ function renderUsersList() {
     const lastLogin = u.last_login ? new Date(u.last_login).toLocaleDateString() : 'Never';
 
     // ===== Two axes as colored pills =====
-    const pill = (bg, fg, txt) => `<span style="background:${bg};color:${fg};padding:2px 9px;border-radius:11px;font-weight:600;white-space:nowrap">${txt}</span>`;
+    const pill = (bg, fg, txt, extra) => `<span style="background:${bg};color:${fg};padding:2px 9px;border-radius:11px;font-weight:600;white-space:nowrap;${extra || ''}">${txt}</span>`;
+    // Fixed-width role pill so the usage icons line up across rows (Free vs Premium vs Admin).
+    const ROLE_W = 'display:inline-block;min-width:90px;text-align:center';
     const st = statsMap[email] || {};
     const tier = st.tier || (isAdmin ? 'admin' : 'free');
     const lim = TIER_LIMITS[tier] || TIER_LIMITS.free;
@@ -1535,9 +1537,9 @@ function renderUsersList() {
     // App-axis: role pill (Admin / Premium / Free). Detailed usage goes in the expanded panel.
     const usedDoc = st.doctor_count || 0, usedId = st.identify_count || 0, usedPlants = st.plants_count || 0;
     let rolePill;
-    if (isAdmin)               rolePill = pill('#3a3000', '#ffd700', '👑 Admin');
-    else if (tier === 'premium') rolePill = pill('#173a2a', '#5cd98a', '💎 Premium');
-    else                        rolePill = pill('#2a2a2a', '#bbb', '🆓 Free');
+    if (isAdmin)               rolePill = pill('#3a3000', '#ffd700', '👑 Admin', ROLE_W);
+    else if (tier === 'premium') rolePill = pill('#173a2a', '#5cd98a', '💎 Premium', ROLE_W);
+    else                        rolePill = pill('#2a2a2a', '#bbb', '🆓 Free', ROLE_W);
     const hasAppActivity = usedDoc > 0 || usedId > 0;
     // Honest origin until a backend `source` field exists: real app activity → App, otherwise
     // it's a web signup (the mobile app isn't released yet, so most accounts arrived via the site).
@@ -1545,8 +1547,9 @@ function renderUsersList() {
     // At-a-glance numbers in the collapsed row (app icons). Shown for app users AND for every
     // paid/admin account (premium/admin) so their quotas are visible even at zero usage.
     const showUsage = !isAdmin && (hasAppActivity || tier === 'premium');
+    const uslot = (ic, txt) => `<span style="display:inline-block;min-width:58px">${ic} ${txt}</span>`;
     const usageTxt = showUsage
-      ? ` <span style="color:#999;font-size:10px;white-space:nowrap">${mi('local_hospital', 12)}${fmtUsage(usedDoc, lim.doctor)} ${mi('camera_alt', 12)}${fmtUsage(usedId, lim.identify)} ${mi('eco', 12)}${fmtUsage(usedPlants, lim.plants)}</span>` : '';
+      ? ` <span style="color:#999;font-size:10px;white-space:nowrap">${uslot(mi('local_hospital'), fmtUsage(usedDoc, lim.doctor))}${uslot(mi('camera_alt'), fmtUsage(usedId, lim.identify))}${uslot(mi('eco'), fmtUsage(usedPlants, lim.plants))}</span>` : '';
     const appBadge = `<span title="${hasAppActivity ? 'used the app' : 'web signup — no app activity'}">${originIcon}</span> ${rolePill}${usageTxt}`;
     // Clear monthly quota line for the expanded panel (shown for every tier; -1 limit = ∞).
     // Quota line only for real app users / premium — admins are not app users (no quotas).
