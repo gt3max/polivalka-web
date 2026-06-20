@@ -1493,19 +1493,24 @@ function renderUsersList() {
     const tier = st.tier || (isAdmin ? 'admin' : 'free');
     const lim = TIER_LIMITS[tier] || TIER_LIMITS.free;
 
-    // App-axis: role pill (Admin / Premium / Free) + usage shown ONLY if there is any.
-    const usedDoc = st.doctor_count || 0, usedId = st.identify_count || 0;
+    // App-axis: role pill (Admin / Premium / Free). Detailed usage goes in the expanded panel.
+    const usedDoc = st.doctor_count || 0, usedId = st.identify_count || 0, usedPlants = st.plants_count || 0;
     let rolePill;
     if (isAdmin)               rolePill = pill('#3a3000', '#ffd700', '👑 Admin');
     else if (tier === 'premium') rolePill = pill('#173a2a', '#5cd98a', '💎 Premium');
     else                        rolePill = pill('#2a2a2a', '#bbb', '🆓 Free');
     const hasAppActivity = usedDoc > 0 || usedId > 0;
-    const usageTxt = hasAppActivity
-      ? ` <span style="color:#888">🩺 ${fmtUsage(usedDoc, lim.doctor)} · 🔍 ${fmtUsage(usedId, lim.identify)}</span>` : '';
     // Honest origin until a backend `source` field exists: real app activity → App, otherwise
     // it's a web signup (the mobile app isn't released yet, so most accounts arrived via the site).
     const originIcon = hasAppActivity ? '📱' : '🌐';
-    const appBadge = `<span title="${hasAppActivity ? 'used the app' : 'web signup — no app activity'}">${originIcon}</span> ${rolePill}${usageTxt}`;
+    const appBadge = `<span title="${hasAppActivity ? 'used the app' : 'web signup — no app activity'}">${originIcon}</span> ${rolePill}`;
+    // Clear monthly quota line for the expanded panel (shown for every tier; -1 limit = ∞).
+    const quotaLine = `<div style="font-size:11px;color:#9aa;margin-bottom:7px;line-height:1.5">`
+      + `Plan: <b style="color:#ddd">${tier}</b> · monthly usage / limit:<br>`
+      + `&nbsp;&nbsp;🩺 Doctor (diagnoses): <b>${fmtUsage(usedDoc, lim.doctor)}</b>`
+      + ` &nbsp; 🔍 Identify (scans): <b>${fmtUsage(usedId, lim.identify)}</b>`
+      + ` &nbsp; 🌱 Plants saved: <b>${fmtUsage(usedPlants, lim.plants)}</b>`
+      + `</div>`;
 
     // Device-axis: owner = Maxim only; everyone else with an assigned device = "Assigned"; none = "—".
     // (App-role ≠ device-role: an app-admin like Maria is a device USER here.)
@@ -1527,6 +1532,7 @@ function renderUsersList() {
           <!-- App block: account + subscription/finance -->
           <div style="margin-bottom:12px">
             <div style="color:#6fb0e8;font-weight:600;margin-bottom:5px">📱 App</div>
+            ${quotaLine}
             <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">
               ${appActions}
               <button onclick="event.stopPropagation();toggleUserFinance('${email}')" style="font-size:11px;padding:4px 8px">💰 Finance</button>
