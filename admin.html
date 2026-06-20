@@ -1523,13 +1523,21 @@ function renderUsersList() {
         <td style="padding:6px 8px;text-align:right;color:#888;vertical-align:top"><span id="chev-${rid}">${open ? '▾' : '▸'}</span></td>
       </tr>
       <tr id="row-${rid}" style="display:${open ? 'table-row' : 'none'};background:${isFake ? '#1a1526' : '#14141f'}">
-        <td colspan="4" style="padding:8px 14px">
-          <div style="margin-bottom:6px"><span style="color:#9aa;display:inline-block;min-width:62px">📱 App</span> ${appActions}</div>
-          <div style="margin-bottom:6px"><span style="color:#9aa;display:inline-block;min-width:62px">🔌 Device</span> ${deviceActions}</div>
-          ${devicesSection}
-          <div style="margin-top:6px">
-            <button onclick="event.stopPropagation();toggleUserFinance('${email}')" style="font-size:11px;padding:3px 8px">💰 Finance</button>
+        <td colspan="4" style="padding:10px 14px">
+          <!-- App block: account + subscription/finance -->
+          <div style="margin-bottom:12px">
+            <div style="color:#6fb0e8;font-weight:600;margin-bottom:5px">📱 App</div>
+            <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">
+              ${appActions}
+              <button onclick="event.stopPropagation();toggleUserFinance('${email}')" style="font-size:11px;padding:4px 8px">💰 Finance</button>
+            </div>
             <div id="finance-${rid}" style="display:none;margin-top:6px;padding:8px;background:#0f0f18;border-radius:8px"></div>
+          </div>
+          <!-- Device block: hardware access + assigned devices -->
+          <div>
+            <div style="color:#5fd0c2;font-weight:600;margin-bottom:5px">🔌 Device</div>
+            <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">${deviceActions}</div>
+            ${devicesSection}
           </div>
         </td>
       </tr>
