@@ -1399,8 +1399,9 @@ function renderUsersList() {
     return a.email.localeCompare(b.email);
   });
 
-  container.innerHTML = sortedUsers.map(u => {
+  const rows = sortedUsers.map(u => {
     const email = u.email;
+    const rid = email.replace(/[@.]/g, '_');
     const isWhitelisted = !!whitelistUsers[email];
     const isBanned = whitelistUsers[email]?.status === 'banned';
     const isSuspended = whitelistUsers[email]?.status === 'suspended';
@@ -1424,42 +1425,23 @@ function renderUsersList() {
       statusBadge = '<span style="color:#999">❌ Not verified</span>';
     }
 
-    // Action buttons based on status
-    let actions = '';
+    // ===== Detail-row controls, split by axis (English only) =====
+    // App-axis: account control. (Tier/block controls need a backend → added later.)
+    const appActions = isAdmin
+      ? '<span class="muted">Full access (admin)</span>'
+      : `<button onclick="event.stopPropagation();deleteUser('${email}')" style="font-size:11px;padding:4px 8px;background:#f44;color:#fff;border-color:#f44">🗑 Delete account</button>`;
+    // Device-axis: device / whitelist access.
+    let deviceActions;
     if (isDeviceOwner) {
-      // Device owner (Maxim): manages ALL devices.
-      actions = `<button onclick="toggleUserDevices('${email}')" style="font-size:11px;padding:4px 8px">📱 All devices (${allDevicesData.length})</button>`;
-    } else if (isAdmin) {
-      // Other admin (app-admin, device-user): show only their OWN assigned devices, no account actions.
-      actions = userDevices.length
-        ? `<button onclick="toggleUserDevices('${email}')" style="font-size:11px;padding:4px 8px">📱 Devices (${userDevices.length})</button>`
-        : '';
+      deviceActions = `<button onclick="event.stopPropagation();toggleUserDevices('${email}')" style="font-size:11px;padding:4px 8px">All devices (${allDevicesData.length})</button>`;
     } else if (isBanned) {
-      actions = `<button onclick="unbanUser('${email}')" style="font-size:11px;padding:4px 8px">Unban</button>`;
+      deviceActions = `<button onclick="event.stopPropagation();unbanUser('${email}')" style="font-size:11px;padding:4px 8px">Unban</button>`;
     } else if (isSuspended) {
-      actions = `
-        <button onclick="unsuspendUser('${email}')" style="font-size:11px;padding:4px 8px">Unsuspend</button>
-        <button onclick="banUser('${email}')" style="font-size:11px;padding:4px 8px;background:#f44;color:#fff;border-color:#f44">Ban</button>
-      `;
+      deviceActions = `<button onclick="event.stopPropagation();unsuspendUser('${email}')" style="font-size:11px;padding:4px 8px">Unsuspend</button> <button onclick="event.stopPropagation();banUser('${email}')" style="font-size:11px;padding:4px 8px;background:#f44;color:#fff;border-color:#f44">Ban</button>`;
     } else if (isWhitelisted) {
-      actions = `
-        <button onclick="toggleUserDevices('${email}')" style="font-size:11px;padding:4px 8px">📱 Devices (${userDevices.length})</button>
-        <button onclick="suspendUser('${email}')" style="font-size:11px;padding:4px 8px">Suspend</button>
-        <button onclick="removeFromWhitelist('${email}')" style="font-size:11px;padding:4px 8px">Remove</button>
-      `;
-    } else if (verified) {
-      actions = `
-        <button onclick="addToWhitelist('${email}')" style="font-size:11px;padding:4px 8px;background:#4caf50;color:#fff;border-color:#4caf50">+ Device access</button>
-        <button onclick="banUser('${email}')" style="font-size:11px;padding:4px 8px">Ban</button>
-        <button onclick="deleteUser('${email}')" style="font-size:11px;padding:4px 8px;background:#f44;color:#fff;border-color:#f44">🗑 Delete</button>
-      `;
+      deviceActions = `<button onclick="event.stopPropagation();toggleUserDevices('${email}')" style="font-size:11px;padding:4px 8px">Devices (${userDevices.length})</button> <button onclick="event.stopPropagation();suspendUser('${email}')" style="font-size:11px;padding:4px 8px">Suspend</button> <button onclick="event.stopPropagation();removeFromWhitelist('${email}')" style="font-size:11px;padding:4px 8px">Remove access</button>`;
     } else {
-      // Unverified users: can add to whitelist or ban
-      actions = `
-        <button onclick="addToWhitelist('${email}')" style="font-size:11px;padding:4px 8px;background:#4caf50;color:#fff;border-color:#4caf50">+ Device access</button>
-        <button onclick="banUser('${email}')" style="font-size:11px;padding:4px 8px">Ban</button>
-        <button onclick="deleteUser('${email}')" style="font-size:11px;padding:4px 8px;background:#f44;color:#fff;border-color:#f44">🗑 Delete</button>
-      `;
+      deviceActions = `<button onclick="event.stopPropagation();addToWhitelist('${email}')" style="font-size:11px;padding:4px 8px;background:#4caf50;color:#fff;border-color:#4caf50">+ Device access</button> <button onclick="event.stopPropagation();banUser('${email}')" style="font-size:11px;padding:4px 8px">Ban</button>`;
     }
 
     // Devices section (expandable). Owner (Maxim) sees ALL devices; everyone else (incl. other
@@ -1522,8 +1504,8 @@ function renderUsersList() {
       ? ` <span style="color:#888">🩺 ${fmtUsage(usedDoc, lim.doctor)} · 🔍 ${fmtUsage(usedId, lim.identify)}</span>` : '';
     // Honest origin until a backend `source` field exists: real app activity → App, otherwise
     // it's a web signup (the mobile app isn't released yet, so most accounts arrived via the site).
-    const originLabel = hasAppActivity ? '📱 App' : '🌐 Web';
-    const appBadge = `<span style="color:#9aa">${originLabel}</span> ${rolePill}${usageTxt}`;
+    const originIcon = hasAppActivity ? '📱' : '🌐';
+    const appBadge = `<span title="${hasAppActivity ? 'used the app' : 'web signup — no app activity'}">${originIcon}</span> ${rolePill}${usageTxt}`;
 
     // Device-axis: owner = Maxim only; everyone else with an assigned device = "Assigned"; none = "—".
     // (App-role ≠ device-role: an app-admin like Maria is a device USER here.)
@@ -1532,33 +1514,55 @@ function renderUsersList() {
     if (isDeviceOwner) devPill = pill('#16263a', '#6fb0e8', 'Owner');
     else if (devIds.length)                   devPill = pill('#14322e', '#5fd0c2', `Assigned · ${devIds.length}`);
     else                                      devPill = '<span style="color:#666">—</span>';
-    const deviceBadge = `<span style="color:#9aa">🔌 Device</span> ${devPill}`;
-
+    const open = expandedRows.has(email);
     return `
-      <div style="padding:10px 0;border-bottom:1px solid #333${isFake ? ';background:#201a30;border-left:3px solid #9575cd;padding-left:8px' : ''}">
-        <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
-          <div>
-            <span style="color:#fff">${esc(email)}</span>
-            ${isFake ? '<span style="margin-left:6px;background:#4a3a6b;color:#d1c4e9;padding:1px 7px;border-radius:9px;font-size:10px;font-weight:600">🧪 service</span>' : ''}
-            <span style="margin-left:8px">${statusBadge}</span>
-            <div class="muted" style="font-size:11px">Last login: ${lastLogin}</div>
-            <div style="font-size:11px;margin-top:5px;display:flex;gap:16px;align-items:center;flex-wrap:wrap">${appBadge}${deviceBadge}</div>
+      <tr onclick="toggleUserRow('${email}')" style="cursor:pointer;border-bottom:1px solid #2a2a2a${isFake ? ';background:#201a30' : ''}">
+        <td style="padding:6px 8px;color:#fff;vertical-align:top">${esc(email)}${isFake ? ' <span style="background:#4a3a6b;color:#d1c4e9;padding:1px 6px;border-radius:8px;font-size:9px;font-weight:600">🧪 service</span>' : ''}${statusBadge ? ' ' + statusBadge : ''}<div class="muted" style="font-size:10px">Last login: ${lastLogin}</div></td>
+        <td style="padding:6px 8px;white-space:nowrap;vertical-align:top">${appBadge}</td>
+        <td style="padding:6px 8px;white-space:nowrap;vertical-align:top">${devPill}</td>
+        <td style="padding:6px 8px;text-align:right;color:#888;vertical-align:top"><span id="chev-${rid}">${open ? '▾' : '▸'}</span></td>
+      </tr>
+      <tr id="row-${rid}" style="display:${open ? 'table-row' : 'none'};background:${isFake ? '#1a1526' : '#14141f'}">
+        <td colspan="4" style="padding:8px 14px">
+          <div style="margin-bottom:6px"><span style="color:#9aa;display:inline-block;min-width:62px">📱 App</span> ${appActions}</div>
+          <div style="margin-bottom:6px"><span style="color:#9aa;display:inline-block;min-width:62px">🔌 Device</span> ${deviceActions}</div>
+          ${devicesSection}
+          <div style="margin-top:6px">
+            <button onclick="event.stopPropagation();toggleUserFinance('${email}')" style="font-size:11px;padding:3px 8px">💰 Finance</button>
+            <div id="finance-${rid}" style="display:none;margin-top:6px;padding:8px;background:#0f0f18;border-radius:8px"></div>
           </div>
-          <div style="display:flex;gap:4px;flex-wrap:wrap">
-            ${actions}
-          </div>
-        </div>
-        <div style="margin-top:6px">
-          <button onclick="toggleUserFinance('${email}')" style="font-size:11px;padding:3px 8px">💰 Finance</button>
-          <div id="finance-${email.replace(/[@.]/g, '_')}" style="display:none;margin-top:6px;padding:8px;background:#14141f;border-radius:8px"></div>
-        </div>
-        ${devicesSection}
-      </div>
+        </td>
+      </tr>
     `;
   }).join('');
 
+  container.innerHTML = `
+    <table style="width:100%;border-collapse:collapse;font-size:12px">
+      <thead><tr style="color:#9aa;text-align:left;border-bottom:2px solid #444">
+        <th style="padding:6px 8px;font-weight:600">Email</th>
+        <th style="padding:6px 8px;font-weight:600">App</th>
+        <th style="padding:6px 8px;font-weight:600">Device</th>
+        <th style="padding:6px 8px"></th>
+      </tr></thead>
+      <tbody>${rows}</tbody>
+    </table>
+  `;
+
   // Restore expanded sections
   restoreExpandedUsers();
+}
+
+// Track which user detail-rows are expanded in the dense table.
+const expandedRows = new Set();
+function toggleUserRow(email) {
+  const rid = email.replace(/[@.]/g, '_');
+  const el = document.getElementById('row-' + rid);
+  if (!el) return;
+  const show = el.style.display === 'none';
+  el.style.display = show ? 'table-row' : 'none';
+  const chev = document.getElementById('chev-' + rid);
+  if (chev) chev.textContent = show ? '▾' : '▸';
+  if (show) expandedRows.add(email); else expandedRows.delete(email);
 }
 
 // Track expanded user sections
