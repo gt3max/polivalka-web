@@ -1353,6 +1353,8 @@ async function loadUserLedger(email) {
   const id = 'finance-' + email.replace(/[@.]/g, '_');
   const el = document.getElementById(id);
   el.innerHTML = '<div class="muted">Loading…</div>';
+  // Owner sees the shared money pool (paid-service balances), not a personal ledger.
+  if (email.toLowerCase() === 'mrmaximshurigin@gmail.com') { return loadMoneyPool(el); }
   try {
     const res = await fetch(`${API.cloudBase}/admin/users/${encodeURIComponent(email)}/ledger?limit=50`, { headers: API.getAuthHeaders() });
     if (!res.ok) throw new Error('HTTP ' + res.status);
@@ -1379,6 +1381,33 @@ async function loadUserLedger(email) {
   } catch (e) {
     el.innerHTML = '<div class="danger">Error: ' + esc(e.message) + '</div>';
   }
+}
+
+// Money pool — live balances of the paid services (owner only). Real numbers, don't fluctuate.
+async function loadMoneyPool(el) {
+  try {
+    const res = await fetch(`${API.cloudBase}/admin/finance/balances`, { headers: API.getAuthHeaders() });
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const b = (await res.json()).balances || {};
+    const val = (s) => {
+      if (!s || s.remaining == null) return '<span class="muted">n/a</span>';
+      if (s.unit === 'usd') return `<b style="color:#5cd98a">$${Number(s.remaining).toFixed(2)}</b>`;
+      return `<b style="color:#5cd98a">${s.remaining}</b> <span class="muted" style="font-size:10px">${s.unit}</span>`;
+    };
+    el.innerHTML = `
+      <div style="font-size:11px;color:#9aa;margin-bottom:8px">💰 Money pool — live balances of the paid services. All users spend from here.</div>
+      <div style="display:flex;flex-direction:column;gap:7px">
+        ${poolRow('🤖 OpenRouter', val(b.openrouter))}
+        ${poolRow('🩺 Plant.id', val(b.plantid))}
+        ${b.serpapi ? poolRow('🔎 SerpAPI', val(b.serpapi)) : ''}
+      </div>`;
+    el.dataset.loaded = '1';
+  } catch (e) {
+    el.innerHTML = '<div class="danger">Error loading balances: ' + esc(e.message) + '</div>';
+  }
+}
+function poolRow(label, valHtml) {
+  return `<div style="display:flex;justify-content:space-between;align-items:center;padding:7px 11px;background:#15151f;border:1px solid #2c2c44;border-radius:8px"><span>${label}</span>${valHtml}</div>`;
 }
 
 // Render users list with current whitelist data
