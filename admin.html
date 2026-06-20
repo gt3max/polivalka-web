@@ -1513,7 +1513,7 @@ function renderUsersList() {
     const devIds = userDevices.map(d => d.replace('Polivalka-', ''));
     let devPill;
     if (email.toLowerCase() === DEVICE_OWNER) devPill = pill('#16263a', '#6fb0e8', 'Owner');
-    else if (devIds.length)                   devPill = pill('#14322e', '#5fd0c2', 'Assigned · ' + devIds.join(', '));
+    else if (devIds.length)                   devPill = pill('#14322e', '#5fd0c2', `Assigned · ${devIds.length}`);
     else                                      devPill = '<span style="color:#666">—</span>';
     const deviceBadge = `<span style="color:#9aa">🔌 Device</span> ${devPill}`;
 
