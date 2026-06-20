@@ -1,5 +1,6 @@
 <!doctype html><html><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width, initial-scale=1"><title>PlantApp — Admin</title>
 <link rel="icon" href="favicon.svg" type="image/svg+xml">
+<link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
 <script src="api-adapter.js"></script>
 <script src="common.js"></script>
 <style>
@@ -1285,6 +1286,8 @@ const TIER_LIMITS = {
   admin:   { doctor: -1, identify: -1, plants: -1 },
 };
 function fmtUsage(n, lim) { return (lim < 0 ? `${n}/∞` : `${n}/${lim}`); }
+// Inline Material icon (same icons the app uses): local_hospital=Doctor, camera_alt=Identify, eco=Plants.
+function mi(name, sz) { return `<span class="material-icons" style="font-size:${sz || 13}px;vertical-align:-3px;color:#7fb88f">${name}</span>`; }
 
 // Load users with whitelist status
 async function loadUsers() {
@@ -1503,13 +1506,16 @@ function renderUsersList() {
     // Honest origin until a backend `source` field exists: real app activity → App, otherwise
     // it's a web signup (the mobile app isn't released yet, so most accounts arrived via the site).
     const originIcon = hasAppActivity ? '📱' : '🌐';
-    const appBadge = `<span title="${hasAppActivity ? 'used the app' : 'web signup — no app activity'}">${originIcon}</span> ${rolePill}`;
+    // Restore the at-a-glance numbers in the collapsed row, with the app's own icons.
+    const usageTxt = hasAppActivity
+      ? ` <span style="color:#999;font-size:10px;white-space:nowrap">${mi('local_hospital', 12)}${fmtUsage(usedDoc, lim.doctor)} ${mi('camera_alt', 12)}${fmtUsage(usedId, lim.identify)}</span>` : '';
+    const appBadge = `<span title="${hasAppActivity ? 'used the app' : 'web signup — no app activity'}">${originIcon}</span> ${rolePill}${usageTxt}`;
     // Clear monthly quota line for the expanded panel (shown for every tier; -1 limit = ∞).
     const quotaLine = `<div style="font-size:11px;color:#9aa;margin-bottom:7px;line-height:1.5">`
       + `Plan: <b style="color:#ddd">${tier}</b> · monthly usage / limit:<br>`
-      + `&nbsp;&nbsp;🩺 Doctor (diagnoses): <b>${fmtUsage(usedDoc, lim.doctor)}</b>`
-      + ` &nbsp; 🔍 Identify (scans): <b>${fmtUsage(usedId, lim.identify)}</b>`
-      + ` &nbsp; 🌱 Plants saved: <b>${fmtUsage(usedPlants, lim.plants)}</b>`
+      + `&nbsp;&nbsp;${mi('local_hospital')} Doctor (diagnoses): <b>${fmtUsage(usedDoc, lim.doctor)}</b>`
+      + ` &nbsp; ${mi('camera_alt')} Identify (scans): <b>${fmtUsage(usedId, lim.identify)}</b>`
+      + ` &nbsp; ${mi('eco')} Plants saved: <b>${fmtUsage(usedPlants, lim.plants)}</b>`
       + `</div>`;
 
     // Device-axis: owner = Maxim only; everyone else with an assigned device = "Assigned"; none = "—".
