@@ -1389,9 +1389,15 @@ async function loadMoneyPool(el) {
     const res = await fetch(`${API.cloudBase}/admin/finance/balances`, { headers: API.getAuthHeaders() });
     if (!res.ok) throw new Error('HTTP ' + res.status);
     const b = (await res.json()).balances || {};
+    // Plant.id sells credits, not $; estimate $ from the last top-up price (1000 credits = €60.50 ≈ $65).
+    const PLANTID_USD_PER_CREDIT = 0.065;
     const val = (s) => {
       if (!s || s.remaining == null) return '<span class="muted">n/a</span>';
       if (s.unit === 'usd') return `<b style="color:#5cd98a">$${Number(s.remaining).toFixed(2)}</b>`;
+      if (s.unit === 'credits') {
+        const usd = (Number(s.remaining) * PLANTID_USD_PER_CREDIT).toFixed(0);
+        return `<b style="color:#5cd98a">${s.remaining}</b> <span class="muted" style="font-size:10px">credits ≈ $${usd}</span>`;
+      }
       return `<b style="color:#5cd98a">${s.remaining}</b> <span class="muted" style="font-size:10px">${s.unit}</span>`;
     };
     el.innerHTML = `
