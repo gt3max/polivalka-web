@@ -1382,12 +1382,20 @@ function renderUsersList() {
   const container = document.getElementById('users-list');
   const whitelistUsers = whitelistData?.users || {};
 
-  // Sort: Admin first, then alphabetically
+  // Order: me (owner) → Maria → our service/fake accounts → real users (alphabetical).
+  const ME = 'mrmaximshurigin@gmail.com';
+  const MARIA = 'mahin84@gmail.com';
+  const FAKE_ACCOUNTS = ['fred.pires106@dontsp.am', 'seahorse9527@dontsp.am'];
+  const rankUser = (email) => {
+    email = (email || '').toLowerCase();
+    if (email === ME) return 0;
+    if (email === MARIA) return 1;
+    if (FAKE_ACCOUNTS.includes(email)) return 2;
+    return 3;
+  };
   const sortedUsers = [...allUsersData].sort((a, b) => {
-    const aIsAdmin = ADMIN_EMAILS.includes(a.email.toLowerCase());
-    const bIsAdmin = ADMIN_EMAILS.includes(b.email.toLowerCase());
-    if (aIsAdmin && !bIsAdmin) return -1;
-    if (!aIsAdmin && bIsAdmin) return 1;
+    const ra = rankUser(a.email), rb = rankUser(b.email);
+    if (ra !== rb) return ra - rb;
     return a.email.localeCompare(b.email);
   });
 
@@ -1398,6 +1406,7 @@ function renderUsersList() {
     const isSuspended = whitelistUsers[email]?.status === 'suspended';
     // Use ADMIN_EMAILS from common.js (not u.is_admin from DynamoDB which may not be set)
     const isAdmin = ADMIN_EMAILS.includes(email.toLowerCase());
+    const isFake = FAKE_ACCOUNTS.includes(email.toLowerCase());
     const verified = u.verified;
 
     // Get devices assigned to this user
@@ -1518,10 +1527,11 @@ function renderUsersList() {
     const deviceBadge = `<span style="color:#9aa">🔌 Device</span> ${devPill}`;
 
     return `
-      <div style="padding:10px 0;border-bottom:1px solid #333">
+      <div style="padding:10px 0;border-bottom:1px solid #333${isFake ? ';background:#201a30;border-left:3px solid #9575cd;padding-left:8px' : ''}">
         <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
           <div>
             <span style="color:#fff">${esc(email)}</span>
+            ${isFake ? '<span style="margin-left:6px;background:#4a3a6b;color:#d1c4e9;padding:1px 7px;border-radius:9px;font-size:10px;font-weight:600">🧪 service</span>' : ''}
             <span style="margin-left:8px">${statusBadge}</span>
             <div class="muted" style="font-size:11px">Last login: ${lastLogin}</div>
             <div style="font-size:11px;margin-top:5px;display:flex;gap:16px;align-items:center;flex-wrap:wrap">${appBadge}${deviceBadge}</div>
