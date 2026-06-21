@@ -1278,11 +1278,12 @@ let allUsersData = [];
 let allDevicesData = [];
 // App-axis: tier + monthly usage per user, keyed by email (from /admin/users/stats)
 let statsMap = {};
-// Free-tier limits — SYNC with TIER_POLICY (plantapp-cloud/shared/user_storage.py). -1 = ∞ (premium/admin).
+// Limits — SYNC with TIER_POLICY (plantapp-cloud/shared/user_storage.py). -1 = ∞.
+// Premium НЕ полностью ∞: doctor 20/день (doctor_day), Plant.id 5/мес (plantid_month). identify/plants ∞.
 const TIER_LIMITS = {
-  free:    { doctor: 3,  identify: 15, plants: 5 },
-  premium: { doctor: -1, identify: -1, plants: -1 },
-  admin:   { doctor: -1, identify: -1, plants: -1 },
+  free:    { doctor: 3,  identify: 15, plants: 5,  plantid: 0,  doctorDaily: false },
+  premium: { doctor: 20, identify: -1, plants: -1, plantid: 5,  doctorDaily: true  },
+  admin:   { doctor: -1, identify: -1, plants: -1, plantid: -1, doctorDaily: false },
 };
 function fmtUsage(n, lim) { return (lim < 0 ? `${n}/∞` : `${n}/${lim}`); }
 // Metric icons as plain emoji (always render — Material Icons font was unreliable).
@@ -1548,26 +1549,28 @@ function renderUsersList() {
                    : pill('#2a2520', '#d9ad6b', '🌐 Web', SRC_W));
 
     // App-axis: role pill (Admin / Premium / Free). Detailed usage goes in the expanded panel.
-    const usedDoc = st.doctor_count || 0, usedId = st.identify_count || 0, usedPlants = st.plants_count || 0;
+    const usedDoc = st.doctor_count || 0, usedId = st.identify_count || 0, usedPlants = st.plants_count || 0, usedPid = st.plantid_count || 0;
     let rolePill;
     if (isAdmin)               rolePill = pill('#3a3000', '#ffd700', '👑 Admin', ROLE_W);
     else if (tier === 'premium') rolePill = pill('#173a2a', '#5cd98a', '💎 Premium', ROLE_W);
     else                        rolePill = pill('#2a2a2a', '#bbb', '🆓 Free', ROLE_W);
     // Usage counters: ONLY for app-registered users (free + premium), always shown for them —
-    // even at zero (new app accounts read 0/3 · 0/15 · 0/5). Web users & admins get "—".
+    // even at zero. Plants = ЖИВОЙ saved-count (backend active_count), не monthly. Premium doctor — дневной кап.
     const uslot = (ic, txt) => `<span style="display:inline-block;min-width:58px">${ic} ${txt}</span>`;
+    const docTxt = fmtUsage(usedDoc, lim.doctor) + (lim.doctorDaily ? '·д' : '');
     const usageTxt = isAppUser
-      ? ` <span style="color:#999;font-size:10px;white-space:nowrap">${uslot(mi('local_hospital'), fmtUsage(usedDoc, lim.doctor))}${uslot(mi('camera_alt'), fmtUsage(usedId, lim.identify))}${uslot(mi('eco'), fmtUsage(usedPlants, lim.plants))}</span>`
+      ? ` <span style="color:#999;font-size:10px;white-space:nowrap">${uslot(mi('local_hospital'), docTxt)}${uslot(mi('camera_alt'), fmtUsage(usedId, lim.identify))}${uslot(mi('eco'), fmtUsage(usedPlants, lim.plants))}</span>`
       : (isAdmin ? '' : ` <span style="color:#666;font-size:11px">—</span>`);
     const appBadge = `${sourcePill}${rolePill}${usageTxt}`;
     // Expanded-panel quota line: only for app users (web users have no app usage yet; admins none).
+    const pidLine = (lim.plantid > 0) ? ` &nbsp; 💊 Plant.id: <b>${fmtUsage(usedPid, lim.plantid)}/мес</b>` : '';
     const quotaLine = !isAppUser
       ? (isAdmin ? '' : `<div style="font-size:11px;color:#9aa;margin-bottom:7px">🌐 Registered via web-site — no app usage yet. Plan: <b style="color:#ddd">${tier}</b>.</div>`)
       : (`<div style="font-size:11px;color:#9aa;margin-bottom:7px;line-height:1.5">`
-      + `Plan: <b style="color:#ddd">${tier}</b> · monthly usage / limit:<br>`
-      + `&nbsp;&nbsp;${mi('local_hospital')} Doctor (diagnoses): <b>${fmtUsage(usedDoc, lim.doctor)}</b>`
+      + `Plan: <b style="color:#ddd">${tier}</b> · usage / limit:<br>`
+      + `&nbsp;&nbsp;${mi('local_hospital')} Doctor (diagnoses): <b>${fmtUsage(usedDoc, lim.doctor)}${lim.doctorDaily ? ' /день' : ' /мес'}</b>`
       + ` &nbsp; ${mi('camera_alt')} Identify (scans): <b>${fmtUsage(usedId, lim.identify)}</b>`
-      + ` &nbsp; ${mi('eco')} Plants saved: <b>${fmtUsage(usedPlants, lim.plants)}</b>`
+      + ` &nbsp; ${mi('eco')} Plants saved: <b>${fmtUsage(usedPlants, lim.plants)}</b>${pidLine}`
       + `</div>`);
 
     // Device-axis: owner = Maxim only; everyone else with an assigned device = "Assigned"; none = "—".
@@ -2277,6 +2280,8 @@ if (checkAdminAccess()) {
     }
   });
   loadUsers();           // Restored - endpoint fixed
+  // Живой дашборд: авто-рефреш счётчиков раз в минуту (без ручного reload).
+  if (!window._usersAutoRefresh) window._usersAutoRefresh = setInterval(() => { try { loadUsers(); } catch (e) {} }, 60000);
   loadPendingClaimsUI(); // Load pending claims
   loadArchivedDevices();
   loadDeletedDevices();
