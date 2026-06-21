@@ -111,7 +111,7 @@
       <div id="moisture-nodata" class="muted" style="display:none;text-align:center;padding:40px">No moisture data for this period</div>
     </div>
     <div class="card" id="sensor2-chart-card" style="display:none">
-      <h3 style="margin-top:0;color:#9c27b0">🌡️ Resistive Sensor (J7)</h3>
+      <h3 style="margin-top:0;color:#4caf50">💧 Capacitive Sensor (J7)</h3>
       <div class="chart-container">
         <canvas id="sensor2-chart"></canvas>
       </div>
@@ -204,7 +204,7 @@
         <div id="lt-moisture-nodata" class="muted" style="display:none;text-align:center;padding:40px">No moisture data for this period</div>
 
         <div id="lt-sensor2-section" style="margin-top:16px;display:none">
-          <h4 style="margin:0 0 8px 0;color:#9c27b0">🌡️ Resistive Sensor (J7)</h4>
+          <h4 style="margin:0 0 8px 0;color:#4caf50">💧 Capacitive Sensor (J7)</h4>
           <div class="chart-container" style="height:250px">
             <canvas id="lt-sensor2-chart"></canvas>
           </div>
@@ -510,7 +510,7 @@ function renderMoistureChart(data) {
   const adcValues = data.map(d => d.adc_raw);
   const hasAdc = adcValues.some(v => v != null);
 
-  // Sensor 2 data (resistive sensor J7)
+  // Sensor 2 data (capacitive sensor J7)
   const sensor2AdcValues = data.map(d => d.sensor2_adc);
   const sensor2PctValues = data.map(d => d.sensor2_percent);
   const hasSensor2 = sensor2AdcValues.some(v => v != null && v !== undefined);
@@ -585,7 +585,7 @@ function renderMoistureChart(data) {
     options: chartOptions()
   });
 
-  // === Chart 2: Resistive Sensor (J7) - only if data exists ===
+  // === Chart 2: Capacitive Sensor (J7) - only if data exists ===
   const sensor2Card = document.getElementById('sensor2-chart-card');
   if (hasSensor2) {
     sensor2Card.style.display = 'block';
@@ -606,8 +606,8 @@ function renderMoistureChart(data) {
           {
             label: 'Moisture %',
             data: isScatter ? data.map(d => ({ x: new Date(d.timestamp * 1000), y: d.sensor2_percent })) : sensor2PctWithGaps.values,
-            borderColor: '#9c27b0',
-            backgroundColor: isScatter ? '#9c27b0' : 'rgba(156, 39, 176, 0.1)',
+            borderColor: '#4caf50',
+            backgroundColor: isScatter ? '#4caf50' : 'rgba(76, 175, 80, 0.1)',
             fill: !isScatter,
             tension: 0.3,
             pointRadius: isScatter ? 6 : 3,
@@ -1131,7 +1131,7 @@ function updateStats() {
 
 // Export CSV
 function exportCSV() {
-  let csv = 'timestamp,type,moisture_cap_pct,moisture_res_pct,adc_capacitive,adc_resistive,battery_percent,battery_voltage,charging,boot_type,reset_reason,message\n';
+  let csv = 'timestamp,type,moisture_cap_pct,moisture_res_pct,adc_capacitive,adc_capacitive,battery_percent,battery_voltage,charging,boot_type,reset_reason,message\n';
 
   // Add sensor data
   for (const d of sensorData) {
@@ -1541,8 +1541,8 @@ function renderLtSensor2Chart(weeks) {
         {
           label: 'Moisture %',
           data: isScatter ? data.filter(d => d.sensor2_percent != null).map(d => ({ x: new Date(d.timestamp * 1000), y: d.sensor2_percent })) : s2PctWithGaps.values,
-          borderColor: '#9c27b0',
-          backgroundColor: isScatter ? '#9c27b0' : 'rgba(156, 39, 176, 0.1)',
+          borderColor: '#4caf50',
+          backgroundColor: isScatter ? '#4caf50' : 'rgba(76, 175, 80, 0.1)',
           fill: !isScatter,
           tension: 0.3,
           pointRadius: isScatter ? 6 : 3,

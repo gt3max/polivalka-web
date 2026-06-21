@@ -177,17 +177,21 @@
 <button onclick="saveSensorPreset()">Set Capacitive Preset</button>
 </div>
 
-<div class="section-header" style="margin-top:20px">Resistive Sensor Preset (2-point)</div>
+<div class="section-header" style="margin-top:20px">Capacitive Sensor J7 Preset (3-point)</div>
 <div class="toggle-row">
-<div><div class="toggle-label">ADC Dry Soil</div><div class="toggle-desc">Default 0% moisture <span class="mono">(adc_s2_dry)</span></div></div>
-<div class="row"><input type="number" id="calib-s2-dry" min="0" max="4095" value="100" style="width:80px"></div>
+<div><div class="toggle-label">ADC Water</div><div class="toggle-desc">Default 100% moisture <span class="mono">(adc_s2_water)</span></div></div>
+<div class="row"><input type="number" id="calib-s2-water" min="0" max="4095" value="1200" style="width:80px"></div>
 </div>
 <div class="toggle-row">
-<div><div class="toggle-label">ADC Wet Soil</div><div class="toggle-desc">Default 100% moisture <span class="mono">(adc_s2_wet)</span></div></div>
-<div class="row"><input type="number" id="calib-s2-wet" min="0" max="4095" value="3000" style="width:80px"></div>
+<div><div class="toggle-label">ADC Dry Soil</div><div class="toggle-desc">Default 0% moisture <span class="mono">(adc_s2_dry_soil)</span></div></div>
+<div class="row"><input type="number" id="calib-s2-dry" min="0" max="4095" value="2400" style="width:80px"></div>
+</div>
+<div class="toggle-row">
+<div><div class="toggle-label">ADC Air</div><div class="toggle-desc">Default air reference <span class="mono">(adc_s2_air)</span></div></div>
+<div class="row"><input type="number" id="calib-s2-air" min="0" max="4095" value="2800" style="width:80px"></div>
 </div>
 <div class="row" style="margin-top:8px">
-<button onclick="saveSensor2Preset()">Set Resistive Preset</button>
+<button onclick="saveSensor2Preset()">Set Capacitive J7 Preset</button>
 </div>
 </div>
 
@@ -602,10 +606,11 @@ async function loadDeviceConfig() {
         document.getElementById('calib-adc-air').value = 2800;     // ADC_AIR_DEFAULT
         console.log('[Admin] Factory preset defaults loaded (not user calibration)');
 
-        // Resistive sensor: show defaults
-        document.getElementById('calib-s2-dry').value = 100;       // ADC2_DRY_DEFAULT
-        document.getElementById('calib-s2-wet').value = 3000;      // ADC2_WET_DEFAULT
-        console.log('[Admin] Resistive preset defaults loaded');
+        // Capacitive J7 sensor: show defaults (3-point, mirror of J6)
+        document.getElementById('calib-s2-water').value = 1200;    // ADC2_WATER_DEFAULT
+        document.getElementById('calib-s2-dry').value = 2400;      // ADC2_DRY_SOIL_DEFAULT
+        document.getElementById('calib-s2-air').value = 2800;      // ADC2_AIR_DEFAULT
+        console.log('[Admin] Capacitive J7 preset defaults loaded');
 
         // Show last seen info
         if (device.last_update) {
@@ -1052,7 +1057,7 @@ async function saveSensorPreset() {
   }
 }
 
-// Save Resistive sensor preset
+// Save Capacitive J7 sensor preset (3-point, mirror of J6)
 async function saveSensor2Preset() {
   const selectedDeviceId = document.getElementById('device-select').value;
   if (!selectedDeviceId) {
@@ -1060,10 +1065,11 @@ async function saveSensor2Preset() {
     return;
   }
 
+  const adcWater = parseInt(document.getElementById('calib-s2-water').value);
   const adcDry = parseInt(document.getElementById('calib-s2-dry').value);
-  const adcWet = parseInt(document.getElementById('calib-s2-wet').value);
+  const adcAir = parseInt(document.getElementById('calib-s2-air').value);
 
-  if ([adcDry, adcWet].some(v => isNaN(v) || v < 0 || v > 4095)) {
+  if ([adcWater, adcDry, adcAir].some(v => isNaN(v) || v < 0 || v > 4095)) {
     alert('ADC values must be between 0 and 4095');
     return;
   }
@@ -1074,12 +1080,12 @@ async function saveSensor2Preset() {
       headers: { ...API.getAuthHeaders(), 'Content-Type': 'application/json' },
       body: JSON.stringify({
         command: 'set_sensor2_preset',
-        params: { adc_dry: adcDry, adc_wet: adcWet }
+        params: { adc_air: adcAir, adc_water: adcWater, adc_dry_soil: adcDry }
       })
     });
 
     if (res.ok) {
-      alert(`✓ Resistive preset saved: dry=${adcDry}, wet=${adcWet}`);
+      alert(`✓ Capacitive J7 preset saved: air=${adcAir}, water=${adcWater}, dry=${adcDry}`);
     } else {
       const err = await res.json().catch(() => ({}));
       alert('Failed: ' + (err.error || res.status));
