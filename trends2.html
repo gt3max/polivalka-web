@@ -1131,7 +1131,7 @@ function updateStats() {
 
 // Export CSV
 function exportCSV() {
-  let csv = 'timestamp,type,moisture_cap_pct,moisture_res_pct,adc_capacitive,adc_capacitive,battery_percent,battery_voltage,charging,boot_type,reset_reason,message\n';
+  let csv = 'timestamp,type,moisture_j6_pct,moisture_j7_pct,adc_j6,adc_j7,battery_percent,battery_voltage,charging,boot_type,reset_reason,message\n';
 
   // Add sensor data
   for (const d of sensorData) {

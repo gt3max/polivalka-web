@@ -892,9 +892,13 @@ function renderMoistureChart(data) {
         s2PctMax = Math.min(100, Math.ceil(s2RawMax + 5));
       }
     }
-    // Capacitive J7: ADC axis from water (wettest, low ADC) to air (ref, high ADC), like J6
-    const s2AdcMin = Math.max(0, (sensor2Calib.water ?? 1200) - 200);
-    const s2AdcMax = Math.min(4095, (sensor2Calib.air ?? 2800) + 200);
+    // Capacitive J7: ADC axis spans water (wettest, low ADC) → air (ref, high ADC), like J6,
+    // but also widened to include actual data so an uncalibrated/glitchy J7 isn't clipped.
+    const s2AdcVals = data.map(d => d.sensor2_adc).filter(v => v != null);
+    const s2DataMin = s2AdcVals.length ? Math.min(...s2AdcVals) : (sensor2Calib.water ?? 1200);
+    const s2DataMax = s2AdcVals.length ? Math.max(...s2AdcVals) : (sensor2Calib.air ?? 2800);
+    const s2AdcMin = Math.max(0, Math.min((sensor2Calib.water ?? 1200) - 200, s2DataMin - 100));
+    const s2AdcMax = Math.min(4095, Math.max((sensor2Calib.air ?? 2800) + 200, s2DataMax + 100));
 
     window.sensor2Chart = new Chart(ctx2, {
       type: isScatter ? 'scatter' : 'line',
@@ -1454,7 +1458,7 @@ function updateStats() {
 
 // Export CSV
 function exportCSV() {
-  let csv = 'timestamp,type,moisture_cap_pct,moisture_res_pct,adc_capacitive,adc_capacitive,battery_percent,battery_voltage,charging,boot_type,reset_reason,message\n';
+  let csv = 'timestamp,type,moisture_j6_pct,moisture_j7_pct,adc_j6,adc_j7,battery_percent,battery_voltage,charging,boot_type,reset_reason,message\n';
 
   // Add sensor data
   for (const d of sensorData) {
@@ -1883,8 +1887,11 @@ function renderLtSensor2Chart(weeks) {
     const rMin = Math.min(...ltS2PctVals), rMax = Math.max(...ltS2PctVals);
     if (rMax - rMin >= 10) { ltS2PctMin = Math.max(0, Math.floor(rMin - 5)); ltS2PctMax = Math.min(100, Math.ceil(rMax + 5)); }
   }
-  const ltS2AdcMin = Math.max(0, (sensor2Calib.water ?? 1200) - 200);
-  const ltS2AdcMax = Math.min(4095, (sensor2Calib.air ?? 2800) + 200);
+  const ltS2AdcVals = data.map(d => d.sensor2_adc).filter(v => v != null);
+  const ltS2DataMin = ltS2AdcVals.length ? Math.min(...ltS2AdcVals) : (sensor2Calib.water ?? 1200);
+  const ltS2DataMax = ltS2AdcVals.length ? Math.max(...ltS2AdcVals) : (sensor2Calib.air ?? 2800);
+  const ltS2AdcMin = Math.max(0, Math.min((sensor2Calib.water ?? 1200) - 200, ltS2DataMin - 100));
+  const ltS2AdcMax = Math.min(4095, Math.max((sensor2Calib.air ?? 2800) + 200, ltS2DataMax + 100));
 
   const weekAnnotations = buildWeekAnnotations(weeks);
 
