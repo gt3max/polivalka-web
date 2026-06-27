@@ -1294,7 +1294,7 @@ const TIER_LIMITS = {
 function fmtUsage(n, lim) { return (lim < 0 ? `${n}/∞` : `${n}/${lim}`); }
 // Metric icons as plain emoji (always render — Material Icons font was unreliable).
 function mi(name) {
-  return ({ local_hospital: '🩺', camera_alt: '📷', eco: '🌿' })[name] || '';
+  return ({ local_hospital: '🏥', camera_alt: '📷', eco: '🌿' })[name] || '';
 }
 
 // Load users with whitelist status
@@ -1569,7 +1569,7 @@ function renderUsersList() {
       : (isAdmin ? '' : ` <span style="color:#666;font-size:11px">—</span>`);
     const appBadge = `${sourcePill}${rolePill}${usageTxt}`;
     // Expanded-panel quota line: only for app users (web users have no app usage yet; admins none).
-    const pidLine = (lim.plantid > 0) ? ` &nbsp; 💊 Plant.id: <b>${fmtUsage(usedPid, lim.plantid)}/mo</b>` : '';
+    const pidLine = (lim.plantid > 0) ? ` &nbsp; 🪴 Plant.id: <b>${fmtUsage(usedPid, lim.plantid)}/mo</b>` : '';
     const quotaLine = !isAppUser
       ? (isAdmin ? '' : `<div style="font-size:11px;color:#9aa;margin-bottom:7px">🌐 Registered via web-site — no app usage yet. Plan: <b style="color:#ddd">${tier}</b>.</div>`)
       : (`<div style="font-size:11px;color:#9aa;margin-bottom:7px;line-height:1.5">`
