@@ -1375,13 +1375,13 @@ async function loadUserLedger(email) {
         <td class="mono" style="text-align:right;color:${it.type === 'credit' ? '#4caf50' : '#f88'}">$${Number(it.cost_usd || 0).toFixed(4)}</td>
       </tr>`).join('');
     el.innerHTML = `
-      <div style="display:flex;gap:14px;flex-wrap:wrap;margin-bottom:6px;font-size:12px">
+      <div style="display:flex;gap:14px;flex-wrap:wrap;margin-bottom:6px;font-size:12px;color:#ccc">
         <div>Spent: <span class="mono" style="color:#f88">$${Number(b.debit_usd || 0).toFixed(4)}</span></div>
         <div>Credit: <span class="mono" style="color:#4caf50">$${Number(b.credit_usd || 0).toFixed(2)}</span></div>
         <div>Balance: <span class="mono">$${Number(b.balance_usd || 0).toFixed(2)}</span></div>
       </div>
-      <table style="width:100%;font-size:11px;border-collapse:collapse">
-        <thead><tr><th style="text-align:left">When</th><th style="text-align:left">Service</th><th>u</th><th>$</th></tr></thead>
+      <table style="width:100%;font-size:11px;border-collapse:collapse;color:#ddd">
+        <thead><tr><th style="text-align:left;color:#9aa;border-bottom:1px solid #33334d">When</th><th style="text-align:left;color:#9aa;border-bottom:1px solid #33334d">Service</th><th style="color:#9aa;border-bottom:1px solid #33334d">u</th><th style="color:#9aa;border-bottom:1px solid #33334d">$</th></tr></thead>
         <tbody>${rows || '<tr><td colspan=4 class="muted">No events yet</td></tr>'}</tbody>
       </table>`;
     el.dataset.loaded = '1';
@@ -1569,12 +1569,12 @@ function renderUsersList() {
       : (isAdmin ? '' : ` <span style="color:#666;font-size:11px">—</span>`);
     const appBadge = `${sourcePill}${rolePill}${usageTxt}`;
     // Expanded-panel quota line: only for app users (web users have no app usage yet; admins none).
-    const pidLine = (lim.plantid > 0) ? ` &nbsp; 💊 Plant.id: <b>${fmtUsage(usedPid, lim.plantid)}/мес</b>` : '';
+    const pidLine = (lim.plantid > 0) ? ` &nbsp; 💊 Plant.id: <b>${fmtUsage(usedPid, lim.plantid)}/mo</b>` : '';
     const quotaLine = !isAppUser
       ? (isAdmin ? '' : `<div style="font-size:11px;color:#9aa;margin-bottom:7px">🌐 Registered via web-site — no app usage yet. Plan: <b style="color:#ddd">${tier}</b>.</div>`)
       : (`<div style="font-size:11px;color:#9aa;margin-bottom:7px;line-height:1.5">`
       + `Plan: <b style="color:#ddd">${tier}</b> · usage / limit:<br>`
-      + `&nbsp;&nbsp;${mi('local_hospital')} Doctor (diagnoses): <b>${fmtUsage(usedDoc, lim.doctor)}${lim.doctorDaily ? ' /день' : ' /мес'}</b>`
+      + `&nbsp;&nbsp;${mi('local_hospital')} Doctor (diagnoses): <b>${fmtUsage(usedDoc, lim.doctor)}${lim.doctorDaily ? ' /day' : ' /mo'}</b>`
       + ` &nbsp; ${mi('camera_alt')} Identify (scans): <b>${fmtUsage(usedId, lim.identify)}</b>`
       + ` &nbsp; ${mi('eco')} Plants saved: <b>${fmtUsage(usedPlants, lim.plants)}</b>${pidLine}`
       + `</div>`);
