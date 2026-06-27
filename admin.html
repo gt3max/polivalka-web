@@ -1293,8 +1293,19 @@ const TIER_LIMITS = {
 };
 function fmtUsage(n, lim) { return (lim < 0 ? `${n}/∞` : `${n}/${lim}`); }
 // Metric icons as plain emoji (always render — Material Icons font was unreliable).
+// ===== SINGLE SOURCE OF TRUTH for service/feature icons =====
+// Change an icon here → it updates everywhere on the page (usage line, money pool, etc).
+// Features (what the user consumes) and the paid provider that funds each one.
+const ICONS = {
+  doctor:     '🏥', // Doctor (diagnoses)  ← funded by OpenRouter
+  identify:   '📷', // Identify (scans)
+  plants:     '🌿', // Plants saved
+  plantid:    '🪴', // Plant.id (premium identification)
+  openrouter: '🤖', // OpenRouter (LLM provider behind Doctor)
+  serpapi:    '🔎', // SerpAPI (search provider)
+};
 function mi(name) {
-  return ({ local_hospital: '🏥', camera_alt: '📷', eco: '🌿' })[name] || '';
+  return ({ local_hospital: ICONS.doctor, camera_alt: ICONS.identify, eco: ICONS.plants })[name] || '';
 }
 
 // Load users with whitelist status
@@ -1410,9 +1421,9 @@ async function loadMoneyPool(el) {
     el.innerHTML = `
       <div style="font-size:11px;color:#9aa;margin-bottom:8px">💰 Money pool — live balances of the paid services. All users spend from here.</div>
       <div style="display:flex;flex-direction:column;gap:7px">
-        ${poolRow('🤖 OpenRouter', val(b.openrouter))}
-        ${poolRow('🩺 Plant.id', val(b.plantid))}
-        ${b.serpapi ? poolRow('🔎 SerpAPI', val(b.serpapi)) : ''}
+        ${poolRow(`${ICONS.openrouter} OpenRouter`, val(b.openrouter))}
+        ${poolRow(`${ICONS.plantid} Plant.id`, val(b.plantid))}
+        ${b.serpapi ? poolRow(`${ICONS.serpapi} SerpAPI`, val(b.serpapi)) : ''}
       </div>`;
     el.dataset.loaded = '1';
   } catch (e) {
@@ -1569,7 +1580,7 @@ function renderUsersList() {
       : (isAdmin ? '' : ` <span style="color:#666;font-size:11px">—</span>`);
     const appBadge = `${sourcePill}${rolePill}${usageTxt}`;
     // Expanded-panel quota line: only for app users (web users have no app usage yet; admins none).
-    const pidLine = (lim.plantid > 0) ? ` &nbsp; <span title="Plant.id">🪴 <b>${fmtUsage(usedPid, lim.plantid)}/mo</b></span>` : '';
+    const pidLine = (lim.plantid > 0) ? ` &nbsp; <span title="Plant.id">${ICONS.plantid} <b>${fmtUsage(usedPid, lim.plantid)}/mo</b></span>` : '';
     const quotaLine = !isAppUser
       ? (isAdmin ? '' : `<span style="font-size:11px;color:#9aa">🌐 Web signup — no app usage yet · Plan: <b style="color:#ddd">${tier}</b></span>`)
       : (`<span style="font-size:11px;color:#9aa;white-space:nowrap">`
