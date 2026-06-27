@@ -1580,14 +1580,14 @@ function renderUsersList() {
       : (isAdmin ? '' : ` <span style="color:#666;font-size:11px">—</span>`);
     const appBadge = `${sourcePill}${rolePill}${usageTxt}`;
     // Expanded-panel quota line: only for app users (web users have no app usage yet; admins none).
-    const pidLine = (lim.plantid > 0) ? ` &nbsp; <span title="Plant.id">${ICONS.plantid} <b>${fmtUsage(usedPid, lim.plantid)}/mo</b></span>` : '';
+    const pidLine = (lim.plantid > 0) ? ` &nbsp; <span title="Plant.id — this month">${ICONS.plantid} <b>${fmtUsage(usedPid, lim.plantid)}/mo</b></span>` : '';
     const quotaLine = !isAppUser
       ? (isAdmin ? '' : `<span style="font-size:11px;color:#9aa">🌐 Web signup — no app usage yet · Plan: <b style="color:#ddd">${tier}</b></span>`)
       : (`<span style="font-size:11px;color:#9aa;white-space:nowrap">`
       + `Plan: <b style="color:#ddd">${tier}</b> &nbsp;·&nbsp; `
-      + `<span title="Doctor (diagnoses)">${mi('local_hospital')} <b>${fmtUsage(usedDoc, lim.doctor)}${lim.doctorDaily ? '/day' : '/mo'}</b></span>`
-      + ` &nbsp; <span title="Identify (scans)">${mi('camera_alt')} <b>${fmtUsage(usedId, lim.identify)}</b></span>`
-      + ` &nbsp; <span title="Plants saved">${mi('eco')} <b>${fmtUsage(usedPlants, lim.plants)}</b></span>${pidLine}`
+      + `<span title="Doctor diagnoses — this month">${mi('local_hospital')} <b>${fmtUsage(usedDoc, lim.doctor)}${lim.doctorDaily ? '/day' : '/mo'}</b></span>`
+      + ` &nbsp; <span title="Identify scans — this month">${mi('camera_alt')} <b>${fmtUsage(usedId, lim.identify)}/mo</b></span>`
+      + ` &nbsp; <span title="Plants saved — live total (all time)">${mi('eco')} <b>${fmtUsage(usedPlants, lim.plants)}</b> <span style="color:#667;font-size:9px">live</span></span>${pidLine}`
       + `</span>`);
 
     // Device-axis: owner = Maxim only; everyone else with an assigned device = "Assigned"; none = "—".
