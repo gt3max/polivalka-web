@@ -1569,15 +1569,15 @@ function renderUsersList() {
       : (isAdmin ? '' : ` <span style="color:#666;font-size:11px">—</span>`);
     const appBadge = `${sourcePill}${rolePill}${usageTxt}`;
     // Expanded-panel quota line: only for app users (web users have no app usage yet; admins none).
-    const pidLine = (lim.plantid > 0) ? ` &nbsp; 🪴 Plant.id: <b>${fmtUsage(usedPid, lim.plantid)}/mo</b>` : '';
+    const pidLine = (lim.plantid > 0) ? ` &nbsp; <span title="Plant.id">🪴 <b>${fmtUsage(usedPid, lim.plantid)}/mo</b></span>` : '';
     const quotaLine = !isAppUser
-      ? (isAdmin ? '' : `<div style="font-size:11px;color:#9aa;margin-bottom:7px">🌐 Registered via web-site — no app usage yet. Plan: <b style="color:#ddd">${tier}</b>.</div>`)
-      : (`<div style="font-size:11px;color:#9aa;margin-bottom:7px;line-height:1.5">`
-      + `Plan: <b style="color:#ddd">${tier}</b> · usage / limit:<br>`
-      + `&nbsp;&nbsp;${mi('local_hospital')} Doctor (diagnoses): <b>${fmtUsage(usedDoc, lim.doctor)}${lim.doctorDaily ? ' /day' : ' /mo'}</b>`
-      + ` &nbsp; ${mi('camera_alt')} Identify (scans): <b>${fmtUsage(usedId, lim.identify)}</b>`
-      + ` &nbsp; ${mi('eco')} Plants saved: <b>${fmtUsage(usedPlants, lim.plants)}</b>${pidLine}`
-      + `</div>`);
+      ? (isAdmin ? '' : `<span style="font-size:11px;color:#9aa">🌐 Web signup — no app usage yet · Plan: <b style="color:#ddd">${tier}</b></span>`)
+      : (`<span style="font-size:11px;color:#9aa;white-space:nowrap">`
+      + `Plan: <b style="color:#ddd">${tier}</b> &nbsp;·&nbsp; `
+      + `<span title="Doctor (diagnoses)">${mi('local_hospital')} <b>${fmtUsage(usedDoc, lim.doctor)}${lim.doctorDaily ? '/day' : '/mo'}</b></span>`
+      + ` &nbsp; <span title="Identify (scans)">${mi('camera_alt')} <b>${fmtUsage(usedId, lim.identify)}</b></span>`
+      + ` &nbsp; <span title="Plants saved">${mi('eco')} <b>${fmtUsage(usedPlants, lim.plants)}</b></span>${pidLine}`
+      + `</span>`);
 
     // Device-axis: owner = Maxim only; everyone else with an assigned device = "Assigned"; none = "—".
     // (App-role ≠ device-role: an app-admin like Maria is a device USER here.)
@@ -1595,23 +1595,21 @@ function renderUsersList() {
         <td style="padding:6px 8px;text-align:right;color:#888;vertical-align:top"><span id="chev-${rid}">${open ? '▾' : '▸'}</span></td>
       </tr>
       <tr id="row-${rid}" style="display:${open ? 'table-row' : 'none'};background:${isFake ? '#1a1526' : '#14141f'}">
-        <td colspan="4" style="padding:10px 14px">
-          <!-- App block: account + subscription/finance -->
-          <div style="margin-bottom:12px">
-            <div style="color:#6fb0e8;font-weight:600;margin-bottom:5px">📱 App</div>
+        <td colspan="4" style="padding:8px 14px">
+          <!-- App block: header + quota + actions on one wrapping row -->
+          <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:6px">
+            <span style="color:#6fb0e8;font-weight:600">📱 App</span>
             ${quotaLine}
-            <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">
-              ${appActions}
-              <button onclick="event.stopPropagation();toggleUserFinance('${email}')" style="font-size:11px;padding:4px 8px">💰 Finance</button>
-            </div>
-            <div id="finance-${rid}" style="display:none;margin-top:8px;padding:12px;background:#1d1d2e;border:1px solid #33334d;border-radius:10px"></div>
+            ${appActions}
+            <button onclick="event.stopPropagation();toggleUserFinance('${email}')" style="font-size:11px;padding:4px 8px">💰 Finance</button>
           </div>
-          <!-- Device block: hardware access + assigned devices -->
-          <div>
-            <div style="color:#5fd0c2;font-weight:600;margin-bottom:5px">🔌 Device</div>
-            <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">${deviceActions}</div>
-            ${devicesSection}
+          <div id="finance-${rid}" style="display:none;margin-bottom:8px;padding:12px;background:#1d1d2e;border:1px solid #33334d;border-radius:10px"></div>
+          <!-- Device block: header + actions on one wrapping row -->
+          <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center">
+            <span style="color:#5fd0c2;font-weight:600">🔌 Device</span>
+            ${deviceActions}
           </div>
+          ${devicesSection}
         </td>
       </tr>
     `;
