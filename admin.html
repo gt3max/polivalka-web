@@ -1508,7 +1508,7 @@ function renderTursoCascade(orgs){
         <span class="mono" style="font-size:12px;color:${_tursoColor(pct)}">${_tursoNum(o.rows_read)} / ${_tursoNum(cap)} <b>${pct.toFixed(1)}%</b></span>
       </div>
       ${_tursoBar(pct)}
-      <div style="font-size:10px;color:#9aa;margin-top:4px">✍ ${_tursoNum(o.rows_written)} writes &nbsp;·&nbsp; 💾 ${_tursoBytes(o.storage_bytes)} &nbsp;·&nbsp; ${o.databases||0} db</div>
+      <div style="font-size:10px;color:#9aa;margin-top:4px">✍ ${_tursoNum(o.rows_written)} / ${_tursoNum(o.write_cap||10000000)} <b style="color:${_tursoColor(100*(Number(o.rows_written)||0)/(o.write_cap||10000000))}">${(100*(Number(o.rows_written)||0)/(o.write_cap||10000000)).toFixed(1)}%</b> writes &nbsp;·&nbsp; 💾 ${_tursoBytes(o.storage_bytes)} &nbsp;·&nbsp; ${o.databases||0} db</div>
     </div>`;
   }).join('');
   el.innerHTML=`<div style="display:flex;flex-direction:column;gap:7px">${rows}</div>`;
