@@ -1,2 +1,8 @@
 __pycache__/
 lambda/*.zip
+
+.DS_Store
+*.bak_*
+*.bak
+.env
+*.env
