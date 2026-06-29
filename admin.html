@@ -1626,16 +1626,10 @@ function renderCloudinary(accounts, savedAt){
     </tr></thead><tbody>${body}</tbody></table></div>`;
   const u=document.getElementById('cloudinary-updated');
   if(u){
-    // Две РАЗНЫЕ свежести: (1) дата самих данных Cloudinary (lastUpdated = их поле
-    // last_updated, считается с задержкой ~24ч); (2) момент МОЕГО опроса API (savedAt).
+    // Только дата самих данных Cloudinary (их поле last_updated).
     const anyPending=accounts.some(a=>a&&a._pending);
     if(anyPending){ u.textContent='загрузка…'; }
-    else {
-      const asof = lastUpdated ? ('данные Cloudinary на '+lastUpdated) : 'данные Cloudinary';
-      let polled='';
-      if(savedAt){ const s=(Date.now()-savedAt)/1000; polled = s<8 ? 'опрошено только что' : ('опрошено '+_tursoAgo(new Date(savedAt).toISOString())); }
-      u.innerHTML = `<span style="color:#9aa">${esc(asof)} · учёт с задержкой ~24ч</span>${polled?(' <span style="color:#667">· '+esc(polled)+'</span>'):''}`;
-    }
+    else u.textContent = lastUpdated ? ('данные на '+lastUpdated) : '';
   }
 }
 
