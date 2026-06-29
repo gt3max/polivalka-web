@@ -1626,12 +1626,16 @@ function renderCloudinary(accounts, savedAt){
     </tr></thead><tbody>${body}</tbody></table></div>`;
   const u=document.getElementById('cloudinary-updated');
   if(u){
-    // savedAt — момент фетча (Date.now ms). Кэш на открытии покажет «N назад»,
-    // после live-обновления — «только что». Без savedAt (скелет) — пусто.
+    // Две РАЗНЫЕ свежести: (1) дата самих данных Cloudinary (lastUpdated = их поле
+    // last_updated, считается с задержкой ~24ч); (2) момент МОЕГО опроса API (savedAt).
     const anyPending=accounts.some(a=>a&&a._pending);
-    if(anyPending) u.textContent='загрузка…';
-    else if(savedAt){ const s=(Date.now()-savedAt)/1000; u.textContent = s<8 ? 'обновлено только что (live)' : ('обновлено '+_tursoAgo(new Date(savedAt).toISOString())+' · обновляется…'); }
-    else u.textContent='live';
+    if(anyPending){ u.textContent='загрузка…'; }
+    else {
+      const asof = lastUpdated ? ('данные Cloudinary на '+lastUpdated) : 'данные Cloudinary';
+      let polled='';
+      if(savedAt){ const s=(Date.now()-savedAt)/1000; polled = s<8 ? 'опрошено только что' : ('опрошено '+_tursoAgo(new Date(savedAt).toISOString())); }
+      u.innerHTML = `<span style="color:#9aa">${esc(asof)} · учёт с задержкой ~24ч</span>${polled?(' <span style="color:#667">· '+esc(polled)+'</span>'):''}`;
+    }
   }
 }
 
