@@ -1619,7 +1619,19 @@ function renderCloudinary(accounts, savedAt){
       ${td(_tursoBytes(st),'right','#9aa')}
     </tr>`;
   }).join('');
-  el.innerHTML=`<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:12px;color:#ddd">
+  // Алярм ≥90%: красный баннер над таблицей, если любой аккаунт упёрся в потолок.
+  const over=accounts.filter(a=>a&&!a._pending&&!a.error).map(a=>{
+    const cr=a.credits||{}; const lim=Number(cr.limit)||0; const used=Number(cr.usage)||0;
+    const p=(cr.used_percent!=null)?Number(cr.used_percent):(lim?100*used/lim:0);
+    return {acc:a.acc,email:a.email,p};
+  }).filter(x=>x.p>=90);
+  let banner='';
+  if(over.length){
+    const list=over.map(x=>`${esc(x.acc||'')} (${esc(x.email||'')}) — ${x.p.toFixed(0)}%`).join('; ');
+    banner=`<div style="margin-bottom:8px;padding:8px 11px;border-radius:8px;background:#3a1414;border:1px solid #f44;color:#ffb4b4;font-size:12px">
+      ⛔ <b>ВНИМАНИЕ: лимит кредитов ≥90%</b> — ${list}. Доставка может троттлиться/резаться. Прогрев/массовые фетчи запрещены, ждать сброса (1-го числа 04:00 UTC).</div>`;
+  }
+  el.innerHTML=`${banner}<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:12px;color:#ddd">
     <thead><tr style="color:#9aa">
       ${th('Account')}${th('Email')}${th('Cloud')}${th('Credits')}
       ${th('Bandwidth','right')}${th('Storage','right')}
