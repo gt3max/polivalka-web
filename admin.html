@@ -1484,7 +1484,7 @@ async function loadTursoUsage(){
     const res=await fetch(`${API.cloudBase}/admin/turso/usage`,{headers:API.getAuthHeaders()});
     if(!res.ok) throw new Error('HTTP '+res.status);
     const d=await res.json();
-    renderTursoCascade(d.orgs||[]);
+    renderTursoCascade(d);
   }catch(e){
     el.innerHTML='<div class="danger">Error: '+esc(e.message)+'</div>';
   }finally{
@@ -1492,36 +1492,53 @@ async function loadTursoUsage(){
   }
 }
 
-function renderTursoCascade(orgs){
+// Свежесть снэпшота объёмов = пульс фетчера/ротатора (GH ежечасно). Цвет по возрасту.
+function _tursoFresh(iso){
+  if(!iso) return {text:'нет снэпшота', color:'#f44'};
+  const s=Math.max(0,(Date.now()-new Date(iso).getTime())/1000);
+  const color = s<5400 ? '#5cd98a' : (s<10800 ? '#ff9800' : '#f44'); // <90м зел · <3ч оранж · иначе красн
+  return {text:_tursoAgo(iso), color};
+}
+
+// d = {orgs:[...], read_cap, rotation_threshold, pool_total, next_reset, snapshot_updated_at}
+// РОЛИ (L1/L2/L3 → аккаунт) — живые из env Lambda; ОБЪЁМЫ — кэш со снэпшота.
+function renderTursoCascade(d){
   const el=document.getElementById('turso-usage');
   if(!el) return;
-  // Fixed cascade order + expected org name per role (so missing orgs still show a row).
-  const KNOWN=[['L1 PROD','gt3max'],['L2 backup','maxplank'],['L3 backup','fred-pires']];
-  const byRole={}; orgs.forEach(o=>{ if(o.role) byRole[o.role]=o; });
-  let latest='';
-  const rows=KNOWN.map(([role,name])=>{
-    const o=byRole[role];
-    if(!o){
-      return `<div style="padding:8px 11px;background:#15151f;border:1px solid #2c2c44;border-radius:8px;display:flex;justify-content:space-between;align-items:center">
-        <span><b style="color:#9aa">${role}</b> · ${name}</span>
-        <span class="muted" style="font-size:10px">no API token — mint to enable</span></div>`;
-    }
-    if(o.updated_at && (!latest || o.updated_at>latest)) latest=o.updated_at;
-    const cap=o.read_cap||500000000;
-    const pct=100*(Number(o.rows_read)||0)/cap;
+  const orgs=(d&&d.orgs)||[];
+  const cap=(d&&d.read_cap)||500000000;
+  const thr=(d&&d.rotation_threshold)||400000000;
+  const thrPct=100*thr/cap;  // отметка порога ротации на баре (~80%)
+  const rows=orgs.map(o=>{
+    const read=Number(o.rows_read)||0;
+    const pct=100*read/cap;
     const blocked=o.blocked_reads||o.blocked_writes;
+    // цвет по ДВУМ порогам: <400M зел · 400–500M оранж (rotation-eligible) · ≥500M/blocked красн
+    const col = (read>=cap||blocked) ? '#f44' : (read>=thr ? '#ff9800' : '#5cd98a');
+    const eligible = read>=thr && read<cap && !blocked;
+    const w=Math.min(100,Math.max(0,pct));
+    const bar=`<div style="position:relative;height:7px;background:#222;border-radius:3px;overflow:hidden;margin-top:4px">
+      <div style="height:100%;width:${w}%;background:${col}"></div>
+      <div title="порог ротации ${_tursoNum(thr)}" style="position:absolute;top:0;left:${thrPct}%;width:1px;height:100%;background:#ffffffaa"></div>
+    </div>`;
+    const roleBad = o.missing_url ? ' <span style="color:#f44;font-size:10px">⛔ роль не задана в env</span>' : '';
+    const noUsage = (!o.has_usage && !o.missing_url) ? ' <span class="muted" style="font-size:10px">· нет снэпшота объёмов</span>' : '';
     return `<div style="padding:8px 11px;background:#15151f;border:1px solid #2c2c44;border-radius:8px">
       <div style="display:flex;justify-content:space-between;align-items:center">
-        <span><b style="color:#6fb0e8">${role}</b> · <span style="color:#dfe3ee;font-weight:600">${esc(o.org||name)}</span> ${blocked?'<span style="color:#f44;font-size:10px">⛔ blocked</span>':''}</span>
-        <span class="mono" style="font-size:12px;color:${_tursoColor(pct)}">${_tursoNum(o.rows_read)} / ${_tursoNum(cap)} <b>${pct.toFixed(1)}%</b></span>
+        <span><b style="color:#6fb0e8">${esc(o.role||'')}</b> · <span style="color:#dfe3ee;font-weight:600">${esc(o.org||'(unset)')}</span>${blocked?' <span style="color:#f44;font-size:10px">⛔ blocked</span>':''}${eligible?' <span style="color:#ff9800;font-size:10px">⟳ rotation-eligible</span>':''}${roleBad}</span>
+        <span class="mono" style="font-size:12px;color:${col}">${_tursoNum(read)} / ${_tursoNum(cap)} <b>${pct.toFixed(1)}%</b></span>
       </div>
-      ${_tursoBar(pct)}
-      <div style="font-size:10px;color:#9aa;margin-top:4px">✍ ${_tursoNum(o.rows_written)} / ${_tursoNum(o.write_cap||10000000)} (${(100*(Number(o.rows_written)||0)/(o.write_cap||10000000)).toFixed(1)}%) &nbsp;·&nbsp; 💾 ${_tursoBytes(o.storage_bytes)} &nbsp;·&nbsp; ${o.databases||0} db</div>
+      ${bar}
+      <div style="font-size:10px;color:#9aa;margin-top:4px">✍ ${_tursoNum(o.rows_written)} / ${_tursoNum(o.write_cap||10000000)} &nbsp;·&nbsp; 💾 ${_tursoBytes(o.storage_bytes)} &nbsp;·&nbsp; ${o.databases||0} db${noUsage}</div>
     </div>`;
   }).join('');
   el.innerHTML=`<div style="display:flex;flex-direction:column;gap:7px">${rows}</div>`;
+  // Подвал: роли — live, объёмы — снимок N назад (цвет по свежести) + дата сброса лимитов.
+  const fr=_tursoFresh(d&&d.snapshot_updated_at);
+  let resetTxt='';
+  if(d&&d.next_reset){ const r=new Date(d.next_reset); if(!isNaN(r)) resetTxt=` · <span style="color:#667">сброс ${r.toISOString().slice(0,10)} 04:00 UTC, все 3 разом (пул ${_tursoNum(d.pool_total||1.5e9)})</span>`; }
   const u=document.getElementById('turso-updated');
-  if(u) u.textContent = latest ? ('updated '+_tursoAgo(latest)) : 'no data yet — press Refresh';
+  if(u) u.innerHTML = `<span style="color:#9aa">роли — </span><b style="color:#5cd98a">live</b><span style="color:#9aa"> · объёмы — снимок </span><b style="color:${fr.color}">${fr.text}</b>${resetTxt}`;
 }
 
 // ===== Cloudinary accounts usage (live — Lambda опрашивает Cloudinary напрямую) =====
@@ -1538,26 +1555,35 @@ function renderCloudinarySkeleton(){
   // Блок присутствует сразу (финальный размер), числа «налью» после загрузки.
   renderCloudinary(CLOUD_ACCS.map(a=>({...a, _pending:true})));
 }
+const CLOUD_CACHE_KEY='cloudinary_usage_cache_v1';
 async function loadCloudinaryUsage(){
   const el=document.getElementById('cloudinary-usage');
   const btn=document.getElementById('cloudinary-refresh-btn');
-  // Первый заход: вместо «Loading…» сразу скелет (блок в финальном размере),
-  // числа нальются ниже. На ручной ↻ Reload — старые числа держим, не мигаем.
-  if(el && /Loading…/.test(el.innerHTML)) renderCloudinarySkeleton();
+  // Мгновенно показать ПОСЛЕДНИЕ известные цифры из localStorage (как остальные разделы
+  // админки), затем тихо обновить вживую. Первый заход без кэша — скелет.
+  let shownCache=false;
+  try{
+    const raw=localStorage.getItem(CLOUD_CACHE_KEY);
+    if(raw){ const c=JSON.parse(raw); if(c&&c.accounts&&c.accounts.length){ renderCloudinary(c.accounts, c.savedAt); shownCache=true; } }
+  }catch(e){}
+  if(!shownCache && el && /Loading…/.test(el.innerHTML)) renderCloudinarySkeleton();
   if(btn){ btn.disabled=true; btn.textContent='…'; }
   try{
     const res=await fetch(`${API.cloudBase}/admin/cloudinary/usage`,{headers:API.getAuthHeaders()});
     if(!res.ok) throw new Error('HTTP '+res.status);
     const d=await res.json();
-    renderCloudinary(d.accounts||[]);
+    const accts=d.accounts||[];
+    renderCloudinary(accts, Date.now());
+    try{ localStorage.setItem(CLOUD_CACHE_KEY, JSON.stringify({accounts:accts, savedAt:Date.now()})); }catch(e){}
   }catch(e){
-    if(el) el.innerHTML=`<div class="muted">Cloudinary usage unavailable: ${esc(String(e.message||e))}</div>`;
+    // Показывали кэш — оставляем его на экране (не затираем ошибкой). Иначе — сообщение.
+    if(!shownCache && el) el.innerHTML=`<div class="muted">Cloudinary usage unavailable: ${esc(String(e.message||e))}</div>`;
   }finally{
     if(btn){ btn.disabled=false; btn.textContent='↻ Reload'; }
   }
 }
 
-function renderCloudinary(accounts){
+function renderCloudinary(accounts, savedAt){
   const el=document.getElementById('cloudinary-usage');
   if(!el) return;
   let lastUpdated='';
@@ -1599,7 +1625,14 @@ function renderCloudinary(accounts){
       ${th('Bandwidth','right')}${th('Storage','right')}
     </tr></thead><tbody>${body}</tbody></table></div>`;
   const u=document.getElementById('cloudinary-updated');
-  if(u) u.textContent = lastUpdated ? ('Cloudinary updated '+lastUpdated+' · live') : 'live';
+  if(u){
+    // savedAt — момент фетча (Date.now ms). Кэш на открытии покажет «N назад»,
+    // после live-обновления — «только что». Без savedAt (скелет) — пусто.
+    const anyPending=accounts.some(a=>a&&a._pending);
+    if(anyPending) u.textContent='загрузка…';
+    else if(savedAt){ const s=(Date.now()-savedAt)/1000; u.textContent = s<8 ? 'обновлено только что (live)' : ('обновлено '+_tursoAgo(new Date(savedAt).toISOString())+' · обновляется…'); }
+    else u.textContent='live';
+  }
 }
 
 // Render users list with current whitelist data
@@ -2469,8 +2502,11 @@ if (checkAdminAccess()) {
   loadArchivedDevices();
   loadDeletedDevices();
   updateCostEstimate();
-  loadTursoUsage();      // Turso cascade — cached snapshot (local fetcher writes it)
+  loadTursoUsage();      // Turso cascade — роли live из env Lambda, объёмы из снэпшота
   loadCloudinaryUsage(); // Cloudinary accounts — live (Lambda опрашивает Cloudinary)
+  // Авто-рефреш Turso раз в 90с (дёшево: DDB scan + чтение env) — роли и метка свежести
+  // держатся актуальными без ручного Reload, дашборд можно держать открытым.
+  if(!window._tursoAutoRefresh) window._tursoAutoRefresh=setInterval(()=>{ try{loadTursoUsage();}catch(e){} }, 90000);
 }
 </script>
 </body></html>
