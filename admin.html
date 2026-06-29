@@ -1494,7 +1494,7 @@ async function loadTursoUsage(){
 
 // Свежесть снэпшота объёмов = пульс фетчера/ротатора (GH ежечасно). Цвет по возрасту.
 function _tursoFresh(iso){
-  if(!iso) return {text:'нет снэпшота', color:'#f44'};
+  if(!iso) return {text:'no snapshot', color:'#f44'};
   const s=Math.max(0,(Date.now()-new Date(iso).getTime())/1000);
   const color = s<5400 ? '#5cd98a' : (s<10800 ? '#ff9800' : '#f44'); // <90м зел · <3ч оранж · иначе красн
   return {text:_tursoAgo(iso), color};
@@ -1519,10 +1519,10 @@ function renderTursoCascade(d){
     const w=Math.min(100,Math.max(0,pct));
     const bar=`<div style="position:relative;height:7px;background:#222;border-radius:3px;overflow:hidden;margin-top:4px">
       <div style="height:100%;width:${w}%;background:${col}"></div>
-      <div title="порог ротации ${_tursoNum(thr)}" style="position:absolute;top:0;left:${thrPct}%;width:1px;height:100%;background:#ffffffaa"></div>
+      <div title="rotation threshold ${_tursoNum(thr)}" style="position:absolute;top:0;left:${thrPct}%;width:1px;height:100%;background:#ffffffaa"></div>
     </div>`;
-    const roleBad = o.missing_url ? ' <span style="color:#f44;font-size:10px">⛔ роль не задана в env</span>' : '';
-    const noUsage = (!o.has_usage && !o.missing_url) ? ' <span class="muted" style="font-size:10px">· нет снэпшота объёмов</span>' : '';
+    const roleBad = o.missing_url ? ' <span style="color:#f44;font-size:10px">⛔ role unset in env</span>' : '';
+    const noUsage = (!o.has_usage && !o.missing_url) ? ' <span class="muted" style="font-size:10px">· no usage snapshot</span>' : '';
     return `<div style="padding:8px 11px;background:#15151f;border:1px solid #2c2c44;border-radius:8px">
       <div style="display:flex;justify-content:space-between;align-items:center">
         <span><b style="color:#6fb0e8">${esc(o.role||'')}</b> · <span style="color:#dfe3ee;font-weight:600">${esc(o.org||'(unset)')}</span>${blocked?' <span style="color:#f44;font-size:10px">⛔ blocked</span>':''}${eligible?' <span style="color:#ff9800;font-size:10px">⟳ rotation-eligible</span>':''}${roleBad}</span>
@@ -1536,9 +1536,9 @@ function renderTursoCascade(d){
   // Подвал: роли — live, объёмы — снимок N назад (цвет по свежести) + дата сброса лимитов.
   const fr=_tursoFresh(d&&d.snapshot_updated_at);
   let resetTxt='';
-  if(d&&d.next_reset){ const r=new Date(d.next_reset); if(!isNaN(r)) resetTxt=` · <span style="color:#667">сброс ${r.toISOString().slice(0,10)} 04:00 UTC, все 3 разом (пул ${_tursoNum(d.pool_total||1.5e9)})</span>`; }
+  if(d&&d.next_reset){ const r=new Date(d.next_reset); if(!isNaN(r)) resetTxt=` · <span style="color:#667">resets ${r.toISOString().slice(0,10)} 04:00 UTC (all 3 together, pool ${_tursoNum(d.pool_total||1.5e9)})</span>`; }
   const u=document.getElementById('turso-updated');
-  if(u) u.innerHTML = `<span style="color:#9aa">роли — </span><b style="color:#5cd98a">live</b><span style="color:#9aa"> · объёмы — снимок </span><b style="color:${fr.color}">${fr.text}</b>${resetTxt}`;
+  if(u) u.innerHTML = `<span style="color:#9aa">roles — </span><b style="color:#5cd98a">live</b><span style="color:#9aa"> · usage snapshot </span><b style="color:${fr.color}">${fr.text}</b>${resetTxt}`;
 }
 
 // ===== Cloudinary accounts usage (live — Lambda опрашивает Cloudinary напрямую) =====
@@ -1628,8 +1628,8 @@ function renderCloudinary(accounts, savedAt){
   if(u){
     // Только дата самих данных Cloudinary (их поле last_updated).
     const anyPending=accounts.some(a=>a&&a._pending);
-    if(anyPending){ u.textContent='загрузка…'; }
-    else u.textContent = lastUpdated ? ('данные на '+lastUpdated) : '';
+    if(anyPending){ u.textContent='loading…'; }
+    else u.textContent = lastUpdated ? ('data as of '+lastUpdated) : '';
   }
 }
 
