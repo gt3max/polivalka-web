@@ -73,6 +73,16 @@
   <div id="turso-updated" style="font-size:10px;color:#667;margin-top:6px"></div>
 </div>
 
+<!-- Cloudinary photo-storage accounts — live кредиты/трафик по 5 аккаунтам -->
+<div class="card" id="cloudinary-card">
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+    <h3 style="margin:0">☁️ Cloudinary accounts</h3>
+    <button id="cloudinary-refresh-btn" onclick="loadCloudinaryUsage()" style="font-size:11px;padding:4px 10px">↻ Reload</button>
+  </div>
+  <div id="cloudinary-usage"><div class="muted">Loading…</div></div>
+  <div id="cloudinary-updated" style="font-size:10px;color:#667;margin-top:6px"></div>
+</div>
+
 <!-- Device Selector -->
 <div class="card">
 <h3>📱 Select Device</h3>
@@ -1514,6 +1524,60 @@ function renderTursoCascade(orgs){
   if(u) u.textContent = latest ? ('updated '+_tursoAgo(latest)) : 'no data yet — press Refresh';
 }
 
+// ===== Cloudinary accounts usage (live — Lambda опрашивает Cloudinary напрямую) =====
+// /usage — бесплатный read-only account-info вызов (bandwidth НЕ жжёт), как finance balances.
+async function loadCloudinaryUsage(){
+  const el=document.getElementById('cloudinary-usage');
+  const btn=document.getElementById('cloudinary-refresh-btn');
+  if(btn){ btn.disabled=true; btn.textContent='…'; }
+  try{
+    const res=await fetch(`${API.cloudBase}/admin/cloudinary/usage`,{headers:API.getAuthHeaders()});
+    if(!res.ok) throw new Error('HTTP '+res.status);
+    const d=await res.json();
+    renderCloudinary(d.accounts||[]);
+  }catch(e){
+    if(el) el.innerHTML=`<div class="muted">Cloudinary usage unavailable: ${esc(String(e.message||e))}</div>`;
+  }finally{
+    if(btn){ btn.disabled=false; btn.textContent='↻ Reload'; }
+  }
+}
+
+function renderCloudinary(accounts){
+  const el=document.getElementById('cloudinary-usage');
+  if(!el) return;
+  let lastUpdated='';
+  const th=(t,align)=>`<th style="padding:6px 8px;font-weight:600;text-align:${align||'left'};border-bottom:2px solid #444;white-space:nowrap">${t}</th>`;
+  const td=(v,align,color)=>`<td style="padding:6px 8px;text-align:${align||'left'};border-bottom:1px solid #26263a;white-space:nowrap;${color?'color:'+color:''}">${v}</td>`;
+  const body=accounts.map(a=>{
+    if(a.error){
+      return `<tr><td style="padding:6px 8px;border-bottom:1px solid #26263a"><b style="color:#6fb0e8">${esc(a.acc||'')}</b></td>
+        <td style="padding:6px 8px;border-bottom:1px solid #26263a">${esc(a.email||'')}</td>
+        <td colspan="4" class="muted" style="padding:6px 8px;border-bottom:1px solid #26263a;font-size:10px">${esc(a.error)}</td></tr>`;
+    }
+    if(a.last_updated && (!lastUpdated || a.last_updated>lastUpdated)) lastUpdated=a.last_updated;
+    const cr=a.credits||{};
+    const used=Number(cr.usage)||0, lim=Number(cr.limit)||0;
+    const pct = (cr.used_percent!=null) ? Number(cr.used_percent) : (lim?100*used/lim:0);
+    const bw=(a.bandwidth||{}).usage, st=(a.storage||{}).usage;
+    const credCell=`<span class="mono" style="color:${_tursoColor(pct)}">${used.toFixed(2)} / ${lim||'?'} <b>${pct.toFixed(1)}%</b></span>${pct>=100?' ⛔':''}${_tursoBar(pct)}`;
+    return `<tr>
+      ${td(`<b style="color:#6fb0e8">${esc(a.acc||'')}</b>`)}
+      ${td(`<span style="color:#dfe3ee">${esc(a.email||'')}</span>`)}
+      ${td(`<span class="muted" style="font-size:10px">${esc(a.cloud||'')}</span>`)}
+      ${td(credCell,'left')}
+      ${td(_tursoBytes(bw),'right','#9aa')}
+      ${td(_tursoBytes(st),'right','#9aa')}
+    </tr>`;
+  }).join('');
+  el.innerHTML=`<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:12px;color:#ddd">
+    <thead><tr style="color:#9aa">
+      ${th('Account')}${th('Email')}${th('Cloud')}${th('Credits')}
+      ${th('Bandwidth','right')}${th('Storage','right')}
+    </tr></thead><tbody>${body}</tbody></table></div>`;
+  const u=document.getElementById('cloudinary-updated');
+  if(u) u.textContent = lastUpdated ? ('Cloudinary updated '+lastUpdated+' · live') : 'live';
+}
+
 // Render users list with current whitelist data
 function renderUsersList() {
   const container = document.getElementById('users-list');
@@ -2382,6 +2446,7 @@ if (checkAdminAccess()) {
   loadDeletedDevices();
   updateCostEstimate();
   loadTursoUsage();      // Turso cascade — cached snapshot (local fetcher writes it)
+  loadCloudinaryUsage(); // Cloudinary accounts — live (Lambda опрашивает Cloudinary)
 }
 </script>
 </body></html>
