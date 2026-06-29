@@ -1526,9 +1526,24 @@ function renderTursoCascade(orgs){
 
 // ===== Cloudinary accounts usage (live — Lambda опрашивает Cloudinary напрямую) =====
 // /usage — бесплатный read-only account-info вызов (bandwidth НЕ жжёт), как finance balances.
+// Метки 5 аккаунтов (не секреты) — чтобы блок рисовался сразу скелетом, до live-цифр.
+const CLOUD_ACCS=[
+  {acc:'acc1',email:'mrmaximshurigin@gmail.com',cloud:'dmvvh57hg'},
+  {acc:'acc2',email:'fred.pires106@dontsp.am',cloud:'doqqrf8z7'},
+  {acc:'acc3',email:'electricray862@carpecool.fr',cloud:'dfphrhkzr'},
+  {acc:'acc4',email:'seahorse9527@dontsp.am',cloud:'dx71pfj2f'},
+  {acc:'acc5',email:'gt3max.work@gmail.com',cloud:'df5tnivkd'},
+];
+function renderCloudinarySkeleton(){
+  // Блок присутствует сразу (финальный размер), числа «налью» после загрузки.
+  renderCloudinary(CLOUD_ACCS.map(a=>({...a, _pending:true})));
+}
 async function loadCloudinaryUsage(){
   const el=document.getElementById('cloudinary-usage');
   const btn=document.getElementById('cloudinary-refresh-btn');
+  // Первый заход: вместо «Loading…» сразу скелет (блок в финальном размере),
+  // числа нальются ниже. На ручной ↻ Reload — старые числа держим, не мигаем.
+  if(el && /Loading…/.test(el.innerHTML)) renderCloudinarySkeleton();
   if(btn){ btn.disabled=true; btn.textContent='…'; }
   try{
     const res=await fetch(`${API.cloudBase}/admin/cloudinary/usage`,{headers:API.getAuthHeaders()});
@@ -1553,6 +1568,15 @@ function renderCloudinary(accounts){
       return `<tr><td style="padding:6px 8px;border-bottom:1px solid #26263a"><b style="color:#6fb0e8">${esc(a.acc||'')}</b></td>
         <td style="padding:6px 8px;border-bottom:1px solid #26263a">${esc(a.email||'')}</td>
         <td colspan="4" class="muted" style="padding:6px 8px;border-bottom:1px solid #26263a;font-size:10px">${esc(a.error)}</td></tr>`;
+    }
+    if(a._pending){
+      const dot='<span class="muted">…</span>';
+      return `<tr>
+        ${td(`<b style="color:#6fb0e8">${esc(a.acc||'')}</b>`)}
+        ${td(`<span style="color:#dfe3ee">${esc(a.email||'')}</span>`)}
+        ${td(`<span class="muted" style="font-size:10px">${esc(a.cloud||'')}</span>`)}
+        ${td(dot,'left')}${td(dot,'right')}${td(dot,'right')}
+      </tr>`;
     }
     if(a.last_updated && (!lastUpdated || a.last_updated>lastUpdated)) lastUpdated=a.last_updated;
     const cr=a.credits||{};
