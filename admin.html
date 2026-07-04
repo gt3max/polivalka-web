@@ -1305,11 +1305,13 @@ let allDevicesData = [];
 // App-axis: tier + monthly usage per user, keyed by email (from /admin/users/stats)
 let statsMap = {};
 // Limits — SYNC with TIER_POLICY (plantapp-cloud/shared/user_storage.py). -1 = ∞.
-// Premium НЕ полностью ∞: doctor 20/день (doctor_day), Plant.id 5/мес (plantid_month). identify/plants ∞.
+// `doctor`/`identify` = MONTHLY caps; `doctorDay`/`identifyDay` = DAILY caps.
+// Free: doctor 1/день · 3/мес; identify 5/день · 15/мес; plants 5.
+// Premium: doctor 20/день (не ∞); Plant.id 5/мес; identify/plants ∞.
 const TIER_LIMITS = {
-  free:    { doctor: 3,  identify: 15, plants: 5,  plantid: 0,  doctorDaily: false },
-  premium: { doctor: 20, identify: -1, plants: -1, plantid: 5,  doctorDaily: true  },
-  admin:   { doctor: -1, identify: -1, plants: -1, plantid: -1, doctorDaily: false },
+  free:    { doctor: 3,  doctorDay: 1,  identify: 15, identifyDay: 5,  plants: 5,  plantid: 0,  doctorDaily: false },
+  premium: { doctor: 20, doctorDay: 20, identify: -1, identifyDay: -1, plants: -1, plantid: 5,  doctorDaily: true  },
+  admin:   { doctor: -1, doctorDay: -1, identify: -1, identifyDay: -1, plants: -1, plantid: -1, doctorDaily: false },
 };
 function fmtUsage(n, lim) { return (lim < 0 ? `${n}/∞` : `${n}/${lim}`); }
 // Metric icons as plain emoji (always render — Material Icons font was unreliable).
