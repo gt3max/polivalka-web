@@ -1525,16 +1525,22 @@ function renderTursoCascade(d){
     </div>`;
     const roleBad = o.missing_url ? ' <span style="color:#f44;font-size:10px">⛔ role unset in env</span>' : '';
     const noUsage = (!o.has_usage && !o.missing_url) ? ' <span class="muted" style="font-size:10px">· no usage snapshot</span>' : '';
-    return `<div style="padding:8px 11px;background:#15151f;border:1px solid #2c2c44;border-radius:8px">
+    const benchedTag = o.benched ? ' <span style="color:#c98; font-size:10px">💤 benched (no cascade role)</span>' : '';
+    return `<div style="padding:8px 11px;background:#15151f;border:1px solid ${o.benched?'#3a3320':'#2c2c44'};border-radius:8px;${o.benched?'opacity:.72':''}">
       <div style="display:flex;justify-content:space-between;align-items:center">
-        <span><b style="color:#6fb0e8">${esc(o.role||'')}</b> · <span style="color:#dfe3ee;font-weight:600">${esc(o.org||'(unset)')}</span>${blocked?' <span style="color:#f44;font-size:10px">⛔ blocked</span>':''}${eligible?' <span style="color:#ff9800;font-size:10px">⟳ rotation-eligible</span>':''}${roleBad}</span>
+        <span><b style="color:#6fb0e8">${esc(o.role||'')}</b> · <span style="color:#dfe3ee;font-weight:600">${esc(o.org||'(unset)')}</span>${blocked?' <span style="color:#f44;font-size:10px">⛔ blocked</span>':''}${eligible?' <span style="color:#ff9800;font-size:10px">⟳ rotation-eligible</span>':''}${roleBad}${benchedTag}</span>
         <span class="mono" style="font-size:12px;color:${col}">${_tursoNum(read)} / ${_tursoNum(cap)} <b>${pct.toFixed(1)}%</b></span>
       </div>
       ${bar}
       <div style="font-size:10px;color:#9aa;margin-top:4px">✍ ${_tursoNum(o.rows_written)} / ${_tursoNum(o.write_cap||10000000)} &nbsp;·&nbsp; 💾 ${_tursoBytes(o.storage_bytes)} &nbsp;·&nbsp; ${o.databases||0} db${noUsage}</div>
     </div>`;
   }).join('');
-  el.innerHTML=`<div style="display:flex;flex-direction:column;gap:7px">${rows}</div>`;
+  // 2026-07-06: честный баннер деградации — два role-слота на одной орге = нет
+  // независимого резерва (напр. L2 и L3 оба fred-pires, пока maxplank заблокирован).
+  const degradedBanner = (d&&d.degraded_redundancy)
+    ? `<div style="padding:8px 11px;background:#3a1414;border:1px solid #f44;border-radius:8px;color:#ffb3b3;font-size:12px;font-weight:600">⚠ L2/L3 на одном аккаунте — независимой избыточности нет. Резерв деградировал до 2 орг.</div>`
+    : '';
+  el.innerHTML=`<div style="display:flex;flex-direction:column;gap:7px">${degradedBanner}${rows}</div>`;
   // Подвал: роли — live, объёмы — снимок N назад (цвет по свежести) + дата сброса лимитов.
   const fr=_tursoFresh(d&&d.snapshot_updated_at);
   let resetTxt='';
