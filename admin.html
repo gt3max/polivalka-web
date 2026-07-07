@@ -1359,9 +1359,15 @@ async function loadUsers(light) {
         statsMap = {};
         (sdata.users || []).forEach(r => {
           if (r && r.email) {
-            // light mode omits plants_count (device scan skipped) — keep last known value
-            if ((r.plants_count === undefined || r.plants_count === null) && prev[r.email]) {
-              r.plants_count = prev[r.email].plants_count;
+            // light mode omits heavy fields (device scan + ledger query skipped) —
+            // keep last known values so the badges don't blank on auto-refresh.
+            const p = prev[r.email];
+            if ((r.plants_count === undefined || r.plants_count === null) && p) {
+              r.plants_count = p.plants_count;
+            }
+            if ((r.spent_usd === undefined || r.spent_usd === null) && p) {
+              r.spent_usd = p.spent_usd;
+              r.balance_usd = p.balance_usd;
             }
             statsMap[r.email] = r;
           }
@@ -1785,7 +1791,13 @@ function renderUsersList() {
     const usageTxt = isAppUser
       ? ` <span style="color:#999;font-size:10px;white-space:nowrap">${uslot(mi('local_hospital'), docTxt)}${uslot(mi('camera_alt'), fmtUsage(usedId, lim.identify))}${uslot(mi('eco'), fmtUsage(usedPlants, lim.plants))}</span>`
       : (isAdmin ? '' : ` <span style="color:#666;font-size:11px">—</span>`);
-    const appBadge = `${sourcePill}${rolePill}${usageTxt}`;
+    // Lifetime spend badge — visible for EVERY user right in the collapsed row
+    // (не только при открытии Finance). Source: ledger debit (same as Finance panel).
+    const spentVal = (typeof st.spent_usd === 'number') ? st.spent_usd : null;
+    const spentBadge = (spentVal !== null && spentVal > 0)
+      ? ` <span title="Total spent — lifetime (all paid AI calls: Haiku, Plant.id, …)" style="background:#3a1f1f;color:#f2a3a3;padding:2px 9px;border-radius:11px;font-weight:600;font-size:10px;white-space:nowrap">💰 $${spentVal.toFixed(4)}</span>`
+      : '';
+    const appBadge = `${sourcePill}${rolePill}${usageTxt}${spentBadge}`;
     // Expanded-panel quota line: only for app users (web users have no app usage yet; admins none).
     const pidLine = (lim.plantid > 0) ? ` &nbsp; <span title="Plant.id — this month">${ICONS.plantid} <b>${fmtUsage(usedPid, lim.plantid)}/mo</b></span>` : '';
     const quotaLine = !isAppUser
