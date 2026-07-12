@@ -83,6 +83,15 @@
   <div id="cloudinary-updated" style="font-size:10px;color:#667;margin-top:6px"></div>
 </div>
 
+<!-- Library growth — что просят и нет (missing_species) + черновые provisional-карточки -->
+<div class="card" id="catalog-growth-card">
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+    <h3 style="margin:0">📚 Library growth</h3>
+    <button id="catalog-growth-refresh-btn" onclick="loadCatalogGrowth()" style="font-size:11px;padding:4px 10px">↻ Reload</button>
+  </div>
+  <div id="catalog-growth"><div class="muted">Loading…</div></div>
+</div>
+
 <!-- Device Selector -->
 <div class="card">
 <h3>📱 Select Device</h3>
@@ -1597,6 +1606,33 @@ async function loadCloudinaryUsage(){
   }
 }
 
+// Library growth — demand queue (missing_species) + provisional cards. Read-only window.
+async function loadCatalogGrowth(){
+  const el=document.getElementById('catalog-growth');
+  const btn=document.getElementById('catalog-growth-refresh-btn');
+  if(btn){ btn.disabled=true; btn.textContent='…'; }
+  try{
+    const res=await fetch(`${API.cloudBase}/admin/catalog-growth`,{headers:API.getAuthHeaders()});
+    if(!res.ok) throw new Error('HTTP '+res.status);
+    renderCatalogGrowth(await res.json());
+  }catch(e){
+    if(el) el.innerHTML=`<div class="muted">Catalog growth unavailable: ${esc(String(e.message||e))}</div>`;
+  }finally{ if(btn){ btn.disabled=false; btn.textContent='↻ Reload'; } }
+}
+function renderCatalogGrowth(d){
+  const el=document.getElementById('catalog-growth');
+  if(!el) return;
+  const q=d.demand||[], pr=d.provisional||[];
+  const td=(v,al,c)=>`<td style="padding:4px 8px;text-align:${al||'left'};border-bottom:1px solid #26263a;white-space:nowrap;${c?'color:'+c:''}">${v}</td>`;
+  const tbl=(rows)=>`<table style="width:100%;border-collapse:collapse;font-size:12px;color:#ddd">${rows}</table>`;
+  const demand = q.length ? tbl(q.slice(0,25).map(r=>`<tr>${td(`<b style="color:#6fb0e8">${esc(r.scientific||'')}</b>`)}${td(esc(r.common_name||''),'left','#9aa')}${td('×'+(r.req_count||1),'right')}</tr>`).join(''))
+    : `<div class="muted" style="font-size:11px">— пусто (все запрошенные виды у нас есть)</div>`;
+  const prov = pr.length ? tbl(pr.slice(0,25).map(r=>`<tr>${td(`<b style="color:#6fb0e8">${esc(r.scientific||'')}</b>`)}${td(esc(r.plant_id||''),'left','#9aa')}</tr>`).join(''))
+    : `<div class="muted" style="font-size:11px">— нет черновых карточек</div>`;
+  el.innerHTML=`<div class="section-header" style="margin-bottom:6px">Спрос: просят, но нет <span style="color:#9aa">(${q.length})</span></div>${demand}`
+    +`<div class="section-header" style="margin:12px 0 6px">Черновики: доработать <span style="color:#9aa">(${pr.length})</span></div>${prov}`;
+}
+
 function renderCloudinary(accounts, savedAt){
   const el=document.getElementById('cloudinary-usage');
   if(!el) return;
@@ -2522,6 +2558,7 @@ if (checkAdminAccess()) {
   updateCostEstimate();
   loadTursoUsage();      // Turso cascade — роли live из env Lambda, объёмы из снэпшота
   loadCloudinaryUsage(); // Cloudinary accounts — live (Lambda опрашивает Cloudinary)
+  loadCatalogGrowth();   // Library growth — спрос (missing_species) + черновые provisional-карточки
   // Авто-рефреш Turso раз в 90с (дёшево: DDB scan + чтение env) — роли и метка свежести
   // держатся актуальными без ручного Reload, дашборд можно держать открытым.
   if(!window._tursoAutoRefresh) window._tursoAutoRefresh=setInterval(()=>{ try{loadTursoUsage();}catch(e){} }, 90000);
