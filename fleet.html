@@ -932,6 +932,7 @@ function createExpandableRow(device, isOnline, hasWarnings, isCritical) {
         ${automationControl}
         <span class="device-status" style="background:${stateBg};color:${stateColor}">${stateText}</span>
         <span class="device-status ${isOnline ? 'online' : 'offline'}">${isOnline ? '● Online' : '○ Offline'}</span>
+        <span class="muted" style="font-size:10px;opacity:0.7" title="Last data received from device">${timeAgo(device.last_update)}</span>
         <span class="ota-badge" id="ota-badge-${device.device_id}"></span>
       </div>
     </div>
@@ -1019,7 +1020,7 @@ function switchView(view) {
 
     // Use device.online from API (Lambda calculates with 90 min threshold)
     const isOnline = device.online === true;
-    const hasWarnings = device.warnings.length > 0 || (device.battery_pct !== null && device.battery_pct < 10) || (device.moisture_pct !== null && device.moisture_pct < 20);
+    const hasWarnings = device.warnings.length > 0 || (device.battery_pct !== null && device.battery_pct < 10) || (device.moisture_pct !== null && device.moisture_pct < 20) || timerWetWarn(device);
     if (status === 'online' && !isOnline) return false;
     if (status === 'offline' && isOnline) return false;
     if (status === 'warning' && !hasWarnings) return false;
@@ -1029,6 +1030,15 @@ function switchView(view) {
   }));
 }
 
+// Timer mode + wet soil: the device is watering by schedule while a sensor reads
+// high moisture (informational — the device still waters; the firmware raises the
+// on-device warning). J6 = moisture_pct, J7 = sensor2_percent (either counts).
+function timerWetWarn(d) {
+  return d.mode === 'timer' && (
+    (d.moisture_pct != null && d.moisture_pct >= 80) ||
+    (d.sensor2_percent != null && d.sensor2_percent >= 80));
+}
+
 function createDeviceCard(device) {
   const div = document.createElement('div');
 
@@ -1036,7 +1046,7 @@ function createDeviceCard(device) {
   // Fallback to local calculation if device.online is missing (shouldn't happen)
   const isOnline = device.online !== undefined ? device.online :
                    ((Date.now() - (device.last_update < 10000000000 ? device.last_update * 1000 : device.last_update)) < 90 * 60 * 1000);
-  const hasWarnings = device.warnings.length > 0;
+  const hasWarnings = device.warnings.length > 0 || timerWetWarn(device);
   const isCritical = (device.battery_pct !== null && device.battery_pct < 10) || (device.moisture_pct !== null && device.moisture_pct < 15);
 
   let cardClass = 'device-card';
@@ -1221,7 +1231,7 @@ function filterDevices() {
 
     // Status filter - use API's online flag (consistent with device cards)
     const isOnline = device.online === true;
-    const hasWarnings = device.warnings.length > 0 || (device.battery_pct !== null && device.battery_pct < 10) || (device.moisture_pct !== null && device.moisture_pct < 20);
+    const hasWarnings = device.warnings.length > 0 || (device.battery_pct !== null && device.battery_pct < 10) || (device.moisture_pct !== null && device.moisture_pct < 20) || timerWetWarn(device);
     if (status === 'online' && !isOnline) return false;
     if (status === 'offline' && isOnline) return false;
     if (status === 'warning' && !hasWarnings) return false;
