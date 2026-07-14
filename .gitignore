@@ -6,3 +6,8 @@ lambda/*.zip
 *.bak
 .env
 *.env
+
+# personal screenshots — не в git (PII), хранить локально
+documentation/*.jpg
+documentation/*.png
+documentation/Screenshot*
