@@ -1626,11 +1626,11 @@ function renderCatalogGrowth(d){
   const td=(v,al,c)=>`<td style="padding:4px 8px;text-align:${al||'left'};border-bottom:1px solid #26263a;white-space:nowrap;${c?'color:'+c:''}">${v}</td>`;
   const tbl=(rows)=>`<table style="width:100%;border-collapse:collapse;font-size:12px;color:#ddd">${rows}</table>`;
   const demand = q.length ? tbl(q.slice(0,25).map(r=>`<tr>${td(`<b style="color:#6fb0e8">${esc(r.scientific||'')}</b>`)}${td(esc(r.common_name||''),'left','#9aa')}${td('×'+(r.req_count||1),'right')}</tr>`).join(''))
-    : `<div class="muted" style="font-size:11px">— пусто (все запрошенные виды у нас есть)</div>`;
+    : `<div class="muted" style="font-size:11px">None — every requested species is already in the library.</div>`;
   const prov = pr.length ? tbl(pr.slice(0,25).map(r=>`<tr>${td(`<b style="color:#6fb0e8">${esc(r.scientific||'')}</b>`)}${td(esc(r.plant_id||''),'left','#9aa')}</tr>`).join(''))
-    : `<div class="muted" style="font-size:11px">— нет черновых карточек</div>`;
-  el.innerHTML=`<div class="section-header" style="margin-bottom:6px">Спрос: просят, но нет <span style="color:#9aa">(${q.length})</span></div>${demand}`
-    +`<div class="section-header" style="margin:12px 0 6px">Черновики: доработать <span style="color:#9aa">(${pr.length})</span></div>${prov}`;
+    : `<div class="muted" style="font-size:11px">None — no draft cards pending.</div>`;
+  el.innerHTML=`<div class="section-header" style="margin-bottom:6px">Requested — not yet in library <span style="color:#9aa">(${q.length})</span></div>${demand}`
+    +`<div class="section-header" style="margin:12px 0 6px">Draft cards — to complete <span style="color:#9aa">(${pr.length})</span></div>${prov}`;
 }
 
 function renderCloudinary(accounts, savedAt){
