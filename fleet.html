@@ -968,7 +968,7 @@ function createExpandableRow(device, isOnline, hasWarnings, isCritical) {
         <button onclick="event.stopPropagation(); refreshSensor('${device.device_id}')" class="btn-secondary">🔄 Refresh</button>
         <button onclick="event.stopPropagation(); startPump('${device.device_id}', event)" class="btn-primary btn-water-toggle">💧 Water Now</button>
         <button onclick="event.stopPropagation(); stopPump('${device.device_id}', event)" class="btn-danger">⛔ Stop</button>
-        <button onclick="event.stopPropagation(); viewDevice('${device.device_id}')">🏠 Home</button>
+        <button onclick="event.stopPropagation(); viewDevice('${device.device_id}')">🏠 Device</button>
         <button onclick="event.stopPropagation(); viewTrends('${device.device_id}')">📊 Trends</button>
         <button onclick="event.stopPropagation(); deviceUpdate('${device.device_id}')">📦 OTA Update</button>
         <button onclick="event.stopPropagation(); viewLogs('${device.device_id}')">📝 Logs</button>
@@ -1168,7 +1168,7 @@ function createDeviceCard(device) {
       <button onclick="refreshSensor('${device.device_id}')" class="btn-primary">🔄 Refresh</button>
       <button onclick="startPump('${device.device_id}', event)" class="btn-primary btn-water-toggle">💧 Water Now</button>
       <button onclick="stopPump('${device.device_id}', event)" class="btn-danger">⛔ Stop</button>
-      <button onclick="viewDevice('${device.device_id}')">🏠 Home</button>
+      <button onclick="viewDevice('${device.device_id}')">🏠 Device</button>
       <button onclick="viewTrends('${device.device_id}')">📊 Trends</button>
       <button onclick="deviceUpdate('${device.device_id}')">📦 OTA Update</button>
       <button onclick="viewLogs('${device.device_id}')">📝 Logs</button>
