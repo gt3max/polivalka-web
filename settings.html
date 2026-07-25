@@ -265,13 +265,26 @@ async function softReset(){
 async function loadTimezone(){
   try {
     const t = await API.get('/time/timezone');
-    if (t.timezone) {
-      document.getElementById('timezone-select').value = t.timezone;
-      // Find timezone name from dropdown
-      const selectEl = document.getElementById('timezone-select');
-      const selectedOption = selectEl.options[selectEl.selectedIndex];
-      const tzName = selectedOption ? selectedOption.text : t.timezone;
-      document.getElementById('timezone-status').textContent = 'Current: ' + tzName;
+    const selectEl = document.getElementById('timezone-select');
+    const statusEl = document.getElementById('timezone-status');
+    if (isTimezoneUnset(t.timezone)) {
+      // Never set → device is on the firmware default (CET/CEST), which is wrong
+      // outside Central Europe: Timer fires at the wrong hour and the pump can run
+      // at night. Pre-select the browser's zone and prompt the user to confirm.
+      const guess = browserPosixTimezone();
+      if (guess) selectEl.value = guess;
+      const opt = selectEl.options[selectEl.selectedIndex];
+      const guessName = opt ? opt.text : '';
+      statusEl.innerHTML = '⚠️ <b>Timezone not set</b> — this device may run on the wrong hour (e.g. water at night). ' +
+        (guess ? 'Detected <b>' + guessName + '</b> — press <b>Save Timezone</b> to confirm.'
+               : 'Please pick your timezone and Save.');
+      statusEl.style.color = '#e65100';
+    } else {
+      selectEl.value = t.timezone;
+      const opt = selectEl.options[selectEl.selectedIndex];
+      const tzName = opt ? opt.text : t.timezone;
+      statusEl.textContent = 'Current: ' + tzName;
+      statusEl.style.color = '';
     }
   } catch(e) {
     console.error('Load timezone failed:', e);

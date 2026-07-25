@@ -2292,6 +2292,7 @@ async function claimDevice() {
       if (response.success) {
         successEl.textContent = `✅ Device ${deviceId} claimed (Admin)`;
         successEl.style.display = 'block';
+        setDeviceTimezoneFromBrowser(deviceId);  // Phase A: give the new device its real timezone
         setTimeout(() => { closeClaimModal(); loadDevices(); }, 1500);
       } else {
         throw new Error(response.message || 'Claim failed');
@@ -2319,6 +2320,7 @@ async function claimDevice() {
       if (response.success) {
         successEl.textContent = `✅ Device ${deviceId} is now yours!`;
         successEl.style.display = 'block';
+        setDeviceTimezoneFromBrowser(deviceId);  // Phase A: give the new device its real timezone
         setTimeout(() => { closeClaimModal(); loadDevices(); showToast(`🎉 Device ${deviceId} claimed!`, 'success'); }, 1500);
       } else {
         throw new Error(response.message || 'Claim failed');

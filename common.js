@@ -200,6 +200,93 @@ function showToast(message, type = 'info') {
 
 // ============ Utilities ============
 /**
+ * ===== Timezone helpers (correct per-device local time) =====
+ * The device runs on POSIX TZ strings; the browser reports IANA. This maps the
+ * browser's IANA zone to the POSIX strings used by the settings.html dropdown, so we
+ * can auto-set a device's timezone at claim and prompt the user when it's unset.
+ * Without this, every device stays on the firmware default CET/CEST regardless of
+ * where it physically is (Timer fires at the wrong hour, pump can run at night).
+ */
+const IANA_TO_POSIX = {
+  'Europe/London':'GMT0BST,M3.5.0,M10.5.0','Europe/Dublin':'GMT0BST,M3.5.0,M10.5.0',
+  'Europe/Lisbon':'WET0WEST,M3.5.0,M10.5.0',
+  'Europe/Berlin':'CET-1CEST,M3.5.0,M10.5.0/3','Europe/Paris':'CET-1CEST,M3.5.0,M10.5.0/3',
+  'Europe/Madrid':'CET-1CEST,M3.5.0,M10.5.0/3','Europe/Rome':'CET-1CEST,M3.5.0,M10.5.0/3',
+  'Europe/Amsterdam':'CET-1CEST,M3.5.0,M10.5.0/3','Europe/Brussels':'CET-1CEST,M3.5.0,M10.5.0/3',
+  'Europe/Vienna':'CET-1CEST,M3.5.0,M10.5.0/3','Europe/Prague':'CET-1CEST,M3.5.0,M10.5.0/3',
+  'Europe/Warsaw':'CET-1CEST,M3.5.0,M10.5.0/3','Europe/Zurich':'CET-1CEST,M3.5.0,M10.5.0/3',
+  'Europe/Stockholm':'CET-1CEST,M3.5.0,M10.5.0/3','Europe/Oslo':'CET-1CEST,M3.5.0,M10.5.0/3',
+  'Europe/Copenhagen':'CET-1CEST,M3.5.0,M10.5.0/3','Europe/Budapest':'CET-1CEST,M3.5.0,M10.5.0/3',
+  'Europe/Kiev':'EET-2EEST,M3.5.0,M10.5.0/3','Europe/Kyiv':'EET-2EEST,M3.5.0,M10.5.0/3',
+  'Europe/Athens':'EET-2EEST,M3.5.0,M10.5.0/3','Europe/Bucharest':'EET-2EEST,M3.5.0,M10.5.0/3',
+  'Europe/Helsinki':'EET-2EEST,M3.5.0,M10.5.0/3','Europe/Riga':'EET-2EEST,M3.5.0,M10.5.0/3',
+  'Europe/Moscow':'MSK-3','Europe/Istanbul':'<TRT>-3',
+  'America/Anchorage':'AKST9AKDT,M3.2.0,M11.1.0',
+  'America/Los_Angeles':'PST8PDT,M3.2.0,M11.1.0','America/Vancouver':'PST8PDT,M3.2.0,M11.1.0',
+  'America/Tijuana':'PST8PDT,M3.2.0,M11.1.0',
+  'America/Denver':'MST7MDT,M3.2.0,M11.1.0','America/Edmonton':'MST7MDT,M3.2.0,M11.1.0',
+  'America/Phoenix':'MST7',
+  'America/Chicago':'CST6CDT,M3.2.0,M11.1.0','America/Mexico_City':'CST6CDT,M3.2.0,M11.1.0',
+  'America/Winnipeg':'CST6CDT,M3.2.0,M11.1.0',
+  'America/New_York':'EST5EDT,M3.2.0,M11.1.0','America/Toronto':'EST5EDT,M3.2.0,M11.1.0',
+  'America/Puerto_Rico':'AST4','America/St_Johns':'NST3:30NDT,M3.2.0,M11.1.0',
+  'Pacific/Honolulu':'HST10',
+  'America/Sao_Paulo':'<-03>3','America/Argentina/Buenos_Aires':'<-03>3','America/Montevideo':'<-03>3',
+  'America/Caracas':'<-04>4','America/Lima':'<-05>5','America/Bogota':'<-05>5',
+  'America/Santiago':'<CLT>4<CLST>,M9.1.6/24,M4.1.6/24',
+  'Asia/Tokyo':'JST-9','Asia/Seoul':'KST-9',
+  'Asia/Shanghai':'CST-8','Asia/Hong_Kong':'CST-8','Asia/Taipei':'CST-8',
+  'Asia/Bangkok':'<+07>-7','Asia/Jakarta':'<+07>-7','Asia/Ho_Chi_Minh':'<+07>-7',
+  'Asia/Kathmandu':'<+0545>-5:45',
+  'Asia/Kolkata':'IST-5:30','Asia/Colombo':'IST-5:30',
+  'Asia/Dubai':'<+04>-4','Asia/Riyadh':'<+03>-3','Asia/Kuwait':'<+03>-3','Asia/Qatar':'<+03>-3',
+  'Asia/Jerusalem':'IST-2IDT,M3.4.4/26,M10.5.0',
+  'Asia/Almaty':'<+06>-6','Asia/Karachi':'<+05>-5','Asia/Kabul':'<+045>-4:30',
+  'Africa/Cairo':'EET-2','Africa/Johannesburg':'CAT-2','Africa/Nairobi':'EAT-3','Africa/Lagos':'WAT-1',
+  'Australia/Sydney':'AEST-10AEDT,M10.1.0,M4.1.0','Australia/Melbourne':'AEST-10AEDT,M10.1.0,M4.1.0',
+  'Australia/Adelaide':'ACST-9:30ACDT,M10.1.0,M4.1.0','Australia/Perth':'AWST-8',
+  'Pacific/Auckland':'NZST-12NZDT,M9.5.0,M4.1.0','Pacific/Fiji':'<+11>-11',
+  'Pacific/Port_Moresby':'<+10>-10','Pacific/Pago_Pago':'<-11>11'
+};
+
+function browserIanaTimezone() {
+  try { return Intl.DateTimeFormat().resolvedOptions().timeZone || ''; } catch (e) { return ''; }
+}
+
+// Browser's zone as a POSIX TZ string the device understands, or null if the zone
+// isn't in our curated map (we intentionally do NOT guess a malformed POSIX string;
+// the Settings prompt lets the user pick manually instead).
+function browserPosixTimezone() {
+  return IANA_TO_POSIX[browserIanaTimezone()] || null;
+}
+
+// The cloud returns the IANA default 'Europe/Warsaw' when no timezone was ever stored.
+// A real selection is always a POSIX string from the dropdown, never this value — so
+// this reliably means "timezone never set on this device".
+function isTimezoneUnset(tz) {
+  return !tz || tz === 'Europe/Warsaw';
+}
+
+// Push the browser's timezone to a specific device. Reuses the existing, tested
+// POST /device/{id}/time/timezone (saves to DynamoDB + sends set_timezone MQTT).
+// Non-fatal: the claim/whatever succeeds regardless.
+async function setDeviceTimezoneFromBrowser(deviceId) {
+  const posix = browserPosixTimezone();
+  if (!posix || !deviceId) return false;
+  try {
+    await API.fetchGlobal('/device/' + deviceId + '/time/timezone', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ timezone: posix })
+    });
+    return true;
+  } catch (e) {
+    console.warn('[TZ] auto-set failed for', deviceId, e);
+    return false;
+  }
+}
+
+/**
  * Promise-based sleep
  */
 function sleep(ms) {
