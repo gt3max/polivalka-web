@@ -426,6 +426,8 @@ let pumpCalibration = 1.0;  // ml/sec default
 let maxWateringTime = 60;   // seconds default
 let pumpRunningDevices = new Set();  // Track which devices have pump running
 let pumpTimers = {};  // Track timers for each device
+let pump2RunningDevices = new Set();  // Pump 2 (second actuator) — independent tracking
+let pump2Timers = {};  // Pump 2 countdown timers per device
 
 // Track expanded devices (to preserve state across re-renders)
 let expandedDevices = new Set();
@@ -976,7 +978,7 @@ function createExpandableRow(device, isOnline, hasWarnings, isCritical) {
         <button onclick="event.stopPropagation(); refreshSensor('${device.device_id}')" class="btn-secondary">🔄 Refresh</button>
         <button onclick="event.stopPropagation(); startPump('${device.device_id}', event)" class="btn-primary btn-water-toggle">💧 Water Now</button>
         <button onclick="event.stopPropagation(); stopPump('${device.device_id}', event)" class="btn-danger">⛔ Stop</button>
-        <button onclick="event.stopPropagation(); startPump2('${device.device_id}', event)" class="btn-secondary">⚡ Pump 2</button>
+        <button onclick="event.stopPropagation(); startPump2('${device.device_id}', event)" class="btn-secondary btn-pump2-toggle">⚡ Pump 2</button>
         <button onclick="event.stopPropagation(); stopPump2('${device.device_id}', event)" class="btn-danger">⛔ P2 Stop</button>
         <button onclick="event.stopPropagation(); viewDevice('${device.device_id}')">🏠 Device</button>
         <button onclick="event.stopPropagation(); viewTrends('${device.device_id}')">📊 Trends</button>
@@ -1178,7 +1180,7 @@ function createDeviceCard(device) {
       <button onclick="refreshSensor('${device.device_id}')" class="btn-primary">🔄 Refresh</button>
       <button onclick="startPump('${device.device_id}', event)" class="btn-primary btn-water-toggle">💧 Water Now</button>
       <button onclick="stopPump('${device.device_id}', event)" class="btn-danger">⛔ Stop</button>
-      <button onclick="startPump2('${device.device_id}', event)" class="btn-secondary">⚡ Pump 2</button>
+      <button onclick="startPump2('${device.device_id}', event)" class="btn-secondary btn-pump2-toggle">⚡ Pump 2</button>
       <button onclick="stopPump2('${device.device_id}', event)" class="btn-danger">⛔ P2 Stop</button>
       <button onclick="viewDevice('${device.device_id}')">🏠 Device</button>
       <button onclick="viewTrends('${device.device_id}')">📊 Trends</button>
@@ -1325,6 +1327,13 @@ async function refreshSensor(deviceId) {
       // Pump calibration and speed (for water volume calculation)
       if (result.pump_calibration !== undefined) device.pump_calibration = result.pump_calibration;
       if (result.pump_speed !== undefined) device.pump_speed = result.pump_speed;
+      // Pump 2 (second actuator) — independent, nested under result.pump2
+      if (result.pump2) {
+        if (result.pump2.running !== undefined) device.pump2_running = result.pump2.running;
+        if (result.pump2.type !== undefined && result.pump2.type !== null) device.pump2_type = result.pump2.type;
+        if (result.pump2.calibration !== undefined && result.pump2.calibration !== null) device.pump2_calibration = result.pump2.calibration;
+        if (result.pump2.speed !== undefined && result.pump2.speed !== null) device.pump2_speed = result.pump2.speed;
+      }
       // Firmware and restart counters
       if (result.firmware_version) device.firmware_version = result.firmware_version;
       if (result.clean_restarts !== undefined) device.clean_restarts = result.clean_restarts;
@@ -1387,6 +1396,13 @@ async function refreshSensorSilent(deviceId) {
       // Pump calibration and speed (for water volume calculation)
       if (result.pump_calibration !== undefined) device.pump_calibration = result.pump_calibration;
       if (result.pump_speed !== undefined) device.pump_speed = result.pump_speed;
+      // Pump 2 (second actuator) — independent, nested under result.pump2
+      if (result.pump2) {
+        if (result.pump2.running !== undefined) device.pump2_running = result.pump2.running;
+        if (result.pump2.type !== undefined && result.pump2.type !== null) device.pump2_type = result.pump2.type;
+        if (result.pump2.calibration !== undefined && result.pump2.calibration !== null) device.pump2_calibration = result.pump2.calibration;
+        if (result.pump2.speed !== undefined && result.pump2.speed !== null) device.pump2_speed = result.pump2.speed;
+      }
       // Firmware and restart counters
       if (result.firmware_version) device.firmware_version = result.firmware_version;
       if (result.clean_restarts !== undefined) device.clean_restarts = result.clean_restarts;
@@ -1480,19 +1496,42 @@ async function stopPump(deviceId, event) {
 // ── Pump 2 (second actuator) — minimal Fleet control (etap 3) ──
 async function startPump2(deviceId, event) {
   if (event) event.stopPropagation();
+
+  // Prevent multiple clicks — mirror pump1
+  if (pump2RunningDevices.has(deviceId)) {
+    return;
+  }
+
   showToast(`⚡ Starting Pump 2 on ${deviceId}...`, 'info');
+
+  // Mark running BEFORE API call to prevent race condition
+  pump2RunningDevices.add(deviceId);
+  updatePump2Button(deviceId, true, 0, maxWateringTime);
+
   try {
     await API.post(`/device/${deviceId}/pump2?sec=${maxWateringTime}`);
+    startPump2Timer(deviceId);
     showToast(`✅ Pump 2 command sent (${maxWateringTime}s)`, 'success');
     setTimeout(() => loadDevices(), 2000);
   } catch(e) {
+    // On error, revert state
+    pump2RunningDevices.delete(deviceId);
+    stopPump2Timer(deviceId);
+    updatePump2Button(deviceId, false);
     showToast(`❌ Failed to start Pump 2: ${e.message}`, 'error');
   }
 }
 
 async function stopPump2(deviceId, event) {
   if (event) event.stopPropagation();
+
   showToast(`🛑 Stopping Pump 2 on ${deviceId}...`, 'info');
+
+  // Clear local tracking state
+  pump2RunningDevices.delete(deviceId);
+  stopPump2Timer(deviceId);
+  updatePump2Button(deviceId, false);
+
   try {
     await API.post(`/device/${deviceId}/pump2/stop`);
     showToast(`✅ Pump 2 stopped`, 'success');
@@ -1598,6 +1637,46 @@ function stopPumpTimer(deviceId) {
   }
 }
 
+// ── Pump 2 button countdown state machine (independent mirror of pump1) ──
+function updatePump2Button(deviceId, isRunning, elapsed = 0, total = maxWateringTime) {
+  const buttons = document.querySelectorAll(`[data-device-id="${deviceId}"] .btn-pump2-toggle`);
+  buttons.forEach(btn => {
+    if (isRunning) {
+      btn.classList.add('active');
+      btn.textContent = `⚡ Running ${elapsed}s / ${total}s`;
+      btn.disabled = true;
+    } else {
+      btn.classList.remove('active');
+      btn.textContent = `⚡ Pump 2`;
+      btn.disabled = false;
+      btn.onclick = (e) => startPump2(deviceId, e);
+    }
+  });
+}
+
+function startPump2Timer(deviceId) {
+  if (pump2Timers[deviceId]) {
+    clearInterval(pump2Timers[deviceId]);
+  }
+  let elapsed = 0;
+  pump2Timers[deviceId] = setInterval(() => {
+    elapsed++;
+    updatePump2Button(deviceId, true, elapsed, maxWateringTime);
+    if (elapsed >= maxWateringTime) {
+      stopPump2Timer(deviceId);
+      pump2RunningDevices.delete(deviceId);
+      updatePump2Button(deviceId, false);
+    }
+  }, 1000);
+}
+
+function stopPump2Timer(deviceId) {
+  if (pump2Timers[deviceId]) {
+    clearInterval(pump2Timers[deviceId]);
+    delete pump2Timers[deviceId];
+  }
+}
+
 function viewDevice(deviceId) {
   // Navigate to home.html with device_id parameter
   window.location.href = `/home?device=${deviceId}`;
@@ -1675,6 +1754,13 @@ async function bulkAction(action) {
         // Pump calibration and speed
         if (result.pump_calibration !== undefined) device.pump_calibration = result.pump_calibration;
         if (result.pump_speed !== undefined) device.pump_speed = result.pump_speed;
+        // Pump 2 (second actuator) — independent, nested under result.pump2
+        if (result.pump2) {
+          if (result.pump2.running !== undefined) device.pump2_running = result.pump2.running;
+          if (result.pump2.type !== undefined && result.pump2.type !== null) device.pump2_type = result.pump2.type;
+          if (result.pump2.calibration !== undefined && result.pump2.calibration !== null) device.pump2_calibration = result.pump2.calibration;
+          if (result.pump2.speed !== undefined && result.pump2.speed !== null) device.pump2_speed = result.pump2.speed;
+        }
         // Firmware and restart counters
         if (result.firmware_version) device.firmware_version = result.firmware_version;
         if (result.reboot_count !== undefined) device.reboot_count = result.reboot_count;
@@ -1950,7 +2036,7 @@ function exportData() {
   }
 
   // CSV header
-  let csv = 'device_id,name,location,room,mode,controller_enabled,state,moisture_pct,battery_pct,battery_charging,firmware_version,online,last_update,last_watering,clean_restarts,unexpected_restarts\n';
+  let csv = 'device_id,name,location,room,mode,controller_enabled,state,moisture_pct,battery_pct,battery_charging,firmware_version,online,last_update,last_watering,clean_restarts,unexpected_restarts,pump2_type,pump2_running,total_water2_ml,pump2_runtime_sec,last_watering2\n';
 
   for (const d of allDevices) {
     const name = (d.name || '').replace(/,/g, ';');
@@ -1968,8 +2054,14 @@ function exportData() {
     const lastWatering = d.last_watering ? new Date(d.last_watering < 10000000000 ? d.last_watering * 1000 : d.last_watering).toISOString() : '';
     const cleanRestarts = d.clean_restarts !== null && d.clean_restarts !== undefined ? d.clean_restarts : '';
     const unexpectedRestarts = d.unexpected_restarts !== null && d.unexpected_restarts !== undefined ? d.unexpected_restarts : '';
+    // Pump 2 (second actuator) — independent columns
+    const pump2Type = (d.pump2_type || '').replace(/,/g, ';');
+    const pump2Running = d.pump2_running ? 'yes' : 'no';
+    const totalWater2 = d.total_water2_ml !== null && d.total_water2_ml !== undefined ? d.total_water2_ml : '';
+    const pump2Runtime = d.pump2_runtime_sec !== null && d.pump2_runtime_sec !== undefined ? d.pump2_runtime_sec : '';
+    const lastWatering2 = d.last_watering2 ? new Date(d.last_watering2 < 10000000000 ? d.last_watering2 * 1000 : d.last_watering2).toISOString() : '';
 
-    csv += `${d.device_id},"${name}","${location}","${room}",${mode},${controllerEnabled},${state},${moisture},${battery},${charging},${firmware},${online},${lastUpdate},${lastWatering},${cleanRestarts},${unexpectedRestarts}\n`;
+    csv += `${d.device_id},"${name}","${location}","${room}",${mode},${controllerEnabled},${state},${moisture},${battery},${charging},${firmware},${online},${lastUpdate},${lastWatering},${cleanRestarts},${unexpectedRestarts},"${pump2Type}",${pump2Running},${totalWater2},${pump2Runtime},${lastWatering2}\n`;
   }
 
   // Download with standardized filename
@@ -2450,7 +2542,7 @@ window.addEventListener('pageshow', (event) => {
   }
 });
 // Cleanup on page unload
-window.addEventListener('beforeunload',()=>{Object.values(pumpTimers).forEach(clearInterval);if(fleetRefreshId)clearInterval(fleetRefreshId);});
+window.addEventListener('beforeunload',()=>{Object.values(pumpTimers).forEach(clearInterval);Object.values(pump2Timers).forEach(clearInterval);if(fleetRefreshId)clearInterval(fleetRefreshId);});
 </script>
 
 <!-- Claim Device Modal -->
