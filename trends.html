@@ -121,6 +121,18 @@
       <div id="pump-nodata" class="muted" style="display:none;text-align:center;padding:40px">No pump activity in this period</div>
     </div>
     <div class="card">
+      <h3 style="margin-top:0;color:#f57c00">⚡ Pump 2 Activity</h3>
+      <div class="chart-container">
+        <canvas id="pump2-chart"></canvas>
+      </div>
+      <div id="pump2-nodata" class="muted" style="display:none;text-align:center;padding:40px">No Pump 2 activity in this period</div>
+      <div id="pump2-summary" class="stats-grid" style="margin-top:16px">
+        <div class="stat-box"><div class="stat-value" id="pump2-count">—</div><div class="stat-label">Events</div></div>
+        <div class="stat-box"><div class="stat-value" id="pump2-total-ml">—</div><div class="stat-label">Total ml</div></div>
+        <div class="stat-box"><div class="stat-value" id="pump2-total-sec">—</div><div class="stat-label">Total sec</div></div>
+      </div>
+    </div>
+    <div class="card">
       <h3 style="margin-top:0">📋 Watering Events</h3>
       <div id="watering-summary" class="stats-grid" style="margin-bottom:16px">
         <div class="stat-box"><div class="stat-value" id="watering-count">—</div><div class="stat-label">Events</div></div>
@@ -255,6 +267,11 @@
           <canvas id="lt-watering-chart"></canvas>
         </div>
         <div id="lt-watering-nodata" class="muted" style="display:none;text-align:center;padding:40px">No watering events in this period</div>
+        <h4 style="margin:16px 0 8px 0;color:#f57c00">⚡ Pump 2 Events</h4>
+        <div class="chart-container" style="height:250px">
+          <canvas id="lt-pump2-chart"></canvas>
+        </div>
+        <div id="lt-pump2-nodata" class="muted" style="display:none;text-align:center;padding:40px">No Pump 2 events in this period</div>
       </div>
     </div>
 
@@ -290,6 +307,7 @@ let pumpData = []; // Pump events for chart annotations
 let moistureChart = null;
 let batteryChart = null;
 let pumpChart = null;
+let pump2Chart = null;
 
 // Preset reference values (defaults, updated from /status calib data)
 let deviceCalib = { adc_water: 1200, adc_dry_soil: 2400, adc_air: 2800 };
@@ -542,10 +560,13 @@ async function loadActivity() {
     wateringLoading.style.display = 'none';
 
     const pumpEvents = filtered.filter(a => a.type === 'PUMP');
+    const pump2Events = filtered.filter(a => a.type === 'PUMP2');
     renderActivityList(filtered);
     renderPumpChart(filtered);  // Timeline chart for pump activity
     renderWateringSummary(pumpEvents);
     renderWateringList(pumpEvents);
+    renderPump2Chart(filtered);       // Pump 2 (second actuator) — independent
+    renderPump2Summary(pump2Events);
     updateStats();
   } catch(e) {
     loading.style.display = 'none';
@@ -1341,6 +1362,110 @@ function renderWateringSummary(events) {
   document.getElementById('watering-total-sec').textContent = totalSec > 0 ? totalSec + 's' : '—';
 }
 
+// ── Pump 2 (second actuator) — independent activity chart (mirror of renderPumpChart) ──
+function renderPump2Chart(events) {
+  const canvas = document.getElementById('pump2-chart');
+  const nodata = document.getElementById('pump2-nodata');
+
+  if (pump2Chart) { pump2Chart.destroy(); pump2Chart = null; }
+
+  const pump2Events = events.filter(e =>
+    e.type === 'PUMP2' && e.message && e.message.toLowerCase().includes('start')
+  );
+
+  if (pump2Events.length === 0) {
+    canvas.style.display = 'none';
+    nodata.style.display = 'block';
+    return;
+  }
+
+  canvas.style.display = 'block';
+  nodata.style.display = 'none';
+
+  const chartData = pump2Events.map(e => {
+    let duration = e.duration_sec;
+    let volume = e.volume_ml;
+    if (duration == null || volume == null) {
+      const msg = e.message || '';
+      const secMatch = msg.match(/(\d+)\s*s[,\)]/i);
+      const volMatch = msg.match(/(\d+)\s*ml/i);
+      duration = duration ?? (secMatch ? parseInt(secMatch[1]) : 0);
+      volume = volume ?? (volMatch ? parseInt(volMatch[1]) : 0);
+    }
+    return { timestamp: e.timestamp, duration: duration || 0, volume: volume || 0, deviceType: e.device_type || 'Pump 2' };
+  });
+
+  chartData.sort((a, b) => a.timestamp - b.timestamp);
+
+  const points = chartData.map(d => ({
+    x: d.timestamp * 1000,
+    y: d.volume,
+    duration: d.duration,
+    typeLabel: d.deviceType
+  }));
+
+  const now = Date.now();
+  const periodMs = currentPeriod * 24 * 60 * 60 * 1000;
+
+  pump2Chart = new Chart(canvas.getContext('2d'), {
+    type: 'scatter',
+    data: {
+      datasets: [{
+        label: 'Pump 2 activity',
+        data: points,
+        backgroundColor: '#f57c00',
+        borderColor: '#f57c00',
+        pointRadius: 6,
+        pointHoverRadius: 8,
+        showLine: false
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          callbacks: {
+            title: (items) => items.length > 0 ? new Date(items[0].parsed.x).toLocaleString() : '',
+            label: (ctx) => {
+              const p = ctx.raw;
+              return [ `${p.typeLabel}`, `Volume: ${p.y} ml`, `Duration: ${p.duration}s` ];
+            }
+          }
+        }
+      },
+      scales: {
+        x: {
+          type: 'time',
+          min: now - periodMs,
+          max: now,
+          time: { unit: currentPeriod === 1 ? 'hour' : 'day', displayFormats: { hour: 'HH:mm', day: 'MMM d' } },
+          ticks: { autoSkip: true, maxTicksLimit: 8 },
+          grid: { display: false }
+        },
+        y: { type: 'linear', position: 'left', min: 0, title: { display: true, text: 'ml' }, grid: { color: 'rgba(0,0,0,0.05)' } }
+      }
+    }
+  });
+}
+
+// Pump 2 summary (mirror of renderWateringSummary, independent DOM)
+function renderPump2Summary(events) {
+  const startEvents = events.filter(e => e.message && e.message.toLowerCase().includes('start'));
+  let totalMl = 0, totalSec = 0;
+  for (const e of startEvents) {
+    let vol = e.volume_ml, sec = e.duration_sec;
+    if (vol == null) { const m = e.message.match(/(\d+)\s*ml/i); vol = m ? parseInt(m[1]) : 0; }
+    if (sec == null) { const m = e.message.match(/(\d+)\s*s[,\)]/i); sec = m ? parseInt(m[1]) : 0; }
+    totalMl += vol || 0;
+    totalSec += sec || 0;
+  }
+  document.getElementById('pump2-count').textContent = startEvents.length;
+  document.getElementById('pump2-total-ml').textContent = totalMl > 0 ? totalMl + 'ml' : '—';
+  document.getElementById('pump2-total-sec').textContent = totalSec > 0 ? totalSec + 's' : '—';
+}
+
 // Render watering list with clear info
 function renderWateringList(events) {
   const container = document.getElementById('watering-list');
@@ -1610,6 +1735,7 @@ let ltMoistureChart = null;
 let ltSensor2Chart = null;
 let ltBatteryChart = null;
 let ltWateringChart = null;
+let ltPump2Chart = null;
 
 // Helper: Format week data to readable date labels
 function formatWeekLabel(weekData) {
@@ -1728,6 +1854,7 @@ function renderLtTabChart(name) {
     renderLtBatteryChart(ltFilteredData);
   } else if (name === 'watering') {
     renderLtWateringChart(ltFilteredData);
+    renderLtPump2Chart(ltFilteredData);
   }
 }
 
@@ -2182,6 +2309,61 @@ function renderLtWateringChart(weeks) {
   });
 }
 
+// ── Pump 2 (second actuator) — long-term series + chart (independent) ──
+function buildLtPump2Series(weeks) {
+  let pump2 = [];
+  for (const w of weeks) {
+    if (w.raw && w.raw.pump2) {
+      for (const p of (w.raw.pump2 || [])) {
+        pump2.push({ timestamp: p.ts, volume: p.ml || 0, duration: p.sec || 0, deviceType: p.type || 'Pump 2' });
+      }
+    }
+  }
+  const fromActivity = activityData
+    .filter(a => a.type === 'PUMP2' && a.message && a.message.toLowerCase().includes('start'))
+    .map(e => {
+      let vol = e.volume_ml, sec = e.duration_sec;
+      if (vol == null) { const m = (e.message || '').match(/(\d+)\s*ml/i); vol = m ? parseInt(m[1]) : 0; }
+      if (sec == null) { const m = (e.message || '').match(/(\d+)\s*s[,)]/i); sec = m ? parseInt(m[1]) : 0; }
+      return { timestamp: e.timestamp, volume: vol || 0, duration: sec || 0, deviceType: e.device_type || 'Pump 2' };
+    });
+  pump2.push(...fromActivity);
+  const seen = new Set();
+  pump2 = pump2.filter(p => { if (seen.has(p.timestamp)) return false; seen.add(p.timestamp); return true; });
+  pump2.sort((a, b) => a.timestamp - b.timestamp);
+  return pump2;
+}
+
+function renderLtPump2Chart(weeks) {
+  const canvas = document.getElementById('lt-pump2-chart');
+  const nodata = document.getElementById('lt-pump2-nodata');
+  if (ltPump2Chart) { ltPump2Chart.destroy(); ltPump2Chart = null; }
+  const data = buildLtPump2Series(weeks);
+  if (data.length === 0) { canvas.style.display = 'none'; nodata.style.display = 'block'; return; }
+  canvas.style.display = 'block'; nodata.style.display = 'none';
+  const points = data.map(d => ({ x: d.timestamp * 1000, y: d.volume || 0, duration: d.duration || 0, typeLabel: d.deviceType }));
+  const weekAnnotations = buildWeekAnnotations(weeks);
+  ltPump2Chart = new Chart(canvas.getContext('2d'), {
+    type: 'scatter',
+    data: { datasets: [{ label: 'Pump 2 activity', data: points, backgroundColor: '#f57c00', borderColor: '#f57c00', pointRadius: 5, pointHoverRadius: 7, showLine: false }] },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: {
+        legend: { display: false },
+        annotation: { annotations: weekAnnotations },
+        tooltip: { callbacks: {
+          title: (items) => items.length > 0 ? new Date(items[0].parsed.x).toLocaleString() : '',
+          label: (ctx) => { const p = ctx.raw; return [ `${p.typeLabel}`, `Volume: ${p.y} ml`, `Duration: ${p.duration}s` ]; }
+        } }
+      },
+      scales: {
+        x: { type: 'time', time: { unit: longTermPeriod <= 4 ? 'day' : 'week', displayFormats: { day: 'MMM d', week: 'MMM d' } }, ticks: { autoSkip: true, maxTicksLimit: 12 }, grid: { display: false } },
+        y: { type: 'linear', position: 'left', min: 0, title: { display: true, text: 'ml' }, grid: { color: 'rgba(0,0,0,0.05)' } }
+      }
+    }
+  });
+}
+
 // Store filtered data for lazy rendering
 let ltFilteredData = [];
 
@@ -2253,13 +2435,14 @@ function exportLongTermCSV() {
     return;
   }
 
-  let csv = 'week,start_date,end_date,moisture_avg,moisture_min,moisture_max,battery_avg,battery_min,battery_max,waterings,total_ml,auto_events,manual_events,online_hours,offline_hours,restarts,firmware,avg_rssi,min_rssi,wifi_disconnects,unexpected_restarts,brownouts,crashes\n';
+  let csv = 'week,start_date,end_date,moisture_avg,moisture_min,moisture_max,battery_avg,battery_min,battery_max,waterings,total_ml,auto_events,manual_events,pump2_events,pump2_total_ml,online_hours,offline_hours,restarts,firmware,avg_rssi,min_rssi,wifi_disconnects,unexpected_restarts,brownouts,crashes\n';
 
   for (const w of longTermData) {
     csv += `${w.week},${w.start_date},${w.end_date},`;
     csv += `${w.moisture?.avg_percent || ''},${w.moisture?.min_percent || ''},${w.moisture?.max_percent || ''},`;
     csv += `${w.battery?.avg_percent || ''},${w.battery?.min_percent || ''},${w.battery?.max_percent || ''},`;
     csv += `${w.watering?.events_count || 0},${w.watering?.total_ml || 0},${w.watering?.auto_events || 0},${w.watering?.manual_events || 0},`;
+    csv += `${w.watering2?.events_count || 0},${w.watering2?.total_ml || 0},`;
     csv += `${w.system?.online_hours || ''},${w.system?.offline_hours || ''},${w.system?.restarts || 0},${w.system?.firmware_version || ''},`;
     csv += `${w.health?.avg_rssi || ''},${w.health?.min_rssi || ''},${w.health?.wifi_disconnects || 0},${w.health?.unexpected_restarts || 0},${w.health?.brownouts || 0},${w.health?.crashes || 0}\n`;
   }
