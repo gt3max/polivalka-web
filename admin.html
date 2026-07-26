@@ -151,6 +151,15 @@
 <div class="row" style="margin-top:8px">
 <button onclick="resetStats('pump')">Reset Pump Stats</button>
 </div>
+<div class="section-header" style="margin-top:16px">Pump 2 (second actuator)</div>
+<div class="info-list">
+<div class="info-row"><span class="info-label">Type</span><span class="info-value" id="stat-pump2-type">—</span></div>
+<div class="info-row"><span class="info-label">Total Water (P2)</span><span class="info-value" id="stat-total-water2">— ml</span></div>
+<div class="info-row"><span class="info-label">Pump 2 Runtime</span><span class="info-value" id="stat-pump2-runtime">— sec</span></div>
+</div>
+<div class="row" style="margin-top:8px">
+<button onclick="resetStats('pump2')">Reset Pump 2 Stats</button>
+</div>
 </div>
 
 <!-- Periodic Telemetry (Info only - hardcoded in firmware) -->
@@ -670,6 +679,10 @@ async function loadDeviceConfig() {
         document.getElementById('stat-unexpected-restarts').textContent = device.unexpected_restarts ?? '—';
         document.getElementById('stat-total-water').textContent = device.total_water_ml ? device.total_water_ml.toLocaleString() + ' ml' : '— ml';
         document.getElementById('stat-pump-runtime').textContent = device.pump_runtime_sec ? device.pump_runtime_sec.toLocaleString() + ' sec' : '— sec';
+        // Pump 2 (second actuator) — independent stats
+        document.getElementById('stat-pump2-type').textContent = device.pump2_type || '—';
+        document.getElementById('stat-total-water2').textContent = device.total_water2_ml ? device.total_water2_ml.toLocaleString() + ' ml' : '— ml';
+        document.getElementById('stat-pump2-runtime').textContent = device.pump2_runtime_sec ? device.pump2_runtime_sec.toLocaleString() + ' sec' : '— sec';
 
         // Plant info
         const plant = device.plant;
@@ -1242,7 +1255,8 @@ async function resetStats(group) {
 
   const labels = {
     'restarts': 'Restart counters (Clean + Unexpected)',
-    'pump': 'Pump stats (Water + Runtime)'
+    'pump': 'Pump stats (Water + Runtime)',
+    'pump2': 'Pump 2 stats (Water + Runtime)'
   };
 
   if (!confirm(`Reset ${labels[group]}?\n\nDevice: ${selectedDeviceId}`)) {
@@ -1269,6 +1283,9 @@ async function resetStats(group) {
       } else if (group === 'pump') {
         document.getElementById('stat-total-water').textContent = '0 ml';
         document.getElementById('stat-pump-runtime').textContent = '0 sec';
+      } else if (group === 'pump2') {
+        document.getElementById('stat-total-water2').textContent = '0 ml';
+        document.getElementById('stat-pump2-runtime').textContent = '0 sec';
       }
     } else {
       const err = await res.json().catch(() => ({}));
