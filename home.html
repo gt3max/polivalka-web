@@ -365,6 +365,31 @@ async function updateStatus(){
       manualBtn.style.borderColor = '';
     }
 
+    // Pump 2 Running Indicator (independent second actuator — mirrors pump1, isolated)
+    const pump2Indicator = document.getElementById('pump2-running');
+    const pump2StopBtn = document.getElementById('btn-pump2-stop');
+    const pump2Btn = document.getElementById('btn-pump2');
+    if (pump2Indicator && pump2StopBtn) {
+      // Optimistic guard: after a manual Run/Stop, don't let stale telemetry flicker the UI
+      const pump2Optimistic = window.pump2OptimisticUntil && Date.now() < window.pump2OptimisticUntil;
+      if (s.pump2_running) {
+        window.pump2OptimisticUntil = 0;  // server confirmed running — drop guard
+        pump2Indicator.style.display = 'block';
+        pump2StopBtn.disabled = false;
+        if (pump2Btn) pump2Btn.disabled = true;
+        const remEl = document.getElementById('pump2-remaining');
+        if (remEl) {
+          const rem = s.pump2_remaining_ms > 0 ? Math.floor(s.pump2_remaining_ms / 1000) : 0;
+          remEl.textContent = s.pump2_remaining_ms > 0 ? `${rem}s left` : 'running';
+        }
+      } else if (!pump2Optimistic) {
+        // Server says idle and no fresh optimistic action — trust server
+        pump2Indicator.style.display = 'none';
+        pump2StopBtn.disabled = true;
+        if (pump2Btn) pump2Btn.disabled = false;
+      }
+    }
+
     // Automation Control - показываем нужную секцию (skip if mode change pending)
     if (!modeProtected) {
       const timerControl = document.getElementById('timer-auto-control');
@@ -1248,8 +1273,8 @@ async function loadPumpSpeed(){
 loadPumpSpeed(); // Load immediately (default 100% shown until data arrives)
 
 // ── Pump 2 (second actuator) — cloud device page ──
-async function pump2Water(){const d=parseInt(document.getElementById('pump2-duration').value);const u=document.getElementById('pump2-unit').value;const sec=u==='min'?d*60:d;if(sec>600){showToast('Maximum 10 minutes (600s)','warning');return;}try{await API.post('/pump2?sec='+sec);document.getElementById('btn-pump2-stop').disabled=false;document.getElementById('pump2-running').style.display='block';document.getElementById('pump2-remaining').textContent=sec+'s left';showToast('⚡ Pump 2 started ('+sec+'s)','success');setTimeout(loadPump2Status,1500);}catch(e){showToast('Pump 2: '+e.message,'error');}}
-async function pump2Stop(){try{await API.post('/pump2/stop');document.getElementById('pump2-running').style.display='none';document.getElementById('btn-pump2-stop').disabled=true;showToast('Pump 2 stopped','success');setTimeout(loadPump2Status,1000);}catch(e){showToast('Error: '+e.message,'error');}}
+async function pump2Water(){const d=parseInt(document.getElementById('pump2-duration').value);const u=document.getElementById('pump2-unit').value;const sec=u==='min'?d*60:d;if(sec>600){showToast('Maximum 10 minutes (600s)','warning');return;}try{await API.post('/pump2?sec='+sec);window.pump2OptimisticUntil=Date.now()+5000;document.getElementById('btn-pump2-stop').disabled=false;document.getElementById('pump2-running').style.display='block';document.getElementById('pump2-remaining').textContent=sec+'s left';showToast('⚡ Pump 2 started ('+sec+'s)','success');setTimeout(loadPump2Status,1500);}catch(e){showToast('Pump 2: '+e.message,'error');}}
+async function pump2Stop(){try{await API.post('/pump2/stop');window.pump2OptimisticUntil=0;document.getElementById('pump2-running').style.display='none';document.getElementById('btn-pump2-stop').disabled=true;showToast('Pump 2 stopped','success');setTimeout(loadPump2Status,1000);}catch(e){showToast('Error: '+e.message,'error');}}
 function pump2SpeedPreview(v){document.getElementById('pump2-speed-display').textContent=v+'%';}
 let pump2SpeedT=null;
 async function pump2SetSpeed(v){if(pump2SpeedT)clearTimeout(pump2SpeedT);pump2SpeedT=setTimeout(async()=>{try{await API.post('/pump2/speed?value='+v);}catch(e){showToast('Speed set failed','error');}},300);}
