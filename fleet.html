@@ -931,6 +931,7 @@ function createExpandableRow(device, isOnline, hasWarnings, isCritical) {
         ${modeBadgeCompact}
         ${automationControl}
         <span class="device-status" style="background:${stateBg};color:${stateColor}">${stateText}</span>
+        ${device.pump2_running ? '<span class="device-status" style="background:#f57c00;color:#fff" title="Second actuator running">⚡ P2</span>' : ''}
         <span class="device-status ${isOnline ? 'online' : 'offline'}">${isOnline ? '● Online' : '○ Offline'}</span>
         <span class="muted" style="font-size:10px;opacity:0.7" title="Last data received from device">${timeAgo(device.last_update)}</span>
         <span class="ota-badge" id="ota-badge-${device.device_id}"></span>
@@ -958,6 +959,13 @@ function createExpandableRow(device, isOnline, hasWarnings, isCritical) {
         ${isAdmin() && device.owner && device.owner !== 'admin' ? `<span class="detail-item" style="color:#1565c0">📧 Assigned to: ${device.owner}</span>` : ''}
       </div>
 
+      ${device.pump2_type ? `
+      <div class="detail-row" style="margin-top:8px">
+        <span class="detail-item">⚡ Pump 2 (${device.pump2_type}): <b style="color:${device.pump2_running ? '#f57c00' : '#888'}">${device.pump2_running ? 'Running' : 'Idle'}</b></span>
+        ${device.total_water2_ml ? `<span class="detail-item">Total: ${device.total_water2_ml} ml</span>` : ''}
+        ${device.pump2_runtime_sec ? `<span class="detail-item">Runtime: ${device.pump2_runtime_sec} s</span>` : ''}
+      </div>` : ''}
+
       ${hasWarnings ? `
         <div class="device-warnings">
           ⚠️ ${device.warnings.join('<br>⚠️ ')}
@@ -968,6 +976,8 @@ function createExpandableRow(device, isOnline, hasWarnings, isCritical) {
         <button onclick="event.stopPropagation(); refreshSensor('${device.device_id}')" class="btn-secondary">🔄 Refresh</button>
         <button onclick="event.stopPropagation(); startPump('${device.device_id}', event)" class="btn-primary btn-water-toggle">💧 Water Now</button>
         <button onclick="event.stopPropagation(); stopPump('${device.device_id}', event)" class="btn-danger">⛔ Stop</button>
+        <button onclick="event.stopPropagation(); startPump2('${device.device_id}', event)" class="btn-secondary">⚡ Pump 2</button>
+        <button onclick="event.stopPropagation(); stopPump2('${device.device_id}', event)" class="btn-danger">⛔ P2 Stop</button>
         <button onclick="event.stopPropagation(); viewDevice('${device.device_id}')">🏠 Device</button>
         <button onclick="event.stopPropagation(); viewTrends('${device.device_id}')">📊 Trends</button>
         <button onclick="event.stopPropagation(); deviceUpdate('${device.device_id}')">📦 OTA Update</button>
@@ -1168,6 +1178,8 @@ function createDeviceCard(device) {
       <button onclick="refreshSensor('${device.device_id}')" class="btn-primary">🔄 Refresh</button>
       <button onclick="startPump('${device.device_id}', event)" class="btn-primary btn-water-toggle">💧 Water Now</button>
       <button onclick="stopPump('${device.device_id}', event)" class="btn-danger">⛔ Stop</button>
+      <button onclick="startPump2('${device.device_id}', event)" class="btn-secondary">⚡ Pump 2</button>
+      <button onclick="stopPump2('${device.device_id}', event)" class="btn-danger">⛔ P2 Stop</button>
       <button onclick="viewDevice('${device.device_id}')">🏠 Device</button>
       <button onclick="viewTrends('${device.device_id}')">📊 Trends</button>
       <button onclick="deviceUpdate('${device.device_id}')">📦 OTA Update</button>
@@ -1462,6 +1474,31 @@ async function stopPump(deviceId, event) {
     setTimeout(() => loadDevices(), 1000);
   } catch(e) {
     showToast(`❌ Failed to stop pump: ${e.message}`, 'error');
+  }
+}
+
+// ── Pump 2 (second actuator) — minimal Fleet control (etap 3) ──
+async function startPump2(deviceId, event) {
+  if (event) event.stopPropagation();
+  showToast(`⚡ Starting Pump 2 on ${deviceId}...`, 'info');
+  try {
+    await API.post(`/device/${deviceId}/pump2?sec=${maxWateringTime}`);
+    showToast(`✅ Pump 2 command sent (${maxWateringTime}s)`, 'success');
+    setTimeout(() => loadDevices(), 2000);
+  } catch(e) {
+    showToast(`❌ Failed to start Pump 2: ${e.message}`, 'error');
+  }
+}
+
+async function stopPump2(deviceId, event) {
+  if (event) event.stopPropagation();
+  showToast(`🛑 Stopping Pump 2 on ${deviceId}...`, 'info');
+  try {
+    await API.post(`/device/${deviceId}/pump2/stop`);
+    showToast(`✅ Pump 2 stopped`, 'success');
+    setTimeout(() => loadDevices(), 1000);
+  } catch(e) {
+    showToast(`❌ Failed to stop Pump 2: ${e.message}`, 'error');
   }
 }
 
