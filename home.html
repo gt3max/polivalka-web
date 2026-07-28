@@ -1275,7 +1275,7 @@ async function loadPumpSpeed(){
 loadPumpSpeed(); // Load immediately (default 100% shown until data arrives)
 
 // ── Pump 2 (second actuator) — cloud device page ──
-async function pump2Water(){const d=parseInt(document.getElementById('pump2-duration').value);const u=document.getElementById('pump2-unit').value;const sec=u==='min'?d*60:d;if(sec>600){showToast('Maximum 10 minutes (600s)','warning');return;}try{await API.post('/pump2?sec='+sec);document.getElementById('btn-pump2-stop').disabled=false;document.getElementById('pump2-running').style.display='block';document.getElementById('pump2-remaining').textContent=sec+'s left';
+async function pump2Water(){const d=parseInt(document.getElementById('pump2-duration').value);const u=document.getElementById('pump2-unit').value;const sec=u==='min'?d*60:d;if(sec>600){showToast('Maximum 10 minutes (600s)','warning');return;}try{const r=await API.post('/pump2?sec='+sec);if(r&&r.success===false){showToast(r.error||'Pump 2 could not start','warning');return;}document.getElementById('btn-pump2-stop').disabled=false;document.getElementById('pump2-running').style.display='block';document.getElementById('pump2-remaining').textContent=sec+'s left';
 // Local countdown (mirror pump1) — cloud telemetry lags, drive the UI locally so the box clears on time
 if(window.pump2CountdownInterval)clearInterval(window.pump2CountdownInterval);
 let p2elapsed=0;
