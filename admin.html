@@ -1577,11 +1577,21 @@ function renderTursoCascade(d){
       </div>`;
     };
     const dbs=Number(o.databases)||0, dbCap=Number(o.db_cap)||100;
-    const bar = meter('Reads',           read, cap,   _tursoNum,   thrPct)
-              + meter('Writes',            wr, wrCap, _tursoNum,   0)
-              + meter('Syncs',             sy, syCap, _tursoBytes, 0)
-              + meter('Storage',           st, stCap, _tursoBytes, 0)
-              + meter('Total Databases', dbs, dbCap, (n)=>String(Math.round(n)), 0);
+    // Reads видно всегда, остальные четыре — под раскрытием: три базы по пять
+    // полос занимают экран целиком. 🔴 Если пик НЕ по чтению, раскрываем сразу:
+    // иначе повторится 30.07, когда прод лежал по синхронизации, а на виду была
+    // зелёная полоса чтения на 7.7 %.
+    const peakIsReads = pct >= Math.max(100*wr/wrCap, 100*sy/syCap, 100*st/stCap, 100*dbs/dbCap);
+    const rest = meter('Writes',            wr, wrCap, _tursoNum,   0)
+               + meter('Syncs',             sy, syCap, _tursoBytes, 0)
+               + meter('Storage',           st, stCap, _tursoBytes, 0)
+               + meter('Total Databases',  dbs, dbCap, (n)=>String(Math.round(n)), 0);
+    const bar = meter('Reads', read, cap, _tursoNum, thrPct)
+      + `<details ${peakIsReads?'':'open'} style="margin-top:2px">
+           <summary style="cursor:pointer;font-size:10px;color:#7f879c;list-style:none;padding:3px 0">
+             ▾ writes · syncs · storage · databases
+           </summary>${rest}
+         </details>`;
     const roleBad = o.missing_url ? ' <span style="color:#f44;font-size:10px">⛔ role unset in env</span>' : '';
     const noUsage = (!o.has_usage && !o.missing_url) ? ' <span class="muted" style="font-size:10px">· no usage snapshot</span>' : '';
     const benchedTag = o.benched ? ' <span style="color:#c98; font-size:10px">💤 benched (no cascade role)</span>' : '';
