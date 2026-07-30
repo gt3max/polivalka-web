@@ -51,13 +51,15 @@
     .info-label{color:#ccc}
     .info-value{color:#4caf50;font-family:ui-monospace,monospace}
 
-/* Раскрытие счётчиков базы в карточке Turso: треугольник справа, как принято,
-   и поворот при раскрытии. Свою метку списка `details` прячем — она слева и
-   дублирует наш указатель. */
-.turso-more summary { list-style: none; }
-.turso-more summary::-webkit-details-marker { display: none; }
-.turso-more .chev { transition: transform .15s ease; display: inline-block; }
-.turso-more[open] .chev { transform: rotate(180deg); }
+/* Раскрытие счётчиков базы: управляет ЗАГОЛОВОК строки, треугольник справа от
+   пикового процента. Отдельная строка-переключатель посреди карточки читалась
+   как сломанная подпись, а не как кнопка. */
+.turso-row .chev { transition: transform .15s ease; display: inline-block;
+                   color: #7f879c; font-size: 10px; margin-left: 6px; }
+.turso-row.open .chev { transform: rotate(180deg); }
+.turso-row .more { display: none; }
+.turso-row.open .more { display: block; }
+.turso-row .head { cursor: pointer; }
 </style>
 </head><body>
 <div class="warning-banner">ADMIN PANEL — NOT FOR USERS</div>
@@ -1595,20 +1597,14 @@ function renderTursoCascade(d){
                + meter('Storage',           st, stCap, _tursoBytes, 0)
                + meter('Total Databases',  dbs, dbCap, (n)=>String(Math.round(n)), 0);
     const bar = meter('Reads', read, cap, _tursoNum, thrPct)
-      + `<details class="turso-more" ${peakIsReads?'':'open'} style="margin-top:2px">
-           <summary style="cursor:pointer;font-size:10px;color:#7f879c;padding:4px 0;
-                           display:flex;justify-content:space-between;align-items:center">
-             <span>writes · syncs · storage · databases</span>
-             <span class="chev" style="font-size:11px;color:#9aa">▾</span>
-           </summary>${rest}
-         </details>`;
+              + `<div class="more">${rest}</div>`;
     const roleBad = o.missing_url ? ' <span style="color:#f44;font-size:10px">⛔ role unset in env</span>' : '';
     const noUsage = (!o.has_usage && !o.missing_url) ? ' <span class="muted" style="font-size:10px">· no usage snapshot</span>' : '';
     const benchedTag = o.benched ? ' <span style="color:#c98; font-size:10px">💤 benched (no cascade role)</span>' : '';
-    return `<div style="padding:8px 11px;background:#15151f;border:1px solid ${o.benched?'#3a3320':'#2c2c44'};border-radius:8px;${o.benched?'opacity:.72':''}">
-      <div style="display:flex;justify-content:space-between;align-items:center">
+    return `<div class="turso-row${peakIsReads?'':' open'}" style="padding:10px 12px;background:#15151f;border:1px solid ${o.benched?'#3a3320':'#2c2c44'};border-radius:8px;${o.benched?'opacity:.72':''}">
+      <div class="head" onclick="this.closest('.turso-row').classList.toggle('open')" style="display:flex;justify-content:space-between;align-items:center">
         <span><b style="color:#6fb0e8">${esc(o.role||'')}</b> · <span style="color:#dfe3ee;font-weight:600">${esc(o.org||'(unset)')}</span>${blocked?' <span style="color:#f44;font-size:10px">⛔ blocked</span>':''}${eligible?' <span style="color:#ff9800;font-size:10px">⟳ rotation-eligible</span>':''}${roleBad}${benchedTag}</span>
-        <span class="mono" style="font-size:12px;color:${col}"><b>${worst.toFixed(1)}%</b> peak</span>
+        <span class="mono" style="font-size:12px;color:${col}"><b>${worst.toFixed(1)}%</b> peak<span class="chev">▾</span></span>
       </div>
       ${bar}${noUsage?`<div style="font-size:10px;color:#9aa;margin-top:5px">${noUsage}</div>`:''}
     </div>`;
