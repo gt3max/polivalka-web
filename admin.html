@@ -50,6 +50,14 @@
     .info-row:last-child{border-bottom:none}
     .info-label{color:#ccc}
     .info-value{color:#4caf50;font-family:ui-monospace,monospace}
+
+/* Раскрытие счётчиков базы в карточке Turso: треугольник справа, как принято,
+   и поворот при раскрытии. Свою метку списка `details` прячем — она слева и
+   дублирует наш указатель. */
+.turso-more summary { list-style: none; }
+.turso-more summary::-webkit-details-marker { display: none; }
+.turso-more .chev { transition: transform .15s ease; display: inline-block; }
+.turso-more[open] .chev { transform: rotate(180deg); }
 </style>
 </head><body>
 <div class="warning-banner">ADMIN PANEL — NOT FOR USERS</div>
@@ -1587,9 +1595,11 @@ function renderTursoCascade(d){
                + meter('Storage',           st, stCap, _tursoBytes, 0)
                + meter('Total Databases',  dbs, dbCap, (n)=>String(Math.round(n)), 0);
     const bar = meter('Reads', read, cap, _tursoNum, thrPct)
-      + `<details ${peakIsReads?'':'open'} style="margin-top:2px">
-           <summary style="cursor:pointer;font-size:10px;color:#7f879c;list-style:none;padding:3px 0">
-             ▾ writes · syncs · storage · databases
+      + `<details class="turso-more" ${peakIsReads?'':'open'} style="margin-top:2px">
+           <summary style="cursor:pointer;font-size:10px;color:#7f879c;padding:4px 0;
+                           display:flex;justify-content:space-between;align-items:center">
+             <span>writes · syncs · storage · databases</span>
+             <span class="chev" style="font-size:11px;color:#9aa">▾</span>
            </summary>${rest}
          </details>`;
     const roleBad = o.missing_url ? ' <span style="color:#f44;font-size:10px">⛔ role unset in env</span>' : '';
