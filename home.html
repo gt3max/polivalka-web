@@ -384,11 +384,8 @@ async function updateStatus(){
           }
         }
       } else {
-        // Server says idle — clear any local countdown and hide (trust server)
-        if (pump2LocalCountdown) { clearInterval(window.pump2CountdownInterval); window.pump2CountdownInterval = null; }
-        pump2Indicator.style.display = 'none';
-        pump2StopBtn.disabled = true;
-        if (pump2Btn) pump2Btn.disabled = false;
+        // Server says idle — clear any local countdown/watchdog and hide (trust server)
+        pump2Teardown();
       }
     }
 
@@ -1275,20 +1272,26 @@ async function loadPumpSpeed(){
 loadPumpSpeed(); // Load immediately (default 100% shown until data arrives)
 
 // ── Pump 2 (second actuator) — cloud device page ──
-async function pump2Water(){const d=parseInt(document.getElementById('pump2-duration').value);const u=document.getElementById('pump2-unit').value;const sec=u==='min'?d*60:d;if(sec>600){showToast('Maximum 10 minutes (600s)','warning');return;}try{const r=await API.post('/pump2?sec='+sec);if(r&&r.success===false){showToast(r.error||'Pump 2 could not start','warning');return;}document.getElementById('btn-pump2-stop').disabled=false;document.getElementById('pump2-running').style.display='block';document.getElementById('pump2-remaining').textContent=sec+'s left';
+// Единая уборка индикатора pump2: гасит бокс, останавливает отсчёт И сторож, возвращает кнопки
+function pump2Teardown(){if(window.pump2CountdownInterval){clearInterval(window.pump2CountdownInterval);window.pump2CountdownInterval=null;}if(window.pump2Watchdog){clearInterval(window.pump2Watchdog);window.pump2Watchdog=null;}const ind=document.getElementById('pump2-running');if(ind)ind.style.display='none';const sb=document.getElementById('btn-pump2-stop');if(sb)sb.disabled=true;const rb=document.getElementById('btn-pump2');if(rb)rb.disabled=false;}
+// Сторож: пока pump2 «работает», опрашиваем РЕАЛЬНЫЙ /pump2/status каждые 3с. running===false (уступка / auto-stop / ручной стоп на устройстве) → сразу гасим. Не ждём 60-с общий опрос.
+function pump2StartWatchdog(){if(window.pump2Watchdog)clearInterval(window.pump2Watchdog);window.pump2Watchdog=setInterval(async()=>{try{const s=await API.get('/pump2/status');if(s&&s.running===false){pump2Teardown();showToast('⚡ Pump 2 stopped','warning');}}catch(e){}},3000);}
+async function pump2Water(){const d=parseInt(document.getElementById('pump2-duration').value);const u=document.getElementById('pump2-unit').value;const sec=u==='min'?d*60:d;if(sec>600){showToast('Maximum 10 minutes (600s)','warning');return;}try{const r=await API.post('/pump2?sec='+sec);if(r&&r.success===false){showToast(r.error||'Pump 2 could not start','warning');return;}document.getElementById('btn-pump2-stop').disabled=false;document.getElementById('btn-pump2').disabled=true;document.getElementById('pump2-running').style.display='block';document.getElementById('pump2-remaining').textContent=sec+'s left';
 // Local countdown (mirror pump1) — cloud telemetry lags, drive the UI locally so the box clears on time
 if(window.pump2CountdownInterval)clearInterval(window.pump2CountdownInterval);
 let p2elapsed=0;
-window.pump2CountdownInterval=setInterval(()=>{p2elapsed++;const rem=Math.max(0,sec-p2elapsed);document.getElementById('pump2-remaining').textContent=rem+'s left';if(p2elapsed>=sec){clearInterval(window.pump2CountdownInterval);window.pump2CountdownInterval=null;document.getElementById('pump2-running').style.display='none';document.getElementById('btn-pump2-stop').disabled=true;}},1000);
+window.pump2CountdownInterval=setInterval(()=>{p2elapsed++;const rem=Math.max(0,sec-p2elapsed);document.getElementById('pump2-remaining').textContent=rem+'s left';if(p2elapsed>=sec){pump2Teardown();}},1000);
+// Сторож стартует через 5с — чтобы «start»-телеметрия успела лечь и он не погасил бокс раньше времени
+setTimeout(pump2StartWatchdog,5000);
 showToast('⚡ Pump 2 started ('+sec+'s)','success');setTimeout(loadPump2Status,1500);}catch(e){showToast('Pump 2: '+e.message,'error');}}
-async function pump2Stop(){try{await API.post('/pump2/stop');if(window.pump2CountdownInterval){clearInterval(window.pump2CountdownInterval);window.pump2CountdownInterval=null;}document.getElementById('pump2-running').style.display='none';document.getElementById('btn-pump2-stop').disabled=true;showToast('Pump 2 stopped','success');setTimeout(loadPump2Status,1000);}catch(e){showToast('Error: '+e.message,'error');}}
+async function pump2Stop(){try{await API.post('/pump2/stop');pump2Teardown();showToast('Pump 2 stopped','success');setTimeout(loadPump2Status,1000);}catch(e){showToast('Error: '+e.message,'error');}}
 function pump2SpeedPreview(v){document.getElementById('pump2-speed-display').textContent=v+'%';}
 let pump2SpeedT=null;
 async function pump2SetSpeed(v){if(pump2SpeedT)clearTimeout(pump2SpeedT);pump2SpeedT=setTimeout(async()=>{try{await API.post('/pump2/speed?value='+v);}catch(e){showToast('Speed set failed','error');}},300);}
 function pump2UpdateLimit(){const unit=document.getElementById('pump2-unit').value;const input=document.getElementById('pump2-duration');if(unit==='min'){input.max=10;if(parseInt(input.value)>10)input.value=10;}else{input.max=600;if(parseInt(input.value)>600)input.value=600;}}
 function pump2ApplyType(t){const el=document.getElementById('pump2-title');if(el)el.textContent=(t&&t!=='Pump')?t:'Pump 2';}
 async function pump2SetType(v){try{await API.post('/pump2/type?value='+encodeURIComponent(v));pump2ApplyType(v);showToast('Pump 2 type: '+v,'success');}catch(e){showToast('Type set failed','error');}}
-async function loadPump2Status(){try{const s=await API.get('/pump2/status');if(s.type){const sel=document.getElementById('pump2-type');if(sel&&sel.value!==s.type)sel.value=s.type;pump2ApplyType(s.type);}if(s.speed!==undefined){const sl=document.getElementById('pump2-speed-slider');if(document.activeElement!==sl){sl.value=s.speed;document.getElementById('pump2-speed-display').textContent=s.speed+'%';}}const run=s.running===true;document.getElementById('pump2-running').style.display=run?'block':'none';document.getElementById('btn-pump2-stop').disabled=!run;}catch(e){}}
+async function loadPump2Status(){try{const s=await API.get('/pump2/status');if(s.type){const sel=document.getElementById('pump2-type');if(sel&&sel.value!==s.type)sel.value=s.type;pump2ApplyType(s.type);}if(s.speed!==undefined){const sl=document.getElementById('pump2-speed-slider');if(document.activeElement!==sl){sl.value=s.speed;document.getElementById('pump2-speed-display').textContent=s.speed+'%';}}const run=s.running===true;document.getElementById('pump2-running').style.display=run?'block':'none';document.getElementById('btn-pump2-stop').disabled=!run;const rb=document.getElementById('btn-pump2');if(rb)rb.disabled=run;if(run&&!window.pump2Watchdog)pump2StartWatchdog();}catch(e){}}
 loadPump2Status();
 
 // Plant card expand/collapse
