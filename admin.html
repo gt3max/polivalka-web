@@ -1561,37 +1561,42 @@ function renderTursoCascade(d){
     // величины с лимитом, и упор в любую блокирует аккаунт целиком. 30.07.2026
     // прод лёг по синхронизации, а панель показывала одну полосу чтения на
     // 7.7 % — зелёную. Теперь видно всё, и не надо помнить, что где.
+    // Раскладка как в самой панели Turso: подпись слева, значение справа на той
+    // же строке, полоса под ними во всю ширину. Так читается за один взгляд.
     const meter=(label,val,capv,fmt,mark)=>{
       const p=capv?100*val/capv:0, c=_tursoColor(p);
-      return `<div style="display:flex;align-items:center;gap:6px;margin-top:3px">
-        <span style="font-size:10px;color:#8a90a2;width:64px;flex:none">${label}</span>
-        <div style="position:relative;flex:1;height:6px;background:#222;border-radius:3px;overflow:hidden">
+      return `<div style="margin-top:7px">
+        <div style="display:flex;justify-content:space-between;align-items:baseline">
+          <span style="font-size:11px;color:#b9c0d0">${label}</span>
+          <span class="mono" style="font-size:11px;color:${c}">${fmt(val)} / ${fmt(capv)}</span>
+        </div>
+        <div style="position:relative;height:6px;background:#222;border-radius:3px;overflow:hidden;margin-top:3px">
           <div style="height:100%;width:${Math.min(100,Math.max(0,p))}%;background:${c}"></div>
           ${mark?`<div title="rotation threshold" style="position:absolute;top:0;left:${mark}%;width:1px;height:100%;background:#ffffffaa"></div>`:''}
         </div>
-        <span class="mono" style="font-size:10px;color:${c};width:118px;flex:none;text-align:right">${fmt(val)} / ${fmt(capv)} <b>${p.toFixed(1)}%</b></span>
       </div>`;
     };
-    const bar = meter('rows read',  read, cap,   _tursoNum,  thrPct)
-              + meter('rows written', wr, wrCap, _tursoNum,  0)
-              + meter('syncs',        sy, syCap, _tursoBytes, 0)
-              + meter('storage',      st, stCap, _tursoBytes, 0);
+    const dbs=Number(o.databases)||0, dbCap=Number(o.db_cap)||100;
+    const bar = meter('Reads',           read, cap,   _tursoNum,   thrPct)
+              + meter('Writes',            wr, wrCap, _tursoNum,   0)
+              + meter('Syncs',             sy, syCap, _tursoBytes, 0)
+              + meter('Storage',           st, stCap, _tursoBytes, 0)
+              + meter('Total Databases', dbs, dbCap, (n)=>String(Math.round(n)), 0);
     const roleBad = o.missing_url ? ' <span style="color:#f44;font-size:10px">⛔ role unset in env</span>' : '';
     const noUsage = (!o.has_usage && !o.missing_url) ? ' <span class="muted" style="font-size:10px">· no usage snapshot</span>' : '';
     const benchedTag = o.benched ? ' <span style="color:#c98; font-size:10px">💤 benched (no cascade role)</span>' : '';
     return `<div style="padding:8px 11px;background:#15151f;border:1px solid ${o.benched?'#3a3320':'#2c2c44'};border-radius:8px;${o.benched?'opacity:.72':''}">
       <div style="display:flex;justify-content:space-between;align-items:center">
         <span><b style="color:#6fb0e8">${esc(o.role||'')}</b> · <span style="color:#dfe3ee;font-weight:600">${esc(o.org||'(unset)')}</span>${blocked?' <span style="color:#f44;font-size:10px">⛔ blocked</span>':''}${eligible?' <span style="color:#ff9800;font-size:10px">⟳ rotation-eligible</span>':''}${roleBad}${benchedTag}</span>
-        <span class="mono" style="font-size:12px;color:${col}">худший <b>${worst.toFixed(1)}%</b></span>
+        <span class="mono" style="font-size:12px;color:${col}"><b>${worst.toFixed(1)}%</b> peak</span>
       </div>
-      ${bar}
-      <div style="font-size:10px;color:#9aa;margin-top:5px">${o.databases||0} db${noUsage}</div>
+      ${bar}${noUsage?`<div style="font-size:10px;color:#9aa;margin-top:5px">${noUsage}</div>`:''}
     </div>`;
   }).join('');
   // 2026-07-06: честный баннер деградации — два role-слота на одной орге = нет
   // независимого резерва (напр. L2 и L3 оба fred-pires, пока maxplank заблокирован).
   const degradedBanner = (d&&d.degraded_redundancy)
-    ? `<div style="padding:8px 11px;background:#3a1414;border:1px solid #f44;border-radius:8px;color:#ffb3b3;font-size:12px;font-weight:600">⚠ L2/L3 на одном аккаунте — независимой избыточности нет. Резерв деградировал до 2 орг.</div>`
+    ? `<div style="padding:8px 11px;background:#3a1414;border:1px solid #f44;border-radius:8px;color:#ffb3b3;font-size:12px;font-weight:600">⚠ L2/L3 share one account — no independent redundancy. Cascade degraded to 2 orgs.</div>`
     : '';
   el.innerHTML=`<div style="display:flex;flex-direction:column;gap:7px">${degradedBanner}${rows}</div>`;
   // Подвал: роли — live, объёмы — снимок N назад (цвет по свежести) + дата сброса лимитов.
