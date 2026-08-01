@@ -83,6 +83,18 @@
   <div id="turso-updated" style="font-size:10px;color:#667;margin-top:6px"></div>
 </div>
 
+<!-- Состояние разделов приложения: не «версии», а ЗАМЕРЫ с датой. Номер, который
+     надо помнить обновлять, обновлять перестают (версия каталога болезней стояла
+     3.1.0 с 17.05 при 135 изменённых записях). Здесь каждое число публикует тот,
+     кто его меряет: contracts_check, золотой прогон поиска, деплой каталога. -->
+<div class="card" id="sections-card">
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+    <h3 style="margin:0">🧭 Разделы приложения — где сейчас</h3>
+    <button id="sections-refresh-btn" onclick="loadSectionsState()" style="font-size:11px;padding:4px 10px">↻ Reload</button>
+  </div>
+  <div id="sections-state"><div class="muted">Loading…</div></div>
+</div>
+
 <!-- Cloudinary photo-storage accounts — live кредиты/трафик по 5 аккаунтам -->
 <div class="card" id="cloudinary-card">
   <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
@@ -1520,6 +1532,53 @@ function _tursoAgo(iso){ if(!iso)return ''; const s=Math.max(0,(Date.now()-new D
 function _tursoColor(pct){ return pct>=90?'#f44':(pct>=70?'#ff9800':'#5cd98a'); }
 function _tursoBar(pct){ const w=Math.min(100,Math.max(0,pct)); return `<div style="height:6px;background:#222;border-radius:3px;overflow:hidden;margin-top:4px"><div style="height:100%;width:${w}%;background:${_tursoColor(pct)}"></div></div>`; }
 
+async function loadSectionsState(){
+  const el=document.getElementById('sections-state');
+  const btn=document.getElementById('sections-refresh-btn');
+  if(btn){ btn.disabled=true; btn.textContent='⏳ …'; }
+  try{
+    const res=await fetch(`${API.cloudBase}/admin/sections/state`,{headers:API.getAuthHeaders()});
+    if(!res.ok) throw new Error(`HTTP ${res.status}`);
+    const {sections={}}=await res.json();
+    const pct=v=>v==null?'—':`${(v*100).toFixed(1)}%`;
+    // Возраст замера показываем всегда: старое число обязано выглядеть старым.
+    const age=iso=>{
+      if(!iso) return '';
+      const h=(Date.now()-new Date(iso).getTime())/36e5;
+      return h<24?`${h.toFixed(0)} ч назад`:`${(h/24).toFixed(0)} дн назад`;
+    };
+    const rows=[];
+    const lib=sections.library||{};
+    rows.push(['📚 Библиотека', [
+      lib.catalog_epoch!=null?`эпоха каталога ${lib.catalog_epoch}`:null,
+      lib.contracts_violations!=null?`контрактов нарушено ${lib.contracts_violations} из ${lib.contracts_checked??'?'}`:null,
+      lib.search_top1!=null?`поиск top-1 ${pct(lib.search_top1)}, пустых ${pct(lib.search_empty)} (${lib.search_queries??'?'} запросов)`:null,
+    ].filter(Boolean).join(' · '), age(lib.updated_at)]);
+    const doc=sections.doctor||{};
+    rows.push(['🩺 Доктор', [
+      doc.catalog_version?`каталог болезней ${doc.catalog_version}`:null,
+      doc.entries!=null?`${doc.entries} записей`:null,
+      doc.top1!=null?`Top-1 ${pct(doc.top1)}`:null,
+    ].filter(Boolean).join(' · ')||'замеров ещё нет', age(doc.updated_at)]);
+    const idf=sections.identifier||{};
+    rows.push(['🌿 Верификатор', [
+      idf.vision_pack?`Vision-пак ${idf.vision_pack}`:null,
+      idf.accuracy!=null?`точность ${pct(idf.accuracy)}`:null,
+    ].filter(Boolean).join(' · ')||'замеров ещё нет', age(idf.updated_at)]);
+    el.innerHTML=rows.map(([name,body,when])=>
+      `<div style="padding:6px 0;border-bottom:1px solid #eee">
+         <div style="display:flex;justify-content:space-between;gap:10px">
+           <b>${name}</b><span class="muted" style="font-size:10px">${when}</span>
+         </div>
+         <div style="font-size:12px;color:#445">${body}</div>
+       </div>`).join('');
+  }catch(e){
+    el.innerHTML=`<div class="muted">Не загрузилось: ${e.message}</div>`;
+  }finally{
+    if(btn){ btn.disabled=false; btn.textContent='↻ Reload'; }
+  }
+}
+
 async function loadTursoUsage(){
   const el=document.getElementById('turso-usage');
   const btn=document.getElementById('turso-refresh-btn');
@@ -2624,7 +2683,7 @@ if (checkAdminAccess()) {
   loadArchivedDevices();
   loadDeletedDevices();
   updateCostEstimate();
-  loadTursoUsage();      // Turso cascade — роли live из env Lambda, объёмы из снэпшота
+  loadSectionsState(); loadTursoUsage();      // Turso cascade — роли live из env Lambda, объёмы из снэпшота
   loadCloudinaryUsage(); // Cloudinary accounts — live (Lambda опрашивает Cloudinary)
   loadCatalogGrowth();   // Library growth — спрос (missing_species) + черновые provisional-карточки
   // Авто-рефреш Turso раз в 90с (дёшево: DDB scan + чтение env) — роли и метка свежести
