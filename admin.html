@@ -1591,7 +1591,16 @@ function renderTursoCascade(d){
     // полос занимают экран целиком. 🔴 Если пик НЕ по чтению, раскрываем сразу:
     // иначе повторится 30.07, когда прод лежал по синхронизации, а на виду была
     // зелёная полоса чтения на 7.7 %.
+    //
+    // 🔴 Но раскрывать при ЛЮБОМ таком пике — значит держать карточку развёрнутой
+    // всегда: пик почти никогда не приходится на чтение, и три базы по пять полос
+    // занимают весь экран при каждом обновлении страницы. Тревога, которая горит
+    // постоянно, перестаёт быть тревогой. Поэтому раскрываем, только когда есть на
+    // что смотреть: worst ≥ ПОРОГ_РАСКРЫТИЯ. Замысел сохранён — 30.07 синхронизация
+    // ушла за 100 %, и порог сработал бы задолго до этого.
+    const ПОРОГ_РАСКРЫТИЯ = 50;
     const peakIsReads = pct >= Math.max(100*wr/wrCap, 100*sy/syCap, 100*st/stCap, 100*dbs/dbCap);
+    const раскрыть = !peakIsReads && worst >= ПОРОГ_РАСКРЫТИЯ;
     const rest = meter('Writes',            wr, wrCap, _tursoNum,   0)
                + meter('Syncs',             sy, syCap, _tursoBytes, 0)
                + meter('Storage',           st, stCap, _tursoBytes, 0)
@@ -1601,7 +1610,7 @@ function renderTursoCascade(d){
     const roleBad = o.missing_url ? ' <span style="color:#f44;font-size:10px">⛔ role unset in env</span>' : '';
     const noUsage = (!o.has_usage && !o.missing_url) ? ' <span class="muted" style="font-size:10px">· no usage snapshot</span>' : '';
     const benchedTag = o.benched ? ' <span style="color:#c98; font-size:10px">💤 benched (no cascade role)</span>' : '';
-    return `<div class="turso-row${peakIsReads?'':' open'}" style="padding:10px 12px;background:#15151f;border:1px solid ${o.benched?'#3a3320':'#2c2c44'};border-radius:8px;${o.benched?'opacity:.72':''}">
+    return `<div class="turso-row${раскрыть?' open':''}" style="padding:10px 12px;background:#15151f;border:1px solid ${o.benched?'#3a3320':'#2c2c44'};border-radius:8px;${o.benched?'opacity:.72':''}">
       <div class="head" onclick="this.closest('.turso-row').classList.toggle('open')" style="display:flex;justify-content:space-between;align-items:center">
         <span><b style="color:#6fb0e8">${esc(o.role||'')}</b> · <span style="color:#dfe3ee;font-weight:600">${esc(o.org||'(unset)')}</span>${blocked?' <span style="color:#f44;font-size:10px">⛔ blocked</span>':''}${eligible?' <span style="color:#ff9800;font-size:10px">⟳ rotation-eligible</span>':''}${roleBad}${benchedTag}</span>
         <span class="mono" style="font-size:12px;color:${col}"><b>${worst.toFixed(1)}%</b> peak<span class="chev">▾</span></span>
