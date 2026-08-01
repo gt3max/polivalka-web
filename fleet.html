@@ -1414,14 +1414,10 @@ async function refreshSensorSilent(deviceId) {
     // Silent success - no toasts, no button updates
 
   } catch(e) {
-    // Error - just log, don't update UI
+    // Error — just log; do NOT mark offline. A failed live sensor ping means the device
+    // didn't answer THIS request, not that it's offline. online/offline is driven by the
+    // backend device.online (is_device_online); a transient timeout must not flap the badge.
     console.warn(`refreshSensorSilent failed for ${deviceId}:`, e.message);
-    const device = allDevices.find(d => d.device_id === deviceId);
-    if (device) {
-      device.online = false;
-      renderDevices(allDevices);
-      updateStats(allDevices);
-    }
 
     // Only show error toast if request fails
     showToast(e.message.includes('408') ?
@@ -1678,8 +1674,8 @@ async function bulkAction(action) {
 
         successCount++;
       } catch(e) {
-        // Device didn't respond = offline
-        device.online = false;
+        // Device didn't answer THIS refresh — do NOT mark offline (backend device.online rules).
+        // A transient MQTT round-trip timeout is not a disconnect; it was flapping the badge.
         failCount++;
       }
     });
