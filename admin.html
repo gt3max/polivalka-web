@@ -299,10 +299,17 @@
 </div>
 </div>
 
-<!-- Costs Estimate -->
+<!-- REAL AWS bill (Cost Explorer, all services) -->
 <div class="card">
-<h3>💰 AWS Cost Estimate</h3>
-<p class="muted">Based on current settings</p>
+<h3>💰 AWS Real Cost <span id="awscost-month" class="muted" style="font-size:12px"></span></h3>
+<p class="muted">Actual bill from AWS Cost Explorer — all services (Route 53, Lambda, DynamoDB, IoT…)</p>
+<div id="awscost-body" style="color:#fff;font-size:14px"><div class="muted">Loading…</div></div>
+</div>
+
+<!-- IoT message estimate (formula only, NOT the real bill) -->
+<div class="card">
+<h3>📨 IoT Messages Estimate</h3>
+<p class="muted">Formula only (IoT messages) — NOT the real bill. See “AWS Real Cost” above.</p>
 <div id="cost-estimate" style="color:#fff;font-size:14px">
 <div>Messages/month: <span id="est-messages" class="mono ok">—</span></div>
 <div>Within Free Tier: <span id="est-free-tier" class="mono">—</span></div>
@@ -1303,6 +1310,32 @@ async function resetStats(group) {
     }
   } catch(e) {
     alert('Error: ' + e.message);
+  }
+}
+
+// REAL AWS bill from Cost Explorer (all services), cached 24h server-side ($0.01/CE call).
+async function loadAwsCosts() {
+  const body = document.getElementById('awscost-body');
+  if (!body) return;
+  try {
+    const res = await fetch(`${API.cloudBase}/admin/aws-costs`, { headers: API.getAuthHeaders() });
+    const d = await res.json();
+    if (d && d.error === 'ce_not_granted') {
+      body.innerHTML = `<div class="muted">Cost Explorer access not granted.<br><span class="mono" style="font-size:11px">${d.hint || ''}</span></div>`;
+      return;
+    }
+    if (!d || d.total === undefined) { body.innerHTML = '<div class="muted">No cost data</div>'; return; }
+    const mo = document.getElementById('awscost-month'); if (mo) mo.textContent = d.month || '';
+    const rows = (d.by_service || []).map(s =>
+      `<div style="display:flex;justify-content:space-between"><span>${s.service}</span><span class="mono">$${Number(s.amount).toFixed(2)}</span></div>`
+    ).join('') || '<div class="muted">$0 — no billable services</div>';
+    const asOf = d.as_of ? new Date(d.as_of * 1000).toLocaleString() : '';
+    body.innerHTML =
+      `<div style="font-size:20px;font-weight:700;margin-bottom:6px">$${Number(d.total).toFixed(2)} <span class="muted" style="font-size:11px">${d.currency || 'USD'}/mo</span></div>` +
+      rows +
+      `<div class="muted" style="font-size:11px;margin-top:8px">as of ${asOf}${d.cached ? ' · cached' : ''}</div>`;
+  } catch (e) {
+    body.innerHTML = `<div class="muted">Error: ${e.message}</div>`;
   }
 }
 
@@ -2624,6 +2657,7 @@ if (checkAdminAccess()) {
   loadArchivedDevices();
   loadDeletedDevices();
   updateCostEstimate();
+  loadAwsCosts();        // REAL AWS bill (Cost Explorer, all services) — cached 24h server-side
   loadTursoUsage();      // Turso cascade — роли live из env Lambda, объёмы из снэпшота
   loadCloudinaryUsage(); // Cloudinary accounts — live (Lambda опрашивает Cloudinary)
   loadCatalogGrowth();   // Library growth — спрос (missing_species) + черновые provisional-карточки
