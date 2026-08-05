@@ -1022,9 +1022,18 @@ async function updateSensorControllerStatus() {
     const headerWarning = document.getElementById('header-warning');
     if (sc.warning_active && sc.warning_msg) {
       warningRow.style.display = 'block';
-      document.getElementById('status-warning-message').textContent = sc.warning_msg;
+      // A latched sensor fault BLOCKS auto-watering until the user re-arms — say so plainly
+      // (the raw firmware message alone, e.g. "Sensor fault: 69%->25%", doesn't tell the user
+      // the plant is no longer being watered or how to fix it).
+      const isFault = /fault|probe out of soil|not reaching sensor|blocked/i.test(sc.warning_msg);
+      document.getElementById('status-warning-message').textContent = isFault
+        ? sc.warning_msg + ' — 🚫 Auto-watering is BLOCKED. To resume: turn Sensor OFF then ON (re-arm) once the probe is back in soil.'
+        : sc.warning_msg;
       headerWarning.style.display = 'flex';
-      document.getElementById('warning-text').textContent = sc.warning_msg.substring(0, 40) + (sc.warning_msg.length > 40 ? '...' : '');
+      // Header badge: short, clean, no mid-word truncation.
+      document.getElementById('warning-text').textContent = isFault
+        ? 'Sensor fault — auto-watering BLOCKED'
+        : sc.warning_msg;
     } else {
       warningRow.style.display = 'none';
       headerWarning.style.display = 'none';
@@ -1170,7 +1179,7 @@ async function updateTimerControllerStatus() {
       document.getElementById('timer-warning-message').textContent = tc.warning_msg;
       if (mode === 'timer') {
         headerWarning.style.display = 'flex';
-        document.getElementById('warning-text').textContent = tc.warning_msg.substring(0, 40) + (tc.warning_msg.length > 40 ? '...' : '');
+        document.getElementById('warning-text').textContent = tc.warning_msg;  // no mid-word truncation
       }
     } else {
       warningRow.style.display = 'none';
