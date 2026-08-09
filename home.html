@@ -1027,7 +1027,7 @@ async function updateSensorControllerStatus() {
       // the plant is no longer being watered or how to fix it).
       const isFault = /fault|probe out of soil|not reaching sensor|blocked/i.test(sc.warning_msg);
       document.getElementById('status-warning-message').textContent = isFault
-        ? sc.warning_msg + ' — 🚫 Auto-watering is BLOCKED. To resume: turn Sensor OFF then ON (re-arm) once the probe is back in soil.'
+        ? sc.warning_msg + ' — ⚠️ Action required: auto-watering BLOCKED — turn it off, then on, to resume (once the probe is back in soil).'
         : sc.warning_msg;
       headerWarning.style.display = 'flex';
       // Header badge: short, clean, no mid-word truncation.

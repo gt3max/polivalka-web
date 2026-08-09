@@ -49,6 +49,8 @@
   .device-row{display:flex;align-items:center;padding:12px 16px;cursor:pointer;transition:background 0.2s}
   .device-row:hover{background:#f9f9f9}
   .device-row.has-warnings{background:#fff9e6}
+  .device-row.blocked{background:#fff3e0;border-left:4px solid #e65100}
+  .blocked-banner{margin:0 16px 10px 44px;padding:8px 12px;background:#fff3e0;border:1px solid #e65100;border-radius:8px;color:#e65100;font-size:12.5px;font-weight:600}
   .device-row .expand-icon{margin-right:12px;font-size:12px;color:#666;transition:transform 0.2s}
   .device-row.expanded .expand-icon{transform:rotate(90deg)}
   .device-row .warning-badge{color:#b00;font-size:16px;margin-right:8px;animation:pulse 2s infinite}
@@ -886,27 +888,31 @@ function createExpandableRow(device, isOnline, hasWarnings, isCritical) {
   // controller_enabled = automation actually running
   const controllerEnabled = device.controller_enabled === true;
 
-  // Show automation status based on controller_enabled
-  let automationText = '';
-  let automationColor = '#666';
+  // BLOCKED = latched sensor fault: auto-watering stopped even though Sensor mode is still
+  // "on". No machine flag exists at any layer — detect from the firmware warning text.
+  const blocked = !!device.warning_active &&
+    /fault|probe out of soil|not reaching sensor|blocked/i.test(device.warning_msg || '');
 
-  if (controllerEnabled && device.mode === 'sensor') {
-    automationText = '✅ Auto ON (Sensor)';
-    automationColor = '#0a0';
-  } else if (controllerEnabled && device.mode === 'timer') {
-    automationText = '✅ Auto ON (Timer)';
-    automationColor = '#0a0';
+  // Automation pill. In Sensor mode it's a TAP toggle wired to the CORRECT controller
+  // endpoints (/sensor/controller/enable|disable) — i.e. the real re-arm; the Fleet's old
+  // toggleAutomation sends a mode change and would NOT clear the latch. stopPropagation so a
+  // tap doesn't also expand the row. Timer/Manual stay a plain label.
+  let automationControl;
+  if (device.mode === 'sensor') {
+    const on = controllerEnabled;
+    const label = blocked ? '🚫 BLOCKED' : (on ? '✅ Auto ON (Sensor)' : '⭕ Auto OFF');
+    const col = blocked ? '#c62828' : (on ? '#0a0' : '#999');
+    automationControl = `
+      <span class="automation-control" role="button"
+            title="Tap to turn auto-watering ${on ? 'off' : 'on'}"
+            onclick="event.stopPropagation(); fleetSensorToggle('${device.device_id}', ${!on})"
+            style="color:${col};font-weight:600;cursor:pointer;user-select:none;border-bottom:1px dotted ${col}">${label}</span>
+    `;
   } else {
-    automationText = '⭕ Auto OFF';
-    automationColor = '#999';
+    const automationText = controllerEnabled && device.mode === 'timer' ? '✅ Auto ON (Timer)' : '⭕ Auto OFF';
+    const automationColor = controllerEnabled && device.mode === 'timer' ? '#0a0' : '#999';
+    automationControl = `<span class="automation-control" style="color:${automationColor};font-weight:600">${automationText}</span>`;
   }
-
-  // Show automation status
-  const automationControl = `
-    <span class="automation-control" style="color: ${automationColor}; font-weight: 600">
-      ${automationText}
-    </span>
-  `;
 
   // Determine actual state using mapStateToDisplay for consistent UX
   const rawState = !controllerEnabled ? 'DISABLED' : (device.state || 'STANDBY');
@@ -920,7 +926,7 @@ function createExpandableRow(device, isOnline, hasWarnings, isCritical) {
 
   div.innerHTML = `
     <!-- Compact row (click to expand) -->
-    <div class="device-row ${hasWarnings ? 'has-warnings' : ''}" onclick="toggleDeviceExpand(this, '${device.device_id}')">
+    <div class="device-row ${hasWarnings ? 'has-warnings' : ''} ${blocked ? 'blocked' : ''}" onclick="toggleDeviceExpand(this, '${device.device_id}')">
       <span class="expand-icon">▶</span>
       ${hasWarnings ? '<span class="warning-badge">⚠️</span>' : ''}
       <span class="device-name">🌱 ${device.device_id}${isAdmin() && device.owner && device.owner !== 'admin' ? ' <span style="color:#1565c0;font-size:11px;font-weight:600">Assigned</span>' : ''}</span>
@@ -937,6 +943,7 @@ function createExpandableRow(device, isOnline, hasWarnings, isCritical) {
         <span class="ota-badge" id="ota-badge-${device.device_id}"></span>
       </div>
     </div>
+    ${blocked ? `<div class="blocked-banner" onclick="event.stopPropagation()">⚠️ Action required: auto-watering BLOCKED — turn it off, then on, to resume.</div>` : ''}
 
     <!-- Expanded details (hidden by default) -->
     <div class="device-details" id="details-${device.device_id}">
@@ -1481,6 +1488,26 @@ async function stopPump(deviceId, event) {
   } catch(e) {
     showToast(`❌ Failed to stop pump: ${e.message}`, 'error');
   }
+}
+
+// Sensor auto-watering toggle for a Fleet row. Uses the CORRECT controller endpoints
+// (/sensor/controller/enable|disable) = the real re-arm; toggling OFF then ON clears a
+// latched sensor fault. NOTE: distinct from toggleAutomation() below, which sends a MODE
+// change and does NOT clear the latch (firmware set_mode does not re-enable the controller).
+async function fleetSensorToggle(deviceId, on) {
+  try {
+    const path = on ? `/device/${deviceId}/sensor/controller/enable`
+                    : `/device/${deviceId}/sensor/controller/disable`;
+    const r = (await API.post(path)) || {};
+    if (on && r.success === false) {
+      showToast(r.message || r.error || 'Could not resume — probe may be disconnected', 'error');
+    } else {
+      showToast(on ? '▶ Auto-watering resumed' : '⏸ Auto-watering off', 'success');
+    }
+  } catch (e) {
+    showToast(`Auto-watering toggle failed: ${e.message}`, 'error');
+  }
+  setTimeout(() => loadDevices(), 2000);  // refresh: reflect cleared fault / new state
 }
 
 async function toggleAutomation(deviceId, enable) {
