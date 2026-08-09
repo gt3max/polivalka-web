@@ -51,6 +51,13 @@
   .device-row.has-warnings{background:#fff9e6}
   .device-row.blocked{background:#fff3e0;border-left:4px solid #e65100}
   .blocked-banner{margin:0 16px 10px 44px;padding:8px 12px;background:#fff3e0;border:1px solid #e65100;border-radius:8px;color:#e65100;font-size:12.5px;font-weight:600}
+  /* iOS-style toggle (same as Device page, compact for the row) */
+  .toggle-switch{position:relative;display:inline-block;width:44px;height:24px;flex-shrink:0;vertical-align:middle}
+  .toggle-switch input{opacity:0;width:0;height:0}
+  .toggle-slider{position:absolute;cursor:pointer;top:0;left:0;right:0;bottom:0;background:#ccc;border-radius:24px;transition:0.3s}
+  .toggle-slider:before{position:absolute;content:"";height:20px;width:20px;left:2px;bottom:2px;background:#fff;border-radius:50%;transition:0.3s}
+  .toggle-switch input:checked+.toggle-slider{background:#34c759}
+  .toggle-switch input:checked+.toggle-slider:before{transform:translateX(20px)}
   .device-row .expand-icon{margin-right:12px;font-size:12px;color:#666;transition:transform 0.2s}
   .device-row.expanded .expand-icon{transform:rotate(90deg)}
   .device-row .warning-badge{color:#b00;font-size:16px;margin-right:8px;animation:pulse 2s infinite}
@@ -900,14 +907,18 @@ function createExpandableRow(device, isOnline, hasWarnings, isCritical) {
   let automationControl;
   if (device.mode === 'sensor') {
     const on = controllerEnabled;
-    const label = blocked ? '🚫 BLOCKED' : (on ? '✅ Auto ON (Sensor)' : '⭕ Auto OFF');
-    const col = blocked ? '#c62828' : (on ? '#0a0' : '#999');
+    const lbl = blocked ? '🚫 BLOCKED' : (on ? 'Sensor' : 'Sensor off');
+    const lblCol = blocked ? '#c62828' : (on ? '#0a0' : '#999');
+    // Real toggle switch (same as Device page). stopPropagation on the switch so a tap
+    // doesn't also expand the row. onchange → correct re-arm endpoints (enable/disable).
     automationControl = `
-      <span class="automation-control" role="button"
-            title="Tap to turn auto-watering ${on ? 'off' : 'on'}"
-            onclick="event.stopPropagation(); fleetSensorToggle('${device.device_id}', ${!on})"
-            style="color:${col};font-weight:600;cursor:pointer;user-select:none;border-bottom:1px dotted ${col}">${label}</span>
-    `;
+      <span class="automation-control" style="display:inline-flex;align-items:center;gap:6px">
+        <span style="color:${lblCol};font-weight:600">${lbl}</span>
+        <label class="toggle-switch" onclick="event.stopPropagation()" title="Auto-watering ${on ? 'on' : 'off'}">
+          <input type="checkbox" ${on ? 'checked' : ''} onchange="fleetSensorToggle('${device.device_id}', this.checked)">
+          <span class="toggle-slider"></span>
+        </label>
+      </span>`;
   } else {
     const automationText = controllerEnabled && device.mode === 'timer' ? '✅ Auto ON (Timer)' : '⭕ Auto OFF';
     const automationColor = controllerEnabled && device.mode === 'timer' ? '#0a0' : '#999';
