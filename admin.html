@@ -1627,10 +1627,21 @@ function renderJobsState(d){
     + порядок.map(j=>{
         const цвет = j.trouble ? '#f44' : (j.ok ? '#5cd98a' : '#ff9800');
         const когда = j.at ? _tursoAgo(j.at) : 'never';
-        const хвост = j.trouble ? ' — '+esc(j.detail||j.trouble) : '';
-        return '<div style="display:flex;justify-content:space-between;gap:10px;border-bottom:1px solid #222;padding:3px 0">'
-          +'<span><span style="color:'+цвет+'">●</span> '+esc(j.name)+'</span>'
-          +'<span class="muted" style="text-align:right">'+esc(когда)+esc(хвост)+'</span></div>';
+        // 🔴 Текст СОБИРАЕТСЯ ЗДЕСЬ и только по-английски. Сводка присылает код
+        // беды и числа: 27.08.2026 в панель приехала готовая русская фраза
+        // «последняя отметка 31 ч назад при сроке 30 ч» — интерфейс английский.
+        let хвост='';
+        if(j.trouble==='silent'){
+          хвост = j.hours_ago!==null&&j.hours_ago!==undefined
+            ? ' — silent for '+Math.round(j.hours_ago)+'h (due every '+j.due_hours+'h)'
+            : ' — never reported';
+        } else if(j.trouble==='failed'){ хвост=' — last run failed'; }
+        else if(j.trouble==='idle'){ хвост=' — ran but did nothing'; }
+        // Имя — светлым: раньше оно наследовало тусклый цвет и не читалось.
+        return '<div style="display:flex;justify-content:space-between;gap:10px;border-bottom:1px solid #333;padding:4px 0">'
+          +'<span style="color:#e8e8f0"><span style="color:'+цвет+'">●</span> '+esc(j.name)+'</span>'
+          +'<span style="color:'+(j.trouble?'#ff8a80':'#aab')+';text-align:right;font-size:12px">'
+          +esc(когда)+esc(хвост)+'</span></div>';
       }).join('')
     + '</div>';
   upd.textContent = d.updated_at ? ('verdict from '+_tursoAgo(d.updated_at)) : '';
