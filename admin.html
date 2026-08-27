@@ -3,7 +3,7 @@
 <script src="api-adapter.js"></script>
 <script src="common.js"></script>
 <style>
-    body{font-family:system-ui,Arial;margin:0;padding:0;max-width:100%;background:#1a1a2e}
+    body{font-family:system-ui,Arial;margin:0;padding:0;max-width:100%;background:#1a1a2e;color:#e8e8f0}
     .header{position:sticky;top:0;z-index:1000;background:#b00;color:#fff;padding:8px 10px;display:flex;justify-content:space-between;align-items:center;gap:8px}
     .header h1{margin:0;font-size:18px}
     .header-info{font-size:12px;text-align:right;line-height:1.3}
@@ -12,7 +12,7 @@
     .card h3{color:#fff;margin-top:0}
     .row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
     .mono{font-family:ui-monospace,monospace}
-    button{padding:8px 12px;border-radius:8px;border:1px solid #888;background:#fafafa;cursor:pointer}
+    button{padding:8px 12px;border-radius:8px;border:1px solid #888;background:#fafafa;color:#111;cursor:pointer}
     button.primary{background:#2c5f2d;color:#fff;border-color:#2c5f2d}
     button.danger{background:#b00;color:#fff;border-color:#900}
     input[type="number"]{padding:8px 10px;border:1px solid #555;border-radius:8px;background:#1a1a2e;color:#fff;width:80px;font-size:16px}
@@ -80,7 +80,7 @@
 <div class="card" id="jobs-state-card">
   <div class="turso-row" id="jobs-state-row" style="padding:10px 12px;background:#15151f;border:1px solid #2c2c44;border-radius:8px">
     <div class="head" onclick="this.closest('.turso-row').classList.toggle('open')" style="display:flex;justify-content:space-between;align-items:center;gap:10px">
-      <div id="jobs-state-summary" class="mono" style="font-size:13px">⏱ Jobs <span class="muted">loading…</span></div>
+      <div id="jobs-state-summary" class="mono" style="font-size:13px;color:#e8e8f0">⏱ Jobs <span class="muted">loading…</span></div>
       <div style="display:flex;align-items:center;gap:8px">
         <button id="jobs-state-refresh-btn" onclick="event.stopPropagation();loadJobsState()" style="font-size:11px;padding:4px 10px">↻ Reload</button>
         <span class="chev">▾</span>
@@ -88,7 +88,7 @@
     </div>
     <div class="more" style="margin-top:8px" id="jobs-state-list"></div>
   </div>
-  <div id="jobs-state-updated" style="font-size:10px;color:#667;margin-top:6px"></div>
+  <div id="jobs-state-updated" style="font-size:10px;color:#999;margin-top:6px"></div>
 </div>
 
 <!-- AWS spend — сколько облако стоит: текущий месяц, прогноз и история.
@@ -98,7 +98,7 @@
 <div class="card" id="aws-spend-card">
   <div class="turso-row" id="aws-spend-row" style="padding:10px 12px;background:#15151f;border:1px solid #2c2c44;border-radius:8px">
     <div class="head" onclick="this.closest('.turso-row').classList.toggle('open')" style="display:flex;justify-content:space-between;align-items:center;gap:10px">
-      <div id="aws-spend-summary" class="mono" style="font-size:13px">💸 AWS <span class="muted">loading…</span></div>
+      <div id="aws-spend-summary" class="mono" style="font-size:13px;color:#e8e8f0">💸 AWS <span class="muted">loading…</span></div>
       <div style="display:flex;align-items:center;gap:8px">
         <button id="aws-spend-refresh-btn" onclick="event.stopPropagation();loadAwsSpend()" style="font-size:11px;padding:4px 10px">↻ Reload</button>
         <span class="chev">▾</span>
@@ -107,7 +107,7 @@
     <div id="aws-spend-bar" style="margin-top:6px"></div>
     <div class="more" style="margin-top:8px" id="aws-spend-history"></div>
   </div>
-  <div id="aws-spend-updated" style="font-size:10px;color:#667;margin-top:6px"></div>
+  <div id="aws-spend-updated" style="font-size:10px;color:#999;margin-top:6px"></div>
 </div>
 
 <!-- Turso DB cascade — usage across the 3 orgs (cached; live on Refresh) -->
