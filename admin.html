@@ -1617,7 +1617,8 @@ function renderJobsState(d){
     sum.innerHTML='⏱ Jobs <span class="muted">no verdict yet — heartbeat has not run</span>';
     list.innerHTML=''; upd.textContent=''; return;
   }
-  const bad=jobs.filter(j=>j.trouble);
+  // Спавший ноутбук в счёт тревог не идёт — иначе шапка карточки врёт красным.
+  const bad=jobs.filter(j=>j.trouble && j.trouble!=='offline');
   sum.innerHTML='⏱ Jobs <b>'+(jobs.length-bad.length)+'/'+jobs.length+'</b> ok'
     +(bad.length?' · <span class="danger">'+bad.length+' silent</span>':' · <span style="color:#5cd98a">all reporting</span>');
 
@@ -1625,7 +1626,11 @@ function renderJobsState(d){
   const порядок=[...bad, ...jobs.filter(j=>!j.trouble)];
   list.innerHTML='<div style="display:grid;grid-template-columns:1fr;gap:3px;font-size:12px" class="mono">'
     + порядок.map(j=>{
-        const цвет = j.trouble ? '#f44' : (j.ok ? '#5cd98a' : '#ff9800');
+        // 🔴 «Ноутбук был закрыт» — не поломка и красным быть не должно: ложная
+        // тревога притупляет внимание так же, как тишина. Но если машины нет третьи
+        // сутки, локальных копий и зеркала действительно нет — это снова беда.
+        const спал = j.trouble==='offline';
+        const цвет = спал ? '#8a8aa0' : (j.trouble ? '#f44' : (j.ok ? '#5cd98a' : '#ff9800'));
         const когда = j.at ? _tursoAgo(j.at) : 'never';
         // 🔴 Текст СОБИРАЕТСЯ ЗДЕСЬ и только по-английски. Сводка присылает код
         // беды и числа: 27.08.2026 в панель приехала готовая русская фраза
@@ -1637,10 +1642,13 @@ function renderJobsState(d){
             : ' — never reported';
         } else if(j.trouble==='failed'){ хвост=' — last run failed'; }
         else if(j.trouble==='idle'){ хвост=' — ran but did nothing'; }
+        else if(спал){ хвост=' — laptop was off ('+Math.round(j.hours_ago||0)+'h)'; }
+        else if(j.trouble==='offline_long'){
+          хвост=' — laptop off '+Math.round((j.hours_ago||0)/24)+'d, no local backups'; }
         // Имя — светлым: раньше оно наследовало тусклый цвет и не читалось.
         return '<div style="display:flex;justify-content:space-between;gap:10px;border-bottom:1px solid #333;padding:4px 0">'
           +'<span style="color:#e8e8f0"><span style="color:'+цвет+'">●</span> '+esc(j.name)+'</span>'
-          +'<span style="color:'+(j.trouble?'#ff8a80':'#aab')+';text-align:right;font-size:12px">'
+          +'<span style="color:'+(спал?'#8a8aa0':(j.trouble?'#ff8a80':'#aab'))+';text-align:right;font-size:12px">'
           +esc(когда)+esc(хвост)+'</span></div>';
       }).join('')
     + '</div>';
