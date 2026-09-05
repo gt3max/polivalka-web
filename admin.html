@@ -1664,9 +1664,27 @@ function renderJobsState(d){
         else if(спал){ хвост=' — laptop was off ('+Math.round(j.hours_ago||0)+'h)'; }
         else if(j.trouble==='offline_long'){
           хвост=' — laptop off '+Math.round((j.hours_ago||0)/24)+'d, no local backups'; }
+        // 🔴 ЧИСЛА, которые процесс о себе сообщил. Их присылал и сервер, и сводка,
+        // а панель молча выбрасывала — из-за этого расход минут Actions (ради
+        // которого счётчик и заводился) на экране не появлялся вовсе. Показываем
+        // до трёх, по-английски: сводка присылает ключи как есть, перевод живёт
+        // здесь, потому что интерфейс английский.
+        const ЯРЛЫКИ={'минут':'min','квота':'quota','процент':'% of quota',
+          'темп_мес':'projected/mo','полный_счёт':'full count','копий':'copies',
+          'учёток':'accounts','правок':'edits','беспокойств':'concerns',
+          'обращений':'requests','настоящих':'valid','отклонённых':'rejected',
+          'настоящих_всего':'valid total','дней_без_попытки':'days idle',
+          'covered':'covered','live':'live','tables':'tables',
+          'dump_mb':'dump MB','folder_mb':'folder MB'};
+        const числа=Object.entries(j.numbers||{})
+          .filter(([k])=>ЯРЛЫКИ[k])
+          .slice(0,3)
+          .map(([k,v])=>ЯРЛЫКИ[k]+' '+esc(String(v)))
+          .join(' · ');
         // Имя — светлым: раньше оно наследовало тусклый цвет и не читалось.
         return '<div style="display:flex;justify-content:space-between;gap:10px;border-bottom:1px solid #333;padding:4px 0">'
-          +'<span style="color:#e8e8f0"><span style="color:'+цвет+'">●</span> '+esc(j.name)+'</span>'
+          +'<span style="color:#e8e8f0"><span style="color:'+цвет+'">●</span> '+esc(j.name)
+          +(числа?'<span class="muted" style="font-size:11px"> · '+числа+'</span>':'')+'</span>'
           +'<span style="color:'+(спал?'#8a8aa0':(j.trouble?'#ff8a80':'#aab'))+';text-align:right;font-size:12px">'
           +esc(когда)+esc(хвост)+'</span></div>';
       }).join('')
