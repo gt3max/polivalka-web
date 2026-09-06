@@ -130,6 +130,19 @@
   <div id="cloudinary-updated" style="font-size:10px;color:#667;margin-top:6px"></div>
 </div>
 
+<!-- ImageKit accounts — звено между Cloudinary и приложением. Приложение не ходит на
+     Cloudinary напрямую: адрес оборачивается в прокси-шард (lib/utils/image_url.dart).
+     За Cloudinary следили, за соседним звеном — нет. Числа собирает
+     scripts/imagekit_usage_to_ddb.py, лямбда только отдаёт готовое. -->
+<div class="card" id="imagekit-card">
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+    <h3 style="margin:0">🖼 ImageKit accounts</h3>
+    <button id="imagekit-refresh-btn" onclick="loadImagekitUsage()" style="font-size:11px;padding:4px 10px">↻ Reload</button>
+  </div>
+  <div id="imagekit-usage"><div class="muted">Loading…</div></div>
+  <div id="imagekit-updated" style="font-size:10px;color:#667;margin-top:6px"></div>
+</div>
+
 <!-- Library growth — что просят и нет (missing_species) + черновые provisional-карточки -->
 <div class="card" id="catalog-growth-card">
   <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
@@ -1870,6 +1883,65 @@ function renderTursoCascade(d){
   if(u) u.innerHTML = `<span style="color:#9aa">roles — </span><b style="color:#5cd98a">live</b><span style="color:#9aa"> · usage snapshot </span><b style="color:${fr.color}">${fr.text}</b>${resetTxt}`;
 }
 
+// ===== ImageKit accounts =====
+// Числа кладёт scripts/imagekit_usage_to_ddb.py в DynamoDB, лямбда отдаёт готовое:
+// ключей ImageKit в её окружении нет и не будет — там оставалось 250 байт из 4060.
+// ⚠️ Лимитов ImageKit API не отдаёт. Пока они не сверены с кабинетом, показываем
+// объём БЕЗ процента и без шкалы: шкала от выдуманного лимита хуже отсутствующей.
+function _mb(b){ if(b===null||b===undefined) return '—';
+  const n=Number(b); return n>=1073741824 ? (n/1073741824).toFixed(2)+' GB' : (n/1048576).toFixed(1)+' MB'; }
+
+function renderImagekitUsage(d){
+  const box=document.getElementById('imagekit-usage');
+  const upd=document.getElementById('imagekit-updated');
+  if(!box) return;
+  const acc=(d&&d.accounts)||[];
+  if(!acc.length){
+    box.innerHTML='<div class="muted">no data yet — collector has not run</div>';
+    upd.textContent=''; return;
+  }
+  box.innerHTML='<table style="width:100%;border-collapse:collapse;font-size:12px" class="mono">'
+    +'<tr style="color:#889;text-align:left"><th>Account</th><th>ID</th><th>Role</th>'
+    +'<th style="text-align:right">Media library</th><th style="text-align:right">Bandwidth</th>'
+    +'<th style="text-align:right">Cache</th></tr>'
+    + acc.map(function(a){
+        if(a.error) return '<tr><td>'+esc(a.acc)+'</td><td colspan="5" class="danger">'+esc(a.error)+'</td></tr>';
+        const pct = a.storage_limit ? ' <span class="muted">'
+          +(100*Number(a.storage_bytes)/Number(a.storage_limit)).toFixed(0)+'%</span>' : '';
+        return '<tr style="border-top:1px solid #333">'
+          +'<td>'+esc(a.acc)+'</td><td>'+esc(a.id)+'</td>'
+          +'<td class="muted">'+esc(a.role||'')+'</td>'
+          +'<td style="text-align:right">'+_mb(a.storage_bytes)+pct+'</td>'
+          +'<td style="text-align:right">'+_mb(a.bandwidth_bytes)+'</td>'
+          +'<td style="text-align:right">'+_mb(a.cache_bytes)+'</td></tr>';
+      }).join('')
+    +'</table>'
+    + (d.limits_source ? '<div class="muted" style="font-size:11px;margin-top:6px">limits: '
+        +esc(d.limits_source)+'</div>' : '');
+  upd.textContent = d.updated_at ? ('updated '+_tursoAgo(d.updated_at)) : '';
+}
+
+async function loadImagekitUsage(){
+  const box=document.getElementById('imagekit-usage');
+  const btn=document.getElementById('imagekit-refresh-btn');
+  if(btn){ btn.disabled=true; btn.textContent='⏳ …'; }
+  try{
+    const res=await fetch(`${API.cloudBase}/admin/imagekit/usage`,{headers:API.getAuthHeaders()});
+    // Пока роут не выложен, он отвечает 404/401. Это не поломка панели, а ожидание
+    // выкладки — красным такое красить нельзя: ложная тревога притупляет внимание.
+    if(res.status===404||res.status===401){
+      if(box) box.innerHTML='<div class="muted">waiting for backend deploy</div>';
+      return;
+    }
+    if(!res.ok) throw new Error('HTTP '+res.status);
+    renderImagekitUsage(await res.json());
+  }catch(e){
+    if(box) box.innerHTML='<div class="muted">Error: '+esc(e.message)+'</div>';
+  }finally{
+    if(btn){ btn.disabled=false; btn.textContent='↻ Reload'; }
+  }
+}
+
 // ===== Cloudinary accounts usage (live — Lambda опрашивает Cloudinary напрямую) =====
 // /usage — бесплатный read-only account-info вызов (bandwidth НЕ жжёт), как finance balances.
 // Метки 5 аккаунтов (не секреты) — чтобы блок рисовался сразу скелетом, до live-цифр.
@@ -2867,6 +2939,7 @@ if (checkAdminAccess()) {
   loadAwsSpend();        // AWS spend — счёт облака: месяц, прогноз, история
   loadTursoUsage();      // Turso cascade — роли live из env Lambda, объёмы из снэпшота
   loadCloudinaryUsage(); // Cloudinary accounts — live (Lambda опрашивает Cloudinary)
+  loadImagekitUsage();   // ImageKit accounts — из DynamoDB, собирает скрипт
   loadCatalogGrowth();   // Library growth — спрос (missing_species) + черновые provisional-карточки
   // Авто-рефреш Turso раз в 90с (дёшево: DDB scan + чтение env) — роли и метка свежести
   // держатся актуальными без ручного Reload, дашборд можно держать открытым.
