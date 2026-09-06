@@ -1885,10 +1885,15 @@ function renderTursoCascade(d){
 }
 
 // ===== ImageKit accounts =====
-// Числа кладёт scripts/imagekit_usage_to_ddb.py в DynamoDB, лямбда отдаёт готовое:
-// ключей ImageKit в её окружении нет и не будет — там оставалось 250 байт из 4060.
-// ⚠️ Лимитов ImageKit API не отдаёт. Пока они не сверены с кабинетом, показываем
-// объём БЕЗ процента и без шкалы: шкала от выдуманного лимита хуже отсутствующей.
+// Лямбда спрашивает ImageKit ЖИВЬЁМ на каждое нажатие — как соседняя карточка
+// спрашивает Cloudinary. Раньше здесь читалась запись, которую клал скрипт снаружи,
+// а скрипт не стоял в расписании: кнопка перечитывала позавчерашнее и выглядела
+// сломанной.
+// 🔴 Объём считается по СПИСКУ ФАЙЛОВ. Счётчик ImageKit врёт: 06.09.2026 он
+// показывал 4.8 МБ на пустом аккаунте и НОЛЬ на аккаунте с 28 файлами. Поэтому
+// рядом с объёмом показываем и число файлов — подмена так не спрячется.
+// Пределы (3 ГБ медиатеки, 20 ГБ трафика в месяц) их API не отдаёт, они сверены
+// с кабинетом владельцем 06.09.2026 и заданы в лямбде.
 
 function renderImagekitUsage(d){
   const box=document.getElementById('imagekit-usage');
@@ -1896,7 +1901,7 @@ function renderImagekitUsage(d){
   if(!box) return;
   const acc=(d&&d.accounts)||[];
   if(!acc.length){
-    box.innerHTML='<div class="muted">no data yet — collector has not run</div>';
+    box.innerHTML='<div class="muted">no accounts configured</div>';
     if(upd) upd.textContent=''; return;
   }
   // Разметка и помощники — те же, что у карточки Cloudinary выше (`renderCloudinary`),
@@ -1921,7 +1926,8 @@ function renderImagekitUsage(d){
       ${td(`<span style="color:#dfe3ee">${esc(a.email||'')}</span>`)}
       ${td(`<span class="muted" style="font-size:10px">${esc(a.id||'')}</span>`)}
       ${td(пара(a.bandwidth_bytes,a.bandwidth_limit),'right')}
-      ${td(пара(a.storage_bytes,a.storage_limit),'right')}
+      ${td(пара(a.storage_bytes,a.storage_limit)
+           + (a.files!=null?`<div class="muted" style="font-size:10px">${a.files} files</div>`:''),'right')}
       ${td(_tursoBytes(Number(a.cache_bytes)||0),'right','#9aa')}
     </tr>`;
   }).join('');
