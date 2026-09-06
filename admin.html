@@ -1889,8 +1889,6 @@ function renderTursoCascade(d){
 // ключей ImageKit в её окружении нет и не будет — там оставалось 250 байт из 4060.
 // ⚠️ Лимитов ImageKit API не отдаёт. Пока они не сверены с кабинетом, показываем
 // объём БЕЗ процента и без шкалы: шкала от выдуманного лимита хуже отсутствующей.
-function _mb(b){ if(b===null||b===undefined) return '—';
-  const n=Number(b); return n>=1073741824 ? (n/1073741824).toFixed(2)+' GB' : (n/1048576).toFixed(1)+' MB'; }
 
 function renderImagekitUsage(d){
   const box=document.getElementById('imagekit-usage');
@@ -1899,35 +1897,37 @@ function renderImagekitUsage(d){
   const acc=(d&&d.accounts)||[];
   if(!acc.length){
     box.innerHTML='<div class="muted">no data yet — collector has not run</div>';
-    upd.textContent=''; return;
+    if(upd) upd.textContent=''; return;
   }
-  // Доля от лимита с тем же порогом цвета, что у Cloudinary: до 80% спокойно.
-  function доля(used, limit){
-    if(!limit) return '';
-    const p=100*Number(used)/Number(limit);
-    const c=p<80?'#5cd98a':(p<100?'#ff9800':'#f44');
-    return ' <span style="color:'+c+'">'+p.toFixed(1)+'%</span>';
-  }
-  box.innerHTML='<table style="width:100%;border-collapse:collapse;font-size:12px" class="mono">'
-    +'<tr style="color:#889;text-align:left"><th>Account</th><th>Email</th><th>ID</th>'
-    +'<th style="text-align:right">Bandwidth</th><th style="text-align:right">Media library</th>'
-    +'<th style="text-align:right">Cache</th></tr>'
-    + acc.map(function(a){
-        if(a.error) return '<tr><td>'+esc(a.acc)+'</td><td colspan="5" class="danger">'+esc(a.error)+'</td></tr>';
-        return '<tr style="border-top:1px solid #333">'
-          +'<td>'+esc(a.acc)+'</td>'
-          +'<td class="muted">'+esc(a.email||'')+'</td>'
-          +'<td>'+esc(a.id)+'</td>'
-          +'<td style="text-align:right">'+_mb(a.bandwidth_bytes)
-            +'<span class="muted"> / '+_mb(a.bandwidth_limit)+'</span>'+доля(a.bandwidth_bytes,a.bandwidth_limit)+'</td>'
-          +'<td style="text-align:right">'+_mb(a.storage_bytes)
-            +'<span class="muted"> / '+_mb(a.storage_limit)+'</span>'+доля(a.storage_bytes,a.storage_limit)+'</td>'
-          +'<td style="text-align:right">'+_mb(a.cache_bytes)+'</td></tr>';
-      }).join('')
-    +'</table>'
-    + (d.limits_verified ? '' : '<div class="muted" style="font-size:11px;margin-top:6px">'
-        +'limits are the published free-plan figures — not yet verified against the ImageKit dashboard</div>');
-  upd.textContent = d.updated_at ? ('updated '+_tursoAgo(d.updated_at)) : '';
+  // Разметка и помощники — те же, что у карточки Cloudinary выше (`renderCloudinary`),
+  // чтобы две соседние карточки читались как одна таблица, а не как две разные.
+  const th=(t,align)=>`<th style="padding:6px 8px;font-weight:600;text-align:${align||'left'};border-bottom:2px solid #444;white-space:nowrap">${t}</th>`;
+  const td=(v,align,color)=>`<td style="padding:6px 8px;text-align:${align||'left'};border-bottom:1px solid #26263a;white-space:nowrap;${color?'color:'+color:''}">${v}</td>`;
+  const пара=(used,limit)=>{
+    const u=Number(used)||0, l=Number(limit)||0;
+    if(!l) return `<span class="mono" style="color:#9aa">${_tursoBytes(u)}</span>`;
+    const p=100*u/l;
+    return `<span class="mono" style="color:${_tursoColor(p)}">${_tursoBytes(u)} / ${_tursoBytes(l)} <b>${p.toFixed(1)}%</b></span>`;
+  };
+  const body=acc.map(a=>{
+    if(a.error){
+      return `<tr>${td(`<b style="color:#6fb0e8">${esc(a.acc||'')}</b>`)}`
+        +`<td colspan="5" class="muted" style="padding:6px 8px;border-bottom:1px solid #26263a;font-size:10px">${esc(a.error)}</td></tr>`;
+    }
+    return `<tr>
+      ${td(`<b style="color:#6fb0e8">${esc(a.acc||'')}</b>`)}
+      ${td(`<span style="color:#dfe3ee">${esc(a.email||'')}</span>`)}
+      ${td(`<span class="muted" style="font-size:10px">${esc(a.id||'')}</span>`)}
+      ${td(пара(a.bandwidth_bytes,a.bandwidth_limit),'right')}
+      ${td(пара(a.storage_bytes,a.storage_limit),'right')}
+      ${td(_tursoBytes(Number(a.cache_bytes)||0),'right','#9aa')}
+    </tr>`;
+  }).join('');
+  box.innerHTML=`<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:12px;color:#ddd">
+    <thead><tr style="color:#9aa">${th('Account')}${th('Email')}${th('ID')}${th('Bandwidth','right')}${th('Media library','right')}${th('Cache','right')}</tr></thead>
+    <tbody>${body}</tbody></table></div>`
+    + (d.limits_verified ? '' : '<div class="muted" style="font-size:10px;margin-top:6px">limits not verified against the ImageKit dashboard</div>');
+  if(upd) upd.textContent = d.updated_at ? ('updated '+_tursoAgo(d.updated_at)) : '';
 }
 
 async function loadImagekitUsage(){
