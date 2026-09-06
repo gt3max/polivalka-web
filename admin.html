@@ -1926,9 +1926,14 @@ function renderImagekitUsage(d){
     </tr>`;
   }).join('');
   box.innerHTML=`<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:12px;color:#ddd">
-    <thead><tr style="color:#9aa">${th('Account')}${th('Email')}${th('ID')}${th('Bandwidth','right')}${th('Media library','right')}${th('Cache','right')}</tr></thead>
+    <thead><tr style="color:#9aa">${th('Account')}${th('Email')}${th('ID')}${th('Bandwidth','right')}${th('Media library','right')}${th('Origin cache','right')}</tr></thead>
     <tbody>${body}</tbody></table></div>`
-    + (d.limits_verified ? '' : '<div class="muted" style="font-size:10px;margin-top:6px">limits not verified against the ImageKit dashboard</div>');
+    + '<div class="muted" style="font-size:10px;margin-top:6px">'
+    + 'Origin cache = ImageKit storing pulled originals (paid feature, off — hence 0). '
+    + 'CDN edge caching works regardless: verified 06.09.2026, s-maxage 1 year, '
+    + 'so each URL costs Cloudinary one origin pull and then nothing.'
+    + (d.limits_verified ? '' : '<br>limits not verified against the ImageKit dashboard')
+    + '</div>';
   if(upd) upd.textContent = d.updated_at ? ('updated '+_tursoAgo(d.updated_at)) : '';
 }
 
