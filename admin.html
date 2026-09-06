@@ -1907,7 +1907,9 @@ function renderImagekitUsage(d){
     const u=Number(used)||0, l=Number(limit)||0;
     if(!l) return `<span class="mono" style="color:#9aa">${_tursoBytes(u)}</span>`;
     const p=100*u/l;
-    return `<span class="mono" style="color:${_tursoColor(p)}">${_tursoBytes(u)} / ${_tursoBytes(l)} <b>${p.toFixed(1)}%</b></span>`;
+    // Полоска заполненности — та же, что у Cloudinary (`_tursoBar`): по числу видно
+    // мало, по полоске сразу понятно, близко ли предел.
+    return `<span class="mono" style="color:${_tursoColor(p)}">${_tursoBytes(u)} / ${_tursoBytes(l)} <b>${p.toFixed(1)}%</b></span>${_tursoBar(p)}`;
   };
   const body=acc.map(a=>{
     if(a.error){
