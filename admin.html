@@ -1892,10 +1892,6 @@ function renderTursoCascade(d){
 function _mb(b){ if(b===null||b===undefined) return '—';
   const n=Number(b); return n>=1073741824 ? (n/1073741824).toFixed(2)+' GB' : (n/1048576).toFixed(1)+' MB'; }
 
-// 🔴 Текст собирается ЗДЕСЬ по коду, а не приезжает готовой фразой: интерфейс
-// английский, русские строки в панель попадать не должны.
-const РОЛЬ={doctor:'Doctor media library', delivery:'Library delivery'};
-
 function renderImagekitUsage(d){
   const box=document.getElementById('imagekit-usage');
   const upd=document.getElementById('imagekit-updated');
@@ -1905,24 +1901,32 @@ function renderImagekitUsage(d){
     box.innerHTML='<div class="muted">no data yet — collector has not run</div>';
     upd.textContent=''; return;
   }
+  // Доля от лимита с тем же порогом цвета, что у Cloudinary: до 80% спокойно.
+  function доля(used, limit){
+    if(!limit) return '';
+    const p=100*Number(used)/Number(limit);
+    const c=p<80?'#5cd98a':(p<100?'#ff9800':'#f44');
+    return ' <span style="color:'+c+'">'+p.toFixed(1)+'%</span>';
+  }
   box.innerHTML='<table style="width:100%;border-collapse:collapse;font-size:12px" class="mono">'
-    +'<tr style="color:#889;text-align:left"><th>Account</th><th>ID</th><th>Role</th>'
-    +'<th style="text-align:right">Media library</th><th style="text-align:right">Bandwidth</th>'
+    +'<tr style="color:#889;text-align:left"><th>Account</th><th>Email</th><th>ID</th>'
+    +'<th style="text-align:right">Bandwidth</th><th style="text-align:right">Media library</th>'
     +'<th style="text-align:right">Cache</th></tr>'
     + acc.map(function(a){
         if(a.error) return '<tr><td>'+esc(a.acc)+'</td><td colspan="5" class="danger">'+esc(a.error)+'</td></tr>';
-        const pct = a.storage_limit ? ' <span class="muted">'
-          +(100*Number(a.storage_bytes)/Number(a.storage_limit)).toFixed(0)+'%</span>' : '';
         return '<tr style="border-top:1px solid #333">'
-          +'<td>'+esc(a.acc)+'</td><td>'+esc(a.id)+'</td>'
-          +'<td class="muted">'+esc(РОЛЬ[a.role]||a.role||'')+'</td>'
-          +'<td style="text-align:right">'+_mb(a.storage_bytes)+pct+'</td>'
-          +'<td style="text-align:right">'+_mb(a.bandwidth_bytes)+'</td>'
+          +'<td>'+esc(a.acc)+'</td>'
+          +'<td class="muted">'+esc(a.email||'')+'</td>'
+          +'<td>'+esc(a.id)+'</td>'
+          +'<td style="text-align:right">'+_mb(a.bandwidth_bytes)
+            +'<span class="muted"> / '+_mb(a.bandwidth_limit)+'</span>'+доля(a.bandwidth_bytes,a.bandwidth_limit)+'</td>'
+          +'<td style="text-align:right">'+_mb(a.storage_bytes)
+            +'<span class="muted"> / '+_mb(a.storage_limit)+'</span>'+доля(a.storage_bytes,a.storage_limit)+'</td>'
           +'<td style="text-align:right">'+_mb(a.cache_bytes)+'</td></tr>';
       }).join('')
     +'</table>'
     + (d.limits_verified ? '' : '<div class="muted" style="font-size:11px;margin-top:6px">'
-        +'limits not verified against the ImageKit dashboard — showing size without a bar</div>');
+        +'limits are the published free-plan figures — not yet verified against the ImageKit dashboard</div>');
   upd.textContent = d.updated_at ? ('updated '+_tursoAgo(d.updated_at)) : '';
 }
 
