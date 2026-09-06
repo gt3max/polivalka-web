@@ -1688,7 +1688,8 @@ function renderJobsState(d){
           'обращений':'requests','настоящих':'valid','отклонённых':'rejected',
           'настоящих_всего':'valid total','дней_без_попытки':'days idle',
           'covered':'covered','live':'live','tables':'tables',
-          'dump_mb':'dump MB','folder_mb':'folder MB'};
+          'dump_mb':'dump MB','folder_mb':'folder MB',
+          'accounts':'accounts','storage_mb':'storage MB'};
         const числа=Object.entries(j.numbers||{})
           .filter(([k])=>ЯРЛЫКИ[k])
           .slice(0,3)
@@ -1891,6 +1892,10 @@ function renderTursoCascade(d){
 function _mb(b){ if(b===null||b===undefined) return '—';
   const n=Number(b); return n>=1073741824 ? (n/1073741824).toFixed(2)+' GB' : (n/1048576).toFixed(1)+' MB'; }
 
+// 🔴 Текст собирается ЗДЕСЬ по коду, а не приезжает готовой фразой: интерфейс
+// английский, русские строки в панель попадать не должны.
+const РОЛЬ={doctor:'Doctor media library', delivery:'Library delivery'};
+
 function renderImagekitUsage(d){
   const box=document.getElementById('imagekit-usage');
   const upd=document.getElementById('imagekit-updated');
@@ -1910,14 +1915,14 @@ function renderImagekitUsage(d){
           +(100*Number(a.storage_bytes)/Number(a.storage_limit)).toFixed(0)+'%</span>' : '';
         return '<tr style="border-top:1px solid #333">'
           +'<td>'+esc(a.acc)+'</td><td>'+esc(a.id)+'</td>'
-          +'<td class="muted">'+esc(a.role||'')+'</td>'
+          +'<td class="muted">'+esc(РОЛЬ[a.role]||a.role||'')+'</td>'
           +'<td style="text-align:right">'+_mb(a.storage_bytes)+pct+'</td>'
           +'<td style="text-align:right">'+_mb(a.bandwidth_bytes)+'</td>'
           +'<td style="text-align:right">'+_mb(a.cache_bytes)+'</td></tr>';
       }).join('')
     +'</table>'
-    + (d.limits_source ? '<div class="muted" style="font-size:11px;margin-top:6px">limits: '
-        +esc(d.limits_source)+'</div>' : '');
+    + (d.limits_verified ? '' : '<div class="muted" style="font-size:11px;margin-top:6px">'
+        +'limits not verified against the ImageKit dashboard — showing size without a bar</div>');
   upd.textContent = d.updated_at ? ('updated '+_tursoAgo(d.updated_at)) : '';
 }
 
