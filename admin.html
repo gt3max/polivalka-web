@@ -2233,7 +2233,39 @@ function renderUsersList() {
     const spentBadge = (spentVal !== null && spentVal > 0)
       ? ` <span title="Total spent — lifetime (all paid AI calls: Haiku, Plant.id, …)" style="background:#3a1f1f;color:#f2a3a3;padding:2px 9px;border-radius:11px;font-weight:600;font-size:10px;white-space:nowrap">💰 $${spentVal.toFixed(4)}</span>`
       : '';
-    const appBadge = `${sourcePill}${rolePill}${usageTxt}${spentBadge}`;
+    // 🔴 Подписка целиком, а не одна плашка «Premium».
+    //
+    // Сервер отдавал срок и источник с 21.07.2026, а панель рисовала только
+    // тир — и просроченный премиум выглядел точно так же, как действующий.
+    // 12.09.2026 это было видно прямо на наших данных: у одной служебной
+    // учётки горело зелёное «Premium», хотя срок истёк 10 августа.
+    //
+    // Показываем три вещи, каждую по своей причине:
+    //   · СРОК — красным, если он в прошлом. Иначе панель врёт о деньгах;
+    //   · ИСТОЧНИК — apple / stripe / manual. Выставленное командой не должно
+    //     притворяться покупкой;
+    //   · ОПОЗНАВАТЕЛЬ ПОКУПКИ — две учётки с одинаковым делят одну подписку.
+    //     В customer_id лежит идентификатор ПРОДУКТА, одинаковый у всех, и
+    //     поймать такое по нему нельзя.
+    let subBadge = '';
+    if (tier === 'premium') {
+      const exp = st.sub_expires ? new Date(st.sub_expires) : null;
+      const истёк = exp && exp.getTime() < Date.now();
+      const когда = exp
+        ? exp.toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' })
+        : 'без срока';
+      // «Без срока» — тоже тревога: сервер такую запись считает бесплатной
+      // (fail-closed), значит человек платит и премиума не получает.
+      const тревога = истёк || !exp;
+      subBadge += ` <span title="${st.sub_expires || 'срок не записан'}" style="background:${тревога ? '#3a1f1f' : '#1f2a3a'};color:${тревога ? '#f2a3a3' : '#9ab7d4'};padding:2px 8px;border-radius:11px;font-size:10px;white-space:nowrap">${тревога ? '⚠' : '⏳'} ${истёк ? 'истёк ' : 'до '}${когда}</span>`;
+      const src = st.sub_provider || '—';
+      const ручной = src !== 'apple' && src !== 'stripe';
+      subBadge += ` <span title="источник оплаты" style="background:${ручной ? '#3a3000' : '#20262e'};color:${ручной ? '#ffd700' : '#9ab'};padding:2px 8px;border-radius:11px;font-size:10px">${ручной ? '🛠 ' : ''}${src}</span>`;
+      if (st.sub_txn) {
+        subBadge += ` <span title="опознаватель покупки: ${st.sub_txn} — одинаковый у двух учёток значит, что подписку делят" style="background:#20262e;color:#7a8b9a;padding:2px 8px;border-radius:11px;font-size:10px;font-family:monospace">#${String(st.sub_txn).slice(-6)}</span>`;
+      }
+    }
+    const appBadge = `${sourcePill}${rolePill}${subBadge}${usageTxt}${spentBadge}`;
     // Expanded-panel quota line: only for app users (web users have no app usage yet; admins none).
     const pidLine = (lim.plantid > 0) ? ` &nbsp; <span title="Plant.id — this month">${ICONS.plantid} <b>${fmtUsage(usedPid, lim.plantid)}/mo</b></span>` : '';
     const quotaLine = !isAppUser
