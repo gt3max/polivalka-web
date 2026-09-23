@@ -2250,7 +2250,7 @@ function renderUsersList() {
     //     поймать такое по нему нельзя.
     let subBadge = '';
     if (tier === 'premium') {
-      const exp = st.sub_expires ? new Date(st.sub_expires) : null;
+      const exp = u.sub_expires ? new Date(u.sub_expires) : null;
       const истёк = exp && exp.getTime() < Date.now();
       const когда = exp
         ? exp.toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' })
@@ -2258,12 +2258,19 @@ function renderUsersList() {
       // «Без срока» — тоже тревога: сервер такую запись считает бесплатной
       // (fail-closed), значит человек платит и премиума не получает.
       const тревога = истёк || !exp;
-      subBadge += ` <span title="${st.sub_expires || 'срок не записан'}" style="background:${тревога ? '#3a1f1f' : '#1f2a3a'};color:${тревога ? '#f2a3a3' : '#9ab7d4'};padding:2px 8px;border-radius:11px;font-size:10px;white-space:nowrap">${тревога ? '⚠' : '⏳'} ${истёк ? 'истёк ' : 'до '}${когда}</span>`;
-      const src = st.sub_provider || '—';
+      subBadge += ` <span title="${u.sub_expires || 'срок не записан'}" style="background:${тревога ? '#3a1f1f' : '#1f2a3a'};color:${тревога ? '#f2a3a3' : '#9ab7d4'};padding:2px 8px;border-radius:11px;font-size:10px;white-space:nowrap">${тревога ? '⚠' : '⏳'} ${истёк ? 'истёк ' : 'до '}${когда}</span>`;
+      const src = u.sub_provider || '—';
       const ручной = src !== 'apple' && src !== 'stripe';
       subBadge += ` <span title="источник оплаты" style="background:${ручной ? '#3a3000' : '#20262e'};color:${ручной ? '#ffd700' : '#9ab'};padding:2px 8px;border-radius:11px;font-size:10px">${ручной ? '🛠 ' : ''}${src}</span>`;
-      if (st.sub_txn) {
-        subBadge += ` <span title="опознаватель покупки: ${st.sub_txn} — одинаковый у двух учёток значит, что подписку делят" style="background:#20262e;color:#7a8b9a;padding:2px 8px;border-radius:11px;font-size:10px;font-family:monospace">#${String(st.sub_txn).slice(-6)}</span>`;
+      // 🔴 Когда сервер последний раз спрашивал Apple про этот чек. Возврат денег
+      // ловится суточным проходом, и без этой метки непонятно, доступ ещё не сняли
+      // или проверка вообще перестала ходить.
+      if (u.sub_provider === 'apple') {
+        const п = u.apple_checked_at ? String(st.apple_checked_at).slice(0, 10) : null;
+        subBadge += ` <span title="последняя перепроверка чека у Apple${п ? '' : ' — ни разу'}" style="background:${п ? '#20262e' : '#3a1f1f'};color:${п ? '#9ab' : '#f2a3a3'};padding:2px 8px;border-radius:11px;font-size:10px;white-space:nowrap">🍎 ${п || 'не проверялся'}</span>`;
+      }
+      if (u.sub_txn) {
+        subBadge += ` <span title="опознаватель покупки: ${u.sub_txn} — одинаковый у двух учёток значит, что подписку делят" style="background:#20262e;color:#7a8b9a;padding:2px 8px;border-radius:11px;font-size:10px;font-family:monospace">#${String(u.sub_txn).slice(-6)}</span>`;
       }
     }
     const appBadge = `${sourcePill}${rolePill}${subBadge}${usageTxt}${spentBadge}`;
