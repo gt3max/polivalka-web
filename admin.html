@@ -1377,9 +1377,33 @@ async function resetStats(group) {
 //
 // Не удаляем, а переводим на живые данные: тот же `/admin/aws/spend`, что и у
 // карточки расхода выше. Разделение получается естественное — та отвечает «сколько»
-// (текущий месяц, прогноз, история), эта «за что» (последний полный месяц по
-// сервисам). Разбивка приходит тем же платным запросом Cost Explorer, что и история,
-// поэтому стоит ноль: платим за него раз в месяц, а не за каждый показ.
+// (текущий месяц, прогноз, история), эта «за что» (по службам). Разбивка приходит тем
+// же платным запросом Cost Explorer, что и история, поэтому показ стоит ноль.
+//
+// 🔴 24.09.2026 (W39): разбивка стала за ТЕКУЩИЙ месяц, а не за последний полный.
+// Прежде период обрывался на первом числе, и свежий месяц не раскладывался НИКОГДА:
+// владелец смотрел на сентябрьский счёт $1.31, а карточка показывала август — и
+// августовские числа читались как сентябрьские. Подпись периода теперь приходит с
+// сервера (`by_service_period`), а не вычисляется здесь по последней строке истории.
+// Период разбивки приходит как «2026-09-01..2026-09-24». Показываем коротко:
+// «Sep 1–24». Пусто/непонятно — подписи нет вовсе, врать о периоде хуже, чем молчать.
+const _AWS_MON = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+function awsPeriodLabel(period) {
+  const m = /^(\d{4})-(\d{2})-(\d{2})\.\.(\d{4})-(\d{2})-(\d{2})$/.exec(String(period || ''));
+  if (!m) return '';
+  const mon = _AWS_MON[Number(m[2]) - 1] || m[2];
+  const d1 = Number(m[3]), d2 = Number(m[6]);
+  if (m[2] !== m[5]) return mon + ' ' + d1 + ' – ' + (_AWS_MON[Number(m[5]) - 1] || m[5]) + ' ' + d2;
+  return d1 === d2 ? (mon + ' ' + d1) : (mon + ' ' + d1 + '–' + d2);
+}
+// Идёт ли период до сегодняшнего дня — от этого зависит, «за месяц» сумма или «пока что».
+function awsPeriodIsCurrent(period) {
+  const m = /\.\.(\d{4})-(\d{2})-(\d{2})$/.exec(String(period || ''));
+  if (!m) return false;
+  const now = new Date();
+  return Number(m[1]) === now.getFullYear() && Number(m[2]) === (now.getMonth() + 1);
+}
+
 async function loadAwsCosts() {
   const body = document.getElementById('awscost-body');
   if (!body) return;
@@ -1389,10 +1413,11 @@ async function loadAwsCosts() {
     const d = await res.json();
     const svc = (d && d.by_service) || [];
     const mo = document.getElementById('awscost-month');
-    // Подписываем, ЗА КАКОЙ месяц разбивка: это последний ПОЛНЫЙ месяц, а не текущий,
-    // и без подписи цифры выглядели бы расхождением с карточкой расхода.
-    const last = (d && d.history && d.history.length) ? d.history[d.history.length - 1].month : '';
-    if (mo) mo.textContent = last ? ('· ' + last + ' (last full month)') : '';
+    // 🔴 Подпись периода обязательна и держится КОРОТКОЙ: длинная подпись уже ломала
+    // ширину карточек (23.09.2026). «Sep 1–24» — этого достаточно, чтобы отличить
+    // месяц к сегодняшнему дню от закрытого месяца.
+    const period = awsPeriodLabel(d && d.by_service_period);
+    if (mo) mo.textContent = period ? ('· ' + period) : '';
     if (!svc.length) {
       body.innerHTML = '<div class="muted">breakdown appears with the next monthly bill</div>';
       return;
@@ -1408,7 +1433,7 @@ async function loadAwsCosts() {
     }).join('');
     body.innerHTML =
       `<div style="font-size:20px;font-weight:700;margin-bottom:6px">$${total.toFixed(2)}`
-      + ` <span class="muted" style="font-size:11px">USD/mo</span></div>`
+      + ` <span class="muted" style="font-size:11px">${awsPeriodIsCurrent(d && d.by_service_period) ? 'USD to date' : 'USD/mo'}</span></div>`
       + rows
       + (d.updated_at ? `<div class="muted" style="font-size:11px;margin-top:8px">updated ${esc(_tursoAgo(d.updated_at))}</div>` : '');
   } catch (e) {
