@@ -1930,8 +1930,9 @@ function renderImagekitUsage(d){
         +`<td colspan="5" class="muted" style="padding:6px 8px;border-bottom:1px solid #26263a;font-size:10px">${esc(a.error)}</td></tr>`;
     }
     return `<tr>
-      ${td(`<b style="color:#6fb0e8">${esc(a.acc||'')}</b>`
-           + (a.role?`<div class="muted" style="font-size:10px;white-space:normal;max-width:150px">${esc(a.role)}</div>`:''))}
+      ${/* 🔴 Роль аккаунта под именем убрана 23.09.2026: она растягивала колонку и
+            засоряла таблицу. Смысл переехал в подсказку ⓘ — там ему и место. */''}
+      ${td(`<b style="color:#6fb0e8">${esc(a.acc||'')}</b>`)}
       ${td(`<span style="color:#dfe3ee">${esc(a.email||'')}</span>`)}
       ${td(`<span class="muted" style="font-size:10px">${esc(a.id||'')}</span>`)}
       ${td(пара(a.bandwidth_bytes,a.bandwidth_limit),'right')}
