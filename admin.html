@@ -1499,8 +1499,19 @@ const ICONS = {
   openrouter: '🤖', // OpenRouter (LLM provider behind Doctor)
   serpapi:    '🔎', // SerpAPI (search provider)
 };
+//: Значки счётчиков — ТЕ ЖЕ, что в приложении (Material Icons, Apache 2.0): контуры взяты из
+//: шрифта Flutter `MaterialIcons-Regular.otf` — camera_alt_rounded (определитель), eco_rounded
+//: (растения), medical_services_rounded (AI Doctor, как вкладка в `lib/app/router.dart`). Вставлены
+//: прямо в страницу: без внешнего шрифта, одинаково в любом браузере (18.10.2026, владелец:
+//: «в приложении есть нормальный значок доктора»).
+const APP_ICONS = {
+  camera_alt: '<svg viewBox="0 0 512 512" width="14" height="14" fill="currentColor" style="vertical-align:-2px" aria-hidden="true"><path d="M192 256C192 221 221 192 256 192C291 192 320 221 320 256C320 291 291 320 256 320C221 320 192 291 192 256ZM427 85H359L333 57C325 48 313 43 301 43H211C199 43 187 48 179 57L153 85H85C62 85 43 105 43 128V384C43 407 62 427 85 427H427C450 427 469 407 469 384V128C469 105 450 85 427 85ZM256 363C197 363 149 315 149 256C149 197 197 149 256 149C315 149 363 197 363 256C363 315 315 363 256 363Z"/></svg>',
+  eco: '<svg viewBox="0 0 512 512" width="14" height="14" fill="currentColor" style="vertical-align:-2px" aria-hidden="true"><path d="M129 172C71 230 71 324 129 383C160 310 216 249 286 213C227 263 185 333 171 412C226 438 294 429 340 383C404 319 422 145 426 97C426 91 421 86 415 86C367 90 193 108 129 172Z"/></svg>',
+  medical_services: '<svg viewBox="0 0 512 512" width="14" height="14" fill="currentColor" style="vertical-align:-2px" aria-hidden="true"><path d="M427 128H341V85C341 62 322 43 299 43H213C190 43 171 62 171 85V128H85C62 128 43 147 43 171V427C43 450 62 469 85 469H427C450 469 469 450 469 427V171C469 147 450 128 427 128ZM213 85H299V128H213V85ZM320 320H277V363C277 374 268 384 256 384C244 384 235 374 235 363V320H192C180 320 171 310 171 299C171 287 180 277 192 277H235V235C235 223 244 213 256 213C268 213 277 223 277 235V277H320C332 277 341 287 341 299C341 310 332 320 320 320Z"/></svg>',
+};
 function mi(name) {
-  return ({ medical_services: ICONS.doctor, local_hospital: ICONS.doctor, camera_alt: ICONS.identify, eco: ICONS.plants })[name] || '';
+  if (name === 'local_hospital') name = 'medical_services';
+  return APP_ICONS[name] || '';
 }
 
 // Load users with whitelist status
