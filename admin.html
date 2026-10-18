@@ -2313,8 +2313,9 @@ function renderUsersList() {
       const src = u.sub_provider || '—';
       const ручной = src !== 'apple' && src !== 'stripe';
       //: код источника — в подсказке; на плашке словами: оплачено (Apple/Stripe) или выдано нами
-      const ИСТОЧНИК = { apple: 'Apple', stripe: 'Stripe', manual: 'Granted', manual_test: 'Test grant' };
-      subBadge += ` <span title="payment source: ${esc(src)} — Granted / Test grant = premium given by us, not paid" style="background:${ручной ? '#3a3000' : '#20262e'};color:${ручной ? '#ffd700' : '#9ab'};padding:2px 8px;border-radius:11px;font-size:10px;white-space:nowrap">${ручной ? '🛠 ' : ''}${ИСТОЧНИК[src] || esc(src)}</span>`;
+      //: `manual` и `manual_test` для сервера одно и то же (премиум выдан нами до срока) — одно имя
+      const ИСТОЧНИК = { apple: 'Apple', stripe: 'Stripe' };
+      subBadge += ` <span title="payment source: ${esc(src)} — Granted = premium given by us, not paid" style="background:${ручной ? '#3a3000' : '#20262e'};color:${ручной ? '#ffd700' : '#9ab'};padding:2px 8px;border-radius:11px;font-size:10px;white-space:nowrap">${ручной ? '🛠 Granted' : (ИСТОЧНИК[src] || esc(src))}</span>`;
       // 🔴 Когда сервер последний раз спрашивал Apple про этот чек. Возврат денег
       // ловится суточным проходом, и без этой метки непонятно, доступ ещё не сняли
       // или проверка вообще перестала ходить.
