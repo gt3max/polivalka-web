@@ -1475,6 +1475,8 @@ let allUsersData = [];
 let allDevicesData = [];
 // App-axis: tier + monthly usage per user, keyed by email (from /admin/users/stats)
 let statsMap = {};
+//: траты удалённых учёток (сервер: deleted_accounts, только в полной загрузке; лёгкая держит прежнее)
+let deletedAccounts = null;
 // Limits — SYNC with TIER_POLICY (plantapp-cloud/shared/user_storage.py). -1 = ∞.
 // `doctor`/`identify` = MONTHLY caps; `doctorDay`/`identifyDay` = DAILY caps.
 // Free: doctor 1/день · 3/мес; identify 5/день · 15/мес; plants 5.
@@ -1490,7 +1492,7 @@ function fmtUsage(n, lim) { return (lim < 0 ? `${n}/∞` : `${n}/${lim}`); }
 // Change an icon here → it updates everywhere on the page (usage line, money pool, etc).
 // Features (what the user consumes) and the paid provider that funds each one.
 const ICONS = {
-  doctor:     '🏥', // Doctor (diagnoses)  ← funded by OpenRouter
+  doctor:     '🩺', // AI Doctor (diagnoses)  ← funded by OpenRouter; 🩺 — not 🏥 (owner 18.10.2026: «невнятный»)
   identify:   '📷', // Identify (scans)
   plants:     '🌿', // Plants saved
   plantid:    '🪴', // Plant.id (premium identification)
@@ -1498,7 +1500,7 @@ const ICONS = {
   serpapi:    '🔎', // SerpAPI (search provider)
 };
 function mi(name) {
-  return ({ local_hospital: ICONS.doctor, camera_alt: ICONS.identify, eco: ICONS.plants })[name] || '';
+  return ({ medical_services: ICONS.doctor, local_hospital: ICONS.doctor, camera_alt: ICONS.identify, eco: ICONS.plants })[name] || '';
 }
 
 // Load users with whitelist status
@@ -1514,10 +1516,13 @@ async function loadUsers(light) {
     await loadWhitelist();
 
     // Load users from AWS
-    const res = await fetch(`${API.cloudBase}/admin/users`, {
-      headers: API.getAuthHeaders()
-    });
-    if (!res.ok) throw new Error('Failed to load users');
+    //: один повтор через 2 с, и в тексте ошибки — код ответа или «network»: до 18.10.2026
+    //: панель писала только «Failed», и место поломки нельзя было назвать
+    const getUsers = () => fetch(`${API.cloudBase}/admin/users`, { headers: API.getAuthHeaders() })
+      .catch(e => ({ ok: false, status: 'network: ' + (e && e.message || e) }));
+    let res = await getUsers();
+    if (!res.ok) { await new Promise(r => setTimeout(r, 2000)); res = await getUsers(); }
+    if (!res.ok) throw new Error(`Failed to load users (HTTP ${res.status})`);
     allUsersData = await res.json();
 
     // App-axis: tier + monthly usage per user (one bulk call). Non-fatal if it fails.
@@ -1526,6 +1531,7 @@ async function loadUsers(light) {
       const sres = await fetch(`${API.cloudBase}/admin/users/stats?yyyy_mm=${ym}${light ? '&light=1' : ''}`, { headers: API.getAuthHeaders() });
       if (sres.ok) {
         const sdata = await sres.json();
+        if (sdata.deleted_accounts) deletedAccounts = sdata.deleted_accounts;
         const prev = statsMap || {};
         statsMap = {};
         (sdata.users || []).forEach(r => {
@@ -2260,7 +2266,7 @@ function renderUsersList() {
     const uslot = (ic, txt) => `<span style="display:inline-block;min-width:58px">${ic} ${txt}</span>`;
     const docTxt = fmtUsage(usedDoc, lim.doctor);
     const usageTxt = isAppUser
-      ? ` <span style="color:#999;font-size:10px;white-space:nowrap">${uslot(mi('local_hospital'), docTxt)}${uslot(mi('camera_alt'), fmtUsage(usedId, lim.identify))}${uslot(mi('eco'), fmtUsage(usedPlants, lim.plants))}</span>`
+      ? ` <span style="color:#999;font-size:10px;white-space:nowrap">${uslot(mi('camera_alt'), fmtUsage(usedId, lim.identify))}${uslot(mi('eco'), fmtUsage(usedPlants, lim.plants))}${uslot(mi('medical_services'), docTxt)}</span>`
       : (isAdmin ? '' : ` <span style="color:#666;font-size:11px">—</span>`);
     // Lifetime spend badge — visible for EVERY user right in the collapsed row
     // (не только при открытии Finance). Source: ledger debit (same as Finance panel).
@@ -2287,24 +2293,26 @@ function renderUsersList() {
       const exp = u.sub_expires ? new Date(u.sub_expires) : null;
       const истёк = exp && exp.getTime() < Date.now();
       const когда = exp
-        ? exp.toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' })
-        : 'без срока';
+        ? 'until ' + exp.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })
+        : 'no expiry';
       // «Без срока» — тоже тревога: сервер такую запись считает бесплатной
       // (fail-closed), значит человек платит и премиума не получает.
       const тревога = истёк || !exp;
-      subBadge += ` <span title="${u.sub_expires || 'срок не записан'}" style="background:${тревога ? '#3a1f1f' : '#1f2a3a'};color:${тревога ? '#f2a3a3' : '#9ab7d4'};padding:2px 8px;border-radius:11px;font-size:10px;white-space:nowrap">${тревога ? '⚠' : '⏳'} ${истёк ? 'истёк ' : 'до '}${когда}</span>`;
+      subBadge += ` <span title="${u.sub_expires || 'expiry not recorded'}" style="background:${тревога ? '#3a1f1f' : '#1f2a3a'};color:${тревога ? '#f2a3a3' : '#9ab7d4'};padding:2px 8px;border-radius:11px;font-size:10px;white-space:nowrap">${тревога ? '⚠' : '⏳'} ${истёк ? 'expired ' + когда.replace('until ', '') : когда}</span>`;
       const src = u.sub_provider || '—';
       const ручной = src !== 'apple' && src !== 'stripe';
-      subBadge += ` <span title="источник оплаты" style="background:${ручной ? '#3a3000' : '#20262e'};color:${ручной ? '#ffd700' : '#9ab'};padding:2px 8px;border-radius:11px;font-size:10px">${ручной ? '🛠 ' : ''}${src}</span>`;
+      //: код источника — в подсказке; на плашке словами: оплачено (Apple/Stripe) или выдано нами
+      const ИСТОЧНИК = { apple: 'Apple', stripe: 'Stripe', manual: 'Granted', manual_test: 'Test grant' };
+      subBadge += ` <span title="payment source: ${esc(src)} — Granted / Test grant = premium given by us, not paid" style="background:${ручной ? '#3a3000' : '#20262e'};color:${ручной ? '#ffd700' : '#9ab'};padding:2px 8px;border-radius:11px;font-size:10px;white-space:nowrap">${ручной ? '🛠 ' : ''}${ИСТОЧНИК[src] || esc(src)}</span>`;
       // 🔴 Когда сервер последний раз спрашивал Apple про этот чек. Возврат денег
       // ловится суточным проходом, и без этой метки непонятно, доступ ещё не сняли
       // или проверка вообще перестала ходить.
       if (u.sub_provider === 'apple') {
         const п = u.apple_checked_at ? String(st.apple_checked_at).slice(0, 10) : null;
-        subBadge += ` <span title="последняя перепроверка чека у Apple${п ? '' : ' — ни разу'}" style="background:${п ? '#20262e' : '#3a1f1f'};color:${п ? '#9ab' : '#f2a3a3'};padding:2px 8px;border-radius:11px;font-size:10px;white-space:nowrap">🍎 ${п || 'не проверялся'}</span>`;
+        subBadge += ` <span title="last receipt re-check with Apple${п ? '' : ' — never'}" style="background:${п ? '#20262e' : '#3a1f1f'};color:${п ? '#9ab' : '#f2a3a3'};padding:2px 8px;border-radius:11px;font-size:10px;white-space:nowrap">🍎 ${п || 'never checked'}</span>`;
       }
       if (u.sub_txn) {
-        subBadge += ` <span title="опознаватель покупки: ${u.sub_txn} — одинаковый у двух учёток значит, что подписку делят" style="background:#20262e;color:#7a8b9a;padding:2px 8px;border-radius:11px;font-size:10px;font-family:monospace">#${String(u.sub_txn).slice(-6)}</span>`;
+        subBadge += ` <span title="purchase id: ${u.sub_txn} — the same id on two accounts means they share one subscription" style="background:#20262e;color:#7a8b9a;padding:2px 8px;border-radius:11px;font-size:10px;font-family:monospace">#${String(u.sub_txn).slice(-6)}</span>`;
       }
     }
     const appBadge = `${sourcePill}${rolePill}${subBadge}${usageTxt}${spentBadge}`;
@@ -2314,9 +2322,9 @@ function renderUsersList() {
       ? (isAdmin ? '' : `<span style="font-size:11px;color:#9aa">🌐 Web signup — no app usage yet · Plan: <b style="color:#ddd">${tier}</b></span>`)
       : (`<span style="font-size:11px;color:#9aa;white-space:nowrap">`
       + `Plan: <b style="color:#ddd">${tier}</b> &nbsp;·&nbsp; `
-      + `<span title="Doctor diagnoses — this month">${mi('local_hospital')} <b>${fmtUsage(usedDoc, lim.doctor)}${lim.doctorDaily ? '/day' : '/mo'}</b></span>`
-      + ` &nbsp; <span title="Identify scans — this month">${mi('camera_alt')} <b>${fmtUsage(usedId, lim.identify)}/mo</b></span>`
-      + ` &nbsp; <span title="Plants saved — live total (all time)">${mi('eco')} <b>${fmtUsage(usedPlants, lim.plants)}</b> <span style="color:#667;font-size:9px">live</span></span>${pidLine}`
+      + `<span title="Identify scans — this month">${mi('camera_alt')} <b>${fmtUsage(usedId, lim.identify)}/mo</b></span>`
+      + ` &nbsp; <span title="Plants saved — live total (all time)">${mi('eco')} <b>${fmtUsage(usedPlants, lim.plants)}</b> <span style="color:#667;font-size:9px">live</span></span>`
+      + ` &nbsp; <span title="AI Doctor diagnoses — this month">${mi('medical_services')} <b>${fmtUsage(usedDoc, lim.doctor)}${lim.doctorDaily ? '/day' : '/mo'}</b></span>${pidLine}`
       + `</span>`);
 
     // Device-axis: owner = Maxim only; everyone else with an assigned device = "Assigned"; none = "—".
@@ -2330,7 +2338,7 @@ function renderUsersList() {
     return `
       <tr onclick="toggleUserRow('${esc(email)}')" style="cursor:pointer;border-bottom:1px solid #2a2a2a${isFake ? ';background:#201a30' : ''}">
         <td style="padding:6px 8px;color:#fff;vertical-align:top">${esc(email)}${isFake ? ' <span style="background:#4a3a6b;color:#d1c4e9;padding:1px 6px;border-radius:8px;font-size:9px;font-weight:600">🧪 service</span>' : ''}${statusBadge ? ' ' + statusBadge : ''}<div class="muted" style="font-size:10px">Last login: ${lastLogin}</div></td>
-        <td style="padding:6px 8px;white-space:nowrap;vertical-align:top">${appBadge}</td>
+        <td style="padding:6px 8px;vertical-align:top"><div style="display:flex;flex-wrap:wrap;gap:4px 6px;align-items:center">${appBadge}</div></td>
         <td style="padding:6px 8px;white-space:nowrap;vertical-align:top">${devPill}</td>
         <td style="padding:6px 8px;text-align:right;color:#888;vertical-align:top"><span id="chev-${rid}">${open ? '▾' : '▸'}</span></td>
       </tr>
@@ -2365,6 +2373,7 @@ function renderUsersList() {
       </tr></thead>
       <tbody>${rows}</tbody>
     </table>
+    ${deletedAccounts && deletedAccounts.accounts ? `<div style="margin-top:8px;font-size:11px;color:#9aa" title="spend of deleted accounts — their cost records are kept under an email fingerprint, without the address">🗑 Deleted accounts · ${deletedAccounts.accounts} · <span style="color:#f2a3a3;font-weight:600">$${Number(deletedAccounts.spent_usd || 0).toFixed(4)}</span></div>` : ''}
   `;
 
   // Restore expanded sections
