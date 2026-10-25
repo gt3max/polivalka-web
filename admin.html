@@ -706,24 +706,26 @@ async function loadDeviceConfig() {
       const devices = await res.json();
       const device = devices.find(d => d.device_id === deviceId);
       if (device) {
-        // Populate pump calibration (from DynamoDB)
-        const pumpCalib = device.pump_calibration || 1.0;
+        // Pump 1 preset: the stored admin preset; before one is stored — the working value (as before)
+        const pumpCalib = device.pump_preset || device.pump_calibration || 1.0;
         document.getElementById('calib-pump-mlsec').value = pumpCalib;
-        console.log('[Admin] Loaded pump_calibration:', pumpCalib);
+        console.log('[Admin] Loaded pump preset:', pumpCalib, device.pump_preset ? '(stored preset)' : '(no stored preset)');
 
-        // Factory Presets: show DEFAULTS, not user calibration
-        // These are admin-set factory values, not what user calibrated
-        // Presets live in device NVS, not DynamoDB — show hardcoded defaults
-        document.getElementById('calib-adc-water').value = 1200;   // ADC_WATER_DEFAULT
-        document.getElementById('calib-adc-dry').value = 2400;     // ADC_DRY_SOIL_DEFAULT
-        document.getElementById('calib-adc-air').value = 2800;     // ADC_AIR_DEFAULT
-        console.log('[Admin] Factory preset defaults loaded (not user calibration)');
+        // Factory Presets: the admin preset stored for THIS device (cloud copy of the device's
+        // NVS preset, see iot_rule_response.py), never the user calibration.
+        // No stored preset yet → firmware defaults ADC_*_DEFAULT (sensor.c).
+        const p1 = device.sensor_preset || {water: 1200, dry_soil: 2400, air: 2800};
+        document.getElementById('calib-adc-water').value = p1.water;
+        document.getElementById('calib-adc-dry').value = p1.dry_soil;
+        document.getElementById('calib-adc-air').value = p1.air;
+        console.log('[Admin] J6 preset loaded:', p1, device.sensor_preset ? '(stored)' : '(factory defaults)');
 
-        // Capacitive J7 sensor: show defaults (3-point, mirror of J6)
-        document.getElementById('calib-s2-water').value = 1200;    // ADC2_WATER_DEFAULT
-        document.getElementById('calib-s2-dry').value = 2400;      // ADC2_DRY_SOIL_DEFAULT
-        document.getElementById('calib-s2-air').value = 2800;      // ADC2_AIR_DEFAULT
-        console.log('[Admin] Capacitive J7 preset defaults loaded');
+        // Capacitive J7 sensor (3-point, mirror of J6)
+        const p2 = device.sensor2_preset || {water: 1200, dry_soil: 2400, air: 2800};
+        document.getElementById('calib-s2-water').value = p2.water;
+        document.getElementById('calib-s2-dry').value = p2.dry_soil;
+        document.getElementById('calib-s2-air').value = p2.air;
+        console.log('[Admin] J7 preset loaded:', p2, device.sensor2_preset ? '(stored)' : '(factory defaults)');
 
         // Show last seen info
         if (device.last_update) {
@@ -1101,6 +1103,15 @@ async function rejectClaim(index) {
   }
 }
 
+// After a preset save: let the device reply, then ask it for get_status (via /moisture) so the
+// cloud's working values (and the Calibrated/Presets badge) are fresh, not the pre-save ones.
+function refreshDeviceAfterPreset(deviceId) {
+  setTimeout(() => {
+    fetch(`${API.cloudBase}/device/${deviceId}/moisture`, { headers: API.getAuthHeaders(), cache: 'no-store' })
+      .catch(e => console.log('[Admin] Device refresh after preset failed:', e));
+  }, 3000);
+}
+
 // Save pump preset (factory default)
 async function savePumpPreset() {
   const selectedDeviceId = document.getElementById('device-select').value;
@@ -1127,6 +1138,7 @@ async function savePumpPreset() {
 
     if (res.ok) {
       alert(`✓ Pump preset set to ${mlPerSec} ml/sec`);
+      refreshDeviceAfterPreset(selectedDeviceId);
     } else {
       const err = await res.json().catch(() => ({}));
       alert('Failed: ' + (err.error || res.status));
@@ -1165,6 +1177,7 @@ async function saveSensorPreset() {
 
     if (res.ok) {
       alert(`✓ Capacitive preset saved: water=${adcWater}, dry=${adcDry}, air=${adcAir}`);
+      refreshDeviceAfterPreset(selectedDeviceId);
     } else {
       const err = await res.json().catch(() => ({}));
       alert('Failed: ' + (err.error || res.status));
@@ -1203,6 +1216,7 @@ async function saveSensor2Preset() {
 
     if (res.ok) {
       alert(`✓ Capacitive J7 preset saved: air=${adcAir}, water=${adcWater}, dry=${adcDry}`);
+      refreshDeviceAfterPreset(selectedDeviceId);
     } else {
       const err = await res.json().catch(() => ({}));
       alert('Failed: ' + (err.error || res.status));

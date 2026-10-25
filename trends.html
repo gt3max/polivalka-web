@@ -1588,13 +1588,13 @@ function exportCSV() {
   // Add sensor data
   for (const d of sensorData) {
     const time = new Date(d.timestamp * 1000).toISOString();
-    csv += `${time},sensor,${d.moisture_percent || ''},${d.sensor2_percent || ''},${d.adc_raw || ''},${d.sensor2_adc || ''},,,,,,""\n`;
+    csv += `${time},sensor,${d.moisture_percent ?? ''},${d.sensor2_percent ?? ''},${d.adc_raw ?? ''},${d.sensor2_adc ?? ''},,,,,,""\n`;
   }
 
   // Add battery data
   for (const d of batteryData) {
     const time = new Date(d.timestamp * 1000).toISOString();
-    csv += `${time},battery,,,,,${d.percent || ''},${d.voltage || ''},${d.charging || ''},,,\n`;
+    csv += `${time},battery,,,,,${d.percent ?? ''},${d.voltage ?? ''},${d.charging || ''},,,\n`;
   }
 
   // Add activity (includes boot events with boot_type and reset_reason)
@@ -2439,8 +2439,8 @@ function exportLongTermCSV() {
 
   for (const w of longTermData) {
     csv += `${w.week},${w.start_date},${w.end_date},`;
-    csv += `${w.moisture?.avg_percent || ''},${w.moisture?.min_percent || ''},${w.moisture?.max_percent || ''},`;
-    csv += `${w.battery?.avg_percent || ''},${w.battery?.min_percent || ''},${w.battery?.max_percent || ''},`;
+    csv += `${w.moisture?.avg_percent ?? ''},${w.moisture?.min_percent ?? ''},${w.moisture?.max_percent ?? ''},`;
+    csv += `${w.battery?.avg_percent ?? ''},${w.battery?.min_percent ?? ''},${w.battery?.max_percent ?? ''},`;
     csv += `${w.watering?.events_count || 0},${w.watering?.total_ml || 0},${w.watering?.auto_events || 0},${w.watering?.manual_events || 0},`;
     csv += `${w.watering2?.events_count || 0},${w.watering2?.total_ml || 0},`;
     csv += `${w.system?.online_hours || ''},${w.system?.offline_hours || ''},${w.system?.restarts || 0},${w.system?.firmware_version || ''},`;

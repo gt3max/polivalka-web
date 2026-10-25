@@ -125,6 +125,11 @@ else{timeEl.textContent='--:--';timeEl.className='mono danger';}}catch(e){}}
 // Session tracking: which calibration points were done
 var capDone={air:false,water:false,soil:false};
 var s2Done={air:false,water:false,dry_soil:false};
+// Cloud: /status shows what the backend last stored; ask the device itself (/moisture → get_status)
+// so calibration/reset results (J6, J7, pump) are fresh, then redraw. Local AP: plain reload.
+async function refreshFromDevice(){
+if(IS_CLOUD){try{await API.get('/moisture');}catch(e){console.log('Device refresh failed:',e);}}
+await loadAllData();}
 async function calib(kind){
 document.getElementById('btn-air').disabled=true;document.getElementById('btn-water').disabled=true;
 document.getElementById('btn-soil').disabled=true;const CAL_SEC=2;
@@ -141,7 +146,7 @@ try {
 capDone[kind]=true;
 document.getElementById('btn-air').disabled=false;document.getElementById('btn-water').disabled=false;
 document.getElementById('btn-soil').disabled=false;
-await loadAllData();}
+await refreshFromDevice();}
 async function resetCalib(){
   const btn = event?.target; if (btn) { btn.disabled = true; btn.textContent = 'Resetting...'; }
   try {
@@ -155,7 +160,7 @@ async function resetCalib(){
   } catch(e) { console.error('Reset error:', e); showToast('Reset failed: ' + e.message, 'error'); }
   if (btn) { btn.disabled = false; btn.textContent = 'Reset'; }
   capDone={air:false,water:false,soil:false};
-  await loadAllData();
+  await refreshFromDevice();
 }
 // Sensor 2 (Capacitive J7) functions - Cloud mode: data comes from main status, no separate endpoints
 async function loadSensor2Data(){
@@ -183,8 +188,8 @@ try{
   if(typeof API !== 'undefined' && API.mode === 'local') {
     await API.get('/sensor2/status');await new Promise(r=>setTimeout(r,500));await loadSensor2Data();
   } else {
-    // Cloud mode: refresh from main status
-    await loadAllData();
+    // Cloud mode: ask the device, then refresh from main status
+    await refreshFromDevice();
   }
 }catch(e){console.log('Sensor2 refresh error:', e);}
 if(btn){btn.disabled=false;btn.textContent='🔬 Read';}}
@@ -197,6 +202,7 @@ else{await fetch('/api/sensor2/calibrate?'+kind+'=1',{cache:'no-store'});}
 }catch(e){console.error('Calib2 error:',e);}
 s2Done[kind]=true;
 document.getElementById('btn-s2-air').disabled=false;document.getElementById('btn-s2-water').disabled=false;document.getElementById('btn-s2-soil').disabled=false;
+if(IS_CLOUD)await refreshFromDevice();
 loadSensor2Data();}
 async function resetCalib2(){
 try{
@@ -205,6 +211,7 @@ else{await fetch('/api/sensor2/reset',{cache:'no-store'});}
 showToast('✓ Reset to defaults', 'success');
 }catch(e){console.error('Reset2 error:',e);showToast('Reset failed: '+e.message,'error');}
 s2Done={air:false,water:false,dry_soil:false};
+if(IS_CLOUD)await refreshFromDevice();
 loadSensor2Data();}
 async function loadPumpCalibration(){
 try{const s=await API.get('/pump/status');
@@ -288,6 +295,7 @@ try{
   if (IS_CLOUD) {
     await API.post('/command', {command: 'set_pump_calibration', params: {ml_per_sec: ml_per_sec}});
     await new Promise(r=>setTimeout(r,2000));
+    await refreshFromDevice();
   } else {
     await fetch('/api/pump/calibrate?ml_per_sec='+ml_per_sec,{cache:'no-store'});
   }
@@ -298,6 +306,7 @@ try{
   if (IS_CLOUD) {
     await API.post('/command', {command: 'reset_pump_calibration', params: {}});
     await new Promise(r=>setTimeout(r,2000));
+    await refreshFromDevice();
   } else {
     await fetch('/api/pump/reset',{cache:'no-store'});
   }
@@ -331,6 +340,8 @@ if (IS_CLOUD) {
 }
 
 loadAllData();loadSensor2Data();loadPumpCalibration();pump2CalLoad();
+// Cloud: first paint from stored values, then ask the device once and redraw with fresh ones
+if(IS_CLOUD)refreshFromDevice().then(()=>{loadPumpCalibration();pump2CalLoad();});
 
 // Header update interval
 var _intervals=[];
