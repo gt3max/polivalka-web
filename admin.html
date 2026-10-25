@@ -1797,13 +1797,15 @@ async function loadModules(){
     const res=await fetch(`${API.cloudBase}/admin/sections/state`,{headers:API.getAuthHeaders()});
     if(!res.ok) throw new Error('HTTP '+res.status);
     const d=await res.json();
-    const mods=d.modules||{}, off=d.modules_off||[];
-    const names=Object.keys(mods).sort();
+    const mods=d.modules||{}, off=d.modules_off||[], detached=d.modules_detached||[];
+    // Откручены от приложения (Поливалка — устройства, работают через сайт): отдельно, не в счёте разделов.
+    const names=Object.keys(mods).filter(n=>!detached.includes(n)).sort();
     // «Номеров нет» != «модулей нет»: выкладка не положила номера — так и говорим.
     sum.innerHTML='🧩 Modules '+(names.length?names.length+' on server':'<span class="muted">no numbers in this deploy</span>')
       +' · '+(off.length?'<span class="danger">off: '+off.map(esc).join(', ')+'</span>':'<span class="muted">none off</span>')
       +(d.lambda_version?' · <span class="muted">lambda v'+esc(String(d.lambda_version))+'</span>':'');
-    list.innerHTML=names.map(n=>'<div>'+(off.includes(n)?'<span class="danger">⛔ ':'<span>')+esc(n)+'</span> <span class="muted">'+esc(String(mods[n]))+'</span></div>').join('');
+    list.innerHTML=names.map(n=>'<div>'+(off.includes(n)?'<span class="danger">⛔ ':'<span>')+esc(n)+'</span> <span class="muted">'+esc(String(mods[n]))+'</span></div>').join('')
+      +detached.filter(n=>mods[n]).map(n=>'<div class="muted">📡 '+esc(n)+' '+esc(String(mods[n]))+' — devices, not in the app</div>').join('');
   }catch(e){
     sum.innerHTML='🧩 Modules <span class="danger">Error: '+esc(e.message)+'</span>';
   }finally{
