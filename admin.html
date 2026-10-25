@@ -118,6 +118,22 @@
   <div id="aws-spend-updated" style="font-size:10px;color:#999;margin-top:6px"></div>
 </div>
 
+<!-- Modules — номера модулей сервера и выключенные (25.10.2026). Только показ: выключатель —
+     `python3 scripts/modules.py switch off|on <модуль>`. Номера модулей приложения едут в сборке
+     и видны в его настройках. Источник — /admin/sections/state (modules, modules_off). -->
+<div class="card" id="modules-card">
+  <div class="turso-row" style="padding:10px 12px;background:#15151f;border:1px solid #2c2c44;border-radius:8px">
+    <div class="head" onclick="this.closest('.turso-row').classList.toggle('open')" style="display:flex;justify-content:space-between;align-items:center;gap:10px">
+      <div id="modules-summary" class="mono" style="font-size:13px;color:#e8e8f0">🧩 Modules <span class="muted">loading…</span></div>
+      <div style="display:flex;align-items:center;gap:8px">
+        <button id="modules-refresh-btn" onclick="event.stopPropagation();loadModules()" style="font-size:11px;padding:4px 10px">↻ Reload</button>
+        <span class="chev">▾</span>
+      </div>
+    </div>
+    <div class="more mono" style="margin-top:8px;font-size:12px" id="modules-list"></div>
+  </div>
+</div>
+
 <!-- Turso DB cascade — usage across the 3 orgs (cached; live on Refresh) -->
 <div class="card" id="turso-card">
   <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
@@ -1772,6 +1788,29 @@ function renderJobsState(d){
 
 // AWS spend — цифры собирает scripts/aws_spend_to_ddb.py в ту же таблицу, что и Turso
 // (ключ _meta#aws_spend); Lambda только отдаёт готовое. Порог = факт прошлого месяца.
+async function loadModules(){
+  const sum=document.getElementById('modules-summary');
+  const list=document.getElementById('modules-list');
+  const btn=document.getElementById('modules-refresh-btn');
+  if(btn){ btn.disabled=true; btn.textContent='⏳ …'; }
+  try{
+    const res=await fetch(`${API.cloudBase}/admin/sections/state`,{headers:API.getAuthHeaders()});
+    if(!res.ok) throw new Error('HTTP '+res.status);
+    const d=await res.json();
+    const mods=d.modules||{}, off=d.modules_off||[];
+    const names=Object.keys(mods).sort();
+    // «Номеров нет» != «модулей нет»: выкладка не положила номера — так и говорим.
+    sum.innerHTML='🧩 Modules '+(names.length?names.length+' on server':'<span class="muted">no numbers in this deploy</span>')
+      +' · '+(off.length?'<span class="danger">off: '+off.map(esc).join(', ')+'</span>':'<span class="muted">none off</span>')
+      +(d.lambda_version?' · <span class="muted">lambda v'+esc(String(d.lambda_version))+'</span>':'');
+    list.innerHTML=names.map(n=>'<div>'+(off.includes(n)?'<span class="danger">⛔ ':'<span>')+esc(n)+'</span> <span class="muted">'+esc(String(mods[n]))+'</span></div>').join('');
+  }catch(e){
+    sum.innerHTML='🧩 Modules <span class="danger">Error: '+esc(e.message)+'</span>';
+  }finally{
+    if(btn){ btn.disabled=false; btn.textContent='↻ Reload'; }
+  }
+}
+
 async function loadAwsSpend(){
   const sum=document.getElementById('aws-spend-summary');
   const btn=document.getElementById('aws-spend-refresh-btn');
@@ -3068,6 +3107,7 @@ if (checkAdminAccess()) {
   loadAwsCosts();        // REAL AWS bill (Cost Explorer, all services) — cached 24h server-side
   loadJobsState();       // Background jobs — кто отметился, кто молчит
   loadAwsSpend();        // AWS spend — счёт облака: месяц, прогноз, история
+  loadModules();         // Modules — номера модулей сервера и выключенные
   loadTursoUsage();      // Turso cascade — роли live из env Lambda, объёмы из снэпшота
   loadCloudinaryUsage(); // Cloudinary accounts — live (Lambda опрашивает Cloudinary)
   loadImagekitUsage();   // ImageKit accounts — из DynamoDB, собирает скрипт
