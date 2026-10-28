@@ -15,17 +15,18 @@
 </head>
 <body>
 <h1>Privacy Policy</h1>
-<div class="upd">PlantApp · Last updated: 18 October 2026</div>
+<div class="upd">PlantApp · Last updated: 28 October 2026</div>
 
 <p>This Privacy Policy explains what data PlantApp ("we", "us", the "App") collects, how we use it,
-and your choices. By using the App you agree to this policy. Questions:
+and your choices. The App is operated by <b>[CONTROLLER NAME, POSTAL ADDRESS]</b>, who is the
+controller of your personal data. Questions:
 <a href="mailto:support@plantapp.pro">support@plantapp.pro</a>.</p>
 
 <h2>1. Data we collect</h2>
 <ul>
   <li><b>Account data</b> — your email address and a securely hashed password. Optional display name.</li>
   <li><b>Content you create</b> — plants you save, watering/care history, journal notes, and onboarding answers.</li>
-  <li><b>Photos you submit</b> — images you take or pick to identify a plant or to ask the AI Doctor about a problem. A photo you send to the AI Doctor is stored with that consultation so you can see it again later, and is deleted together with it.</li>
+  <li><b>Photos you submit</b> — images you take or pick to identify a plant or to ask the AI Doctor about a problem. A photo you send to the AI Doctor is stored with that consultation so you can see it again later, and is deleted together with it. Before a photo leaves your device, the App removes its metadata, such as the location where it was taken.</li>
   <li><b>Location</b> — only if you grant permission, used to tailor seasonal watering and outdoor advice. You can disable it any time.</li>
   <li><b>Basic technical data</b> — app version and device type needed to run the service.</li>
   <li><b>Subscription status</b> — if you buy PlantApp Premium, Apple gives us a receipt that we
@@ -42,15 +43,38 @@ and your choices. By using the App you agree to this policy. Questions:
 </ul>
 <p>We do <b>not</b> sell your data, and we do <b>not</b> use third-party advertising or analytics SDKs.</p>
 
-<h2>3. Third-party processors</h2>
-<p>To identify plants and diagnose problems, the photo or query you submit may be sent to third-party
-computer-vision / AI services that return the result — including <b>iNaturalist</b>, <b>Pl@ntNet</b>,
-<b>Cloudflare</b>, <b>Google (Gemini)</b>, and <b>Plant.id</b>. Plant images are delivered via image
-CDNs (<b>Cloudinary</b>, <b>ImageKit</b>), and the service is hosted on <b>Amazon Web Services</b>.
-These providers process data only to deliver their function.</p>
+<h2>3. Services that receive your photos and queries</h2>
+<p>The App asks for your permission before it sends a photo for the first time. You can withdraw it
+at any time in <code>Settings → Privacy</code>; without it, photos are not sent.</p>
+<p>To identify plants and diagnose problems, the photo or query you submit is sent to third-party
+plant-recognition and AI services that return the result: <b>iNaturalist</b>, <b>Pl@ntNet</b>,
+<b>Google</b> (Gemini), <b>Cloudflare</b>, <b>Groq</b> and <b>OpenRouter</b> (which passes the
+request to the model provider it routes to: <b>Anthropic</b>, <b>Google</b>, <b>OpenAI</b>, and
+<b>DeepSeek</b> models served only from the US or EU, never from China). For an image search we use <b>SerpApi</b>: the photo is made available
+to <b>Google</b> through a temporary link for Google Lens, and SerpApi keeps the search data for 31
+days. Each of these providers handles the data under its own terms; some keep submitted data for a
+period and may use it to improve their services. Plant images are delivered via image CDNs
+(<b>Cloudinary</b>, <b>ImageKit</b>), and the service is hosted on <b>Amazon Web Services</b>.</p>
+<p><b>Plant.id (Kindwise, FlowerChecker s.r.o., Czech Republic)</b> is used only if you separately
+allow it — as a last-resort check when the other services disagree, and for the plant health check
+in the AI Doctor. It is off unless you turn it on. Under Kindwise's terms, a photo sent to Plant.id
+may be kept by Kindwise (its copies of users' data are anonymised after 6 months), used to develop
+its software and AI, shown to its other customers, and published under the Creative Commons
+BY-SA 4.0 licence, with faces blurred. A photo that has been published or used for training cannot
+be withdrawn later, even if you turn the permission off. Please do not photograph people, documents
+or anything private. Plant.id receives only the image — not your email, account or location.</p>
 
-<h2>4. Data retention & deletion</h2>
-<p>We keep your saved plants, care history and journal notes while your account exists.</p>
+<h2>4. Legal bases and international transfers (EEA and UK)</h2>
+<p>We send your photo or query to the services above to provide the result you asked for
+(performance of our contract with you). We send photos to Plant.id only on the basis of your
+consent, which you can withdraw at any time in the App; withdrawal does not affect photos already
+sent. Where a provider is outside the EEA or the UK (for example SerpApi, Google, Cloudflare or Amazon
+Web Services), we rely on the European Commission's Standard Contractual Clauses and the UK Addendum
+in that provider's data-processing terms, or on an adequacy decision where the provider is certified
+under it. Kindwise is located in the EU.</p>
+
+<h2>5. Data retention & deletion</h2>
+<p>We keep your saved plants, care history and journal notes while your account exists. A plant you delete from My Plants is erased at once, together with its care history.</p>
 
 <p>AI Doctor consultations are kept for a limited time and then deleted automatically:
 <b>30 days on the free tier</b> and <b>12 months on Premium</b>. A consultation you delete yourself
@@ -65,18 +89,21 @@ consultations were used that month; it is erased automatically when the month en
 cost records of the paid AI calls made for the account, under the same fingerprint and without your
 address, because they are part of our accounting. Nothing else is kept.</p>
 
-<h2>5. Children</h2>
-<p>The App is not directed to children under 13 (or under 16 where required). We do not knowingly
-collect data from them.</p>
+<h2>6. Children</h2>
+<p>The App is not directed to children under 13, or under 16 in the EEA and the UK. We do not
+knowingly collect data from them.</p>
 
-<h2>6. Your rights</h2>
-<p>You can access, correct, or delete your data via the App, or by contacting us. Depending on your
-region (e.g. EEA/UK/California) you may have additional rights; contact us to exercise them.</p>
+<h2>7. Your rights</h2>
+<p>You can access, correct, or delete your data via the App, or by contacting us. You can withdraw
+your permission to send photos, and your consent for Plant.id, at any time in
+<code>Settings → Privacy</code>. Depending on your region (e.g. EEA/UK/California) you may have
+additional rights, including the right to object to processing and to lodge a complaint with a data
+protection supervisory authority; contact us to exercise them.</p>
 
-<h2>7. Changes</h2>
+<h2>8. Changes</h2>
 <p>We may update this policy; material changes will be reflected here with a new date.</p>
 
-<h2>8. Contact</h2>
+<h2>9. Contact</h2>
 <p><a href="mailto:support@plantapp.pro">support@plantapp.pro</a></p>
 </body>
 </html>
