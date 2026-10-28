@@ -2254,7 +2254,17 @@ function renderUsersList() {
     } else if (isSuspended) {
       statusBadge = '<span style="color:#ff9800">⏸️ Suspended</span>';
     } else if (!verified) {
-      statusBadge = '<span style="color:#999">❌ Not verified</span>';
+      // purge_at: DynamoDB TTL deletes an unconfirmed registration by itself (server, 28.10.2026).
+      // TTL works within ~48 h of the date; overdue by more than 3 days means it is not working.
+      let purge = '';
+      if (u.purge_at) {
+        const d = new Date(u.purge_at * 1000);
+        const late = Date.now() / 1000 - u.purge_at > 3 * 86400;
+        const dd = String(d.getDate()).padStart(2, '0') + '.' + String(d.getMonth() + 1).padStart(2, '0');
+        purge = late ? ` · <span style="color:#f44">auto-delete overdue since ${dd} — TTL not working</span>`
+                     : ` · auto-delete ${dd}`;
+      }
+      statusBadge = `<span style="color:#999">❌ Not verified${purge}</span>`;
     }
 
     // ===== Detail-row controls, split by axis (English only) =====
