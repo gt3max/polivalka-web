@@ -1806,13 +1806,25 @@ async function loadModules(){
       +(d.lambda_version?' · <span class="muted">lambda v'+esc(String(d.lambda_version))+'</span>':'');
     // Одна серия номеров на раздел: облако и последний выпуск приложения рядом — видно, что отстаёт.
     const app=(d.modules_app&&d.modules_app.modules)||{}, appBuild=(d.modules_app&&d.modules_app.version)||'';
+    // 28.10.2026: откат виден как откат (живой номер и с какого откатили); у прошивки — ещё и что реально
+    // стоит на устройствах (из уже загруженного списка устройств): запись двери — намерение, телеметрия — правда.
+    const rb=d.modules_rolled_back||{}, live=d.modules_live||{};
+    const rolled=n=>rb[n]?' <span class="danger">↩ rolled back'+(rb[n].from?' from '+esc(String(rb[n].from)):'')+'</span>'
+      :(live[n]&&live[n].prev?' <span class="muted">(was '+esc(String(live[n].prev))+')</span>':'');
+    const fleet=n=>{
+      if(n!=='firmware'||!Array.isArray(allDevicesData)||!allDevicesData.length) return '';
+      const by={}; allDevicesData.forEach(x=>{const v=String(x.firmware_version||'?').replace(/^v/,''); by[v]=(by[v]||0)+1;});
+      const want=String(mods[n]), parts=Object.keys(by).sort().map(v=>by[v]+'× '+esc(v));
+      const drift=Object.keys(by).some(v=>v!==want);
+      return ' · devices: '+parts.join(', ')+(drift?' <span class="danger">≠</span>':'');
+    };
     list.innerHTML='<div class="muted" style="margin-bottom:4px">section · cloud · app '+(appBuild?esc(appBuild):'(not released yet)')+'</div>'
       +names.map(n=>{
         const a=app[n], lag=a&&a!==mods[n];
         return '<div>'+(off.includes(n)?'<span class="danger">⛔ ':'<span>')+esc(n)+'</span> <span class="muted">'+esc(String(mods[n]))
-          +' · '+(a?esc(String(a)):'—')+'</span>'+(lag?' <span class="danger">≠</span>':'')+'</div>';
+          +' · '+(a?esc(String(a)):'—')+'</span>'+(lag?' <span class="danger">≠</span>':'')+rolled(n)+'</div>';
       }).join('')
-      +detached.filter(n=>mods[n]).map(n=>'<div class="muted">📡 '+esc(n)+' '+esc(String(mods[n]))+' — devices, not in the app</div>').join('');
+      +detached.filter(n=>mods[n]).map(n=>'<div class="muted">📡 '+esc(n)+' '+esc(String(mods[n]))+rolled(n)+fleet(n)+' — devices, not in the app</div>').join('');
   }catch(e){
     sum.innerHTML='🧩 Modules <span class="danger">Error: '+esc(e.message)+'</span>';
   }finally{
