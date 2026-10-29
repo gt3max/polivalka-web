@@ -5,14 +5,16 @@
 # passwords, or PII. Triggered after FIVE leak incidents (2026-04-07,
 # 04-18, 04-20, 04-22, 04-27 dev-password discovery).
 #
-# Bypass with `git commit --no-verify` ONLY if you have a strong reason
-# AND have visually verified no secret leaks. Avoid bypassing.
+# Обход хука запрещён: найденное убирается из файла или вносится в исключения с причиной.
 
 set -u
 
 # Get list of staged file paths (added/modified, exclude deleted)
 staged=$(git diff --cached --name-only --diff-filter=AM)
 [ -z "$staged" ] && exit 0
+
+# === PII (29.10.2026): почты людей, телефоны, токены, выгрузки, скриншоты в репо не уходят ===
+python3 "$(git rev-parse --show-toplevel)/scripts/git-hooks/pii_guard.py" || exit 1
 
 # Skip files that are NOT plain text or are large binaries / data dumps
 filter() {
@@ -127,8 +129,8 @@ if [ ${#violations[@]} -gt 0 ]; then
     echo "  process.env.NAME             (Node)"
     echo "  String.fromEnvironment('X')  (Dart)"
     echo
-    echo "If this is a deliberate, sanitized example — confirm it is NOT"
-    echo "a live credential, then re-commit with --no-verify."
+    echo "If this is a deliberate, sanitized example — rewrite it as a placeholder"
+    echo "(<KEY>, example.com) so the scanner does not match it."
     echo
     exit 1
 fi

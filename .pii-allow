@@ -1,0 +1,20 @@
+# Разрешения сторожа личных данных (scripts/git-hooks/pii_guard.py). Формат: вид значение  # причина.
+# Личные почтовые домены (gmail, icloud, mail.com, privaterelay.appleid.com …) сюда НЕ вносятся никогда.
+domain plantapp.pro        # наш домен: support@, admin@
+domain example.com         # примеры
+domain example.org         # примеры
+domain example.test        # тестовые адреса
+domain test.example        # тестовые адреса
+domain test.com            # тестовые адреса в тестах
+domain test.local          # тестовые адреса
+domain plantapp.test       # тестовые адреса
+domain nowhere.invalid     # тестовые адреса
+domain x.com               # короткие тестовые адреса (a@x.com)
+domain t.com               # короткие тестовые адреса
+domain b.com               # короткие тестовые адреса
+domain email.com           # образец в поле ввода (you@email.com)
+domain anthropic.com       # служба: строка соавторства noreply@anthropic.com
+domain users.noreply.github.com  # служебные адреса GitHub
+domain github.com          # git@github.com
+img ./                     # картинки сайта в корне
+img assets/                # картинки сайта

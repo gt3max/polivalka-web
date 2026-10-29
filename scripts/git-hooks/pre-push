@@ -1,0 +1,19 @@
+#!/usr/bin/env bash
+# pre-push (29.10.2026): перепроверка всего, что уходит, — ловит коммиты, сделанные в обход pre-commit
+# (другой клиент git, IDE). Сторож — scripts/git-hooks/pii_guard.py.
+set -u
+G="$(git rev-parse --show-toplevel)/scripts/git-hooks/pii_guard.py"
+Z=0000000000000000000000000000000000000000
+rc=0
+while read -r local_ref local_sha remote_ref remote_sha; do
+    [ "$local_sha" = "$Z" ] && continue                     # удаление ветки
+    if [ "$remote_sha" = "$Z" ]; then
+        first=$(git rev-list "$local_sha" --not --remotes | tail -1)
+        [ -z "$first" ] && continue                          # всё уже есть на сервере (тег на старом коммите)
+        base=$(git rev-parse -q --verify "$first^" || git hash-object -t tree /dev/null)
+    else
+        base="$remote_sha"
+    fi
+    python3 "$G" --range "$base" "$local_sha" || rc=1
+done
+exit $rc
