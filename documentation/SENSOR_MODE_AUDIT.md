@@ -1,5 +1,7 @@
 # Sensor Mode - Full System Audit
 
+> ⚠️ J6/J7 names in this document follow the firmware/site naming before 30.10.2026 / firmware 1.0.216 (swapped): "J6" here = board socket **J7** (upper, GPIO 35, main sensor), "J7" here = board socket **J6** (lower, GPIO 34, second). Quoted logs left as they were — they are evidence. Reference: `Polivalka/documentation/Hardware/HARDWARE.md` §3–4.
+
 **Date:** 2026-01-18
 **Auditor:** Claude Opus 4.5
 **Status:** VERIFIED - All connections traced
