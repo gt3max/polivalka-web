@@ -82,14 +82,14 @@
   <!-- Moisture Chart -->
   <div id="tab-moisture" class="tab-content active">
     <div class="card">
-      <h3 style="margin-top:0">💧 Capacitive Sensor (J6)</h3>
+      <h3 style="margin-top:0">💧 Capacitive Sensor (J7)</h3>
       <div class="chart-container">
         <canvas id="moisture-chart"></canvas>
       </div>
       <div id="moisture-nodata" class="muted" style="display:none;text-align:center;padding:40px">No moisture data for this period</div>
     </div>
     <div class="card" id="sensor2-chart-card" style="display:none">
-      <h3 style="margin-top:0;color:#4caf50">💧 Capacitive Sensor (J7)</h3>
+      <h3 style="margin-top:0;color:#4caf50">💧 Capacitive Sensor (J6)</h3>
       <div class="chart-container">
         <canvas id="sensor2-chart"></canvas>
       </div>
@@ -237,14 +237,14 @@
     <div id="lt-tabs-container">
       <!-- Long-term Moisture -->
       <div id="lt-tab-moisture" class="lt-tab-content" style="display:block">
-        <h4 style="margin:0 0 8px 0">💧 Capacitive Sensor (J6)</h4>
+        <h4 style="margin:0 0 8px 0">💧 Capacitive Sensor (J7)</h4>
         <div class="chart-container" style="height:250px">
           <canvas id="lt-moisture-chart"></canvas>
         </div>
         <div id="lt-moisture-nodata" class="muted" style="display:none;text-align:center;padding:40px">No moisture data for this period</div>
 
         <div id="lt-sensor2-section" style="margin-top:16px;display:none">
-          <h4 style="margin:0 0 8px 0;color:#4caf50">💧 Capacitive Sensor (J7)</h4>
+          <h4 style="margin:0 0 8px 0;color:#4caf50">💧 Capacitive Sensor (J6)</h4>
           <div class="chart-container" style="height:250px">
             <canvas id="lt-sensor2-chart"></canvas>
           </div>
@@ -798,7 +798,7 @@ function renderMoistureChart(data) {
   const adcValues = data.map(d => d.adc_raw);
   const hasAdc = adcValues.some(v => v != null);
 
-  // Sensor 2 data (capacitive sensor J7)
+  // Sensor 2 data (capacitive sensor J6)
   const sensor2AdcValues = data.map(d => d.sensor2_adc);
   const sensor2PctValues = data.map(d => d.sensor2_percent);
   const hasSensor2 = sensor2AdcValues.some(v => v != null && v !== undefined);
@@ -855,7 +855,7 @@ function renderMoistureChart(data) {
     }
   });
 
-  // === Chart 1: Capacitive Sensor (J6) ===
+  // === Chart 1: Capacitive Sensor (J7) ===
   moistureChart = new Chart(ctx, {
     type: isScatter ? 'scatter' : 'line',
     data: {
@@ -889,7 +889,7 @@ function renderMoistureChart(data) {
     options: chartOptions()
   });
 
-  // === Chart 2: Capacitive Sensor (J7) - only if data exists ===
+  // === Chart 2: Capacitive Sensor (J6) - only if data exists ===
   const sensor2Card = document.getElementById('sensor2-chart-card');
   if (hasSensor2) {
     sensor2Card.style.display = 'block';
@@ -913,8 +913,8 @@ function renderMoistureChart(data) {
         s2PctMax = Math.min(100, Math.ceil(s2RawMax + 5));
       }
     }
-    // Capacitive J7: ADC axis spans water (wettest, low ADC) → air (ref, high ADC), like J6,
-    // but also widened to include actual data so an uncalibrated/glitchy J7 isn't clipped.
+    // Capacitive J6: ADC axis spans water (wettest, low ADC) → air (ref, high ADC), like J7,
+    // but also widened to include actual data so an uncalibrated/glitchy J6 isn't clipped.
     const s2AdcVals = data.map(d => d.sensor2_adc).filter(v => v != null);
     const s2DataMin = s2AdcVals.length ? Math.min(...s2AdcVals) : (sensor2Calib.water ?? 1200);
     const s2DataMax = s2AdcVals.length ? Math.max(...s2AdcVals) : (sensor2Calib.air ?? 2800);
@@ -1983,7 +1983,7 @@ function renderLtMoistureChart(weeks) {
   });
 }
 
-// Render long-term sensor2 (J7) chart (raw data points with time axis)
+// Render long-term sensor2 (J6) chart (raw data points with time axis)
 function renderLtSensor2Chart(weeks) {
   const canvas = document.getElementById('lt-sensor2-chart');
   const section = document.getElementById('lt-sensor2-section');

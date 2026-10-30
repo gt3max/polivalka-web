@@ -299,7 +299,7 @@
 <button onclick="saveSensorPreset()">Set Capacitive Preset</button>
 </div>
 
-<div class="section-header" style="margin-top:20px">Capacitive Sensor J7 Preset (3-point)</div>
+<div class="section-header" style="margin-top:20px">Capacitive Sensor J6 Preset (3-point)</div>
 <div class="toggle-row">
 <div><div class="toggle-label">ADC Water</div><div class="toggle-desc">Default 100% moisture <span class="mono">(adc_s2_water)</span></div></div>
 <div class="row"><input type="number" id="calib-s2-water" min="0" max="4095" value="1200" style="width:80px"></div>
@@ -313,7 +313,7 @@
 <div class="row"><input type="number" id="calib-s2-air" min="0" max="4095" value="2800" style="width:80px"></div>
 </div>
 <div class="row" style="margin-top:8px">
-<button onclick="saveSensor2Preset()">Set Capacitive J7 Preset</button>
+<button onclick="saveSensor2Preset()">Set Capacitive J6 Preset</button>
 </div>
 </div>
 
@@ -734,14 +734,14 @@ async function loadDeviceConfig() {
         document.getElementById('calib-adc-water').value = p1.water;
         document.getElementById('calib-adc-dry').value = p1.dry_soil;
         document.getElementById('calib-adc-air').value = p1.air;
-        console.log('[Admin] J6 preset loaded:', p1, device.sensor_preset ? '(stored)' : '(factory defaults)');
+        console.log('[Admin] J7 preset loaded:', p1, device.sensor_preset ? '(stored)' : '(factory defaults)');
 
-        // Capacitive J7 sensor (3-point, mirror of J6)
+        // Capacitive J6 sensor (3-point, mirror of J7)
         const p2 = device.sensor2_preset || {water: 1200, dry_soil: 2400, air: 2800};
         document.getElementById('calib-s2-water').value = p2.water;
         document.getElementById('calib-s2-dry').value = p2.dry_soil;
         document.getElementById('calib-s2-air').value = p2.air;
-        console.log('[Admin] J7 preset loaded:', p2, device.sensor2_preset ? '(stored)' : '(factory defaults)');
+        console.log('[Admin] J6 preset loaded:', p2, device.sensor2_preset ? '(stored)' : '(factory defaults)');
 
         // Show last seen info
         if (device.last_update) {
@@ -1203,7 +1203,7 @@ async function saveSensorPreset() {
   }
 }
 
-// Save Capacitive J7 sensor preset (3-point, mirror of J6)
+// Save Capacitive J6 sensor preset (3-point, mirror of J7)
 async function saveSensor2Preset() {
   const selectedDeviceId = document.getElementById('device-select').value;
   if (!selectedDeviceId) {
@@ -1231,7 +1231,7 @@ async function saveSensor2Preset() {
     });
 
     if (res.ok) {
-      alert(`✓ Capacitive J7 preset saved: air=${adcAir}, water=${adcWater}, dry=${adcDry}`);
+      alert(`✓ Capacitive J6 preset saved: air=${adcAir}, water=${adcWater}, dry=${adcDry}`);
       refreshDeviceAfterPreset(selectedDeviceId);
     } else {
       const err = await res.json().catch(() => ({}));

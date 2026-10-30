@@ -1058,7 +1058,7 @@ function switchView(view) {
 
 // Timer mode + wet soil: the device is watering by schedule while a sensor reads
 // high moisture (informational — the device still waters; the firmware raises the
-// on-device warning). J6 = moisture_pct, J7 = sensor2_percent (either counts).
+// on-device warning). J7 = moisture_pct, J6 = sensor2_percent (either counts).
 function timerWetWarn(d) {
   return d.mode === 'timer' && (
     (d.moisture_pct != null && d.moisture_pct >= 80) ||
@@ -1316,7 +1316,7 @@ async function refreshSensor(deviceId) {
       if (result.moisture_pct !== undefined) device.moisture_pct = result.moisture_pct;
       if (result.adc_raw !== undefined) device.adc_raw = result.adc_raw;
       if (result.percent_float !== undefined) device.percent_float = result.percent_float;
-      // Sensor2 (J7 capacitive)
+      // Sensor2 (J6 capacitive)
       if (result.sensor2_adc !== undefined) device.sensor2_adc = result.sensor2_adc;
       if (result.sensor2_percent !== undefined) device.sensor2_percent = result.sensor2_percent;
       if (result.sensor2_percent_float !== undefined) device.sensor2_percent_float = result.sensor2_percent_float;
@@ -1386,7 +1386,7 @@ async function refreshSensorSilent(deviceId) {
       if (result.moisture_pct !== undefined) device.moisture_pct = result.moisture_pct;
       if (result.adc_raw !== undefined) device.adc_raw = result.adc_raw;
       if (result.percent_float !== undefined) device.percent_float = result.percent_float;
-      // Sensor2 (J7 capacitive)
+      // Sensor2 (J6 capacitive)
       if (result.sensor2_adc !== undefined) device.sensor2_adc = result.sensor2_adc;
       if (result.sensor2_percent !== undefined) device.sensor2_percent = result.sensor2_percent;
       if (result.sensor2_percent_float !== undefined) device.sensor2_percent_float = result.sensor2_percent_float;
@@ -1666,7 +1666,7 @@ async function bulkAction(action) {
         if (result.moisture_pct !== undefined) device.moisture_pct = result.moisture_pct;
         if (result.adc_raw !== undefined) device.adc_raw = result.adc_raw;
         if (result.percent_float !== undefined) device.percent_float = result.percent_float;
-        // Sensor2 (J7 capacitive)
+        // Sensor2 (J6 capacitive)
         if (result.sensor2_adc !== undefined) device.sensor2_adc = result.sensor2_adc;
         if (result.sensor2_percent !== undefined) device.sensor2_percent = result.sensor2_percent;
         if (result.sensor2_percent_float !== undefined) device.sensor2_percent_float = result.sensor2_percent_float;
