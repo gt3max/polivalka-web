@@ -296,7 +296,7 @@ if 'sensor' in event:
 |----------|---------|---------|
 | `POST /device/{id}/sensor/controller/enable` | `send_controller_command()` | Enable sensor mode |
 | `POST /device/{id}/sensor/controller/disable` | `send_controller_command()` | Disable sensor mode |
-| `POST /device/{id}/sensor/controller/cancel` | `send_controller_command()` | Cancel LAUNCH |
+| `POST /device/{id}/sensor/controller/cancel` | `send_controller_cancel_and_wait()` | Cancel LAUNCH only; waits for the device: outside LAUNCH → `success:false`, "Not in ARMING state" (F12, 31.10.2026) |
 | `GET /device/{id}/sensor/controller/status` | Direct from telemetry | Get state + warning |
 
 ### 9.2 Status Endpoint Response
