@@ -232,10 +232,18 @@ const btn=document.getElementById('test-'+duration+'s');if(!btn)return;
 btn.disabled=true;btn.style.background='#1976d2';btn.style.color='#fff';
 activePumpBtn=btn;activePumpDuration=duration;
 try{
+  let r;
   if (IS_CLOUD) {
-    await API.post('/pump?sec='+duration);
+    r = await API.post('/pump?sec='+duration);
   } else {
-    await fetch('/api/pump/test?sec='+duration,{cache:'no-store'});
+    r = await fetch('/api/pump/test?sec='+duration,{cache:'no-store'}).then(x=>x.json()).catch(()=>null);
+  }
+  // F6: the device refuses while the pump already runs — say so, like pump 2, and restore the button
+  if (r && r.success === false) {
+    alert(r.error || 'Pump could not start');
+    activePumpBtn=null;activePumpDuration=null;
+    btn.textContent='Run '+duration+'s';btn.disabled=false;btn.style.background='';btn.style.color='';
+    return;
   }
   let remaining=duration;
   btn.textContent='💧 '+remaining+'s';

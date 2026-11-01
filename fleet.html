@@ -1461,7 +1461,15 @@ async function startPump(deviceId, event) {
 
   try {
     // Start pump for maxWateringTime
-    await API.post(`/device/${deviceId}/pump?sec=${maxWateringTime}`);
+    const r = await API.post(`/device/${deviceId}/pump?sec=${maxWateringTime}`);
+    // F6: the device refuses while the pump already runs — revert, say why (same path as an error)
+    if (r && r.success === false) {
+      pumpRunningDevices.delete(deviceId);
+      stopPumpTimer(deviceId);
+      updatePumpButton(deviceId, false);
+      showToast(`❌ Failed to start pump: ${r.error || 'Pump could not start'}`, 'error');
+      return;
+    }
 
     // Start timer to update elapsed time
     startPumpTimer(deviceId);

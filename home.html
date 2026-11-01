@@ -528,7 +528,16 @@ async function manualWater(){
   btn.style.background = '#ccc';
 
   try {
-    await API.post('/pump?sec=' + sec);
+    const r = await API.post('/pump?sec=' + sec);
+    // F6: the device refuses while the pump already runs (e.g. auto watering) — say so, like pump 2
+    if (r && r.success === false) {
+      showToast(r.error || 'Pump could not start', 'warning');
+      btn.disabled = false;
+      btn.textContent = 'Water Now';
+      btn.style.background = '';
+      btn.style.borderColor = '';
+      return;
+    }
 
     // Cloud mode: Optimistic UI update (MQTT command sent, show pump running immediately)
     // ESP32 will execute the command, but telemetry update takes 2-3 min
