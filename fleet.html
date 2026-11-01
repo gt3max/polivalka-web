@@ -2144,12 +2144,17 @@ async function viewCriticalLogs(deviceId) {
     const data = await API.get(`/device/${deviceId}/critical-logs`);
     const header = `Critical NVS log (persistent, survives reboot): ${data.count} events\n${'='.repeat(80)}\n`;
     const logLines = (data.logs || []).map(log => {
+      // Honest time (same rule as the board's Trends page): c = clock quality from the device
+      // (r real, s restored after power loss, z after sleep, n none, l older record; missing =
+      // older firmware), u = seconds since that boot.
       const ts = log.timestamp;
       let when;
-      if (ts && ts > 0) {
-        when = new Date(ts * 1000).toISOString().replace('T', ' ').substring(0, 19);
+      if (log.c === 'n' || !(ts >= 1704067200)) {
+        when = `time unknown, ${log.u || 0} s after power-on`;
       } else {
-        when = 'time-unset';
+        when = new Date(ts * 1000).toISOString().replace('T', ' ').substring(0, 19);
+        if (log.c === 's') when = `≈ ${when} (clock behind after power loss)`;
+        else if (log.c === 'z') when = `≈ ${when} (clock after sleep)`;
       }
       return `(${when}) ${log.event}`;
     }).join('\n');
