@@ -64,7 +64,7 @@
 <script>
 // Admin nav link handled by common.js showAdminNavLink()
 
-var pumpCalibration = 1.0;  // ml/sec, will be loaded from API
+var pumpCalibration = null;  // ml/sec from the device's pump status (F8); null → "—"
 var autoSaveTimer = null;   // Debounce timer for auto-save
 var lastDeepInterval = 4;   // Store last non-zero interval for toggle restore
 
@@ -225,7 +225,7 @@ async function updateTime(){
 
 function updatePulseHint(){
   const pulseSec = parseInt(document.getElementById('pulse-sec').value) || 0;
-  const ml = (pulseSec * pumpCalibration).toFixed(1);
+  const ml = pumpCalibration ? (pulseSec * pumpCalibration).toFixed(1) : '—';
   document.getElementById('pulse-ml-hint').textContent = '(≈ ' + ml + ' ml)';
 }
 
@@ -420,11 +420,9 @@ async function loadSensorSettings(){
 
 async function loadPumpCalibration(){
   try {
-    const s = await API.get('/status');
-    if (s.pump?.calibration_ml_per_sec) {
-      pumpCalibration = s.pump.calibration_ml_per_sec;
-      updatePulseHint();
-    }
+    const s = await API.get('/pump/status');
+    pumpCalibration = (typeof s.ml_per_sec === 'number' && s.ml_per_sec > 0) ? s.ml_per_sec : null;
+    updatePulseHint();
   } catch(e) {}
 }
 

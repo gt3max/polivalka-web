@@ -215,7 +215,7 @@ if(IS_CLOUD)await refreshFromDevice();
 loadSensor2Data();}
 async function loadPumpCalibration(){
 try{const s=await API.get('/pump/status');
-const ml=s.ml_per_sec||1.0;document.getElementById('current-ml-per-sec').textContent=ml.toFixed(2)+' ml/sec';
+const ml=s.ml_per_sec;document.getElementById('current-ml-per-sec').textContent=(typeof ml==='number'&&ml>0)?ml.toFixed(2)+' ml/sec':'— ml/sec';
 const pumpBadge=document.getElementById('pump-cal-badge');
 if(s.calibrated){pumpBadge.textContent='✓ Calibrated';pumpBadge.style.background='#e8f5e9';pumpBadge.style.color='#2e7d32';}
 else{pumpBadge.textContent='⚠️ Presets';pumpBadge.style.background='#fff3e0';pumpBadge.style.color='#f57c00';}
@@ -296,18 +296,24 @@ const warningDiv=document.getElementById('pump-warning');const warningText=docum
 if(variance>10){warningText.textContent='Variance '+variance.toFixed(1)+'% - check air bubbles';warningDiv.style.display='block';}
 else{warningDiv.style.display='none';}}
 else{document.getElementById('pump-result').style.display='none';document.getElementById('pump-warning').style.display='none';}}
+// F8: the device's own verdict on a calibration save — never a blind "Saved".
+function calSaveVerdict(r){
+if(r&&(r.success===true||r.status==='success')){const v=r.ml_per_sec!==undefined?r.ml_per_sec:(r.result&&r.result.ml_per_sec);
+alert(typeof v==='number'?'Saved: '+v.toFixed(2)+' ml/sec':'Saved');return;}
+if(r&&r.status==='pending'){alert(r.message);return;}
+alert('Not saved: '+((r&&(r.error||r.message))||'device refused'));}
 async function saveCalibration(){
 const avgText=document.getElementById('avg-ml-per-sec').textContent;const ml_per_sec=parseFloat(avgText);
 if(!ml_per_sec||ml_per_sec<=0){alert('Invalid value');return;}
 try{
+  let r;
   if (IS_CLOUD) {
-    await API.post('/command', {command: 'set_pump_calibration', params: {ml_per_sec: ml_per_sec}});
-    await new Promise(r=>setTimeout(r,2000));
+    r = await API.commandAndWait('set_pump_calibration', {ml_per_sec: ml_per_sec});
     await refreshFromDevice();
   } else {
-    await fetch('/api/pump/calibrate?ml_per_sec='+ml_per_sec,{cache:'no-store'});
+    r = await fetch('/api/pump/calibrate?ml_per_sec='+ml_per_sec,{cache:'no-store'}).then(x=>x.json());
   }
-  alert('Saved: '+ml_per_sec.toFixed(2)+' ml/sec');loadPumpCalibration();
+  calSaveVerdict(r);loadPumpCalibration();
 }catch(e){alert('Save failed');}}
 async function resetPumpCalib(){
 try{
@@ -324,9 +330,9 @@ try{
 }catch(e){alert('Reset failed');}}
 // ── Pump 2 (second actuator) calibration — independent mirror of pump1 ──
 // ── Pump 2 (second actuator) calibration — ported from verified LOCAL UI (gated by type) ──
-async function pump2CalLoad(){try{const s=await API.get('/pump2/status');const type=s.type||'Pump';const body=document.getElementById('pump2-cal-body');const na=document.getElementById('pump2-cal-na');if(type!=='Pump'){if(body)body.style.display='none';if(na){na.style.display='block';na.textContent='Calibration not applicable for '+type+' (ml/sec is for a pump).';}}else{if(body)body.style.display='';if(na)na.style.display='none';}const ml=s.ml_per_sec||1.0;document.getElementById('pump2-current-mlps').textContent=ml.toFixed(2)+' ml/sec';const fb=document.getElementById('pump2-flow-box');if(fb)fb.style.display=(type==='Pump'&&s.calibrated)?'':'none';const b=document.getElementById('pump2-cal-badge');if(type!=='Pump'){b.textContent='N/A';b.style.background='#eee';b.style.color='#888';}else if(s.calibrated){b.textContent='✓ Calibrated';b.style.background='#e8f5e9';b.style.color='#2e7d32';}else{b.textContent='Default';b.style.background='#fff3e0';b.style.color='#f57c00';}}catch(e){}}
+async function pump2CalLoad(){try{const s=await API.get('/pump2/status');const type=s.type||'Pump';const body=document.getElementById('pump2-cal-body');const na=document.getElementById('pump2-cal-na');if(type!=='Pump'){if(body)body.style.display='none';if(na){na.style.display='block';na.textContent='Calibration not applicable for '+type+' (ml/sec is for a pump).';}}else{if(body)body.style.display='';if(na)na.style.display='none';}const ml=s.ml_per_sec;document.getElementById('pump2-current-mlps').textContent=(typeof ml==='number'&&ml>0)?ml.toFixed(2)+' ml/sec':'— ml/sec';const fb=document.getElementById('pump2-flow-box');if(fb)fb.style.display=(type==='Pump'&&s.calibrated)?'':'none';const b=document.getElementById('pump2-cal-badge');if(type!=='Pump'){b.textContent='N/A';b.style.background='#eee';b.style.color='#888';}else if(s.calibrated){b.textContent='✓ Calibrated';b.style.background='#e8f5e9';b.style.color='#2e7d32';}else{b.textContent='Default';b.style.background='#fff3e0';b.style.color='#f57c00';}}catch(e){}}
 async function pump2CalTest(dur){const btn=document.getElementById('pump2-test-btn');btn.disabled=true;btn.textContent='⏳';try{let r;if(IS_CLOUD){r=await API.post('/pump2?sec='+dur);}else{r=await fetch('/api/pump2?sec='+dur,{cache:'no-store'}).then(x=>x.json());}if(r&&r.success===false){alert(r.error||'Pump 2 could not start');btn.textContent='Run '+dur+'s';btn.disabled=false;return;}btn.textContent='✓';}catch(e){btn.textContent='❌';}setTimeout(()=>{btn.textContent='Run '+dur+'s';btn.disabled=false;},2000);}
-async function pump2CalSave(dur){const ml=parseFloat(document.getElementById('pump2-ml').value)||0;if(ml<=0){alert('Enter measured ml');return;}const rate=ml/dur;try{if(IS_CLOUD){await API.post('/command',{command:'set_pump2_calibration',params:{ml_per_sec:parseFloat(rate.toFixed(2))}});await new Promise(r=>setTimeout(r,2000));}else{await fetch('/api/pump2/calibrate?ml_per_sec='+rate.toFixed(2),{cache:'no-store'});}alert('Saved: '+rate.toFixed(2)+' ml/sec');pump2CalLoad();}catch(e){alert('Save failed');}}
+async function pump2CalSave(dur){const ml=parseFloat(document.getElementById('pump2-ml').value)||0;if(ml<=0){alert('Enter measured ml');return;}const rate=ml/dur;try{let r;if(IS_CLOUD){r=await API.commandAndWait('set_pump2_calibration',{ml_per_sec:parseFloat(rate.toFixed(2))});}else{r=await fetch('/api/pump2/calibrate?ml_per_sec='+rate.toFixed(2),{cache:'no-store'}).then(x=>x.json());}calSaveVerdict(r);pump2CalLoad();}catch(e){alert('Save failed');}}
 async function pump2CalReset(){try{if(IS_CLOUD){await API.post('/command',{command:'reset_pump2_calibration',params:{}});await new Promise(r=>setTimeout(r,2000));}else{await fetch('/api/pump2/reset',{cache:'no-store'});}await pump2CalLoad();alert('Pump 2 calibration reset to default');}catch(e){alert('Reset failed');}}
 // Cloud mode: показать device ID в header сразу
 if (IS_CLOUD && DEVICE_ID) {

@@ -276,7 +276,7 @@
 <div class="section-header">Pump Preset</div>
 <div class="toggle-row">
 <div><div class="toggle-label">Default Flow Rate</div><div class="toggle-desc">Used if pump not calibrated <span class="mono">(ml_per_sec)</span></div></div>
-<div class="row"><input type="number" id="calib-pump-mlsec" min="0.1" max="50" step="0.1" value="1.0" style="width:80px"><span class="muted">ml/sec</span></div>
+<div class="row"><input type="number" id="calib-pump-mlsec" step="0.01" value="" style="width:80px"><span class="muted">ml/sec</span></div>
 </div>
 <div class="row" style="margin-top:8px">
 <button onclick="savePumpPreset()">Set Pump Preset</button>
@@ -723,7 +723,8 @@ async function loadDeviceConfig() {
       const device = devices.find(d => d.device_id === deviceId);
       if (device) {
         // Pump 1 preset: the stored admin preset; before one is stored — the working value (as before)
-        const pumpCalib = device.pump_preset || device.pump_calibration || 1.0;
+        // F8: no invented 1.0 — empty field when the device reported nothing
+        const pumpCalib = device.pump_preset || device.pump_calibration || '';
         document.getElementById('calib-pump-mlsec').value = pumpCalib;
         console.log('[Admin] Loaded pump preset:', pumpCalib, device.pump_preset ? '(stored preset)' : '(no stored preset)');
 
@@ -1137,27 +1138,22 @@ async function savePumpPreset() {
   }
 
   const mlPerSec = parseFloat(document.getElementById('calib-pump-mlsec').value);
-  if (isNaN(mlPerSec) || mlPerSec < 0.1 || mlPerSec > 50) {
-    alert('ml/sec must be between 0.1 and 50');
+  // F8: no own range — the device owns the rule (pump.h) and answers accept/refuse
+  if (isNaN(mlPerSec) || mlPerSec <= 0) {
+    alert('Enter ml/sec');
     return;
   }
 
   try {
-    const res = await fetch(`${API.cloudBase}/device/${selectedDeviceId}/command`, {
-      method: 'POST',
-      headers: { ...API.getAuthHeaders(), 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        command: 'set_pump_preset',
-        params: { ml_per_sec: mlPerSec }
-      })
-    });
-
-    if (res.ok) {
-      alert(`✓ Pump preset set to ${mlPerSec} ml/sec`);
+    const r = await API.commandAndWait('set_pump_preset', { ml_per_sec: mlPerSec }, selectedDeviceId);
+    if (r.status === 'success') {
+      const v = r.result && r.result.factory_ml_per_sec;
+      alert(`✓ Pump preset set to ${typeof v === 'number' ? v : mlPerSec} ml/sec`);
       refreshDeviceAfterPreset(selectedDeviceId);
+    } else if (r.status === 'pending') {
+      alert(r.message);
     } else {
-      const err = await res.json().catch(() => ({}));
-      alert('Failed: ' + (err.error || res.status));
+      alert('Failed: ' + r.message);
     }
   } catch(e) {
     alert('Error: ' + e.message);

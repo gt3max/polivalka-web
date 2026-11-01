@@ -189,6 +189,28 @@ const API = {
     return response;
   },
 
+  // F8: send a device command and wait (up to ~5 s) for the DEVICE's answer via the
+  // existing GET /device/{id}/command/{command_id}. Returns {status:'success'|'error'|'pending',
+  // message, result} — pages show "Saved" only on success, the device's text on error.
+  commandAndWait: async function(command, params, deviceId) {
+    const dev = deviceId || DEVICE_ID;
+    const sent = await this.fetchGlobal(`/device/${dev}/command`, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({command: command, params: params || {}})
+    }).then(r => r.json());
+    if (!sent || !sent.command_id) return {status: 'error', message: (sent && sent.error) || 'Not sent'};
+    for (let i = 0; i < 10; i++) {
+      await new Promise(r => setTimeout(r, 500));
+      try {
+        const c = await this.fetchGlobal(`/device/${dev}/command/${sent.command_id}`).then(r => r.json());
+        if (c.status === 'success' || c.status === 'completed') return {status: 'success', message: c.message, result: c.result};
+        if (c.status === 'error') return {status: 'error', message: c.message || 'Device refused'};
+      } catch (e) { /* keep waiting */ }
+    }
+    return {status: 'pending', message: 'Sent, device has not answered yet'};
+  },
+
   // Fetch global endpoint (no /device/{id} prefix, e.g. /plants/*)
   fetchGlobal: async function(path, options = {}) {
     if (IS_CLOUD && !path.startsWith('/auth') && Auth.isTokenExpired()) {
