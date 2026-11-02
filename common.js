@@ -521,3 +521,133 @@ if (typeof IS_CLOUD !== 'undefined' && IS_CLOUD && typeof DEVICE_ID !== 'undefin
 }
 
 console.log('[Common] Utilities loaded');
+
+/* ui_guard — one click = one command; messages hide by themselves (item 4, 02.11.2026).
+ * Same logic on the board pages (appended to every page by send_html_with_init) and on the
+ * site (polivalka-web/common.js). Fable review: documentation/Fable/2026-11-02_item4_double_press_review.md
+ * - A clicked button stays busy until 700 ms pass with none of the requests it started in flight
+ *   (covers GET -> POST and the cloud's 500 ms device polls). Fuse 20 s. `disabled` is never touched.
+ * - Stop controls are never blocked: explicit handler list, not the substring "stop"
+ *   (onclick="event.stopPropagation();..." must stay guarded).
+ * - alert() becomes a toast that hides by itself and survives a page reload for its time.
+ *   confirm() and prompt() are untouched. */
+(function () {
+  if (window.__uiGuard) return;
+  window.__uiGuard = 1;
+  var QUIET = 700, FUSE = 20000, KEY = 'uiToast';
+  var busy = [];
+
+  function isStop(el) {
+    if (el.hasAttribute('data-nobusy')) return true;
+    if (/(^|-)stop(-|$)/i.test(el.id || '')) return true;
+    return /\b(stopPump|pump2Stop|stopDevice|stopAllDevices)\s*\(/.test(el.getAttribute('onclick') || '');
+  }
+  function find(el) {
+    for (var i = 0; i < busy.length; i++) if (busy[i].el === el) return busy[i];
+    return null;
+  }
+  function release(b) {
+    var i = busy.indexOf(b);
+    if (i >= 0) busy.splice(i, 1);
+    b.el.classList.remove('ui-busy');
+    b.el.removeAttribute('aria-busy');
+  }
+  function check(b) {
+    if (busy.indexOf(b) < 0) return;
+    var now = Date.now();
+    if (now - b.start > FUSE || (b.n <= 0 && now - b.last >= QUIET)) { release(b); return; }
+    setTimeout(function () { check(b); }, b.n > 0 ? 200 : Math.max(50, QUIET - (now - b.last)));
+  }
+
+  document.addEventListener('click', function (e) {
+    var t = e.target;
+    if (!t || !t.closest || t.closest('input,select,textarea,label')) return;
+    var el = t.closest('button,[onclick]');
+    if (!el || el.disabled || isStop(el)) return;
+    if (find(el)) { e.preventDefault(); e.stopImmediatePropagation(); return; }
+    var now = Date.now();
+    var b = { el: el, n: 0, last: now, start: now };
+    busy.push(b);
+    el.classList.add('ui-busy');
+    el.setAttribute('aria-busy', 'true');
+    setTimeout(function () { check(b); }, QUIET);
+  }, true);
+
+  // Requests started while an element is busy belong to it.
+  function own() {
+    var owners = busy.slice(), now = Date.now();
+    for (var i = 0; i < owners.length; i++) { owners[i].n++; owners[i].last = now; }
+    var done = false;
+    return function () {
+      if (done) return;
+      done = true;
+      var t = Date.now();
+      for (var j = 0; j < owners.length; j++) { owners[j].n--; owners[j].last = t; }
+    };
+  }
+  var origFetch = window.fetch;
+  if (origFetch) {
+    window.fetch = function () {
+      var end = own(), p;
+      try { p = origFetch.apply(window, arguments); } catch (x) { end(); throw x; }
+      p.then(end, end);
+      return p;
+    };
+  }
+  if (window.XMLHttpRequest) {
+    var origSend = XMLHttpRequest.prototype.send;
+    XMLHttpRequest.prototype.send = function () {
+      var end = own();
+      this.addEventListener('loadend', end);
+      try { return origSend.apply(this, arguments); } catch (x) { end(); throw x; }
+    };
+  }
+
+  // Toast instead of alert()
+  var box = null, timer = null;
+  function show(msg, err, ms) {
+    if (!document.body) {
+      document.addEventListener('DOMContentLoaded', function () { show(msg, err, ms); });
+      return;
+    }
+    if (!box) {
+      box = document.createElement('div');
+      box.id = 'ui-toast';
+      box.setAttribute('role', 'status');
+      box.style.cssText = 'position:fixed;top:12px;left:50%;transform:translateX(-50%);max-width:92vw;' +
+        'z-index:100000;padding:10px 16px;border-radius:8px;color:#fff;font:14px system-ui,Arial;' +
+        'white-space:pre-line;box-shadow:0 4px 12px rgba(0,0,0,.3);cursor:pointer;transition:opacity .3s';
+      box.onclick = function () { hide(); };
+      document.body.appendChild(box);
+    }
+    box.textContent = msg;
+    box.style.background = err ? '#c62828' : '#2e7d32';
+    box.style.opacity = '1';
+    box.style.display = 'block';
+    clearTimeout(timer);
+    timer = setTimeout(hide, ms);
+  }
+  function hide() {
+    clearTimeout(timer);
+    try { sessionStorage.removeItem(KEY); } catch (x) {}
+    if (!box) return;
+    box.style.opacity = '0';
+    setTimeout(function () { if (box.style.opacity === '0') box.style.display = 'none'; }, 300);
+  }
+  window.alert = function (m) {
+    var msg = String(m == null ? '' : m);
+    var err = /error|fail|invalid|maximum|please|cannot|can't|denied|refused|wrong|❌|⚠/i.test(msg);
+    var ms = Math.min(8000, Math.max(3000, msg.length * 60)) + (err ? 2000 : 0);
+    try { sessionStorage.setItem(KEY, JSON.stringify({ m: msg, e: err, t: Date.now() + ms })); } catch (x) {}
+    show(msg, err, ms);
+  };
+  try {
+    var s = JSON.parse(sessionStorage.getItem(KEY) || 'null');
+    if (s && s.t > Date.now()) show(s.m, s.e, Math.max(1500, s.t - Date.now()));
+    else sessionStorage.removeItem(KEY);
+  } catch (x) {}
+
+  var st = document.createElement('style');
+  st.textContent = '.ui-busy{opacity:.6;cursor:progress!important}';
+  (document.head || document.documentElement).appendChild(st);
+})();
