@@ -189,7 +189,7 @@ async function updateOnlineInfo(){
       modeInfoBox.innerHTML += '<b>1️⃣ Local access (via AP):</b><br>';
       modeInfoBox.innerHTML += '   • You are here: <b>192.168.4.1</b> ✅<br>';
       modeInfoBox.innerHTML += '   • Connect to AP: <b>' + (s.ap_ssid || 'Polivalka-XXXXXX') + '</b><br>';
-      modeInfoBox.innerHTML += '   • Password: <b>' + (s.ap_password || 'msXXXXXX') + '</b><br><br>';
+      modeInfoBox.innerHTML += '   • Password: <b>' + (s.ap_password || 'on the device card') + '</b><br><br>';
 
       modeInfoBox.innerHTML += '<small style="color:#666">💡 This is normal for corporate WiFi networks<br>';
       modeInfoBox.innerHTML += 'AP will stay active permanently in this mode</small>';
@@ -225,7 +225,7 @@ async function updateOnlineInfo(){
       modeInfoBox.innerHTML += '   • Open: <code style="background:#fff;padding:2px 6px;border-radius:4px">' + mdnsHostname + '</code><br><br>';
 
       modeInfoBox.innerHTML += '<small style="color:#666">💡 If AP disappears before you switch:<br>';
-      modeInfoBox.innerHTML += '→ Connect to <b>' + (s.ap_ssid || 'Polivalka-XXXXXX') + '</b> (password: <b>' + (s.ap_password || 'msXXXXXX') + '</b>)<br>';
+      modeInfoBox.innerHTML += '→ Connect to <b>' + (s.ap_ssid || 'Polivalka-XXXXXX') + '</b> (password: <b>' + (s.ap_password || 'on the device card') + '</b>)<br>';
       modeInfoBox.innerHTML += '→ Open 192.168.4.1 in browser</small>';
     }
     // 2.1/2.2 UNKNOWN: Detection in progress (first 60 sec), user on AP
@@ -418,7 +418,8 @@ if (!IS_CLOUD) {
 // WiFi connection functionality
 var wifiStatusInterval = null;
 var cachedApSsid = 'Polivalka-XXXXXX';  // Cache AP SSID for disconnect instructions
-var cachedApPassword = 'msXXXXXX';  // Cache AP password for disconnect instructions
+const ON_CARD = 'on the device card';  // board WiFi key hint: it cannot be derived on the site
+var cachedApPassword = ON_CARD;  // Cache AP password for disconnect instructions
 
 function togglePassword() {
   var x = document.getElementById('wifi_password');
@@ -742,9 +743,8 @@ async function enableAPMode() {
     });
 
     if (result.success || result.status === 'sent') {
-      // AP password = 'ms' + last 6 chars of device ID
-      const deviceSuffix = DEVICE_ID.replace('Polivalka-', '');
-      const apPassword = 'ms' + deviceSuffix;
+      // The board's WiFi password is on its device card (QR); it cannot be derived here (item 5, 1.0.218)
+      const apPassword = ON_CARD + ' (scan its QR code)';
 
       statusDiv.innerHTML = `
         <div style="color:#2e7d32;font-weight:600;margin-bottom:8px">✅ AP+STA Mode Enabled for ${minutes} minutes!</div>
@@ -854,9 +854,8 @@ if (IS_CLOUD) {
       const deviceName = status.system_state?.device_name || DEVICE_ID;
       const location = status.system_state?.location || '—';
       const room = status.system_state?.room || '—';
-      // AP password = 'ms' + last 6 chars of device ID (e.g., Polivalka-A1B2C3 → msA1B2C3)
-      const deviceSuffix = DEVICE_ID ? DEVICE_ID.replace('Polivalka-', '') : 'XXXXXX';
-      const apPassword = 'ms' + deviceSuffix;
+      // The board's WiFi password is on its device card (QR); it cannot be derived here (item 5, 1.0.218)
+      const apPassword = ON_CARD + ' (scan its QR code)';
 
       // WiFi signal strength (RSSI)
       const staRssi = status.sta_rssi;
