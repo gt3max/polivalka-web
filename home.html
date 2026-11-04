@@ -1,4 +1,4 @@
-<!doctype html><html><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width, initial-scale=1"><title>PlantApp — Device</title>
+<!doctype html><html lang="en"><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width, initial-scale=1"><title>PlantApp — Device</title>
 <link rel="icon" href="favicon.svg" type="image/svg+xml">
 <script src="api-adapter.js"></script>
 <script src="common.js"></script>
@@ -1307,6 +1307,21 @@ function pump2SpeedPreview(v){document.getElementById('pump2-speed-display').tex
 let pump2SpeedT=null;
 async function pump2SetSpeed(v){if(pump2SpeedT)clearTimeout(pump2SpeedT);pump2SpeedT=setTimeout(async()=>{try{await API.post('/pump2/speed?value='+v);}catch(e){showToast('Speed set failed','error');}},300);}
 function pump2UpdateLimit(){const unit=document.getElementById('pump2-unit').value;const input=document.getElementById('pump2-duration');if(unit==='min'){input.max=10;if(parseInt(input.value)>10)input.value=10;}else{input.max=600;if(parseInt(input.value)>600)input.value=600;}}
+
+// Owner's 1.0.217 check #7: manual duration is a screen setting, kept in this browser.
+// One site serves many devices (?device=), so the key carries the device id.
+[['manual-duration', 'manual-unit', updateManualLimit], ['pump2-duration', 'pump2-unit', pump2UpdateLimit]].forEach(function(f){
+  const d = document.getElementById(f[0]), u = document.getElementById(f[1]);
+  const k = 'dur_' + (DEVICE_ID || 'local') + '_';
+  try {
+    const v = localStorage.getItem(k + f[0]), w = localStorage.getItem(k + f[1]);
+    if (w === 'sec' || w === 'min') u.value = w;
+    if (v && /^\d+$/.test(v) && +v >= 1) d.value = v;
+    f[2]();
+  } catch(e) {}
+  function save(){ try { localStorage.setItem(k + f[0], d.value); localStorage.setItem(k + f[1], u.value); } catch(e) {} }
+  d.addEventListener('input', save); d.addEventListener('change', save); u.addEventListener('change', save);
+});
 function pump2ApplyType(t){const el=document.getElementById('pump2-title');if(el)el.textContent=(t&&t!=='Pump')?t:'Pump 2';}
 async function pump2SetType(v){try{await API.post('/pump2/type?value='+encodeURIComponent(v));pump2ApplyType(v);showToast('Pump 2 type: '+v,'success');}catch(e){showToast('Type set failed','error');}}
 async function loadPump2Status(){try{const s=await API.get('/pump2/status');if(s.type){const sel=document.getElementById('pump2-type');if(sel&&sel.value!==s.type)sel.value=s.type;pump2ApplyType(s.type);}if(s.speed!==undefined){const sl=document.getElementById('pump2-speed-slider');if(document.activeElement!==sl){sl.value=s.speed;document.getElementById('pump2-speed-display').textContent=s.speed+'%';}}const run=s.running===true;document.getElementById('pump2-running').style.display=run?'block':'none';document.getElementById('btn-pump2-stop').disabled=!run;const rb=document.getElementById('btn-pump2');if(rb)rb.disabled=run;if(run&&!window.pump2Watchdog)pump2StartWatchdog();}catch(e){}}
