@@ -1807,20 +1807,20 @@ async function loadModules(){
     const rb=d.modules_rolled_back||{}, live=d.modules_live||{};
     const rolled=n=>rb[n]?' <span class="danger">↩ rolled back'+(rb[n].from?' from '+esc(String(rb[n].from)):'')+'</span>'
       :(live[n]&&live[n].prev?' <span class="muted">(was '+esc(String(live[n].prev))+')</span>':'');
-    const fleet=n=>{
-      if(n!=='firmware'||!Array.isArray(allDevicesData)||!allDevicesData.length) return '';
-      const by={}; allDevicesData.forEach(x=>{const v=String(x.firmware_version||'?').replace(/^v/,''); by[v]=(by[v]||0)+1;});
-      const want=String(mods[n]), parts=Object.keys(by).sort().map(v=>by[v]+'× '+esc(v));
-      const drift=Object.keys(by).some(v=>v!==want);
-      return ' · devices: '+parts.join(', ')+(drift?' <span class="danger">≠</span>':'');
-    };
+    // 05.11.2026: Поливалка — модуль как все, прошивка — его подмодуль (реестр plantapp documentation/modules.json:
+    // firmware.parent = polivalka). Версии по устройствам — данные парка (страница Fleet), не номер модуля.
+    const PARENT=d.modules_parent||{firmware:'polivalka'};
+    const det=detached.filter(n=>mods[n]);
+    const roots=det.filter(n=>!PARENT[n]||!det.includes(PARENT[n]));
+    const detRow=(n,sub)=>'<div class="muted">'+(sub?'&nbsp;&nbsp;└ ':'')+esc(n)+' '+esc(String(mods[n]))
+      +(sub?'':' · —')+rolled(n)+(sub?'':' (devices, not in the app)')+'</div>';
     list.innerHTML='<div class="muted" style="margin-bottom:4px">section · cloud · app '+(appBuild?esc(appBuild):'(not released yet)')+'</div>'
       +names.map(n=>{
         const a=app[n], lag=a&&a!==mods[n];
         return '<div>'+(off.includes(n)?'<span class="danger">⛔ ':'<span>')+esc(n)+'</span> <span class="muted">'+esc(String(mods[n]))
           +' · '+(a?esc(String(a)):'—')+'</span>'+(lag?' <span class="danger">≠</span>':'')+rolled(n)+'</div>';
       }).join('')
-      +detached.filter(n=>mods[n]).map(n=>'<div class="muted">📡 '+esc(n)+' '+esc(String(mods[n]))+rolled(n)+fleet(n)+' — devices, not in the app</div>').join('');
+      +roots.map(r=>detRow(r,false)+det.filter(n=>PARENT[n]===r).map(n=>detRow(n,true)).join('')).join('');
   }catch(e){
     sum.innerHTML='🧩 Modules <span class="danger">Error: '+esc(e.message)+'</span>';
   }finally{
