@@ -240,6 +240,7 @@
 <div class="info-row"><span class="info-label">Type</span><span class="info-value" id="stat-pump2-type">—</span></div>
 <div class="info-row"><span class="info-label">Total Water (P2)</span><span class="info-value" id="stat-total-water2">— ml</span></div>
 <div class="info-row"><span class="info-label">Pump 2 Runtime</span><span class="info-value" id="stat-pump2-runtime">— sec</span></div>
+<div class="info-row"><span class="info-label">Tank (J8)</span><span class="info-value" id="stat-tank">—</span></div>
 </div>
 <div class="row" style="margin-top:8px">
 <button onclick="resetStats('pump2')">Reset Pump 2 Stats</button>
@@ -265,6 +266,7 @@
 <div class="info-row"><span class="info-label">Pump Events</span><span class="info-value">On start/stop</span></div>
 <div class="info-row"><span class="info-label">Config Changes</span><span class="info-value">On save</span></div>
 <div class="info-row"><span class="info-label">Command Responses</span><span class="info-value">On command</span></div>
+<div class="info-row"><span class="info-label">Level Switch (J8)</span><span class="info-value">In system publish</span></div>
 </div>
 </div>
 
@@ -314,6 +316,19 @@
 </div>
 <div class="row" style="margin-top:8px">
 <button onclick="saveSensor2Preset()">Set Capacitive J6 Preset</button>
+</div>
+
+<div class="section-header" style="margin-top:20px">Level Switch (J8)</div>
+<div class="toggle-row">
+<div><div class="toggle-label">Installed</div><div class="toggle-desc">Board ships with a level switch <span class="mono">(installed)</span></div></div>
+<div class="row"><select id="lvl-preset-inst" style="padding:6px"><option value="0">No</option><option value="1">Yes</option></select></div>
+</div>
+<div class="toggle-row">
+<div><div class="toggle-label">Liquid =</div><div class="toggle-desc">Switch output level when liquid is present <span class="mono">(liquid_high)</span></div></div>
+<div class="row"><select id="lvl-preset-high" style="padding:6px"><option value="1">High</option><option value="0">Low</option></select></div>
+</div>
+<div class="row" style="margin-top:8px">
+<button onclick="saveLevelPreset()">Set Level Switch Preset</button>
 </div>
 </div>
 
@@ -744,6 +759,11 @@ async function loadDeviceConfig() {
         document.getElementById('calib-s2-air').value = p2.air;
         console.log('[Admin] J6 preset loaded:', p2, device.sensor2_preset ? '(stored)' : '(factory defaults)');
 
+        // Level switch (J8) preset: stored admin preset, else "not installed"
+        const lp = device.level_preset || {installed: false, liquid_high: true};
+        document.getElementById('lvl-preset-inst').value = lp.installed ? '1' : '0';
+        document.getElementById('lvl-preset-high').value = lp.liquid_high ? '1' : '0';
+
         // Show last seen info
         if (device.last_update) {
           const lastSeen = new Date(device.last_update * 1000);
@@ -777,6 +797,10 @@ async function loadDeviceConfig() {
         document.getElementById('stat-pump2-type').textContent = device.pump2_type || '—';
         document.getElementById('stat-total-water2').textContent = device.total_water2_ml ? device.total_water2_ml.toLocaleString() + ' ml' : '— ml';
         document.getElementById('stat-pump2-runtime').textContent = device.pump2_runtime_sec ? device.pump2_runtime_sec.toLocaleString() + ' sec' : '— sec';
+        const lv = device.level;   // null = no level switch set up
+        document.getElementById('stat-tank').textContent = !lv ? 'Not set up'
+          : (lv.liquid === 0 ? 'No liquid' : (lv.liquid === 1 ? 'OK' : '—'))
+            + (lv.last_change_ts ? ' · changed ' + new Date(lv.last_change_ts * 1000).toLocaleString() : '');
 
         // Plant info
         const plant = device.plant;
@@ -1130,6 +1154,30 @@ function refreshDeviceAfterPreset(deviceId) {
 }
 
 // Save pump preset (factory default)
+// Save level switch (J8) preset — Level_Switch.md §4
+async function saveLevelPreset() {
+  const selectedDeviceId = document.getElementById('device-select').value;
+  if (!selectedDeviceId) {
+    alert('Please select a device first');
+    return;
+  }
+  const installed = document.getElementById('lvl-preset-inst').value === '1';
+  const liquidHigh = document.getElementById('lvl-preset-high').value === '1';
+  try {
+    const r = await API.commandAndWait('set_level_preset', { installed: installed, liquid_high: liquidHigh }, selectedDeviceId);
+    if (r.status === 'success') {
+      alert(`✓ Level switch preset: ${installed ? 'installed' : 'not installed'}, liquid = ${liquidHigh ? 'high' : 'low'}`);
+      refreshDeviceAfterPreset(selectedDeviceId);
+    } else if (r.status === 'pending') {
+      alert(r.message);
+    } else {
+      alert('Failed: ' + r.message);
+    }
+  } catch(e) {
+    alert('Error: ' + e.message);
+  }
+}
+
 async function savePumpPreset() {
   const selectedDeviceId = document.getElementById('device-select').value;
   if (!selectedDeviceId) {

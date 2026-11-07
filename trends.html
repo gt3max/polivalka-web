@@ -1630,6 +1630,35 @@ async function refreshAll() {
     loadActivity(),
     loadSystemHealth()
   ]);
+  applyLevelMarkers();
+}
+
+// Level switch (J8) markers on the moisture chart: a vertical line where the tank ran out (red) or got
+// liquid back (green). Source: system history `level.last_change_ts` (telemetry TTL 7 days).
+function applyLevelMarkers() {
+  if (!moistureChart || !Array.isArray(systemHealthData)) return;
+  const cutoff = IS_ARCHIVE_MODE ? 0 : Date.now() - (currentPeriod * 24 * 60 * 60 * 1000);
+  const seen = new Set();
+  const marks = {};
+  systemHealthData.slice().sort((a, b) => a.timestamp - b.timestamp).forEach(p => {
+    const l = p.level;
+    if (!l || !l.last_change_ts || seen.has(l.last_change_ts)) return;
+    seen.add(l.last_change_ts);
+    if (l.last_change_ts * 1000 < cutoff) return;
+    const empty = l.liquid === 0;
+    marks['lvl' + l.last_change_ts] = {
+      type: 'line', xMin: new Date(l.last_change_ts * 1000), xMax: new Date(l.last_change_ts * 1000),
+      borderColor: empty ? '#c62828' : '#2e7d32', borderWidth: 2, borderDash: [4, 4],
+      label: { display: true, content: empty ? 'Tank: no liquid' : 'Tank: liquid back', position: 'start',
+               backgroundColor: empty ? '#c62828' : '#2e7d32', color: '#fff', font: { size: 10 } }
+    };
+  });
+  if (!Object.keys(marks).length) return;
+  moistureChart.options.plugins = moistureChart.options.plugins || {};
+  const ann = moistureChart.options.plugins.annotation || { annotations: {} };
+  ann.annotations = Object.assign({}, ann.annotations || {}, marks);
+  moistureChart.options.plugins.annotation = ann;
+  moistureChart.update();
 }
 
 // Admin nav link - moved to common.js

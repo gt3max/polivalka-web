@@ -954,6 +954,7 @@ function createExpandableRow(device, isOnline, hasWarnings, isCritical) {
         ${automationControl}
         <span class="device-status" style="background:${stateBg};color:${stateColor}">${stateText}</span>
         ${device.pump2_running ? '<span class="device-status" style="background:#f57c00;color:#fff" title="Second actuator running">⚡ P2</span>' : ''}
+        ${device.level ? `<span class="device-status" style="background:${device.level.liquid === 0 ? '#c62828' : '#e8f5e9'};color:${device.level.liquid === 0 ? '#fff' : '#2c5f2d'}" title="Level switch (J8)">${device.level.liquid === 0 ? '⚠️ Tank: No liquid' : (device.level.liquid === 1 ? '💧 Tank: OK' : 'Tank: —')}</span>` : ''}
         <span class="device-status ${isOnline ? 'online' : 'offline'}">${isOnline ? '● Online' : '○ Offline'}</span>
         <span class="muted" style="font-size:10px;opacity:0.7" title="Last data received from device">${timeAgo(device.last_update)}</span>
         <span class="ota-badge" id="ota-badge-${device.device_id}"></span>
@@ -987,6 +988,13 @@ function createExpandableRow(device, isOnline, hasWarnings, isCritical) {
         <span class="detail-item">⚡ Pump 2 (${device.pump2_type}): <b style="color:${device.pump2_running ? '#f57c00' : '#888'}">${device.pump2_running ? 'Running' : 'Idle'}</b></span>
         ${device.total_water2_ml ? `<span class="detail-item">Total: ${device.total_water2_ml} ml</span>` : ''}
         ${device.pump2_runtime_sec ? `<span class="detail-item">Runtime: ${device.pump2_runtime_sec} s</span>` : ''}
+      </div>` : ''}
+
+      ${device.level ? `
+      <div class="detail-row" style="margin-top:8px">
+        <span class="detail-item">💧 Tank (J8): <b style="color:${device.level.liquid === 0 ? '#c62828' : '#2c5f2d'}">${device.level.liquid === 0 ? 'No liquid' : (device.level.liquid === 1 ? 'OK' : '—')}</b></span>
+        ${device.level.last_change_ts ? `<span class="detail-item">Changed: ${new Date(device.level.last_change_ts * 1000).toLocaleString()}</span>` : ''}
+        <span class="detail-item">Dry-run protection: P1 ${device.level.p1 ? 'on' : 'off'} · P2 ${device.level.p2 ? 'on' : 'off'}</span>
       </div>` : ''}
 
       ${hasWarnings ? `
