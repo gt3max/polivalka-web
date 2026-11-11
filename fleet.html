@@ -154,7 +154,7 @@
   .console-toggle{position:fixed;bottom:260px;right:20px;z-index:2001;background:#007acc;color:#fff;border:none;padding:8px 16px;border-radius:8px 8px 0 0;cursor:pointer;font-size:11px}
   .console-toggle.closed{bottom:0;border-radius:8px}
 
-  /* Toggle button for Water Now */
+  /* Toggle button for Pump 1 Start */
   .btn-water-toggle{transition:all 0.3s;position:relative}
   .btn-water-toggle.active{background:#2c5f2d !important;color:#fff !important;border-color:#2c5f2d !important;box-shadow:inset 0 3px 5px rgba(0,0,0,0.3)}
   .water-hint{font-size:11px;color:#666;margin-left:4px;font-weight:normal}
@@ -954,7 +954,7 @@ function createExpandableRow(device, isOnline, hasWarnings, isCritical) {
         ${automationControl}
         <span class="device-status" style="background:${stateBg};color:${stateColor}">${stateText}</span>
         ${device.pump2_running ? '<span class="device-status" style="background:#f57c00;color:#fff" title="Second actuator running">⚡ P2</span>' : ''}
-        ${device.level ? `<span class="device-status" style="background:${device.level.liquid === 0 ? '#c62828' : '#e8f5e9'};color:${device.level.liquid === 0 ? '#fff' : '#2c5f2d'}" title="Level switch (J8)">${device.level.liquid === 0 ? '⚠️ Tank: No liquid' : (device.level.liquid === 1 ? '💧 Tank: OK' : 'Tank: —')}</span>` : ''}
+        ${device.level ? `<span class="device-status" style="background:${device.level.liquid === 0 ? '#c62828' : '#e8f5e9'};color:${device.level.liquid === 0 ? '#fff' : '#2c5f2d'}" title="Level switch (J8): is there liquid at the switch">${device.level.liquid === 0 ? '⚠️ Liquid: none' : (device.level.liquid === 1 ? 'Liquid: present' : 'Liquid: —')}</span>` : ''}
         <span class="device-status ${isOnline ? 'online' : 'offline'}">${isOnline ? '● Online' : '○ Offline'}</span>
         <span class="muted" style="font-size:10px;opacity:0.7" title="Last data received from device">${timeAgo(device.last_update)}</span>
         <span class="ota-badge" id="ota-badge-${device.device_id}"></span>
@@ -973,7 +973,7 @@ function createExpandableRow(device, isOnline, hasWarnings, isCritical) {
       <div class="detail-row" style="margin-top:8px">
         <span class="detail-item" style="color:${moistureColor}">💧 Moisture: ${moisturePct !== null ? moisturePct + '%' : '—'} (ADC: ${device.adc_raw != null ? device.adc_raw : 'N/A'})</span>
         <span class="detail-item" style="color:${batteryColor}">${batteryDisplayLong}</span>
-        <span class="detail-item">Water: ≈${waterEstimate(device, device.watering_duration || maxWateringTime)}ml / ${device.watering_duration || maxWateringTime}s</span>
+        <span class="detail-item">Pump 1 run: ≈${waterEstimate(device, device.watering_duration || maxWateringTime)}ml / ${device.watering_duration || maxWateringTime}s</span>
       </div>
 
       <div class="detail-row" style="margin-top:8px">
@@ -992,7 +992,7 @@ function createExpandableRow(device, isOnline, hasWarnings, isCritical) {
 
       ${device.level ? `
       <div class="detail-row" style="margin-top:8px">
-        <span class="detail-item">💧 Tank (J8): <b style="color:${device.level.liquid === 0 ? '#c62828' : '#2c5f2d'}">${device.level.liquid === 0 ? 'No liquid' : (device.level.liquid === 1 ? 'OK' : '—')}</b></span>
+        <span class="detail-item">Liquid (J8): <b style="color:${device.level.liquid === 0 ? '#c62828' : '#2c5f2d'}">${device.level.liquid === 0 ? 'none' : (device.level.liquid === 1 ? 'present' : '—')}</b></span>
         ${device.level.last_change_ts ? `<span class="detail-item">Changed: ${new Date(device.level.last_change_ts * 1000).toLocaleString()}</span>` : ''}
         <span class="detail-item">Dry-run protection: P1 ${device.level.p1 ? 'on' : 'off'} · P2 ${device.level.p2 ? 'on' : 'off'}</span>
       </div>` : ''}
@@ -1005,7 +1005,7 @@ function createExpandableRow(device, isOnline, hasWarnings, isCritical) {
 
       <div class="device-actions">
         <button onclick="event.stopPropagation(); refreshSensor('${device.device_id}')" class="btn-secondary">🔄 Refresh</button>
-        <button onclick="event.stopPropagation(); startPump('${device.device_id}', event)" class="btn-primary btn-water-toggle">💧 Water Now</button>
+        <button onclick="event.stopPropagation(); startPump('${device.device_id}', event)" class="btn-primary btn-water-toggle">Pump 1 Start</button>
         <button onclick="event.stopPropagation(); stopPump('${device.device_id}', event)" class="btn-danger">⛔ Stop</button>
         <button onclick="event.stopPropagation(); viewDevice('${device.device_id}')">🏠 Device</button>
         <button onclick="event.stopPropagation(); viewTrends('${device.device_id}')">📊 Trends</button>
@@ -1192,7 +1192,7 @@ function createDeviceCard(device) {
     </div>
 
     <div class="muted" style="font-size:12px;margin:8px 0">
-      Water: ≈${waterEstimate(device, device.watering_duration || 60)}ml / ${device.watering_duration || 60}s<br>
+      Pump 1 run: ≈${waterEstimate(device, device.watering_duration || 60)}ml / ${device.watering_duration || 60}s<br>
       Last watering: ${lastWateringAgo} | Last update: ${lastUpdateAgo}<br>
       🔧 ${device.firmware_version || 'v1.0.0'} | 🔄 Restarts: ${formatRestarts(device)}
     </div>
@@ -1205,7 +1205,7 @@ function createDeviceCard(device) {
 
     <div class="device-actions">
       <button onclick="refreshSensor('${device.device_id}')" class="btn-primary">🔄 Refresh</button>
-      <button onclick="startPump('${device.device_id}', event)" class="btn-primary btn-water-toggle">💧 Water Now</button>
+      <button onclick="startPump('${device.device_id}', event)" class="btn-primary btn-water-toggle">Pump 1 Start</button>
       <button onclick="stopPump('${device.device_id}', event)" class="btn-danger">⛔ Stop</button>
       <button onclick="viewDevice('${device.device_id}')">🏠 Device</button>
       <button onclick="viewTrends('${device.device_id}')">📊 Trends</button>
@@ -1595,16 +1595,16 @@ async function toggleAutomation(deviceId, enable) {
 }
 
 function updatePumpButton(deviceId, isRunning, elapsed = 0, total = maxWateringTime) {
-  // Find and update Water Now button state for this device
+  // Find and update the Pump 1 Start button state for this device
   const buttons = document.querySelectorAll(`[data-device-id="${deviceId}"] .btn-water-toggle`);
   buttons.forEach(btn => {
     if (isRunning) {
       btn.classList.add('active');
-      btn.textContent = `💧 Watering ${elapsed}s / ${total}s`;
+      btn.textContent = `Pump 1 running ${elapsed}s / ${total}s`;
       btn.disabled = true;
     } else {
       btn.classList.remove('active');
-      btn.textContent = `💧 Water Now`;
+      btn.textContent = `Pump 1 Start`;
       btn.disabled = false;
       btn.onclick = (e) => startPump(deviceId, e);
     }

@@ -1649,7 +1649,7 @@ function applyLevelMarkers() {
     marks['lvl' + l.last_change_ts] = {
       type: 'line', xMin: new Date(l.last_change_ts * 1000), xMax: new Date(l.last_change_ts * 1000),
       borderColor: empty ? '#c62828' : '#2e7d32', borderWidth: 2, borderDash: [4, 4],
-      label: { display: true, content: empty ? 'Tank: no liquid' : 'Tank: liquid back', position: 'start',
+      label: { display: true, content: empty ? 'No liquid' : 'Liquid back', position: 'start',
                backgroundColor: empty ? '#c62828' : '#2e7d32', color: '#fff', font: { size: 10 } }
     };
   });
