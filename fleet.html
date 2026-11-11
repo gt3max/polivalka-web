@@ -1364,6 +1364,7 @@ async function refreshSensor(deviceId) {
       if (result.clean_restarts !== undefined) device.clean_restarts = result.clean_restarts;
       if (result.unexpected_restarts !== undefined) device.unexpected_restarts = result.unexpected_restarts;
       if (result.reboot_count !== undefined) device.reboot_count = result.reboot_count;
+      if (result.level !== undefined) device.level = result.level;   // level switch (J8): null = not set up
       if (result.timestamp) device.last_update = result.timestamp;
       device.online = true;  // Device responded = online
       normalizeSensorData(device);  // ADC < 100 = sensor disconnected
@@ -1433,6 +1434,7 @@ async function refreshSensorSilent(deviceId) {
       if (result.clean_restarts !== undefined) device.clean_restarts = result.clean_restarts;
       if (result.unexpected_restarts !== undefined) device.unexpected_restarts = result.unexpected_restarts;
       if (result.reboot_count !== undefined) device.reboot_count = result.reboot_count;
+      if (result.level !== undefined) device.level = result.level;   // level switch (J8): null = not set up
       if (result.timestamp) device.last_update = result.timestamp;
       device.online = true;  // Device responded = online
       normalizeSensorData(device);  // ADC < 100 = sensor disconnected
