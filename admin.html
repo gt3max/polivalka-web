@@ -781,7 +781,7 @@ async function loadDeviceConfig() {
         document.getElementById('stat-pump2-runtime').textContent = device.pump2_runtime_sec ? device.pump2_runtime_sec.toLocaleString() + ' sec' : '— sec';
         const lv = device.level;   // null = no switch connected (or firmware without one)
         document.getElementById('stat-tank').textContent = !lv ? 'No switch connected'
-          : (lv.liquid === 0 ? 'none — or switch unplugged' : (lv.liquid === 1 ? 'present' : '—')) + ((lv.sig === 0 || lv.sig === 1) ? ' · signal ' + lv.sig : '')
+          : (lv.liquid === 0 ? 'none' : (lv.liquid === 1 ? 'present' : '—')) + ((lv.sig === 0 || lv.sig === 1) ? ' · signal ' + lv.sig : '')
             + (lv.last_change_ts ? ' · changed ' + new Date(lv.last_change_ts * 1000).toLocaleString() : '');
 
         // Plant info
