@@ -440,6 +440,11 @@ function waterEstimate(device, sec) {
 let maxWateringTime = 60;   // seconds default
 let pumpRunningDevices = new Set();  // Track which devices have pump running
 let pumpTimers = {};  // Track timers for each device
+// Per device: +1 on every Start and Stop click. A Start answer (the cloud waits up to 5 s for the board) that
+// arrives after a newer click must not restart the counter; if that newer click was Stop, Stop wins (sent again).
+let pumpSeq = {};
+let pumpLastClick = {};
+let pumpElapsed = {};   // seconds shown on a running pump's button
 
 // Track expanded devices (to preserve state across re-renders)
 let expandedDevices = new Set();
@@ -760,6 +765,10 @@ function renderDevices(devices) {
   devices.forEach(device => {
     const card = createDeviceCard(device);
     container.appendChild(card);
+    // A list reload must not show "Pump 1 Start" (enabled) on a pump this page is running
+    if (pumpRunningDevices.has(device.device_id)) {
+      updatePumpButton(device.device_id, true, pumpElapsed[device.device_id] || 0, maxWateringTime);
+    }
 
     // Restore expanded state if device was expanded before
     if (expandedDevices.has(device.device_id)) {
@@ -954,7 +963,7 @@ function createExpandableRow(device, isOnline, hasWarnings, isCritical) {
         ${automationControl}
         <span class="device-status" style="background:${stateBg};color:${stateColor}">${stateText}</span>
         ${device.pump2_running ? '<span class="device-status" style="background:#f57c00;color:#fff" title="Second actuator running">⚡ P2</span>' : ''}
-        ${device.level ? `<span class="device-status" style="background:${device.level.liquid === 0 ? '#c62828' : '#e8f5e9'};color:${device.level.liquid === 0 ? '#fff' : '#2c5f2d'}" title="Level switch (J8): is there liquid at the switch">${device.level.liquid === 0 ? '⚠️ Liquid: none' : (device.level.liquid === 1 ? 'Liquid: present' : 'Liquid: —')}</span>` : ''}
+        ${device.level ? `<span class="device-status" style="background:${device.level.liquid === 0 ? '#c62828' : '#e8f5e9'};color:${device.level.liquid === 0 ? '#fff' : '#2c5f2d'}" title="Level switch (J8): is there liquid at the switch">${device.level.liquid === 0 ? '⚠️ Liquid: none / unplugged?' : (device.level.liquid === 1 ? 'Liquid: present' : 'Liquid: —')}</span>` : ''}
         <span class="device-status ${isOnline ? 'online' : 'offline'}">${isOnline ? '● Online' : '○ Offline'}</span>
         <span class="muted" style="font-size:10px;opacity:0.7" title="Last data received from device">${timeAgo(device.last_update)}</span>
         <span class="ota-badge" id="ota-badge-${device.device_id}"></span>
@@ -992,7 +1001,7 @@ function createExpandableRow(device, isOnline, hasWarnings, isCritical) {
 
       ${device.level ? `
       <div class="detail-row" style="margin-top:8px">
-        <span class="detail-item">Liquid (J8): <b style="color:${device.level.liquid === 0 ? '#c62828' : '#2c5f2d'}">${device.level.liquid === 0 ? 'none' : (device.level.liquid === 1 ? 'present' : '—')}</b></span>
+        <span class="detail-item">Liquid (J8): <b style="color:${device.level.liquid === 0 ? '#c62828' : '#2c5f2d'}">${device.level.liquid === 0 ? 'none — or switch unplugged' : (device.level.liquid === 1 ? 'present' : '—')}</b></span>
         ${device.level.last_change_ts ? `<span class="detail-item">Changed: ${new Date(device.level.last_change_ts * 1000).toLocaleString()}</span>` : ''}
         <span class="detail-item">Dry-run protection: P1 ${device.level.p1 ? 'on' : 'off'} · P2 ${device.level.p2 ? 'on' : 'off'}</span>
       </div>` : ''}
@@ -1473,10 +1482,19 @@ async function startPump(deviceId, event) {
   // Mark as running BEFORE API call to prevent race condition
   pumpRunningDevices.add(deviceId);
   updatePumpButton(deviceId, true, 0, maxWateringTime);
+  const seq = pumpSeq[deviceId] = (pumpSeq[deviceId] || 0) + 1;
+  pumpLastClick[deviceId] = 'start';
 
   try {
     // Start pump for maxWateringTime
     const r = await API.post(`/device/${deviceId}/pump?sec=${maxWateringTime}`);
+    if (pumpSeq[deviceId] !== seq) {
+      // Stop (or another click) came while we waited: the page shows that click, not this start
+      if (pumpLastClick[deviceId] === 'stop' && !(r && r.success === false)) {
+        API.post(`/device/${deviceId}/pump/stop`).catch(() => {});   // the start may have reached the board after the stop
+      }
+      return;
+    }
     // F6: the device refuses while the pump already runs — revert, say why (same path as an error)
     if (r && r.success === false) {
       pumpRunningDevices.delete(deviceId);
@@ -1493,6 +1511,7 @@ async function startPump(deviceId, event) {
     showToast(`✅ Pump started (${maxWateringTime}s)`, 'success');
     setTimeout(() => loadDevices(), 2000);
   } catch(e) {
+    if (pumpSeq[deviceId] !== seq) return;   // a newer click owns the button now
     // On error, revert state
     pumpRunningDevices.delete(deviceId);
     stopPumpTimer(deviceId);
@@ -1511,6 +1530,8 @@ async function stopPump(deviceId, event) {
   showToast(`🛑 Stopping pump on ${deviceId}...`, 'info');
 
   // Clear local tracking state
+  pumpSeq[deviceId] = (pumpSeq[deviceId] || 0) + 1;   // a Start still waiting for its answer must not restart the counter
+  pumpLastClick[deviceId] = 'stop';
   pumpRunningDevices.delete(deviceId);
   stopPumpTimer(deviceId);
   updatePumpButton(deviceId, false);
@@ -1620,8 +1641,10 @@ function startPumpTimer(deviceId) {
   }
 
   let elapsed = 0;
+  pumpElapsed[deviceId] = 0;
   pumpTimers[deviceId] = setInterval(() => {
     elapsed++;
+    pumpElapsed[deviceId] = elapsed;   // renderDevices() repaints the button from it after a list reload
     updatePumpButton(deviceId, true, elapsed, maxWateringTime);
 
     // Auto-stop timer when reaching max time
