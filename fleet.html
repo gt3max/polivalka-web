@@ -446,6 +446,22 @@ let pumpSeq = {};
 let pumpLastClick = {};
 let pumpElapsed = {};   // seconds shown on a running pump's button
 
+// Level switch (J8) in the list: calm by default. Orange only when it changes something — no liquid while
+// automatic watering is on and Pump 1 protection is on (the board then skips automatic runs).
+function levelAutoWaits(device) {
+  const l = device.level;
+  return !!l && l.liquid === 0 && !!l.p1 && device.controller_enabled === true &&
+         (device.mode === 'sensor' || device.mode === 'timer');
+}
+function levelPill(device) {
+  const l = device.level;
+  const waits = levelAutoWaits(device);
+  const text = l.liquid === 1 ? 'Liquid: present' : (l.liquid === 0 ? (waits ? '⚠️ Liquid: none · auto waits' : 'Liquid: none') : 'Liquid: —');
+  const bg = waits ? '#fff3e0' : (l.liquid === 1 ? '#e8f5e9' : '#eee');
+  const fg = waits ? '#e65100' : (l.liquid === 1 ? '#2c5f2d' : '#666');
+  return `<span class="device-status" style="background:${bg};color:${fg}" title="Level switch (J8): is there liquid at the switch">${text}</span>`;
+}
+
 // Track expanded devices (to preserve state across re-renders)
 let expandedDevices = new Set();
 
@@ -963,7 +979,7 @@ function createExpandableRow(device, isOnline, hasWarnings, isCritical) {
         ${automationControl}
         <span class="device-status" style="background:${stateBg};color:${stateColor}">${stateText}</span>
         ${device.pump2_running ? '<span class="device-status" style="background:#f57c00;color:#fff" title="Second actuator running">⚡ P2</span>' : ''}
-        ${device.level ? `<span class="device-status" style="background:${device.level.liquid === 0 ? '#c62828' : '#e8f5e9'};color:${device.level.liquid === 0 ? '#fff' : '#2c5f2d'}" title="Level switch (J8): is there liquid at the switch">${device.level.liquid === 0 ? '⚠️ Liquid: none / unplugged?' : (device.level.liquid === 1 ? 'Liquid: present' : 'Liquid: —')}</span>` : ''}
+        ${device.level ? levelPill(device) : ''}
         <span class="device-status ${isOnline ? 'online' : 'offline'}">${isOnline ? '● Online' : '○ Offline'}</span>
         <span class="muted" style="font-size:10px;opacity:0.7" title="Last data received from device">${timeAgo(device.last_update)}</span>
         <span class="ota-badge" id="ota-badge-${device.device_id}"></span>
@@ -1001,7 +1017,7 @@ function createExpandableRow(device, isOnline, hasWarnings, isCritical) {
 
       ${device.level ? `
       <div class="detail-row" style="margin-top:8px">
-        <span class="detail-item">Liquid (J8): <b style="color:${device.level.liquid === 0 ? '#c62828' : '#2c5f2d'}">${device.level.liquid === 0 ? 'none — or switch unplugged' : (device.level.liquid === 1 ? 'present' : '—')}</b></span>
+        <span class="detail-item">Liquid (J8): <b style="color:${levelAutoWaits(device) ? '#e65100' : '#2c5f2d'}">${device.level.liquid === 0 ? (levelAutoWaits(device) ? 'none · auto watering waits' : 'none') : (device.level.liquid === 1 ? 'present' : '—')}</b></span>
         ${device.level.last_change_ts ? `<span class="detail-item">Changed: ${new Date(device.level.last_change_ts * 1000).toLocaleString()}</span>` : ''}
         <span class="detail-item">Dry-run protection: P1 ${device.level.p1 ? 'on' : 'off'} · P2 ${device.level.p2 ? 'on' : 'off'}</span>
       </div>` : ''}
