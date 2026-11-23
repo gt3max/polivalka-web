@@ -16,6 +16,23 @@ staged=$(git diff --cached --name-only --diff-filter=AM)
 # === PII (29.10.2026): почты людей, телефоны, токены, выгрузки, скриншоты в репо не уходят ===
 python3 "$(git rev-parse --show-toplevel)/scripts/git-hooks/pii_guard.py" || exit 1
 
+# === Site tests (23.11.2026): a page change does not go in while a site test is red ===
+# Fleet search had silently broken (search ignored the device ID). Tests run in node, no browser, < 1 s.
+if echo "$staged" | grep -qE '\.(html|js)$'; then
+    root="$(git rev-parse --show-toplevel)"
+    log="$(mktemp)"
+    for t in "$root"/tests/*.test.js; do
+        [ -e "$t" ] || continue
+        if ! node "$t" > "$log" 2>&1; then
+            echo "✗ COMMIT BLOCKED — site test failed: tests/$(basename "$t")"
+            grep -E '❌|Error' "$log" | head -20
+            rm -f "$log"
+            exit 1
+        fi
+    done
+    rm -f "$log"
+fi
+
 # Skip files that are NOT plain text or are large binaries / data dumps
 filter() {
     local f="$1"

@@ -312,7 +312,7 @@
         </div>
       </div>
       <div class="filters">
-        <input type="text" id="search-input" placeholder="🔍 Search device name..." onkeyup="filterDevices()">
+        <input type="search" id="search-input" placeholder="🔍 Search by device ID, name or location..." oninput="filterDevices()" onkeydown="if (event.key === 'Escape') { this.value = ''; filterDevices(); }" autocapitalize="off" autocorrect="off" spellcheck="false" autocomplete="off" enterkeyhint="search">
         <select id="location-filter" onchange="filterDevices()">
           <option value="">All Locations</option>
         </select>
@@ -328,6 +328,7 @@
           <option value="timer">Timer</option>
           <option value="sensor">Sensor</option>
         </select>
+        <span id="search-count" class="muted" style="align-self:center;font-size:13px"></span>
       </div>
     </div>
 
@@ -719,9 +720,9 @@ async function loadDevices() {
   }
 
   console.log('[Fleet] Rendering', allDevices.length, 'devices...');
-  renderDevices(allDevices);
   updateStats(allDevices);
-  updateLocationFilter(allDevices);
+  updateLocationFilter(allDevices);   // before drawing: a location that vanished is reset first
+  applyFilters();                     // the search and filters survive every reload (5-min auto-refresh too)
 }
 
 function renderDevices(devices) {
@@ -730,6 +731,17 @@ function renderDevices(devices) {
 
   // Update container class based on view mode
   container.className = currentView === 'list' ? 'device-list' : 'device-grid';
+
+  // Boards exist but the search/filters hide them all — say so, never "No devices yet"
+  if (devices.length === 0 && allDevices.length > 0) {
+    container.innerHTML = `
+      <div class="card" style="text-align:center;padding:24px">
+        <h3 style="margin:0 0 12px">No devices match the current filters</h3>
+        <button class="primary" onclick="clearFilters()" style="padding:10px 20px">Clear filters</button>
+      </div>
+    `;
+    return;
+  }
 
   // Show welcome message if no devices
   if (devices.length === 0) {
@@ -752,6 +764,7 @@ function renderDevices(devices) {
   }
 
   // Sort: 1) Assigned by claimed_at, 2) Admin online, 3) Admin offline with data, 4) No data
+  devices = [...devices];   // sort a copy, never the caller's array
   devices.sort((a, b) => {
     const aAssigned = a.owner && a.owner !== 'admin' ? 0 : 1;
     const bAssigned = b.owner && b.owner !== 'admin' ? 0 : 1;
@@ -1056,27 +1069,8 @@ function switchView(view) {
   document.getElementById('view-cards').classList.toggle('active', view === 'cards');
   document.getElementById('view-list').classList.toggle('active', view === 'list');
 
-  // Re-render devices
-  renderDevices(allDevices.filter(device => {
-    // Re-apply current filters
-    const search = document.getElementById('search-input').value.toLowerCase();
-    const location = document.getElementById('location-filter').value;
-    const status = document.getElementById('status-filter').value;
-    const mode = document.getElementById('mode-filter').value;
-
-    if (search && !device.name.toLowerCase().includes(search)) return false;
-    if (location && device.location !== location) return false;
-
-    // Use device.online from API (Lambda calculates with 90 min threshold)
-    const isOnline = device.online === true;
-    const hasWarnings = device.warnings.length > 0 || (device.battery_pct !== null && device.battery_pct < 10) || (device.moisture_pct !== null && device.moisture_pct < 20) || timerWetWarn(device);
-    if (status === 'online' && !isOnline) return false;
-    if (status === 'offline' && isOnline) return false;
-    if (status === 'warning' && !hasWarnings) return false;
-    if (mode && device.mode !== mode) return false;
-
-    return true;
-  }));
+  // Re-render devices with the current search and filters
+  applyFilters();
 }
 
 // Timer mode + wet soil: the device is watering by schedule while a sensor reads
@@ -1265,33 +1259,104 @@ function updateStats(devices) {
   document.getElementById('stat-watering').textContent = watering;
 }
 
+// ── Device List search ─────────────────────────────────────────────────────────
+// Rules from the PlantApp library search (plantapp documentation/PlantApp_Description.md §5.1):
+// several channels (what the card shows: ID, name, location, room), normalised text, every word must
+// match, the wrong-keyboard-layout step only when nothing is found, and no fuzzy guessing of an ID
+// (one wrong character is another board). Test: tests/fleet_search.test.js.
+const SEARCH_LAYOUT_EN = "`qwertyuiop[]asdfghjkl;'zxcvbnm,.";
+const SEARCH_LAYOUT_RU = 'ёйцукенгшщзхъфывапролджэячсмитьбю';
+
+function normSearch(s) {
+  return String(s || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+    .replace(/\s+/g, ' ').trim();
+}
+
+function compactId(s) {
+  return String(s || '').replace(/[\s\-_.]+/g, '');
+}
+
+function layoutSwap(s) {
+  return Array.from(String(s || '').toLowerCase()).map(ch => {
+    const en = SEARCH_LAYOUT_EN.indexOf(ch);
+    if (en >= 0) return SEARCH_LAYOUT_RU[en];
+    const ru = SEARCH_LAYOUT_RU.indexOf(ch);
+    return ru >= 0 ? SEARCH_LAYOUT_EN[ru] : ch;
+  }).join('');
+}
+
+function searchWords(raw) {
+  return normSearch(raw).split(' ').filter(w => compactId(w) !== '');
+}
+
+function deviceMatchesSearch(device, words) {
+  if (!words.length) return true;
+  const id = normSearch(device.device_id);
+  const idCompact = compactId(id);
+  const location = normSearch(device.location);
+  const room = normSearch(device.room);
+  // "Home" / "Room" are what the card prints when nothing is set — not something the user named
+  const channels = [id, normSearch(device.name),
+    location === 'home' ? '' : location, room === 'room' ? '' : room];
+  return words.every(w => channels.some(c => c && c.includes(w)) || idCompact.includes(compactId(w)));
+}
+
+function readFilters() {
+  return {
+    raw: document.getElementById('search-input').value,
+    location: document.getElementById('location-filter').value,
+    status: document.getElementById('status-filter').value,
+    mode: document.getElementById('mode-filter').value,
+  };
+}
+
+function deviceMatchesFilters(device, f, words) {
+  if (!deviceMatchesSearch(device, words)) return false;
+
+  // Location filter
+  if (f.location && device.location !== f.location) return false;
+
+  // Status filter - use API's online flag (consistent with device cards)
+  const isOnline = device.online === true;
+  const hasWarnings = (device.warnings || []).length > 0 || (device.battery_pct !== null && device.battery_pct < 10) || (device.moisture_pct !== null && device.moisture_pct < 20) || timerWetWarn(device);
+  if (f.status === 'online' && !isOnline) return false;
+  if (f.status === 'offline' && isOnline) return false;
+  if (f.status === 'warning' && !hasWarnings) return false;
+
+  // Mode filter
+  if (f.mode && device.mode !== f.mode) return false;
+
+  return true;
+}
+// ── end Device List search ─────────────────────────────────────────────────────
+
+// The ONLY place that draws the device list: every repaint keeps the search and filters.
+function applyFilters() {
+  const f = readFilters();
+  const words = searchWords(f.raw);
+  let shown = allDevices.filter(d => deviceMatchesFilters(d, f, words));
+  // Next step only when nothing is found: the query was typed on the other keyboard layout
+  if (shown.length === 0 && words.length) {
+    const swapped = searchWords(layoutSwap(f.raw));
+    if (swapped.join(' ') !== words.join(' ')) {
+      const alt = allDevices.filter(d => deviceMatchesFilters(d, f, swapped));
+      if (alt.length) shown = alt;
+    }
+  }
+  const active = words.length || f.location || f.status || f.mode;
+  document.getElementById('search-count').textContent =
+    active && allDevices.length ? `Showing ${shown.length} of ${allDevices.length}` : '';
+  renderDevices(shown);
+}
+
+function clearFilters() {
+  ['search-input', 'location-filter', 'status-filter', 'mode-filter']
+    .forEach(id => { document.getElementById(id).value = ''; });
+  applyFilters();
+}
+
 function filterDevices() {
-  const search = document.getElementById('search-input').value.toLowerCase();
-  const location = document.getElementById('location-filter').value;
-  const status = document.getElementById('status-filter').value;
-  const mode = document.getElementById('mode-filter').value;
-
-  const filtered = allDevices.filter(device => {
-    // Search filter
-    if (search && !device.name.toLowerCase().includes(search)) return false;
-
-    // Location filter
-    if (location && device.location !== location) return false;
-
-    // Status filter - use API's online flag (consistent with device cards)
-    const isOnline = device.online === true;
-    const hasWarnings = device.warnings.length > 0 || (device.battery_pct !== null && device.battery_pct < 10) || (device.moisture_pct !== null && device.moisture_pct < 20) || timerWetWarn(device);
-    if (status === 'online' && !isOnline) return false;
-    if (status === 'offline' && isOnline) return false;
-    if (status === 'warning' && !hasWarnings) return false;
-
-    // Mode filter
-    if (mode && device.mode !== mode) return false;
-
-    return true;
-  });
-
-  renderDevices(filtered);
+  applyFilters();
 }
 
 // timeAgo() - moved to common.js
@@ -1379,8 +1444,8 @@ async function refreshSensor(deviceId) {
       device.online = true;  // Device responded = online
       normalizeSensorData(device);  // ADC < 100 = sensor disconnected
 
-      // Re-render devices
-      renderDevices(allDevices);
+      // Re-render devices (keeps the search and filters)
+      applyFilters();
       updateStats(allDevices);
 
       // Show success feedback with updated values
@@ -1449,8 +1514,8 @@ async function refreshSensorSilent(deviceId) {
       device.online = true;  // Device responded = online
       normalizeSensorData(device);  // ADC < 100 = sensor disconnected
 
-      // Re-render devices (will preserve expanded state)
-      renderDevices(allDevices);
+      // Re-render devices (will preserve expanded state; keeps the search and filters)
+      applyFilters();
       updateStats(allDevices);
     }
 
@@ -1767,8 +1832,8 @@ async function bulkAction(action) {
 
     await Promise.all(refreshPromises);
 
-    // Re-render with updated data
-    renderDevices(allDevices);
+    // Re-render with updated data (keeps the search and filters)
+    applyFilters();
     updateStats(allDevices);
 
     // Update last refresh timestamp
