@@ -25,18 +25,7 @@ and your choices. The App is operated by the PlantApp team. Questions:
 <ul>
   <li><b>Account data</b> — your email address and a securely hashed password. Optional display name.</li>
   <li><b>Content you create</b> — plants you save, watering/care history, journal notes, and onboarding answers.</li>
-  <li><b>Photos you submit</b> — images you take or pick to identify a plant or to ask the AI Doctor about a problem. A photo you send to the AI Doctor is stored with that consultation so you can see it again later, and is deleted together with it (a copy inside a conversation you share follows the rules for shared links in section 5). Before a photo leaves your device, the App removes its metadata, such as the location where it was taken.</li>
-  <li><b>Conversations you share</b> — if you tap "Share chat" in the AI Doctor, we create a read-only copy of that
-  conversation and give you a link to it. Anyone who has the link can open the copy without an account, so send it
-  only to people you want to see the conversation. The copy contains your messages as you wrote them, the Doctor's
-  answers, the time of each message, the plant species, the conversation language and the time the copy was made;
-  on Premium it also contains the photos from the conversation, with their metadata (such as location) removed, and
-  the catalogue illustrations shown in the answers. It does not contain your email address or other account details.
-  We keep a private record of which account created the link, so that we can remove the copy and handle reports; it
-  is not shown on the page. The page carries a "noindex" instruction for search engines; we cannot guarantee that
-  every service honours it. The link contains a long code that cannot be guessed, and we do not list it anywhere. Sharing the same conversation again gives the same link. When someone opens
-  the link, Amazon CloudFront processes their IP address to deliver the page; we do not keep access logs for these
-  pages.</li>
+  <li><b>Photos you submit</b> — images you take or pick to identify a plant or to ask the AI Doctor about a problem. A photo you send to the AI Doctor is stored with that consultation so you can see it again later, and is deleted together with it. Before a photo leaves your device, the App removes its metadata, such as the location where it was taken.</li>
   <li><b>Location</b> — only if you grant permission, used to tailor seasonal watering and outdoor advice. The App rounds your coordinates to about 1 km before sending or storing them. On your account we keep these rounded coordinates, your city and country, your climate zone and average monthly temperatures. You can disable location at any time.</li>
   <li><b>Basic technical data</b> — app version, build number and device type needed to run the service. If the App crashed, it sends a short crash report with its next request: the type of error, a code identifying it and the build number, without any content of your data; it appears only in our server logs.</li>
   <li><b>IP address</b> — used to protect the service from abuse (limits on sign-ups and on requests made without an account) and kept for up to 2 days.</li>
@@ -55,7 +44,6 @@ and your choices. The App is operated by the PlantApp team. Questions:
   <li>To identify plants, provide care information, and run AI Doctor diagnosis.</li>
   <li>To save your plants and send local watering reminders.</li>
   <li>To create and secure your account.</li>
-  <li>To create and host the read-only copy of a conversation you choose to share.</li>
 </ul>
 <p>We do <b>not</b> sell your data, and we do <b>not</b> use third-party advertising or analytics SDKs.</p>
 
@@ -71,8 +59,7 @@ to <b>Google</b> through a temporary link for Google Lens, and SerpApi keeps the
 days. Each of these providers handles the data under its own terms; some keep submitted data for a
 period and may use it to improve their services. Plant images are delivered via image CDNs
 (<b>Cloudinary</b>, <b>ImageKit</b>), and the service is hosted on <b>Amazon Web Services</b>, which also
-sends our verification emails. Copies of conversations you share are stored by Amazon Web Services in the EU
-(Frankfurt) and delivered through its content delivery network, <b>Amazon CloudFront</b>.</p>
+sends our verification emails.</p>
 <p>The App also contacts some services directly from your device: <b>Apple</b>, to turn your rounded
 coordinates into a city name; and <b>GitHub</b>, to download updates of the plant identifier that works
 on your device — GitHub sees your IP address.</p>
@@ -99,11 +86,6 @@ in that provider's data-processing terms, or on an adequacy decision where the p
 under it (GitHub, for example, is certified under the EU-U.S. Data Privacy Framework and its UK Extension).
 Kindwise is located in the EU. MET Norway is located in Norway (EEA). NASA POWER receives only a grid point,
 not personal data.</p>
-<p>When you share a conversation, we create and host the copy because you asked us to (performance of our contract
-with you). The copy is stored in the EU (Frankfurt). Amazon CloudFront delivers it from the server location nearest to
-the person who opens the link, which may be outside the EEA or the UK; Amazon Web Services is covered by the
-safeguards named above. We keep the private record of which account created a link on the basis of our legitimate
-interest in removing copies and handling reports.</p>
 
 <h2>5. Data retention & deletion</h2>
 <p>We keep your saved plants, care history and journal notes while your account exists. A plant you delete from My Plants is erased at once, together with its care history.</p>
@@ -112,13 +94,6 @@ interest in removing copies and handling reports.</p>
 <b>30 days on the free tier</b> and <b>12 months on Premium</b>, together with the text of your
 questions and the answers. A consultation you delete yourself
 stays recoverable for 30 days and is then erased for good, together with any photo attached to it.</p>
-
-<p>A link to a shared conversation works for 30 days from the last time you shared it, but never longer than the
-conversation itself is kept (for example, on the free tier it ends when the conversation's own 30-day period ends);
-removal can take up to two days longer. Sharing the same conversation again renews the copy. Deleting the conversation or
-your account removes the shared copy and the private record of the link; copies held in the delivery network's cache
-usually disappear within minutes and at the latest in about an hour. We may also remove a shared copy after a report.
-Copies that a recipient saves themselves (for example as a PDF or a text file) are outside our control.</p>
 
 <p>You can <b>delete your account and associated data at any time</b> in the App:
 <code>Settings → Delete Account</code>. Deletion is permanent.</p>
@@ -142,7 +117,7 @@ knowingly collect data from them.</p>
 <h2>7. Your rights</h2>
 <p>You can access, correct, or delete your data via the App, or by contacting us. You can withdraw
 your permission to send photos, your consent for Plant.id and the "Help improve plant Identifier" option at any time in
-<code>Settings → Privacy</code>, and remove a shared conversation link by deleting that conversation or by writing to us. Depending on your region (e.g. EEA/UK/California) you may have
+<code>Settings → Privacy</code>. Depending on your region (e.g. EEA/UK/California) you may have
 additional rights, including the right to object to processing and to lodge a complaint with a data
 protection supervisory authority; contact us to exercise them.</p>
 
