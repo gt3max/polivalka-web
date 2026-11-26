@@ -176,6 +176,17 @@
   <div id="catalog-growth"><div class="muted">Loading…</div></div>
 </div>
 
+<!-- External services — внешние службы приложения за сегодня и вчера (механизм внешних служб, этап 2б-3, 26.11.2026).
+     Источник — /admin/external/state: отметки двери наружу (лежала, затяжные отказы, мусор, вернулась). Числа сняты
+     в момент первого обнаружения, не живые. Без автообновления: у таблицы отметок 1 единица чтения. -->
+<div class="card" id="external-card">
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+    <h3 style="margin:0">🌐 External services</h3>
+    <button id="external-refresh-btn" onclick="loadExternalState()" style="font-size:11px;padding:4px 10px">↻ Reload</button>
+  </div>
+  <div id="external-state"><div class="muted">Loading…</div></div>
+</div>
+
 <!-- Device Selector -->
 <div class="card">
 <h3>📱 Select Device</h3>
@@ -1898,6 +1909,51 @@ function renderAwsSpend(d){
   upd.textContent = d.updated_at ? ('updated '+_tursoAgo(d.updated_at)) : '';
 }
 
+// External services (этап 2б-3): по службе — сегодня/вчера: лежала, затяжные отказы, мусор, вернулась. Значения
+// с сервера — только через esc(); цвета — по фиксированному списку событий, строки сервера в стили не попадают.
+const EXTERNAL_EVENTS=[['down','🔴','down'],['failing','🟠','failing'],['garbage','🟡','garbage'],['recovered','🟢','back']];
+function externalDay(ev){
+  const parts=[];
+  for(const [key,icon,label] of EXTERNAL_EVENTS){
+    const list=(ev&&ev[key])||[];
+    for(const it of list){
+      const where=it.contour?' ('+esc(String(it.contour))+')':'';
+      const nums='ok '+esc(String(it.ok??'-'))+' · fail '+esc(String(it.fail??'-'))+' · garbage '+esc(String(it.garbage??'-'));
+      parts.push(icon+' '+label+where+' <span style="color:#9aa">'+esc(String(it.kind??'-'))+', '+nums+'</span>');
+    }
+  }
+  return parts.length?parts.join('<br>'):'<span style="color:#667">·</span>';
+}
+async function loadExternalState(){
+  const box=document.getElementById('external-state');
+  const btn=document.getElementById('external-refresh-btn');
+  if(btn){ btn.disabled=true; btn.textContent='⏳ …'; }
+  try{
+    const res=await fetch(`${API.cloudBase}/admin/external/state`,{headers:API.getAuthHeaders()});
+    // Роут ещё не выложен — ожидание выкладки, а не поломка (как у ImageKit).
+    if(res.status===404||res.status===401){
+      if(box) box.innerHTML='<div class="muted">waiting for backend deploy</div>';
+      return;
+    }
+    if(!res.ok) throw new Error('HTTP '+res.status);
+    const d=await res.json();
+    const head=d.store==='ok'
+      ? '<div style="font-size:11px;color:#9aa;margin-bottom:8px">Events at first detection. Today '+esc(String((d.days||{}).today||''))+', yesterday '+esc(String((d.days||{}).yesterday||''))+' (UTC). No row event = no incidents recorded.</div>'
+      : '<div class="danger" style="margin-bottom:8px">Store of service marks unavailable — incidents unknown (not «all quiet»).</div>';
+    const rows=(d.services||[]).filter(s=>s.status!=='removed').map(s=>{
+      const watched=s.door?'':'<span style="color:#667"> · not watched yet</span>';
+      return '<tr><td style="padding:3px 6px">'+esc(String(s.service))+watched+'<div style="font-size:10px;color:#667">'+esc(String(s.class||''))+' · '+esc(String(s.status||''))+'</div></td>'
+        +'<td style="padding:3px 6px;font-size:11px">'+externalDay(s.today)+'</td>'
+        +'<td style="padding:3px 6px;font-size:11px">'+externalDay(s.yesterday)+'</td></tr>';
+    }).join('');
+    box.innerHTML=head+'<table style="width:100%;border-collapse:collapse;font-size:12px"><tr><th style="text-align:left;padding:3px 6px">Service</th><th style="text-align:left;padding:3px 6px">Today</th><th style="text-align:left;padding:3px 6px">Yesterday</th></tr>'+rows+'</table>';
+  }catch(e){
+    if(box) box.innerHTML='<div class="danger">Error: '+esc(e.message)+'</div>';
+  }finally{
+    if(btn){ btn.disabled=false; btn.textContent='↻ Reload'; }
+  }
+}
+
 async function loadTursoUsage(){
   const el=document.getElementById('turso-usage');
   const btn=document.getElementById('turso-refresh-btn');
@@ -3145,6 +3201,7 @@ if (checkAdminAccess()) {
   loadCloudinaryUsage(); // Cloudinary accounts — live (Lambda опрашивает Cloudinary)
   loadImagekitUsage();   // ImageKit accounts — из DynamoDB, собирает скрипт
   loadCatalogGrowth();   // Library growth — спрос (missing_species) + черновые provisional-карточки
+  loadExternalState();   // External services — события служб сегодня/вчера (без автообновления)
   // Авто-рефреш Turso раз в 90с (дёшево: DDB scan + чтение env) — роли и метка свежести
   // держатся актуальными без ручного Reload, дашборд можно держать открытым.
   if(!window._tursoAutoRefresh) window._tursoAutoRefresh=setInterval(()=>{ try{loadTursoUsage();}catch(e){} }, 90000);
