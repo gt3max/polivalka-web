@@ -21,7 +21,7 @@ function функция(начало) {
   if (н < 0) throw new Error('нет функции: ' + начало);
   return html.slice(н, html.indexOf('\n}\n', н) + 2);
 }
-const код = ['function _tursoAgo(', 'function _jobsAgoShort(', 'function renderJobsState(', 'function renderJobsPanel(',
+const код = ['function _tursoAgo(', 'function _jobsAgoShort(', 'function renderJobsState(', 'function _jobRowToggle(', 'function renderJobsPanel(',
   'function renderJobsStateOld('].map(функция).join('\n');
 
 let узлы;
@@ -40,6 +40,8 @@ function строки(список) {
 
 // 1. Новый ответ сервера
 function строки4(список) {
+  // расшифровка (job-more) прячется до нажатия — в разбор колонок её не берём
+  список = список.replace(/<span class="job-more"[^>]*>[^<]*<\/span>/g, '');
   const ячейки = список.split('</div>').map(s => s.replace(/<[^>]+>/g, '').replace(/&amp;/g, '&').trim()).filter(Boolean);
   const out = [];
   for (let i = 4; i + 3 < ячейки.length + 1; i += 4) out.push(ячейки.slice(i, i + 4));
@@ -93,6 +95,44 @@ const по = имя => р.find(с => с[0].endsWith(' ' + имя));
   renderJobsState({ jobs: [{ name: 'x', label: 'y', rank: 0, trouble: 'что-то-новое' }] });
   return узлы['jobs-state-list'].innerHTML.includes('🔴');
 })());
+
+// 1б. Нажатие на строку раскрывает полный текст и расшифровку
+узлы = {};
+renderJobsState({ jobs: [
+  { name: 'ddb-backup', for: 'shared · laptop', label: 'weekly copy of AWS user tables', rank: 1, trouble: 'silent',
+    hours_ago: 290, due_hours: 192 },
+  { name: 'turso-backup-actions', for: 'plantapp', label: 'nightly catalog DB copy to S3 + spares', rank: 1, ok: true,
+    at: сейчас, number_text: 'copies 2' },
+] });
+const сп = узлы['jobs-state-list'].innerHTML;
+const блоки = [...сп.matchAll(/<div class="rt-row" onclick="_jobRowToggle\(this\)"/g)].length;
+const расшифровки = [...сп.matchAll(/<span class="job-more"[^>]*>([^<]*)<\/span>/g)].map(м => м[1]);
+проверить('у каждой строки — нажатие, строка раздвигается на месте (перенос в своих ячейках)', блоки === 2, String(блоки));
+проверить('расшифровка беды спрятана под подписью до нажатия', расшифровки.length === 1 && расшифровки[0] === 'no report for 290h (due every 192h)', JSON.stringify(расшифровки));
+проверить('отдельного блока под строкой нет', !/class="job-more" style="grid-column/.test(сп));
+
+const _jobRowToggle = new Function(код + '\nreturn _jobRowToggle;')();
+проверить('нажатие переключает open; раскрытие и скрытие расшифровки — в CSS', (() => {
+  const кл = new Set();
+  const стр = { classList: { toggle: x => (кл.has(x) ? (кл.delete(x), false) : (кл.add(x), true)) } };
+  _jobRowToggle(стр); const раз = кл.has('open'); _jobRowToggle(стр);
+  return раз && !кл.has('open') && /\.rt \.job-more\{display:none\}/.test(html) && /\.rt-row\.open>\*\{white-space:normal/.test(html)
+    && /\.rt-row\.open \.job-more\{display:block\}/.test(html);
+})());
+
+// 1в. Роли колонок: каждая ячейка панели — ровно одна из четырёх ролей; у каждой роли есть место и в широкой,
+// и в узкой раскладке. Новая колонка без роли — тест красный.
+const РОЛИ = ['rt-name', 'rt-meta', 'rt-main', 'rt-status'];
+узлы = {};
+renderJobsState({ jobs: [{ name: 'a', for: 'plantapp', label: 'x', rank: 0, ok: true, at: сейчас, number_text: '1' },
+                         { name: 'b', for: 'shared', label: 'y', rank: 1, trouble: 'silent', hours_ago: 50, due_hours: 24 }] });
+const рядов = узлы['jobs-state-list'].innerHTML.split('<div class="rt-row').slice(1);
+const ячейкиБезРоли = рядов.flatMap(р => [...р.matchAll(/<div class="([^"]*)"/g)].map(м => м[1]).filter(к => !РОЛИ.includes(к)));
+проверить('у каждой ячейки — роль из списка', рядов.length === 3 && ячейкиБезРоли.length === 0
+  && рядов.every(р => РОЛИ.every(роль => р.includes('class="' + роль + '"'))), JSON.stringify(ячейкиБезРоли));
+const узкая = html.slice(html.indexOf('@container (max-width:560px)'));
+проверить('у каждой роли место в широкой и в узкой раскладке', РОЛИ.every(роль =>
+  new RegExp('\\.' + роль + '\\{grid-column').test(html) && new RegExp('\\.' + роль + '\\{grid-row').test(узкая)));
 
 // 2. Старый ответ сервера — прежняя отрисовка
 узлы = {};

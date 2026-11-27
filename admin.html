@@ -27,6 +27,30 @@
     .muted{color:#999;font-size:14px}
     .danger{color:#f44}
     .ok{color:#4f4}
+    /* 27.11.2026: таблица с ролями колонок. Раскладка — от роли, не от колонки: name · meta · main · status.
+       Широко — таблица; узкая КАРТОЧКА (телефон) — строка становится мини-карточкой в две линии. Нажатие на строку
+       раздвигает её на месте. Новая колонка = выбрать роль, больше ничего. */
+    .rt{container-type:inline-size}
+    .rt-grid{display:grid;grid-template-columns:max-content max-content minmax(0,1fr) max-content;column-gap:14px;font-size:12px}
+    .rt-row{grid-column:1/-1;display:grid;grid-template-columns:subgrid;padding:4px 0;border-bottom:1px solid #333;cursor:pointer}
+    .rt-row.rt-head{cursor:default;color:#999}
+    .rt-row>*{grid-row:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    .rt .muted{font-size:inherit}
+    .rt-name{grid-column:1;color:#e8e8f0}
+    .rt-meta{grid-column:2;color:#999}
+    .rt-main{grid-column:3;color:#aab}
+    .rt-status{grid-column:4;text-align:right}
+    .rt .job-more{display:none}
+    .rt-row.open>*{white-space:normal;overflow-wrap:anywhere}
+    .rt-row.open .job-more{display:block}
+    @container (max-width:560px){
+      .rt-grid{grid-template-columns:max-content minmax(0,1fr) max-content}
+      .rt-row.rt-head{display:none}
+      .rt-name{grid-row:1;grid-column:1/3}
+      .rt-status{grid-row:1;grid-column:3}
+      .rt-meta{grid-row:2;grid-column:1}
+      .rt-main{grid-row:2;grid-column:2/4}
+    }
     .warning-banner{background:#ff9800;color:#000;padding:12px;text-align:center;font-weight:600}
 
     /* Toggle switch */
@@ -1742,6 +1766,8 @@ function _jobsAgoShort(h){
   return h<48 ? Math.round(h)+'h' : Math.round(h/24)+'d';
 }
 
+// 27.11.2026: строка Automatic tasks раздвигается на месте — раскладку делает CSS (.rt-row.open).
+function _jobRowToggle(row){ row.classList.toggle('open'); }
 function renderJobsPanel(d){
   // 🔴 27.11.2026 (W48), согласовано с владельцем: «Automatic tasks» — 4 колонки job | for | what it does | last;
   // 🔴 problem · 🟢 works · ⚪ not running; сверху problem, затем деньги → данные → люди → разработка; off — внизу.
@@ -1762,9 +1788,9 @@ function renderJobsPanel(d){
   const вес=j=>({problem:0,warn:1,works:2,not:2,off:3})[сост(j)];
   const порядок=[...jobs].sort((a,b)=>(вес(a)-вес(b)) || ((a.rank??9)-(b.rank??9)) || String(a.name).localeCompare(String(b.name)));
   const кратко=h=>h===null||h===undefined?'':(h<48?Math.round(h)+'h':Math.round(h/24)+'d');
-  const ячейка='padding:4px 0;border-bottom:1px solid #333;white-space:nowrap;overflow:hidden;text-overflow:ellipsis';
-  list.innerHTML='<div class="mono" style="display:grid;grid-template-columns:max-content max-content minmax(0,1fr) max-content;column-gap:14px;font-size:12px">'
-    +['job','for','what it does','last'].map((з,i)=>'<div class="muted" style="'+ячейка+(i===3?';text-align:right':'')+'">'+з+'</div>').join('')
+  // Роль колонки → место (см. .rt в <style>): name · meta · main · status.
+  list.innerHTML='<div class="rt"><div class="rt-grid mono">'
+    +'<div class="rt-row rt-head"><div class="rt-name">job</div><div class="rt-meta">for</div><div class="rt-main">what it does</div><div class="rt-status">last</div></div>'
     + порядок.map(j=>{
         const с=сост(j);
         const знак={problem:'🔴',warn:'🟡',works:'🟢',not:'⚪',off:'⚪'}[с];
@@ -1792,12 +1818,18 @@ function renderJobsPanel(d){
         }
         const цветПосл=с==='problem'?'#ff8a80':(с==='warn'?'#ffcc66':'#aab');
         const число=j.number_text?' <span class="muted">· '+esc(j.number_text)+'</span>':'';
-        return '<div style="'+ячейка+';color:#e8e8f0">'+знак+' '+esc(j.name)+'</div>'
-          +'<div class="muted" style="'+ячейка+'">'+esc(j.for||j.product||'')+'</div>'
-          +'<div style="'+ячейка+';color:#aab" title="'+esc(j.label||'')+'">'+esc(j.label||'')+число+'</div>'
-          +'<div style="'+ячейка+';text-align:right;color:'+цветПосл+'" title="'+esc(подробно)+'">'+esc(последний)+'</div>';
+        // 27.11.2026: по умолчанию строка в одну линию (текст режется «…»). Нажатие раздвигает строку на месте:
+        // ячейки переносят текст в своих колонках, под подписью появляется расшифровка состояния (на телефоне
+        // подсказки при наведении нет). Ещё нажатие — свернуть.
+        const расшифровка=подробно?'<span class="job-more" style="color:'+цветПосл+'">'+esc(подробно)+'</span>':'';
+        return '<div class="rt-row" onclick="_jobRowToggle(this)">'
+          +'<div class="rt-name">'+знак+' '+esc(j.name)+'</div>'
+          +'<div class="rt-meta">'+esc(j.for||j.product||'')+'</div>'
+          +'<div class="rt-main" title="'+esc(j.label||'')+'">'+esc(j.label||'')+число+расшифровка+'</div>'
+          +'<div class="rt-status" style="color:'+цветПосл+'" title="'+esc(подробно)+'">'+esc(последний)+'</div>'
+          +'</div>';
       }).join('')
-    +'</div>';
+    +'</div></div>';
   upd.textContent = d.updated_at ? ('checked '+_tursoAgo(d.updated_at)) : '';
 }
 
