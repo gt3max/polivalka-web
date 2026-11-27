@@ -88,7 +88,7 @@
 <div class="card" id="jobs-state-card">
   <div class="turso-row" id="jobs-state-row" style="padding:10px 12px;background:#15151f;border:1px solid #2c2c44;border-radius:8px">
     <div class="head" onclick="this.closest('.turso-row').classList.toggle('open')" style="display:flex;justify-content:space-between;align-items:center;gap:10px">
-      <div id="jobs-state-summary" class="mono" style="font-size:13px;color:#e8e8f0">⏱ Jobs <span class="muted">loading…</span></div>
+      <div id="jobs-state-summary" class="mono" style="font-size:13px;color:#e8e8f0">⏱ Automatic tasks <span class="muted">loading…</span></div>
       <div style="display:flex;align-items:center;gap:8px">
         <button id="jobs-state-refresh-btn" onclick="event.stopPropagation();loadJobsState()" style="font-size:11px;padding:4px 10px">↻ Reload</button>
         <span class="chev">▾</span>
@@ -1715,7 +1715,7 @@ async function loadJobsState(){
     if(!res.ok) throw new Error('HTTP '+res.status);
     renderJobsState(await res.json());
   }catch(e){
-    sum.innerHTML='⏱ Jobs <span class="danger">Error: '+esc(e.message)+'</span>';
+    sum.innerHTML='⏱ Automatic tasks <span class="danger">Error: '+esc(e.message)+'</span>';
   }finally{
     if(btn){ btn.disabled=false; btn.textContent='↻ Reload'; }
   }
@@ -1733,7 +1733,7 @@ function renderJobsState(d){
     return renderJobsStateOld(d);
   }catch(e){
     const sum=document.getElementById('jobs-state-summary');
-    if(sum) sum.innerHTML='⏱ Jobs <span class="danger">render error: '+esc(String(e&&e.message||e))+'</span>';
+    if(sum) sum.innerHTML='⏱ Automatic tasks <span class="danger">render error: '+esc(String(e&&e.message||e))+'</span>';
   }
 }
 
@@ -1743,48 +1743,56 @@ function _jobsAgoShort(h){
 }
 
 function renderJobsPanel(d){
+  // 🔴 27.11.2026 (W48), согласовано с владельцем: «Automatic tasks» — 4 колонки job | for | what it does | last;
+  // 🔴 problem · 🟢 works · ⚪ not running; сверху problem, затем деньги → данные → люди → разработка; off — внизу.
   const sum=document.getElementById('jobs-state-summary');
   const list=document.getElementById('jobs-state-list');
   const upd=document.getElementById('jobs-state-updated');
   const jobs=d.jobs;
-  const watched=jobs.filter(j=>j.watch_only);
-  const live=jobs.filter(j=>!j.watch_only && !j.off);
-  // Спавший ноутбук в счёт тревог не идёт — иначе шапка карточки врёт красным.
-  const bad=live.filter(j=>j.trouble && j.trouble!=='offline');
-  sum.innerHTML='⏱ Jobs <b>'+(live.length-bad.length)+'/'+live.length+'</b> ok'
-    +(bad.length?' · <span class="danger">'+bad.length+' in trouble</span>':' · <span style="color:#5cd98a">all reporting</span>')
-    +(watched.length?' · <span class="muted">'+watched.length+' watch-only</span>':'');
-  // Порядок: беда первой; затем по тому, что сломается: money → data → users → dev; затем имя; выключенные — внизу.
-  const вес=j=>j.off?3:(j.trouble&&j.trouble!=='offline'?0:(j.watch_only?2:1));
+  const ПРОБЛЕМА=['silent','failed','idle','errors','unregistered','no_trigger','switched_off','inventory_failed','offline_long'];
+  const НЕ_ИДЁТ=['no_runs','offline','off'];
+  const сост=j=>j.off?'off':(ПРОБЛЕМА.includes(j.trouble)||(j.trouble&&!НЕ_ИДЁТ.includes(j.trouble))?'problem':(НЕ_ИДЁТ.includes(j.trouble)?'not':'works'));
+  const n={problem:0,works:0,not:0,off:0}; jobs.forEach(j=>n[сост(j)]++);
+  sum.innerHTML='⏱ Automatic tasks · <span class="danger">🔴 '+n.problem+' problem</span> · <span style="color:#5cd98a">🟢 '+n.works
+    +' works</span> · <span class="muted">⚪ '+(n.not+n.off)+' not running</span>';
+  const вес=j=>({problem:0,works:1,not:1,off:2})[сост(j)];
   const порядок=[...jobs].sort((a,b)=>(вес(a)-вес(b)) || ((a.rank??9)-(b.rank??9)) || String(a.name).localeCompare(String(b.name)));
+  const кратко=h=>h===null||h===undefined?'':(h<48?Math.round(h)+'h':Math.round(h/24)+'d');
   const ячейка='padding:4px 0;border-bottom:1px solid #333;white-space:nowrap;overflow:hidden;text-overflow:ellipsis';
-  list.innerHTML='<div class="mono" style="display:grid;grid-template-columns:max-content minmax(0,1fr) max-content;column-gap:14px;font-size:12px">'
-    +'<div class="muted" style="'+ячейка+'">job</div><div class="muted" style="'+ячейка+'">what it does</div>'
-    +'<div class="muted" style="'+ячейка+';text-align:right">last</div>'
+  list.innerHTML='<div class="mono" style="display:grid;grid-template-columns:max-content max-content minmax(0,1fr) max-content;column-gap:14px;font-size:12px">'
+    +['job','for','what it does','last'].map((з,i)=>'<div class="muted" style="'+ячейка+(i===3?';text-align:right':'')+'">'+з+'</div>').join('')
     + порядок.map(j=>{
-        const спал=j.trouble==='offline';
-        const беда=j.trouble && !спал;
-        const цвет=j.off||j.watch_only||спал ? '#8a8aa0' : (беда ? '#f44' : (j.ok ? '#5cd98a' : '#ff9800'));
-        const знак=j.watch_only?'○':'●';
+        const с=сост(j);
+        const знак={problem:'🔴',works:'🟢',not:'⚪',off:'⚪'}[с];
+        const ч=j.numbers||{};
         let последний, подробно='';
-        if(j.off){ последний='off'; подробно='off since '+String(j.off).slice(0,10); }
-        else if(j.watch_only){ последний='watch-only'; подробно='no own report yet — watched as a process'; }
-        else if(j.trouble==='silent'){ последний='silent '+_jobsAgoShort(j.hours_ago);
-          подробно=j.hours_ago!==null&&j.hours_ago!==undefined?'silent for '+Math.round(j.hours_ago)+'h (due every '+j.due_hours+'h)':'never reported'; }
-        else if(j.trouble==='failed'){ последний='failed '+(j.at?_tursoAgo(j.at):''); подробно='last run failed'; }
-        else if(j.trouble==='idle'){ последний='idle '+(j.at?_tursoAgo(j.at):''); подробно='ran but did nothing'; }
-        else if(спал){ последний='laptop off '+_jobsAgoShort(j.hours_ago); подробно='laptop was off'; }
-        else if(j.trouble==='offline_long'){ последний='laptop off '+_jobsAgoShort(j.hours_ago); подробно='laptop off, no local backups'; }
-        else if(j.trouble){ последний=String(j.trouble); подробно='unknown state: '+String(j.trouble); }
-        else { последний=j.at?_tursoAgo(j.at):'never'; }
-        const цветПосл=беда?'#ff8a80':'#aab';
+        switch(j.off?'off':j.trouble){
+          case 'off': последний='off'; подробно='off since '+String(j.off).slice(0,10); break;
+          case 'silent': последний='silent '+кратко(j.hours_ago);
+            подробно=j.hours_ago!==null&&j.hours_ago!==undefined?'no report for '+Math.round(j.hours_ago)+'h (due every '+j.due_hours+'h)':'never reported'; break;
+          case 'failed': последний='failed '+(j.at?_tursoAgo(j.at):''); подробно='last run failed'; break;
+          case 'idle': последний='idle '+(j.at?_tursoAgo(j.at):''); подробно='ran but did nothing'; break;
+          case 'errors': последний='errors '+(ч.errors_24h??'')+'/'+(ч.runs_24h??''); подробно='errors / runs in 24 h'; break;
+          case 'unregistered': последний='not in registry'; подробно='runs in prod, has no registry row'; break;
+          case 'no_trigger': последний='nothing runs it'; подробно='in registry, nothing launches it'; break;
+          case 'switched_off': последний='switched off'; подробно='disabled at AWS / GitHub'; break;
+          case 'inventory_failed': последний='inventory failed'; подробно='AWS / GitHub list or metrics not read'; break;
+          case 'no_runs': последний='no runs today'; подробно='normal for event-driven tasks'; break;
+          case 'offline': последний='laptop off '+кратко(j.hours_ago); подробно='laptop was off'; break;
+          case 'offline_long': последний='laptop off '+кратко(j.hours_ago); подробно='laptop off, no local backups'; break;
+          case null: case undefined: case '':
+            последний=ч.runs_24h!==undefined?ч.runs_24h+' runs today':(j.at?_tursoAgo(j.at):'never'); break;
+          default: последний=String(j.trouble); подробно='unknown state';
+        }
+        const цветПосл=с==='problem'?'#ff8a80':'#aab';
         const число=j.number_text?' <span class="muted">· '+esc(j.number_text)+'</span>':'';
-        return '<div style="'+ячейка+';color:#e8e8f0"><span style="color:'+цвет+'">'+знак+'</span> '+esc(j.name)+'</div>'
+        return '<div style="'+ячейка+';color:#e8e8f0">'+знак+' '+esc(j.name)+'</div>'
+          +'<div class="muted" style="'+ячейка+'">'+esc(j.for||j.product||'')+'</div>'
           +'<div style="'+ячейка+';color:#aab" title="'+esc(j.label||'')+'">'+esc(j.label||'')+число+'</div>'
           +'<div style="'+ячейка+';text-align:right;color:'+цветПосл+'" title="'+esc(подробно)+'">'+esc(последний)+'</div>';
       }).join('')
     +'</div>';
-  upd.textContent = d.updated_at ? ('verdict from '+_tursoAgo(d.updated_at)) : '';
+  upd.textContent = d.updated_at ? ('checked '+_tursoAgo(d.updated_at)) : '';
 }
 
 function renderJobsStateOld(d){
@@ -1794,12 +1802,12 @@ function renderJobsStateOld(d){
   if(!sum) return;
   const jobs=(d&&d.jobs)||[];
   if(!jobs.length){
-    sum.innerHTML='⏱ Jobs <span class="muted">no verdict yet — heartbeat has not run</span>';
+    sum.innerHTML='⏱ Automatic tasks <span class="muted">no verdict yet — heartbeat has not run</span>';
     list.innerHTML=''; upd.textContent=''; return;
   }
   // Спавший ноутбук в счёт тревог не идёт — иначе шапка карточки врёт красным.
   const bad=jobs.filter(j=>j.trouble && j.trouble!=='offline');
-  sum.innerHTML='⏱ Jobs <b>'+(jobs.length-bad.length)+'/'+jobs.length+'</b> ok'
+  sum.innerHTML='⏱ Automatic tasks <b>'+(jobs.length-bad.length)+'/'+jobs.length+'</b> ok'
     +(bad.length?' · <span class="danger">'+bad.length+' silent</span>':' · <span style="color:#5cd98a">all reporting</span>');
 
   // Молчащие — сверху: беда важнее порядка по алфавиту.

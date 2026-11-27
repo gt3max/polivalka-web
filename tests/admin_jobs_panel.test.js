@@ -39,35 +39,50 @@ function строки(список) {
 }
 
 // 1. Новый ответ сервера
+function строки4(список) {
+  const ячейки = список.split('</div>').map(s => s.replace(/<[^>]+>/g, '').replace(/&amp;/g, '&').trim()).filter(Boolean);
+  const out = [];
+  for (let i = 4; i + 3 < ячейки.length + 1; i += 4) out.push(ячейки.slice(i, i + 4));
+  return out;
+}
 узлы = {};
 renderJobsState({
   updated_at: сейчас, jobs: [
-    { name: 'jobs-heartbeat', label: 'daily check of this list', rank: 3, ok: true, at: сейчас, trouble: null },
-    { name: 'lambda-warmup', label: 'keeps the shared API warm, every 5 min', rank: 0, watch_only: true },
-    { name: 'turso-backup-actions', label: 'nightly catalog DB copy to S3 + spares', rank: 1, ok: true, at: сейчас,
-      number_text: 'copies 2' },
-    { name: 'ddb-backup', label: 'weekly copy of AWS user tables', rank: 1, trouble: 'silent', hours_ago: 290, due_hours: 192 },
-    { name: 'apple-receipts-recheck', label: 're-checks App Store refunds', rank: 0, ok: true, at: сейчас },
-    { name: 'old-job', label: 'nightly photo check', rank: 3, off: '12.10.2026 решением владельца' },
+    { name: 'jobs-heartbeat', for: 'shared', label: 'daily check of this list', rank: 3, ok: true, at: сейчас, trouble: null },
+    { name: 'lambda-warmup', for: 'shared', label: 'keeps the shared API warm, every 5 min', rank: 0, watch_only: true,
+      numbers: { runs_24h: 288 }, at: сейчас },
+    { name: 'turso-backup-actions', for: 'plantapp', label: 'nightly catalog DB copy to S3 + spares', rank: 1, ok: true,
+      at: сейчас, number_text: 'copies 2' },
+    { name: 'ddb-backup', for: 'shared · laptop', label: 'weekly copy of AWS user tables', rank: 1, trouble: 'silent',
+      hours_ago: 290, due_hours: 192 },
+    { name: 'apple-receipts-recheck', for: 'plantapp', label: 're-checks App Store refunds', rank: 0, ok: true, at: сейчас },
+    { name: 'polivalka-register', for: 'polivalka', label: 'registers new devices', rank: 2, watch_only: true, trouble: 'no_runs' },
+    { name: 'polivalka-auth', for: 'polivalka', label: 'device and site sign-in', rank: 2, watch_only: true, trouble: 'errors',
+      numbers: { runs_24h: 9, errors_24h: 2 } },
+    { name: 'aws:events/new', for: '?', label: 'runs in prod, not in registry', rank: -1, trouble: 'unregistered' },
+    { name: 'old-job', for: 'plantapp', label: 'nightly photo check', rank: 3, off: '12.10.2026 решением владельца' },
   ],
 });
-const р = строки(узлы['jobs-state-list'].innerHTML);
-const имена = р.map(с => с[0].replace(/^[●○] /, ''));
-проверить('три колонки и заголовок', /job<\/div><div[^>]*>what it does<\/div><div[^>]*>last/.test(узлы['jobs-state-list'].innerHTML));
-проверить('беда первой', имена[0] === 'ddb-backup', имена.join(','));
-проверить('деньги раньше данных и сторожей', имена.indexOf('apple-receipts-recheck') < имена.indexOf('turso-backup-actions')
-  && имена.indexOf('turso-backup-actions') < имена.indexOf('jobs-heartbeat'), имена.join(','));
-проверить('наблюдение после живых, выключенные в самом низу', имена.indexOf('lambda-warmup') > имена.indexOf('jobs-heartbeat')
-  && имена[имена.length - 1] === 'old-job', имена.join(','));
-проверить('число серым в конце подписи', р.find(с => с[0].includes('turso-backup-actions'))[1] === 'nightly catalog DB copy to S3 + spares · copies 2');
-проверить('молчание коротко в колонке last', р.find(с => с[0].includes('ddb-backup'))[2] === 'silent 12d');
-проверить('наблюдение и выключено подписаны', р.find(с => с[0].includes('lambda-warmup'))[2] === 'watch-only'
-  && р.find(с => с[0].includes('old-job'))[2] === 'off');
-проверить('шапка считает только живые', /Jobs <b>3\/4<\/b> ok/.test(узлы['jobs-state-summary'].innerHTML), узлы['jobs-state-summary'].innerHTML);
-проверить('незнакомая беда — красным, не зелёным', (() => {
+const р = строки4(узлы['jobs-state-list'].innerHTML);
+const имена = р.map(с => с[0].replace(/^\S+ /, ''));
+const по = имя => р.find(с => с[0].endsWith(' ' + имя));
+проверить('четыре колонки и заголовок', /job<\/div><div[^>]*>for<\/div><div[^>]*>what it does<\/div><div[^>]*>last/.test(узлы['jobs-state-list'].innerHTML));
+проверить('название и шапка', /⏱ Automatic tasks · .*🔴 3 problem.*🟢 4 works.*⚪ 2 not running/.test(узлы['jobs-state-summary'].innerHTML), узлы['jobs-state-summary'].innerHTML);
+проверить('problem сверху: опись первой', имена[0] === 'aws:events/new' && имена.slice(1, 3).sort().join() === 'ddb-backup,polivalka-auth', имена.join(','));
+проверить('затем по важности, выключенные внизу', имена.indexOf('apple-receipts-recheck') < имена.indexOf('turso-backup-actions')
+  && имена.indexOf('turso-backup-actions') < имена.indexOf('jobs-heartbeat') && имена[имена.length - 1] === 'old-job', имена.join(','));
+проверить('цвета эмодзи', по('ddb-backup')[0].startsWith('🔴') && по('jobs-heartbeat')[0].startsWith('🟢')
+  && по('polivalka-register')[0].startsWith('⚪') && по('old-job')[0].startsWith('⚪'));
+проверить('колонка for', по('ddb-backup')[1] === 'shared · laptop' && по('polivalka-auth')[1] === 'polivalka');
+проверить('число серым в конце подписи', по('turso-backup-actions')[2] === 'nightly catalog DB copy to S3 + spares · copies 2');
+проверить('last: молчание, ошибки, запуски, не шёл, опись, off',
+  по('ddb-backup')[3] === 'silent 12d' && по('polivalka-auth')[3] === 'errors 2/9' && по('lambda-warmup')[3] === '288 runs today'
+  && по('polivalka-register')[3] === 'no runs today' && по('aws:events/new')[3] === 'not in registry' && по('old-job')[3] === 'off',
+  JSON.stringify(р.map(с => с[3])));
+проверить('незнакомое состояние — красным', (() => {
   узлы = {};
-  renderJobsState({ jobs: [{ name: 'x', label: 'y', rank: 0, trouble: 'unregistered' }] });
-  return узлы['jobs-state-list'].innerHTML.includes('#f44');
+  renderJobsState({ jobs: [{ name: 'x', label: 'y', rank: 0, trouble: 'что-то-новое' }] });
+  return узлы['jobs-state-list'].innerHTML.includes('🔴');
 })());
 
 // 2. Старый ответ сервера — прежняя отрисовка
