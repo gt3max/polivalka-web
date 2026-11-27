@@ -79,6 +79,15 @@ const по = имя => р.find(с => с[0].endsWith(' ' + имя));
   по('ddb-backup')[3] === 'silent 12d' && по('polivalka-auth')[3] === 'errors 2/9' && по('lambda-warmup')[3] === '288 runs today'
   && по('polivalka-register')[3] === 'no runs today' && по('aws:events/new')[3] === 'not in registry' && по('old-job')[3] === 'off',
   JSON.stringify(р.map(с => с[3])));
+проверить('тесный срок — 🟡, сразу после problem', (() => {
+  узлы = {};
+  renderJobsState({ jobs: [{ name: 'a', for: 'plantapp', label: 'x', rank: 0, ok: true, at: сейчас },
+                           { name: 'b', for: 'plantapp', label: 'y', rank: 3, trouble: 'tight_threshold' },
+                           { name: 'c', for: 'plantapp', label: 'z', rank: 3, trouble: 'silent', hours_ago: 50, due_hours: 24 }] });
+  const р2 = строки4(узлы['jobs-state-list'].innerHTML);
+  return р2[0][0].startsWith('🔴') && р2[1][0].startsWith('🟡') && р2[1][3] === 'tight threshold'
+    && /🟡 1 check/.test(узлы['jobs-state-summary'].innerHTML);
+})());
 проверить('незнакомое состояние — красным', (() => {
   узлы = {};
   renderJobsState({ jobs: [{ name: 'x', label: 'y', rank: 0, trouble: 'что-то-новое' }] });

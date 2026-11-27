@@ -1749,13 +1749,17 @@ function renderJobsPanel(d){
   const list=document.getElementById('jobs-state-list');
   const upd=document.getElementById('jobs-state-updated');
   const jobs=d.jobs;
-  const ПРОБЛЕМА=['silent','failed','idle','errors','unregistered','no_trigger','switched_off','inventory_failed','offline_long'];
+  const ПРОБЛЕМА=['silent','failed','idle','errors','unregistered','no_trigger','switched_off','inventory_failed','offline_long','platform_too_late'];
   const НЕ_ИДЁТ=['no_runs','offline','off'];
-  const сост=j=>j.off?'off':(ПРОБЛЕМА.includes(j.trouble)||(j.trouble&&!НЕ_ИДЁТ.includes(j.trouble))?'problem':(НЕ_ИДЁТ.includes(j.trouble)?'not':'works'));
-  const n={problem:0,works:0,not:0,off:0}; jobs.forEach(j=>n[сост(j)]++);
-  sum.innerHTML='⏱ Automatic tasks · <span class="danger">🔴 '+n.problem+' problem</span> · <span style="color:#5cd98a">🟢 '+n.works
-    +' works</span> · <span class="muted">⚪ '+(n.not+n.off)+' not running</span>';
-  const вес=j=>({problem:0,works:1,not:1,off:2})[сост(j)];
+  // 27.11.2026: 🟡 tight threshold — работает, но GitHub запускает реже, чем допускает срок «молчит»: ещё не беда,
+  // а предупреждение до ложной тревоги (проверка сверяет срок с историей запусков каждый день).
+  const ВНИМАНИЕ=['tight_threshold'];
+  const сост=j=>j.off?'off':(ВНИМАНИЕ.includes(j.trouble)?'warn':(ПРОБЛЕМА.includes(j.trouble)||(j.trouble&&!НЕ_ИДЁТ.includes(j.trouble))?'problem':(НЕ_ИДЁТ.includes(j.trouble)?'not':'works')));
+  const n={problem:0,warn:0,works:0,not:0,off:0}; jobs.forEach(j=>n[сост(j)]++);
+  sum.innerHTML='⏱ Automatic tasks · <span class="danger">🔴 '+n.problem+' problem</span>'
+    +(n.warn?' · <span style="color:#ffcc66">🟡 '+n.warn+' check</span>':'')
+    +' · <span style="color:#5cd98a">🟢 '+n.works+' works</span> · <span class="muted">⚪ '+(n.not+n.off)+' not running</span>';
+  const вес=j=>({problem:0,warn:1,works:2,not:2,off:3})[сост(j)];
   const порядок=[...jobs].sort((a,b)=>(вес(a)-вес(b)) || ((a.rank??9)-(b.rank??9)) || String(a.name).localeCompare(String(b.name)));
   const кратко=h=>h===null||h===undefined?'':(h<48?Math.round(h)+'h':Math.round(h/24)+'d');
   const ячейка='padding:4px 0;border-bottom:1px solid #333;white-space:nowrap;overflow:hidden;text-overflow:ellipsis';
@@ -1763,7 +1767,7 @@ function renderJobsPanel(d){
     +['job','for','what it does','last'].map((з,i)=>'<div class="muted" style="'+ячейка+(i===3?';text-align:right':'')+'">'+з+'</div>').join('')
     + порядок.map(j=>{
         const с=сост(j);
-        const знак={problem:'🔴',works:'🟢',not:'⚪',off:'⚪'}[с];
+        const знак={problem:'🔴',warn:'🟡',works:'🟢',not:'⚪',off:'⚪'}[с];
         const ч=j.numbers||{};
         let последний, подробно='';
         switch(j.off?'off':j.trouble){
@@ -1778,13 +1782,15 @@ function renderJobsPanel(d){
           case 'switched_off': последний='switched off'; подробно='disabled at AWS / GitHub'; break;
           case 'inventory_failed': последний='inventory failed'; подробно='AWS / GitHub list or metrics not read'; break;
           case 'no_runs': последний='no runs today'; подробно='normal for event-driven tasks'; break;
+          case 'tight_threshold': последний='tight threshold'; подробно='GitHub runs it less often than the silence limit allows'; break;
+          case 'platform_too_late': последний='platform too late'; подробно='GitHub delays exceed the 72 h ceiling'; break;
           case 'offline': последний='laptop off '+кратко(j.hours_ago); подробно='laptop was off'; break;
           case 'offline_long': последний='laptop off '+кратко(j.hours_ago); подробно='laptop off, no local backups'; break;
           case null: case undefined: case '':
             последний=ч.runs_24h!==undefined?ч.runs_24h+' runs today':(j.at?_tursoAgo(j.at):'never'); break;
           default: последний=String(j.trouble); подробно='unknown state';
         }
-        const цветПосл=с==='problem'?'#ff8a80':'#aab';
+        const цветПосл=с==='problem'?'#ff8a80':(с==='warn'?'#ffcc66':'#aab');
         const число=j.number_text?' <span class="muted">· '+esc(j.number_text)+'</span>':'';
         return '<div style="'+ячейка+';color:#e8e8f0">'+знак+' '+esc(j.name)+'</div>'
           +'<div class="muted" style="'+ячейка+'">'+esc(j.for||j.product||'')+'</div>'

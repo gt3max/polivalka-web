@@ -29,6 +29,8 @@
       '· errors — запускался с ошибками\n' +
       '· not in registry / nothing runs it / switched off / inventory failed — то, что реально ' +
       'запущено в AWS и GitHub, разошлось с нашим списком\n\n' +
+      '🟡 check — tight threshold: работает, но GitHub запускает реже, чем допускает срок; поправить срок, ' +
+      'пока не пришла ложная тревога. platform too late (🔴) — GitHub запаздывает больше чем на 72 ч.\n\n' +
       '⚪ not running:\n' +
       '· no runs today — за сутки ни разу не запускался; у того, что срабатывает по событию ' +
       '(устройства, вход), это норма\n' +
