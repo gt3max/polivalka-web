@@ -139,6 +139,15 @@ device_data = {
 
 ### 5.1 Admin Panel (admin.html)
 
+Where and how (27.11.2026): `admin.html` (`/admin`) of this shared site — PlantApp and Polivalka are not split yet, and
+neither is the server (`polivalka-api-handler` serves both). Entry: the **⚙️ Admin** tab in the header of every
+device page and of the fleet page (`common.js · showAdminNavLink`, `fleet.html`), shown only to the admin account.
+The **Jobs** panel shows background processes of **prod** for both products (`/admin/jobs/state`); the registry and its
+rules: `plantapp/scripts/jobs_heartbeat_check.py`, `plantapp/documentation/PlantApp_Description.md` («Админка — где она
+и как в неё войти»). The admin page is a sensitive zone: nothing new without the owner's explicit words.
+
+Device stats (old example):
+
 ```javascript
 // Reads from /devices endpoint
 document.getElementById('stat-firmware').textContent = device.firmware_version;
