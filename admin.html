@@ -1721,7 +1721,73 @@ async function loadJobsState(){
   }
 }
 
+// 🔴 27.11.2026 (W48): панель Jobs — прод обоих продуктов, одна строка на процесс, три колонки
+// job | what it does (+ число серым) | last. Подпись, место и вид приходят из реестра
+// (plantapp/scripts/jobs_heartbeat_check.py, _ПАНЕЛЬ) — новая задача появляется здесь без правки
+// страницы. Пока сервер старый (подписей нет) — прежняя отрисовка. Ошибка отрисовки не роняет
+// остальную админку: панель пишет «render error», остальное живёт.
 function renderJobsState(d){
+  try{
+    const jobs=(d&&d.jobs)||[];
+    if(jobs.length && jobs.some(j=>j.label)) return renderJobsPanel(d);
+    return renderJobsStateOld(d);
+  }catch(e){
+    const sum=document.getElementById('jobs-state-summary');
+    if(sum) sum.innerHTML='⏱ Jobs <span class="danger">render error: '+esc(String(e&&e.message||e))+'</span>';
+  }
+}
+
+function _jobsAgoShort(h){
+  if(h===null||h===undefined) return '';
+  return h<48 ? Math.round(h)+'h' : Math.round(h/24)+'d';
+}
+
+function renderJobsPanel(d){
+  const sum=document.getElementById('jobs-state-summary');
+  const list=document.getElementById('jobs-state-list');
+  const upd=document.getElementById('jobs-state-updated');
+  const jobs=d.jobs;
+  const watched=jobs.filter(j=>j.watch_only);
+  const live=jobs.filter(j=>!j.watch_only && !j.off);
+  // Спавший ноутбук в счёт тревог не идёт — иначе шапка карточки врёт красным.
+  const bad=live.filter(j=>j.trouble && j.trouble!=='offline');
+  sum.innerHTML='⏱ Jobs <b>'+(live.length-bad.length)+'/'+live.length+'</b> ok'
+    +(bad.length?' · <span class="danger">'+bad.length+' in trouble</span>':' · <span style="color:#5cd98a">all reporting</span>')
+    +(watched.length?' · <span class="muted">'+watched.length+' watch-only</span>':'');
+  // Порядок: беда первой; затем по тому, что сломается: money → data → users → dev; затем имя; выключенные — внизу.
+  const вес=j=>j.off?3:(j.trouble&&j.trouble!=='offline'?0:(j.watch_only?2:1));
+  const порядок=[...jobs].sort((a,b)=>(вес(a)-вес(b)) || ((a.rank??9)-(b.rank??9)) || String(a.name).localeCompare(String(b.name)));
+  const ячейка='padding:4px 0;border-bottom:1px solid #333;white-space:nowrap;overflow:hidden;text-overflow:ellipsis';
+  list.innerHTML='<div class="mono" style="display:grid;grid-template-columns:max-content minmax(0,1fr) max-content;column-gap:14px;font-size:12px">'
+    +'<div class="muted" style="'+ячейка+'">job</div><div class="muted" style="'+ячейка+'">what it does</div>'
+    +'<div class="muted" style="'+ячейка+';text-align:right">last</div>'
+    + порядок.map(j=>{
+        const спал=j.trouble==='offline';
+        const беда=j.trouble && !спал;
+        const цвет=j.off||j.watch_only||спал ? '#8a8aa0' : (беда ? '#f44' : (j.ok ? '#5cd98a' : '#ff9800'));
+        const знак=j.watch_only?'○':'●';
+        let последний, подробно='';
+        if(j.off){ последний='off'; подробно='off since '+String(j.off).slice(0,10); }
+        else if(j.watch_only){ последний='watch-only'; подробно='no own report yet — watched as a process'; }
+        else if(j.trouble==='silent'){ последний='silent '+_jobsAgoShort(j.hours_ago);
+          подробно=j.hours_ago!==null&&j.hours_ago!==undefined?'silent for '+Math.round(j.hours_ago)+'h (due every '+j.due_hours+'h)':'never reported'; }
+        else if(j.trouble==='failed'){ последний='failed '+(j.at?_tursoAgo(j.at):''); подробно='last run failed'; }
+        else if(j.trouble==='idle'){ последний='idle '+(j.at?_tursoAgo(j.at):''); подробно='ran but did nothing'; }
+        else if(спал){ последний='laptop off '+_jobsAgoShort(j.hours_ago); подробно='laptop was off'; }
+        else if(j.trouble==='offline_long'){ последний='laptop off '+_jobsAgoShort(j.hours_ago); подробно='laptop off, no local backups'; }
+        else if(j.trouble){ последний=String(j.trouble); подробно='unknown state: '+String(j.trouble); }
+        else { последний=j.at?_tursoAgo(j.at):'never'; }
+        const цветПосл=беда?'#ff8a80':'#aab';
+        const число=j.number_text?' <span class="muted">· '+esc(j.number_text)+'</span>':'';
+        return '<div style="'+ячейка+';color:#e8e8f0"><span style="color:'+цвет+'">'+знак+'</span> '+esc(j.name)+'</div>'
+          +'<div style="'+ячейка+';color:#aab" title="'+esc(j.label||'')+'">'+esc(j.label||'')+число+'</div>'
+          +'<div style="'+ячейка+';text-align:right;color:'+цветПосл+'" title="'+esc(подробно)+'">'+esc(последний)+'</div>';
+      }).join('')
+    +'</div>';
+  upd.textContent = d.updated_at ? ('verdict from '+_tursoAgo(d.updated_at)) : '';
+}
+
+function renderJobsStateOld(d){
   const sum=document.getElementById('jobs-state-summary');
   const list=document.getElementById('jobs-state-list');
   const upd=document.getElementById('jobs-state-updated');
